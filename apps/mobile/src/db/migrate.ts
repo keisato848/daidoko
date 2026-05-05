@@ -4,7 +4,6 @@
  */
 import { eq, sql } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
-import type { SQLiteRunResult } from 'expo-sqlite';
 
 import * as schema from './schema';
 import {
@@ -193,7 +192,7 @@ const CREATE_TABLES_SQL = `
 `;
 
 /** Run migrations (create tables) */
-export function runMigrations(expoDb: { execSync: (sql: string) => SQLiteRunResult }): void {
+export function runMigrations(expoDb: { execSync: (sql: string) => void }): void {
   expoDb.execSync(CREATE_TABLES_SQL);
 }
 
