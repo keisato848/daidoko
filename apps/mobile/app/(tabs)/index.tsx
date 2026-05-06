@@ -5,13 +5,7 @@
 import { eq } from 'drizzle-orm';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { Stars } from '../../src/components/Stars';
@@ -79,9 +73,7 @@ export default function HomeScreen() {
       .orderBy(schema.cookingLogs.cookedAt);
 
     const filterDate = getFilterDate(filter);
-    const filtered = filterDate
-      ? logs.filter((l) => new Date(l.cookedAt) >= filterDate)
-      : logs;
+    const filtered = filterDate ? logs.filter((l) => new Date(l.cookedAt) >= filterDate) : logs;
 
     // Sort descending (most recent first)
     filtered.sort((a, b) => b.cookedAt.localeCompare(a.cookedAt));
@@ -109,9 +101,7 @@ export default function HomeScreen() {
 
     return (
       <View>
-        {showDateHeader && (
-          <Text style={styles.dateHeader}>{formatDate(item.cookedAt)}</Text>
-        )}
+        {showDateHeader && <Text style={styles.dateHeader}>{formatDate(item.cookedAt)}</Text>}
         <Pressable
           style={styles.card}
           onPress={() => {
@@ -147,12 +137,7 @@ export default function HomeScreen() {
         <View style={styles.tabs}>
           {(Object.keys(FILTER_LABELS) as FilterTab[]).map((key) => (
             <Pressable key={key} onPress={() => setFilter(key)}>
-              <Text
-                style={[
-                  styles.tab,
-                  filter === key ? styles.tabActive : styles.tabInactive,
-                ]}
-              >
+              <Text style={[styles.tab, filter === key ? styles.tabActive : styles.tabInactive]}>
                 {FILTER_LABELS[key]}
               </Text>
               {filter === key && <View style={styles.tabIndicator} />}

@@ -31,7 +31,7 @@ function sanitizePayload(payload: unknown): Record<string, unknown> | undefined 
 
   const raw = payload as Record<string, unknown>;
   const sanitized: Record<string, unknown> = {};
-  const sensitiveKeys = ['password', 'token', 'secret', 'email', 'userId', 'refreshToken'];
+  const sensitiveKeys = ['password', 'token', 'secret', 'email', 'userid', 'refreshtoken'];
 
   for (const [key, value] of Object.entries(raw)) {
     if (sensitiveKeys.some((s) => key.toLowerCase().includes(s))) {

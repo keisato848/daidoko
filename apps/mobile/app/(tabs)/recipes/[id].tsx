@@ -6,13 +6,7 @@ import { eq } from 'drizzle-orm';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
@@ -54,12 +48,12 @@ const TABS: { key: TabKey; label: string }[] = [
 
 function getEmoji(title: string): string {
   const map: Record<string, string> = {
-    '肉じゃが': '🍲',
-    '味噌汁': '🍜',
-    '唐揚げ': '🍗',
-    '炊き込みご飯': '🍚',
-    '豚汁': '🫕',
-    'ハンバーグ': '🍔',
+    肉じゃが: '🍲',
+    味噌汁: '🍜',
+    唐揚げ: '🍗',
+    炊き込みご飯: '🍚',
+    豚汁: '🫕',
+    ハンバーグ: '🍔',
   };
   return map[title] ?? '🍽️';
 }
@@ -73,11 +67,7 @@ export default function RecipeDetailScreen() {
   const loadRecipe = useCallback(async () => {
     if (!id) return;
 
-    const rows = await db
-      .select()
-      .from(schema.recipes)
-      .where(eq(schema.recipes.id, id))
-      .limit(1);
+    const rows = await db.select().from(schema.recipes).where(eq(schema.recipes.id, id)).limit(1);
 
     if (rows.length === 0) return;
     const r = rows[0];
@@ -179,9 +169,7 @@ export default function RecipeDetailScreen() {
         <Text style={styles.title}>{recipe.title}</Text>
         <View style={styles.metaRow}>
           {recipe.rating != null && <Stars rating={recipe.rating} size={12} />}
-          {recipe.servings != null && (
-            <Text style={styles.metaText}>👥 {recipe.servings}人前</Text>
-          )}
+          {recipe.servings != null && <Text style={styles.metaText}>👥 {recipe.servings}人前</Text>}
           {recipe.cookTimeMin != null && (
             <Text style={styles.metaText}>⏱ {recipe.cookTimeMin}分</Text>
           )}
@@ -198,14 +186,8 @@ export default function RecipeDetailScreen() {
       {/* Tabs */}
       <View style={styles.tabBar}>
         {TABS.map(({ key, label }) => (
-          <Pressable
-            key={key}
-            style={styles.tabItem}
-            onPress={() => setTab(key)}
-          >
-            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>
-              {label}
-            </Text>
+          <Pressable key={key} style={styles.tabItem} onPress={() => setTab(key)}>
+            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
             {tab === key && <View style={styles.tabUnderline} />}
           </Pressable>
         ))}
@@ -221,9 +203,7 @@ export default function RecipeDetailScreen() {
                 (i === 0 || recipe.ingredients[i - 1].groupLabel !== ing.groupLabel);
               return (
                 <View key={ing.id}>
-                  {showGroup && (
-                    <Text style={styles.groupLabel}>{ing.groupLabel}</Text>
-                  )}
+                  {showGroup && <Text style={styles.groupLabel}>{ing.groupLabel}</Text>}
                   <View style={styles.ingredientRow}>
                     <Text style={styles.ingredientName}>{ing.name}</Text>
                     <Text style={styles.ingredientAmount}>{ing.amount}</Text>

@@ -24,10 +24,12 @@ const runners = new Map<AgentId, AgentRunner<any, any>>();
 export const AgentBridge = {
   /** フックハンドラを登録する */
   on<P = unknown>(hook: HookName, handler: HookHandler<P>): void {
-    if (!handlers.has(hook)) {
-      handlers.set(hook, new Set());
+    let set = handlers.get(hook);
+    if (!set) {
+      set = new Set();
+      handlers.set(hook, set);
     }
-    handlers.get(hook)!.add(handler as HookHandler);
+    set.add(handler as HookHandler);
   },
 
   /** フックハンドラを解除する */
@@ -75,11 +77,7 @@ export const AgentBridge = {
   },
 
   /** エージェントを呼び出す */
-  async call<I, O>(
-    agentId: AgentId,
-    input: I,
-    opts?: BridgeCallOptions,
-  ): Promise<AgentResult<O>> {
+  async call<I, O>(agentId: AgentId, input: I, opts?: BridgeCallOptions): Promise<AgentResult<O>> {
     const runner = runners.get(agentId);
     if (!runner) {
       return {
@@ -95,11 +93,25 @@ export const AgentBridge = {
     const traceId = opts?.traceId ?? generateId();
     const spanId = generateId();
 
-    await AgentBridge.fire('beforeAgentRun', agentId, traceId, spanId, { input }, opts?.parentSpanId);
+    await AgentBridge.fire(
+      'beforeAgentRun',
+      agentId,
+      traceId,
+      spanId,
+      { input },
+      opts?.parentSpanId,
+    );
 
     try {
       const result: AgentResult<O> = await runner(input);
-      await AgentBridge.fire('afterAgentRun', agentId, traceId, spanId, { result }, opts?.parentSpanId);
+      await AgentBridge.fire(
+        'afterAgentRun',
+        agentId,
+        traceId,
+        spanId,
+        { result },
+        opts?.parentSpanId,
+      );
       return result;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -107,17 +119,20 @@ export const AgentBridge = {
         ok: false,
         error: { code: 'UNKNOWN', message, retryable: false },
       };
-      await AgentBridge.fire('onAgentError', agentId, traceId, spanId, { error: message }, opts?.parentSpanId);
+      await AgentBridge.fire(
+        'onAgentError',
+        agentId,
+        traceId,
+        spanId,
+        { error: message },
+        opts?.parentSpanId,
+      );
       return agentResult;
     }
   },
 
   /** 複数エージェントを直列に実行する（前の出力を次の入力に渡す） */
-  async pipe<T>(
-    agents: AgentId[],
-    initial: T,
-    opts?: BridgeCallOptions,
-  ): Promise<AgentResult<T>> {
+  async pipe<T>(agents: AgentId[], initial: T, opts?: BridgeCallOptions): Promise<AgentResult<T>> {
     let current: T = initial;
 
     for (const agentId of agents) {

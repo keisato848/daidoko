@@ -6,14 +6,7 @@ import { eq } from 'drizzle-orm';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../../../src/constants/theme';
 import { db } from '../../../../src/db/client';
@@ -130,10 +123,7 @@ export default function CookingModeScreen() {
       </View>
 
       {/* Step content */}
-      <Pressable
-        style={styles.stepArea}
-        onPress={() => setShowIngredients(true)}
-      >
+      <Pressable style={styles.stepArea} onPress={() => setShowIngredients(true)}>
         <View style={styles.stepNumberCircle}>
           <Text style={styles.stepNumberText}>{current.sortOrder}</Text>
         </View>
@@ -157,25 +147,17 @@ export default function CookingModeScreen() {
           onPress={() => setCurrentStep(Math.max(0, currentStep - 1))}
           disabled={currentStep === 0}
         >
-          <Text
-            style={[styles.navPrevText, currentStep === 0 && styles.navDisabledText]}
-          >
+          <Text style={[styles.navPrevText, currentStep === 0 && styles.navDisabledText]}>
             ← 前へ
           </Text>
         </Pressable>
 
         {isLastStep ? (
-          <Pressable
-            style={styles.navFinish}
-            onPress={() => router.back()}
-          >
+          <Pressable style={styles.navFinish} onPress={() => router.back()}>
             <Text style={styles.navFinishText}>✓ 完成！記録する</Text>
           </Pressable>
         ) : (
-          <Pressable
-            style={styles.navNext}
-            onPress={() => setCurrentStep(currentStep + 1)}
-          >
+          <Pressable style={styles.navNext} onPress={() => setCurrentStep(currentStep + 1)}>
             <Text style={styles.navNextText}>次へ →</Text>
           </Pressable>
         )}
@@ -188,14 +170,8 @@ export default function CookingModeScreen() {
         animationType="slide"
         onRequestClose={() => setShowIngredients(false)}
       >
-        <Pressable
-          style={styles.overlayBackdrop}
-          onPress={() => setShowIngredients(false)}
-        >
-          <Pressable
-            style={styles.overlaySheet}
-            onPress={(e) => e.stopPropagation()}
-          >
+        <Pressable style={styles.overlayBackdrop} onPress={() => setShowIngredients(false)}>
+          <Pressable style={styles.overlaySheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.overlayHandle} />
             <Text style={styles.overlayTitle}>
               材料{servings != null ? `（${servings}人前）` : ''}

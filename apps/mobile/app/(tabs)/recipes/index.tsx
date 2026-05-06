@@ -2,19 +2,11 @@
  * S04: Recipe List screen
  * Grid view with search (title, reading, tags, ingredient names) and filter tabs
  */
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
@@ -151,24 +143,30 @@ export default function RecipeListScreen() {
       >
         <View style={styles.cardImage}>
           <Text style={styles.cardEmoji}>
-            {item.title === '肉じゃが' ? '🍲' :
-             item.title === '味噌汁' ? '🍜' :
-             item.title === '唐揚げ' ? '🍗' :
-             item.title === '炊き込みご飯' ? '🍚' :
-             item.title === '豚汁' ? '🫕' :
-             item.title === 'ハンバーグ' ? '🍔' : '🍽️'}
+            {item.title === '肉じゃが'
+              ? '🍲'
+              : item.title === '味噌汁'
+                ? '🍜'
+                : item.title === '唐揚げ'
+                  ? '🍗'
+                  : item.title === '炊き込みご飯'
+                    ? '🍚'
+                    : item.title === '豚汁'
+                      ? '🫕'
+                      : item.title === 'ハンバーグ'
+                        ? '🍔'
+                        : '🍽️'}
           </Text>
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle}>{item.title}</Text>
           {item.rating != null && <Stars rating={item.rating} size={10} />}
-          {item.cookTimeMin != null && (
-            <Text style={styles.cardTime}>⏱ {item.cookTimeMin}分</Text>
-          )}
+          {item.cookTimeMin != null && <Text style={styles.cardTime}>⏱ {item.cookTimeMin}分</Text>}
           {hasIngredientHit && (
             <View style={styles.ingredientBadge}>
               <Text style={styles.ingredientBadgeText}>
-                🥬 {matchedIngs.slice(0, 2).join('・')}{matchedIngs.length > 2 ? ' …' : ''}
+                🥬 {matchedIngs.slice(0, 2).join('・')}
+                {matchedIngs.length > 2 ? ' …' : ''}
               </Text>
             </View>
           )}
