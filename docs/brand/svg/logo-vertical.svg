@@ -1,0 +1,20 @@
+<svg viewBox="0 0 90 130" width="90" height="130" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>だいどこ — 縦組みロゴ</title>
+  <desc>臺所を縦書きで表現したロゴ。スプラッシュ画面・演出向き。コンセプトC。</desc>
+  <rect width="90" height="130" fill="#0A0805"/>
+  <!-- 枠 -->
+  <rect x="22" y="6" width="46" height="118" fill="none" stroke="#2E2418" stroke-width="0.5"/>
+  <!-- 上下ゴールドライン -->
+  <rect x="18" y="5"     width="54" height="1.5" fill="#C9A16A"/>
+  <rect x="18" y="123.5" width="54" height="1.5" fill="#C9A16A"/>
+  <!-- 臺 -->
+  <text x="45" y="65" text-anchor="middle"
+        font-family="'Yu Mincho','Hiragino Mincho ProN','Noto Serif JP',serif"
+        font-size="42" fill="#DCC9A8">臺</text>
+  <!-- 所 -->
+  <text x="45" y="109" text-anchor="middle"
+        font-family="'Yu Mincho','Hiragino Mincho ProN','Noto Serif JP',serif"
+        font-size="42" fill="#DCC9A8">所</text>
+  <!-- 左ゴールドライン -->
+  <line x1="17" y1="18" x2="17" y2="112" stroke="#C9A16A" stroke-width="0.5"/>
+</svg>

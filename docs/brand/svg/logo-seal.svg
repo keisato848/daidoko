@@ -1,0 +1,24 @@
+<svg viewBox="0 0 140 140" width="140" height="140" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>だいどこ — 蔵書印ロゴ</title>
+  <desc>臺所を円形の蔵書印スタイルで表現したロゴ。コンセプトA。</desc>
+  <rect width="140" height="140" fill="#0A0805"/>
+  <!-- 外円 -->
+  <circle cx="70" cy="70" r="62" fill="none" stroke="#C9A16A" stroke-width="1"/>
+  <!-- 内円（破線） -->
+  <circle cx="70" cy="70" r="55" fill="none" stroke="#2E2418" stroke-width="0.5" stroke-dasharray="3 3"/>
+  <!-- 臺所 -->
+  <text x="70" y="82" text-anchor="middle"
+        font-family="'Yu Mincho','Hiragino Mincho ProN','Noto Serif JP',serif"
+        font-size="40" fill="#DCC9A8">臺所</text>
+  <!-- 区切り線 -->
+  <line x1="36" y1="98" x2="104" y2="98" stroke="#2E2418" stroke-width="0.5"/>
+  <!-- DAIDOKO -->
+  <text x="70" y="111" text-anchor="middle"
+        font-family="'Cormorant Garamond','Georgia',serif"
+        font-size="8" font-style="italic" fill="#A07A44" letter-spacing="5">D A I D O K O</text>
+  <!-- 四方の点 -->
+  <circle cx="70" cy="9"   r="2.5" fill="#C9A16A"/>
+  <circle cx="70" cy="131" r="2.5" fill="#C9A16A"/>
+  <circle cx="9"  cy="70"  r="2.5" fill="#C9A16A"/>
+  <circle cx="131" cy="70" r="2.5" fill="#C9A16A"/>
+</svg>

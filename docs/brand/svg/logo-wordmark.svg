@@ -1,0 +1,27 @@
+<svg viewBox="0 0 210 115" width="210" height="115" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>だいどこ — 横組みワードマーク</title>
+  <desc>臺所とDAIDOKOを横組みで配置したヘッダー向けワードマーク。コンセプトD。</desc>
+  <rect width="210" height="115" fill="#0A0805"/>
+  <!-- 上罫線 -->
+  <line x1="20" y1="28" x2="190" y2="28" stroke="#2E2418" stroke-width="0.5"/>
+  <!-- 臺所 -->
+  <text x="105" y="73" text-anchor="middle"
+        font-family="'Yu Mincho','Hiragino Mincho ProN','Noto Serif JP',serif"
+        font-size="46" fill="#F0E6D2" letter-spacing="8">臺所</text>
+  <!-- 下罫線 -->
+  <line x1="20" y1="83" x2="190" y2="83" stroke="#2E2418" stroke-width="0.5"/>
+  <!-- 左右の点 -->
+  <circle cx="12"  cy="55" r="2" fill="#C9A16A"/>
+  <circle cx="198" cy="55" r="2" fill="#C9A16A"/>
+  <!-- D A I D O K O -->
+  <text x="105" y="100" text-anchor="middle"
+        font-family="'Cormorant Garamond','Georgia',serif"
+        font-size="9" font-style="italic" fill="#A07A44" letter-spacing="7">D A I D O K O</text>
+  <!-- 補助テキスト -->
+  <text x="20" y="22" text-anchor="start"
+        font-family="'Cormorant Garamond','Georgia',serif"
+        font-size="7" fill="#3A2A1A" letter-spacing="2">EST. 2026</text>
+  <text x="190" y="22" text-anchor="end"
+        font-family="'Cormorant Garamond','Georgia',serif"
+        font-size="7" fill="#3A2A1A" letter-spacing="2">FAMILY RECIPE</text>
+</svg>

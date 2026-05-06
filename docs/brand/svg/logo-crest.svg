@@ -1,0 +1,19 @@
+<svg viewBox="0 0 140 140" width="140" height="140" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>だいどこ — 家紋ロゴ</title>
+  <desc>臺一文字を六角形の家紋スタイルで表現したロゴ。コンセプトB。</desc>
+  <rect width="140" height="140" fill="#0A0805"/>
+  <!-- 外六角形 -->
+  <polygon points="70,6 125,38 125,102 70,134 15,102 15,38"
+           fill="none" stroke="#C9A16A" stroke-width="1"/>
+  <!-- 内六角形 -->
+  <polygon points="70,18 115,45 115,95 70,122 25,95 25,45"
+           fill="none" stroke="#2E2418" stroke-width="0.5"/>
+  <!-- 臺（一文字モノグラム） -->
+  <text x="70" y="93" text-anchor="middle"
+        font-family="'Yu Mincho','Hiragino Mincho ProN','Noto Serif JP',serif"
+        font-size="54" fill="#DCC9A8">臺</text>
+  <!-- DAIDOKO -->
+  <text x="70" y="114" text-anchor="middle"
+        font-family="'Cormorant Garamond','Georgia',serif"
+        font-size="7.5" font-style="italic" fill="#C9A16A" letter-spacing="3">DAIDOKO</text>
+</svg>
