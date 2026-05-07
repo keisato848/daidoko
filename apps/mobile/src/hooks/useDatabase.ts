@@ -1,11 +1,11 @@
 /**
  * Database initialization hook
- * Runs migrations and seeds on app startup
+ * Runs migrations and seeds on app startup (native)
+ * On web, skips DB init and uses mock data
  */
 import { useEffect, useState } from 'react';
 
-import { db, expoDb } from '../db/client';
-import { runMigrations, seedDatabase } from '../db/migrate';
+import { initDatabase, isNativePlatform } from '../db/client';
 
 export function useDatabase() {
   const [isReady, setIsReady] = useState(false);
@@ -14,8 +14,16 @@ export function useDatabase() {
   useEffect(() => {
     async function init() {
       try {
-        runMigrations(expoDb);
-        await seedDatabase(db);
+        if (isNativePlatform) {
+          await initDatabase();
+
+          const { getDb, getExpoDb } = await import('../db/client');
+          const { runMigrations, seedDatabase } = await import('../db/migrate');
+
+          runMigrations(getExpoDb());
+          await seedDatabase(getDb());
+        }
+        // Web: no DB, screens use mock data
         setIsReady(true);
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Unknown database error';
@@ -26,5 +34,5 @@ export function useDatabase() {
     void init();
   }, []);
 
-  return { isReady, error };
+  return { isReady, error, isNativePlatform };
 }

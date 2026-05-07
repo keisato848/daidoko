@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "だいどこ",
+    "slug": "daidoko",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "scheme": "daidoko",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0805",
+    "splash": {
+      "backgroundColor": "#0A0805"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.daidoko.app"
+    },
+    "android": {
+      "package": "com.daidoko.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0805"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

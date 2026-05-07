@@ -2,15 +2,14 @@
  * S06: Cooking Mode screen
  * Full-screen step display with swipe navigation, timer support, ingredients overlay
  */
-import { eq } from 'drizzle-orm';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../../../src/constants/theme';
-import { db } from '../../../../src/db/client';
-import * as schema from '../../../../src/db/schema';
+import { isNativePlatform } from '../../../../src/db/client';
+import { getMockRecipeDetail } from '../../../../src/db/mock';
 
 interface StepData {
   id: string;
@@ -38,47 +37,58 @@ export default function CookingModeScreen() {
   const loadData = useCallback(async () => {
     if (!id) return;
 
-    const recipes = await db
-      .select()
-      .from(schema.recipes)
-      .where(eq(schema.recipes.id, id))
-      .limit(1);
+    if (isNativePlatform) {
+      const { eq } = await import('drizzle-orm');
+      const { getDb } = await import('../../../../src/db/client');
+      const schema = await import('../../../../src/db/schema');
+      const db = getDb();
 
-    if (recipes.length === 0) return;
-    const recipe = recipes[0];
-    setRecipeTitle(recipe.title);
+      const recipes = await db
+        .select()
+        .from(schema.recipes)
+        .where(eq(schema.recipes.id, id))
+        .limit(1);
 
-    if (!recipe.currentRevId) return;
+      if (recipes.length === 0) return;
+      const recipe = recipes[0];
+      setRecipeTitle(recipe.title);
 
-    // Load revision for servings
-    const revs = await db
-      .select({ servings: schema.recipeRevisions.servings })
-      .from(schema.recipeRevisions)
-      .where(eq(schema.recipeRevisions.id, recipe.currentRevId))
-      .limit(1);
-    if (revs.length > 0) {
-      setServings(revs[0].servings);
+      if (!recipe.currentRevId) return;
+
+      const revs = await db
+        .select({ servings: schema.recipeRevisions.servings })
+        .from(schema.recipeRevisions)
+        .where(eq(schema.recipeRevisions.id, recipe.currentRevId))
+        .limit(1);
+      if (revs.length > 0) {
+        setServings(revs[0].servings);
+      }
+
+      const stepRows = await db
+        .select()
+        .from(schema.steps)
+        .where(eq(schema.steps.revisionId, recipe.currentRevId))
+        .orderBy(schema.steps.sortOrder);
+      setSteps(stepRows);
+
+      const ingRows = await db
+        .select({
+          name: schema.ingredients.name,
+          amount: schema.ingredients.amount,
+          groupLabel: schema.ingredients.groupLabel,
+        })
+        .from(schema.ingredients)
+        .where(eq(schema.ingredients.revisionId, recipe.currentRevId))
+        .orderBy(schema.ingredients.sortOrder);
+      setIngredients(ingRows);
+    } else {
+      const detail = getMockRecipeDetail(id);
+      if (!detail) return;
+      setRecipeTitle(detail.title);
+      setServings(detail.servings);
+      setSteps(detail.steps);
+      setIngredients(detail.ingredients);
     }
-
-    // Load steps
-    const stepRows = await db
-      .select()
-      .from(schema.steps)
-      .where(eq(schema.steps.revisionId, recipe.currentRevId))
-      .orderBy(schema.steps.sortOrder);
-    setSteps(stepRows);
-
-    // Load ingredients
-    const ingRows = await db
-      .select({
-        name: schema.ingredients.name,
-        amount: schema.ingredients.amount,
-        groupLabel: schema.ingredients.groupLabel,
-      })
-      .from(schema.ingredients)
-      .where(eq(schema.ingredients.revisionId, recipe.currentRevId))
-      .orderBy(schema.ingredients.sortOrder);
-    setIngredients(ingRows);
   }, [id]);
 
   useEffect(() => {

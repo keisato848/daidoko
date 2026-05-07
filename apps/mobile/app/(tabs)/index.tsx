@@ -2,7 +2,6 @@
  * S01: Home / Timeline screen
  * Shows recent cooking logs with filter tabs
  */
-import { eq } from 'drizzle-orm';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -10,8 +9,8 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '../../src/components/Avatar';
 import { Stars } from '../../src/components/Stars';
 import { Colors } from '../../src/constants/theme';
-import { db } from '../../src/db/client';
-import * as schema from '../../src/db/schema';
+import { isNativePlatform } from '../../src/db/client';
+import { getMockTimeline } from '../../src/db/mock';
 
 interface TimelineEntry {
   id: string;
@@ -51,44 +50,58 @@ function getFilterDate(filter: FilterTab): Date | null {
   return null;
 }
 
+async function loadFromDb(): Promise<TimelineEntry[]> {
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../../src/db/client');
+  const schema = await import('../../src/db/schema');
+  const db = getDb();
+
+  const logs = await db
+    .select({
+      id: schema.cookingLogs.id,
+      recipeId: schema.cookingLogs.recipeId,
+      recipeTitle: schema.recipes.title,
+      userName: schema.users.displayName,
+      cookedAt: schema.cookingLogs.cookedAt,
+      rating: schema.cookingLogs.rating,
+      memo: schema.cookingLogs.memo,
+    })
+    .from(schema.cookingLogs)
+    .leftJoin(schema.recipes, eq(schema.cookingLogs.recipeId, schema.recipes.id))
+    .leftJoin(schema.users, eq(schema.cookingLogs.cookedBy, schema.users.id))
+    .orderBy(schema.cookingLogs.cookedAt);
+
+  return logs
+    .sort((a, b) => b.cookedAt.localeCompare(a.cookedAt))
+    .map((l) => ({
+      id: l.id,
+      recipeId: l.recipeId,
+      recipeTitle: l.recipeTitle ?? 'フリー記録',
+      userName: l.userName ?? '不明',
+      cookedAt: l.cookedAt,
+      rating: l.rating,
+      memo: l.memo,
+    }));
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [filter, setFilter] = useState<FilterTab>('all');
 
   const loadTimeline = useCallback(async () => {
-    const logs = await db
-      .select({
-        id: schema.cookingLogs.id,
-        recipeId: schema.cookingLogs.recipeId,
-        recipeTitle: schema.recipes.title,
-        userName: schema.users.displayName,
-        cookedAt: schema.cookingLogs.cookedAt,
-        rating: schema.cookingLogs.rating,
-        memo: schema.cookingLogs.memo,
-      })
-      .from(schema.cookingLogs)
-      .leftJoin(schema.recipes, eq(schema.cookingLogs.recipeId, schema.recipes.id))
-      .leftJoin(schema.users, eq(schema.cookingLogs.cookedBy, schema.users.id))
-      .orderBy(schema.cookingLogs.cookedAt);
+    let all: TimelineEntry[];
+
+    if (isNativePlatform) {
+      all = await loadFromDb();
+    } else {
+      all = getMockTimeline();
+    }
 
     const filterDate = getFilterDate(filter);
-    const filtered = filterDate ? logs.filter((l) => new Date(l.cookedAt) >= filterDate) : logs;
+    const filtered = filterDate ? all.filter((l) => new Date(l.cookedAt) >= filterDate) : all;
 
-    // Sort descending (most recent first)
-    filtered.sort((a, b) => b.cookedAt.localeCompare(a.cookedAt));
-
-    setEntries(
-      filtered.map((l) => ({
-        id: l.id,
-        recipeId: l.recipeId,
-        recipeTitle: l.recipeTitle ?? 'フリー記録',
-        userName: l.userName ?? '不明',
-        cookedAt: l.cookedAt,
-        rating: l.rating,
-        memo: l.memo,
-      })),
-    );
+    setEntries(filtered);
   }, [filter]);
 
   useEffect(() => {
