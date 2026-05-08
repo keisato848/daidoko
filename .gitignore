@@ -54,3 +54,8 @@ coverage/
 # Temporary
 tmp/
 temp/
+
+# Claude Code
+.claude/
+chat.json
+nul
