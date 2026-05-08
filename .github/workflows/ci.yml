@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  quality:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Q-1: TypeScript
+      - name: TypeScript check
+        run: pnpm -r typecheck
+
+      # Q-2: ESLint
+      - name: Lint
+        run: pnpm -r lint
+
+      # Q-3: Prettier
+      - name: Format check
+        run: pnpm format:check
+
+      # Q-5: Tests
+      - name: Test (mobile + shared)
+        run: pnpm -r test
+
+      # Q-4: Coverage (informational — thresholds enforced in vitest config)
+      - name: Test coverage (server)
+        run: pnpm --filter server test -- --coverage
+        continue-on-error: true # まだカバレッジ閾値未設定のため警告のみ
+
+  # S-3: Dependency audit
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Audit (high+)
+        run: pnpm audit --audit-level=high
+        continue-on-error: true # 初期は警告のみ。Critical/High 検知後に enforce に変更
