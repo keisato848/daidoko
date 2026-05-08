@@ -33,10 +33,10 @@ const METHODS: MethodOption[] = [
   },
   {
     id: 'ocr',
-    icon: <Camera size={24} color={Colors.muted} />,
+    icon: <Camera size={24} color={Colors.gold} />,
     label: '写真から読み取り',
     description: 'レシピ本や手書きメモを撮影',
-    enabled: false,
+    enabled: true,
   },
 ];
 
@@ -49,6 +49,8 @@ export default function AddScreen() {
       router.push('/recipes/new');
     } else if (method.id === 'url') {
       router.push('/recipes/import-url');
+    } else if (method.id === 'ocr') {
+      router.push('/recipes/import-ocr');
     }
   };
 
