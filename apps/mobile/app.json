@@ -28,6 +28,17 @@
     "plugins": ["expo-router"],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
