@@ -1,6 +1,17 @@
 /**
- * Web mock data provider — Web デバッグ用にシードデータを直接返す
+ * Web mock data provider — mutable mock state for web debugging
+ * Supports read/write operations for CRUD testing without SQLite
  */
+import { generateId } from '../utils/id';
+import type {
+  RecipeDetail,
+  RecipeListItem,
+  SaveCookingLogInput,
+  SaveRecipeInput,
+  TagItem,
+  TimelineEntry,
+  UpdateRecipeInput,
+} from '../services/types';
 import {
   seedCookingLogs,
   seedIngredients,
@@ -12,59 +23,96 @@ import {
   seedUsers,
 } from './seed';
 
-// Build lookup maps from seed data for fast access
-const usersMap = new Map(seedUsers.map((u) => [u.id, u]));
-const revisionsMap = new Map(seedRevisions.map((r) => [r.id, r]));
-const tagsMap = new Map(seedTags.map((t) => [t.id, t]));
+// ─── Mutable State ─────────────────────────────────────────────────────────────
 
-export interface MockTimelineEntry {
+interface MutableRecipe {
+  id: string;
+  familyId: string;
+  title: string;
+  titleReading: string | null;
+  currentRevId: string | null;
+  status: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface MutableRevision {
+  id: string;
+  recipeId: string;
+  revisionNumber: number;
+  isMajor: boolean;
+  servings: number | null;
+  cookTimeMin: number | null;
+  prepTimeMin: number | null;
+  description: string | null;
+  authorNote: string | null;
+  sourceId: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+interface MutableIngredient {
+  id: string;
+  revisionId: string;
+  sortOrder: number;
+  groupLabel: string | null;
+  name: string;
+  amount: string | null;
+  note: string | null;
+}
+
+interface MutableStep {
+  id: string;
+  revisionId: string;
+  sortOrder: number;
+  body: string;
+  timerSec: number | null;
+  photoId: string | null;
+}
+
+interface MutableTag {
+  id: string;
+  familyId: string;
+  name: string;
+  color: string | null;
+}
+
+interface MutableRecipeTag {
+  recipeId: string;
+  tagId: string;
+}
+
+interface MutableCookingLog {
   id: string;
   recipeId: string | null;
-  recipeTitle: string;
-  userName: string;
+  cookedBy: string;
   cookedAt: string;
   rating: number | null;
   memo: string | null;
 }
 
-export interface MockRecipeListItem {
-  id: string;
-  title: string;
-  cookTimeMin: number | null;
-  rating: number | null;
-  tags: string[];
-  ingredientNames: string[];
-}
+// Initialize mutable copies from seed data
+const mockRecipes: MutableRecipe[] = seedRecipes.map((r) => ({
+  ...r,
+  titleReading: r.titleReading ?? null,
+}));
+const mockRevisions: MutableRevision[] = seedRevisions.map((r) => ({ ...r }));
+const mockIngredients: MutableIngredient[] = seedIngredients.map((i) => ({ ...i }));
+const mockSteps: MutableStep[] = seedSteps.map((s) => ({ ...s }));
+const mockTags: MutableTag[] = seedTags.map((t) => ({ ...t }));
+let mockRecipeTags: MutableRecipeTag[] = seedRecipeTags.map((rt) => ({ ...rt }));
+const mockCookingLogs: MutableCookingLog[] = seedCookingLogs.map((l) => ({ ...l }));
 
-export interface MockRecipeDetail {
-  id: string;
-  title: string;
-  servings: number | null;
-  cookTimeMin: number | null;
-  description: string | null;
-  rating: number | null;
-  tags: string[];
-  ingredients: {
-    id: string;
-    groupLabel: string | null;
-    name: string;
-    amount: string | null;
-    note: string | null;
-    sortOrder: number;
-  }[];
-  steps: {
-    id: string;
-    body: string;
-    timerSec: number | null;
-    sortOrder: number;
-  }[];
-}
+const usersMap = new Map<string, (typeof seedUsers)[number]>(seedUsers.map((u) => [u.id, u]));
 
-export function getMockTimeline(): MockTimelineEntry[] {
-  return [...seedCookingLogs]
+// ─── Read Operations ────────────────────────────────────────────────────────────
+
+export function getMockTimeline(): TimelineEntry[] {
+  return [...mockCookingLogs]
     .sort((a, b) => b.cookedAt.localeCompare(a.cookedAt))
     .map((log) => {
-      const recipe = seedRecipes.find((r) => r.id === log.recipeId);
+      const recipe = mockRecipes.find((r) => r.id === log.recipeId);
       const user = usersMap.get(log.cookedBy);
       return {
         id: log.id,
@@ -78,52 +126,59 @@ export function getMockTimeline(): MockTimelineEntry[] {
     });
 }
 
-export function getMockRecipeList(): MockRecipeListItem[] {
-  return seedRecipes.map((recipe) => {
-    const rev = recipe.currentRevId ? revisionsMap.get(recipe.currentRevId) : undefined;
+export function getMockRecipeList(): RecipeListItem[] {
+  return mockRecipes
+    .filter((recipe) => recipe.status === 'active')
+    .map((recipe) => {
+      const rev = recipe.currentRevId
+        ? mockRevisions.find((r) => r.id === recipe.currentRevId)
+        : undefined;
 
-    const tagIds = seedRecipeTags.filter((rt) => rt.recipeId === recipe.id).map((rt) => rt.tagId);
-    const tags = tagIds.map((tid) => tagsMap.get(tid)?.name ?? '').filter(Boolean);
+      const tagIds = mockRecipeTags.filter((rt) => rt.recipeId === recipe.id).map((rt) => rt.tagId);
+      const tags = tagIds
+        .map((tid) => mockTags.find((t) => t.id === tid)?.name ?? '')
+        .filter(Boolean);
 
-    const ings = recipe.currentRevId
-      ? seedIngredients.filter((i) => i.revisionId === recipe.currentRevId).map((i) => i.name)
-      : [];
+      const ings = recipe.currentRevId
+        ? mockIngredients.filter((i) => i.revisionId === recipe.currentRevId).map((i) => i.name)
+        : [];
 
-    // Average rating from cooking logs
-    const logs = seedCookingLogs.filter((l) => l.recipeId === recipe.id && l.rating != null);
-    const avgRating =
-      logs.length > 0
-        ? Math.round(logs.reduce((sum, l) => sum + (l.rating ?? 0), 0) / logs.length)
-        : null;
+      const logs = seedCookingLogs.filter((l) => l.recipeId === recipe.id && l.rating != null);
+      const avgRating =
+        logs.length > 0
+          ? Math.round(logs.reduce((sum, l) => sum + (l.rating ?? 0), 0) / logs.length)
+          : null;
 
-    return {
-      id: recipe.id,
-      title: recipe.title,
-      cookTimeMin: rev?.cookTimeMin ?? null,
-      rating: avgRating,
-      tags,
-      ingredientNames: ings,
-    };
-  });
+      return {
+        id: recipe.id,
+        title: recipe.title,
+        cookTimeMin: rev?.cookTimeMin ?? null,
+        rating: avgRating,
+        tags,
+        ingredientNames: ings,
+      };
+    });
 }
 
-export function getMockRecipeDetail(recipeId: string): MockRecipeDetail | null {
-  const recipe = seedRecipes.find((r) => r.id === recipeId);
+export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
+  const recipe = mockRecipes.find((r) => r.id === recipeId && r.status === 'active');
   if (!recipe) return null;
 
-  const rev = recipe.currentRevId ? revisionsMap.get(recipe.currentRevId) : undefined;
+  const rev = recipe.currentRevId
+    ? mockRevisions.find((r) => r.id === recipe.currentRevId)
+    : undefined;
 
-  const tagIds = seedRecipeTags.filter((rt) => rt.recipeId === recipe.id).map((rt) => rt.tagId);
-  const tags = tagIds.map((tid) => tagsMap.get(tid)?.name ?? '').filter(Boolean);
+  const tagIds = mockRecipeTags.filter((rt) => rt.recipeId === recipe.id).map((rt) => rt.tagId);
+  const tags = tagIds.map((tid) => mockTags.find((t) => t.id === tid)?.name ?? '').filter(Boolean);
 
   const ingredients = recipe.currentRevId
-    ? [...seedIngredients]
+    ? [...mockIngredients]
         .filter((i) => i.revisionId === recipe.currentRevId)
         .sort((a, b) => a.sortOrder - b.sortOrder)
     : [];
 
   const steps = recipe.currentRevId
-    ? [...seedSteps]
+    ? [...mockSteps]
         .filter((s) => s.revisionId === recipe.currentRevId)
         .sort((a, b) => a.sortOrder - b.sortOrder)
     : [];
@@ -145,4 +200,192 @@ export function getMockRecipeDetail(recipeId: string): MockRecipeDetail | null {
     ingredients,
     steps,
   };
+}
+
+export function getMockTags(): TagItem[] {
+  return mockTags.map((t) => ({ id: t.id, name: t.name, color: t.color }));
+}
+
+// ─── Write Operations ───────────────────────────────────────────────────────────
+
+export function createMockRecipe(input: SaveRecipeInput): string {
+  const recipeId = generateId();
+  const revId = generateId();
+  const now = new Date().toISOString();
+
+  mockRecipes.push({
+    id: recipeId,
+    familyId: 'family-001',
+    title: input.title,
+    titleReading: input.titleReading ?? null,
+    currentRevId: revId,
+    status: 'active',
+    createdBy: 'user-kei',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  mockRevisions.push({
+    id: revId,
+    recipeId,
+    revisionNumber: 1,
+    isMajor: true,
+    servings: input.servings ?? null,
+    cookTimeMin: input.cookTimeMin ?? null,
+    prepTimeMin: input.prepTimeMin ?? null,
+    description: input.description ?? null,
+    authorNote: input.authorNote ?? null,
+    sourceId: null,
+    createdBy: 'user-kei',
+    createdAt: now,
+  });
+
+  input.ingredients.forEach((ing, i) => {
+    mockIngredients.push({
+      id: generateId(),
+      revisionId: revId,
+      sortOrder: i + 1,
+      groupLabel: ing.groupLabel ?? null,
+      name: ing.name,
+      amount: ing.amount ?? null,
+      note: ing.note ?? null,
+    });
+  });
+
+  input.steps.forEach((step, i) => {
+    mockSteps.push({
+      id: generateId(),
+      revisionId: revId,
+      sortOrder: i + 1,
+      body: step.body,
+      timerSec: step.timerSec ?? null,
+      photoId: null,
+    });
+  });
+
+  // Handle tags
+  for (const tagName of input.tags) {
+    let tag = mockTags.find((t) => t.name === tagName);
+    if (!tag) {
+      tag = { id: generateId(), familyId: 'family-001', name: tagName, color: null };
+      mockTags.push(tag);
+    }
+    mockRecipeTags.push({ recipeId, tagId: tag.id });
+  }
+
+  return recipeId;
+}
+
+export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): string {
+  const recipe = mockRecipes.find((r) => r.id === recipeId);
+  if (!recipe) throw new Error('Recipe not found');
+
+  const revId = generateId();
+  const now = new Date().toISOString();
+
+  // Get next revision number
+  const currentRev = recipe.currentRevId
+    ? mockRevisions.find((r) => r.id === recipe.currentRevId)
+    : undefined;
+  const nextRevNum = (currentRev?.revisionNumber ?? 0) + 1;
+
+  // Update recipe
+  recipe.title = input.title;
+  recipe.titleReading = input.titleReading ?? null;
+  recipe.currentRevId = revId;
+  recipe.updatedAt = now;
+
+  // Add new revision
+  mockRevisions.push({
+    id: revId,
+    recipeId,
+    revisionNumber: nextRevNum,
+    isMajor: input.isMajor ?? true,
+    servings: input.servings ?? null,
+    cookTimeMin: input.cookTimeMin ?? null,
+    prepTimeMin: input.prepTimeMin ?? null,
+    description: input.description ?? null,
+    authorNote: input.authorNote ?? null,
+    sourceId: null,
+    createdBy: 'user-kei',
+    createdAt: now,
+  });
+
+  // Add ingredients for new revision
+  input.ingredients.forEach((ing, i) => {
+    mockIngredients.push({
+      id: generateId(),
+      revisionId: revId,
+      sortOrder: i + 1,
+      groupLabel: ing.groupLabel ?? null,
+      name: ing.name,
+      amount: ing.amount ?? null,
+      note: ing.note ?? null,
+    });
+  });
+
+  // Add steps for new revision
+  input.steps.forEach((step, i) => {
+    mockSteps.push({
+      id: generateId(),
+      revisionId: revId,
+      sortOrder: i + 1,
+      body: step.body,
+      timerSec: step.timerSec ?? null,
+      photoId: null,
+    });
+  });
+
+  // Update tags
+  mockRecipeTags = mockRecipeTags.filter((rt) => rt.recipeId !== recipeId);
+  for (const tagName of input.tags) {
+    let tag = mockTags.find((t) => t.name === tagName);
+    if (!tag) {
+      tag = { id: generateId(), familyId: 'family-001', name: tagName, color: null };
+      mockTags.push(tag);
+    }
+    mockRecipeTags.push({ recipeId, tagId: tag.id });
+  }
+
+  return revId;
+}
+
+export function deleteMockRecipe(recipeId: string): void {
+  const recipe = mockRecipes.find((r) => r.id === recipeId);
+  if (recipe) {
+    recipe.status = 'archived';
+    recipe.updatedAt = new Date().toISOString();
+  }
+}
+
+export function createMockCookingLog(input: SaveCookingLogInput): string {
+  const id = generateId();
+  mockCookingLogs.push({
+    id,
+    recipeId: input.recipeId ?? null,
+    cookedBy: 'user-kei',
+    cookedAt: input.cookedAt,
+    rating: input.rating ?? null,
+    memo: input.memo ?? null,
+  });
+  return id;
+}
+
+export function getMockCookingLogsForRecipe(recipeId: string): TimelineEntry[] {
+  return mockCookingLogs
+    .filter((l) => l.recipeId === recipeId)
+    .sort((a, b) => b.cookedAt.localeCompare(a.cookedAt))
+    .map((log) => {
+      const user = usersMap.get(log.cookedBy);
+      const recipe = mockRecipes.find((r) => r.id === log.recipeId);
+      return {
+        id: log.id,
+        recipeId: log.recipeId,
+        recipeTitle: recipe?.title ?? 'フリー記録',
+        userName: user?.displayName ?? '不明',
+        cookedAt: log.cookedAt,
+        rating: log.rating,
+        memo: log.memo,
+      };
+    });
 }

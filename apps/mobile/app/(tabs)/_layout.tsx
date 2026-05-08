@@ -47,6 +47,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
         }}
       />
+      {/* Non-tab screens within the (tabs) group — hidden from tab bar */}
+      <Tabs.Screen name="family" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -932,3 +932,182 @@ export const seedCookingLogs = [
     createdAt: '2024-04-20T12:30:00.000Z',
   },
 ] as const;
+
+// ─── Stress Test Seed Generator ─────────────────────────────────────────────
+
+const STRESS_TITLES = [
+  '焼き魚定食',
+  'チキンカレー',
+  'パスタナポリタン',
+  'オムライス',
+  '牛丼',
+  '天ぷらうどん',
+  '刺身盛り合わせ',
+  'かつ丼',
+  '麻婆豆腐',
+  '餃子',
+  '焼きそば',
+  'お好み焼き',
+  'ラーメン',
+  '親子丼',
+  'すき焼き',
+  '手巻き寿司',
+  'グラタン',
+  '回鍋肉',
+  'シチュー',
+  'ビーフストロガノフ',
+];
+
+const STRESS_INGREDIENTS = [
+  '鶏肉',
+  '豚肉',
+  '牛肉',
+  '卵',
+  '玉ねぎ',
+  'にんじん',
+  'キャベツ',
+  'ねぎ',
+  'トマト',
+  'ピーマン',
+  '大根',
+  '白菜',
+  'もやし',
+  'にんにく',
+  '豆腐',
+  '油揚げ',
+  'しめじ',
+  'えのき',
+  'ほうれん草',
+  '塩',
+  '醤油',
+  '味噌',
+  'みりん',
+  '酒',
+  '砂糖',
+  'だし汁',
+  'サラダ油',
+  'ごま油',
+];
+
+interface StressRecipe {
+  id: string;
+  familyId: string;
+  title: string;
+  titleReading: string | null;
+  currentRevId: string;
+  status: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface StressRevision {
+  id: string;
+  recipeId: string;
+  revisionNumber: number;
+  isMajor: boolean;
+  servings: number;
+  cookTimeMin: number;
+  prepTimeMin: number;
+  description: string;
+  authorNote: string | null;
+  sourceId: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+interface StressIngredient {
+  id: string;
+  revisionId: string;
+  sortOrder: number;
+  groupLabel: string | null;
+  name: string;
+  amount: string;
+  note: string | null;
+}
+
+interface StressStep {
+  id: string;
+  revisionId: string;
+  sortOrder: number;
+  body: string;
+  timerSec: number | null;
+  photoId: string | null;
+}
+
+/**
+ * Generate 300 recipes for stress testing.
+ */
+export function generateStressTestSeed(): {
+  recipes: StressRecipe[];
+  revisions: StressRevision[];
+  ingredients: StressIngredient[];
+  steps: StressStep[];
+} {
+  const recipes: StressRecipe[] = [];
+  const revisions: StressRevision[] = [];
+  const ings: StressIngredient[] = [];
+  const stps: StressStep[] = [];
+
+  for (let i = 0; i < 300; i++) {
+    const recipeId = `stress-recipe-${i}`;
+    const revId = `stress-rev-${i}`;
+    const titleIdx = i % STRESS_TITLES.length;
+    const title = `${STRESS_TITLES[titleIdx]} #${i + 1}`;
+
+    recipes.push({
+      id: recipeId,
+      familyId: 'family-001',
+      title,
+      titleReading: null,
+      currentRevId: revId,
+      status: 'active',
+      createdBy: 'user-kei',
+      createdAt: `2024-03-${String((i % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+      updatedAt: `2024-05-${String((i % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+    });
+
+    revisions.push({
+      id: revId,
+      recipeId,
+      revisionNumber: 1,
+      isMajor: true,
+      servings: (i % 6) + 1,
+      cookTimeMin: ((i % 12) + 1) * 5,
+      prepTimeMin: ((i % 6) + 1) * 5,
+      description: `テスト用レシピ #${i + 1}`,
+      authorNote: null,
+      sourceId: null,
+      createdBy: 'user-kei',
+      createdAt: `2024-03-${String((i % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+    });
+
+    const ingCount = (i % 4) + 3;
+    for (let j = 0; j < ingCount; j++) {
+      const ingIdx = (i * 3 + j) % STRESS_INGREDIENTS.length;
+      ings.push({
+        id: `stress-ing-${i}-${j}`,
+        revisionId: revId,
+        sortOrder: j + 1,
+        groupLabel: j >= ingCount - 2 ? 'A 調味料' : null,
+        name: STRESS_INGREDIENTS[ingIdx],
+        amount: '適量',
+        note: null,
+      });
+    }
+
+    const stepCount = (i % 3) + 3;
+    for (let j = 0; j < stepCount; j++) {
+      stps.push({
+        id: `stress-step-${i}-${j}`,
+        revisionId: revId,
+        sortOrder: j + 1,
+        body: `手順 ${j + 1}: テスト用の説明文です。`,
+        timerSec: j === stepCount - 2 ? ((i % 5) + 1) * 60 : null,
+        photoId: null,
+      });
+    }
+  }
+
+  return { recipes, revisions, ingredients: ings, steps: stps };
+}

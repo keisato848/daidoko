@@ -16,15 +16,16 @@ export function TagChip({ label }: TagChipProps) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.bgCard,
   },
   text: {
-    fontSize: 10,
+    fontSize: 12, // xs: タグチップ（詳細画面の表示用）
+    fontWeight: '400',
     color: Colors.goldDim,
     letterSpacing: 0.5,
   },

@@ -9,18 +9,8 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '../../src/components/Avatar';
 import { Stars } from '../../src/components/Stars';
 import { Colors } from '../../src/constants/theme';
-import { isNativePlatform } from '../../src/db/client';
-import { getMockTimeline } from '../../src/db/mock';
-
-interface TimelineEntry {
-  id: string;
-  recipeId: string | null;
-  recipeTitle: string;
-  userName: string;
-  cookedAt: string;
-  rating: number | null;
-  memo: string | null;
-}
+import { getTimeline } from '../../src/services/timeline.service';
+import type { TimelineEntry } from '../../src/services/types';
 
 type FilterTab = 'week' | 'month' | 'all';
 
@@ -50,57 +40,15 @@ function getFilterDate(filter: FilterTab): Date | null {
   return null;
 }
 
-async function loadFromDb(): Promise<TimelineEntry[]> {
-  const { eq } = await import('drizzle-orm');
-  const { getDb } = await import('../../src/db/client');
-  const schema = await import('../../src/db/schema');
-  const db = getDb();
-
-  const logs = await db
-    .select({
-      id: schema.cookingLogs.id,
-      recipeId: schema.cookingLogs.recipeId,
-      recipeTitle: schema.recipes.title,
-      userName: schema.users.displayName,
-      cookedAt: schema.cookingLogs.cookedAt,
-      rating: schema.cookingLogs.rating,
-      memo: schema.cookingLogs.memo,
-    })
-    .from(schema.cookingLogs)
-    .leftJoin(schema.recipes, eq(schema.cookingLogs.recipeId, schema.recipes.id))
-    .leftJoin(schema.users, eq(schema.cookingLogs.cookedBy, schema.users.id))
-    .orderBy(schema.cookingLogs.cookedAt);
-
-  return logs
-    .sort((a, b) => b.cookedAt.localeCompare(a.cookedAt))
-    .map((l) => ({
-      id: l.id,
-      recipeId: l.recipeId,
-      recipeTitle: l.recipeTitle ?? 'フリー記録',
-      userName: l.userName ?? '不明',
-      cookedAt: l.cookedAt,
-      rating: l.rating,
-      memo: l.memo,
-    }));
-}
-
 export default function HomeScreen() {
   const router = useRouter();
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [filter, setFilter] = useState<FilterTab>('all');
 
   const loadTimeline = useCallback(async () => {
-    let all: TimelineEntry[];
-
-    if (isNativePlatform) {
-      all = await loadFromDb();
-    } else {
-      all = getMockTimeline();
-    }
-
+    const all = await getTimeline();
     const filterDate = getFilterDate(filter);
     const filtered = filterDate ? all.filter((l) => new Date(l.cookedAt) >= filterDate) : all;
-
     setEntries(filtered);
   }, [filter]);
 
@@ -126,7 +74,7 @@ export default function HomeScreen() {
           <View style={styles.cardContent}>
             <View style={styles.cardHeader}>
               <Text style={styles.recipeTitle}>{item.recipeTitle}</Text>
-              {item.rating != null && <Stars rating={item.rating} size={10} />}
+              {item.rating != null && <Stars rating={item.rating} size={12} />}
             </View>
             <View style={styles.cardUser}>
               <Avatar name={item.userName} size={22} />
@@ -198,7 +146,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 4,
     paddingBottom: 8,
-    fontSize: 12,
+    fontSize: 13, // sm: フィルタータブ
+    fontWeight: '400',
   },
   tabActive: {
     color: Colors.gold,
@@ -213,7 +162,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontStyle: 'italic',
-    fontSize: 9,
+    fontSize: 9, // wordmark: 意図的な最小表示
     color: Colors.muted,
     letterSpacing: 4,
     paddingBottom: 8,
@@ -226,8 +175,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 4,
-    fontSize: 10,
-    color: Colors.muted,
+    fontSize: 12, // xs: タイムスタンプ・日付ヘッダー
+    color: Colors.paperDim,
     letterSpacing: 2,
   },
   card: {
@@ -249,7 +198,7 @@ const styles = StyleSheet.create({
   },
   recipeTitle: {
     color: Colors.paper,
-    fontSize: 14,
+    fontSize: 15, // base: カードタイトル
     fontWeight: '500',
   },
   cardUser: {
@@ -259,11 +208,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   userName: {
-    fontSize: 11,
-    color: Colors.muted,
+    fontSize: 13, // sm: ユーザー名
+    color: Colors.paperDim,
+    fontWeight: '400',
   },
   memo: {
-    fontSize: 11,
+    fontSize: 13, // sm: メモ
     color: Colors.goldDim,
     fontStyle: 'italic',
     marginTop: 2,

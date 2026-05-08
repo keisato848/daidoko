@@ -1,15 +1,16 @@
 /**
- * S06: Cooking Mode screen
- * Full-screen step display with swipe navigation, timer support, ingredients overlay
+ * S06: Cooking Mode screen (v0.5 enhanced)
+ * Full-screen step display with working timer, keep-awake, completion flow
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { TimerWidget } from '../../../../src/components/TimerWidget';
 import { Colors } from '../../../../src/constants/theme';
-import { isNativePlatform } from '../../../../src/db/client';
-import { getMockRecipeDetail } from '../../../../src/db/mock';
+import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
+import { getRecipeDetail } from '../../../../src/services/recipe.service';
 
 interface StepData {
   id: string;
@@ -33,67 +34,30 @@ export default function CookingModeScreen() {
   const [ingredients, setIngredients] = useState<IngredientData[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
+  const [showTimer, setShowTimer] = useState(false);
+
+  // Keep screen awake during cooking
+  useKeepAwake();
 
   const loadData = useCallback(async () => {
     if (!id) return;
+    const detail = await getRecipeDetail(id);
+    if (!detail) return;
 
-    if (isNativePlatform) {
-      const { eq } = await import('drizzle-orm');
-      const { getDb } = await import('../../../../src/db/client');
-      const schema = await import('../../../../src/db/schema');
-      const db = getDb();
-
-      const recipes = await db
-        .select()
-        .from(schema.recipes)
-        .where(eq(schema.recipes.id, id))
-        .limit(1);
-
-      if (recipes.length === 0) return;
-      const recipe = recipes[0];
-      setRecipeTitle(recipe.title);
-
-      if (!recipe.currentRevId) return;
-
-      const revs = await db
-        .select({ servings: schema.recipeRevisions.servings })
-        .from(schema.recipeRevisions)
-        .where(eq(schema.recipeRevisions.id, recipe.currentRevId))
-        .limit(1);
-      if (revs.length > 0) {
-        setServings(revs[0].servings);
-      }
-
-      const stepRows = await db
-        .select()
-        .from(schema.steps)
-        .where(eq(schema.steps.revisionId, recipe.currentRevId))
-        .orderBy(schema.steps.sortOrder);
-      setSteps(stepRows);
-
-      const ingRows = await db
-        .select({
-          name: schema.ingredients.name,
-          amount: schema.ingredients.amount,
-          groupLabel: schema.ingredients.groupLabel,
-        })
-        .from(schema.ingredients)
-        .where(eq(schema.ingredients.revisionId, recipe.currentRevId))
-        .orderBy(schema.ingredients.sortOrder);
-      setIngredients(ingRows);
-    } else {
-      const detail = getMockRecipeDetail(id);
-      if (!detail) return;
-      setRecipeTitle(detail.title);
-      setServings(detail.servings);
-      setSteps(detail.steps);
-      setIngredients(detail.ingredients);
-    }
+    setRecipeTitle(detail.title);
+    setServings(detail.servings);
+    setSteps(detail.steps);
+    setIngredients(detail.ingredients);
   }, [id]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  // Reset timer view when step changes
+  useEffect(() => {
+    setShowTimer(false);
+  }, [currentStep]);
 
   if (steps.length === 0) {
     return (
@@ -107,12 +71,9 @@ export default function CookingModeScreen() {
   const progress = (currentStep + 1) / steps.length;
   const isLastStep = currentStep === steps.length - 1;
 
-  function formatTimer(sec: number): string {
-    if (sec >= 60) {
-      return `${Math.floor(sec / 60)}分 タイマーを開始`;
-    }
-    return `${sec}秒 タイマーを開始`;
-  }
+  const handleComplete = () => {
+    router.push(`/(tabs)/recipes/${id}/log`);
+  };
 
   return (
     <View style={styles.container}>
@@ -140,12 +101,18 @@ export default function CookingModeScreen() {
 
         <Text style={styles.stepBody}>{current.body}</Text>
 
-        {current.timerSec != null && (
-          <Pressable style={styles.timerButton}>
+        {current.timerSec != null && !showTimer && (
+          <Pressable style={styles.timerButton} onPress={() => setShowTimer(true)}>
             <Text style={styles.timerIcon}>⏱</Text>
-            <Text style={styles.timerText}>{formatTimer(current.timerSec)}</Text>
+            <Text style={styles.timerButtonText}>
+              {current.timerSec >= 60
+                ? `${Math.floor(current.timerSec / 60)}分 タイマーを開始`
+                : `${current.timerSec}秒 タイマーを開始`}
+            </Text>
           </Pressable>
         )}
+
+        {current.timerSec != null && showTimer && <TimerWidget timerSec={current.timerSec} />}
 
         <Text style={styles.tapHint}>画面をタップで材料を表示</Text>
       </Pressable>
@@ -163,7 +130,7 @@ export default function CookingModeScreen() {
         </Pressable>
 
         {isLastStep ? (
-          <Pressable style={styles.navFinish} onPress={() => router.back()}>
+          <Pressable style={styles.navFinish} onPress={handleComplete}>
             <Text style={styles.navFinishText}>✓ 完成！記録する</Text>
           </Pressable>
         ) : (
@@ -207,7 +174,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
   },
   loadingText: {
-    color: Colors.muted,
+    fontSize: 15, // base
+    fontWeight: '400',
+    color: Colors.paperDim,
     textAlign: 'center',
     marginTop: 100,
   },
@@ -222,13 +191,15 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: {
-    fontSize: 14,
+    fontSize: 15, // base: レシピ名（コンパクト表示）
+    fontWeight: '500',
     color: Colors.paperDim,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   headerStep: {
-    fontSize: 12,
-    color: Colors.muted,
+    fontSize: 13, // sm: ステップカウンター
+    fontWeight: '400',
+    color: Colors.paperDim,
   },
   progressBar: {
     height: 2,
@@ -257,20 +228,22 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   stepNumberText: {
-    fontSize: 20,
+    fontSize: 20, // lg: ステップ番号
+    fontWeight: '500',
     color: Colors.gold,
   },
   stepBody: {
-    fontSize: 18,
+    fontSize: 20, // lg: 手順テキスト（料理中は大きく読みやすく）
+    fontWeight: '400',
     color: Colors.paper,
     textAlign: 'center',
-    lineHeight: 32,
-    letterSpacing: 0.5,
+    lineHeight: 34,
+    letterSpacing: 0.3,
   },
   timerButton: {
     marginTop: 24,
     paddingHorizontal: 24,
-    paddingVertical: 10,
+    paddingVertical: 12,
     backgroundColor: '#1A1108',
     borderWidth: 1,
     borderColor: Colors.gold,
@@ -280,14 +253,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timerIcon: {
-    fontSize: 18,
+    fontSize: 17, // md
   },
-  timerText: {
+  timerButtonText: {
     color: Colors.gold,
-    fontSize: 16,
+    fontSize: 17, // md: タイマーボタン
+    fontWeight: '500',
   },
   tapHint: {
-    fontSize: 11,
+    fontSize: 12, // xs: ヒントテキスト
+    fontWeight: '400',
     color: Colors.muted,
     marginTop: 20,
   },
@@ -301,7 +276,7 @@ const styles = StyleSheet.create({
   },
   navPrev: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.goldDim,
@@ -311,7 +286,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   navPrevText: {
-    fontSize: 14,
+    fontSize: 15, // base: ナビゲーションボタン
+    fontWeight: '400',
     color: Colors.goldDim,
   },
   navDisabledText: {
@@ -319,19 +295,19 @@ const styles = StyleSheet.create({
   },
   navNext: {
     flex: 2,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 8,
     backgroundColor: Colors.gold,
     alignItems: 'center',
   },
   navNextText: {
-    fontSize: 14,
+    fontSize: 15, // base
     fontWeight: '600',
     color: Colors.bg,
   },
   navFinish: {
     flex: 2,
-    paddingVertical: 12,
+    paddingVertical: 13,
     borderRadius: 8,
     backgroundColor: '#2A6040',
     borderWidth: 1,
@@ -339,7 +315,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   navFinishText: {
-    fontSize: 14,
+    fontSize: 15, // base
     fontWeight: '600',
     color: '#7FFFAA',
   },
@@ -367,9 +343,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   overlayTitle: {
-    fontSize: 12,
+    fontSize: 13, // sm: オーバーレイタイトル
+    fontWeight: '500',
     color: Colors.goldDim,
-    letterSpacing: 2,
+    letterSpacing: 1,
     marginBottom: 12,
   },
   overlayScroll: {
@@ -378,16 +355,18 @@ const styles = StyleSheet.create({
   overlayRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 7,
+    paddingVertical: 9,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   overlayIngName: {
-    fontSize: 13,
-    color: Colors.paperDim,
+    fontSize: 15, // base: 材料名（オーバーレイ）
+    fontWeight: '400',
+    color: Colors.paper,
   },
   overlayIngAmount: {
-    fontSize: 13,
+    fontSize: 15, // base: 分量（オーバーレイ）
+    fontWeight: '400',
     color: Colors.goldDim,
   },
 });

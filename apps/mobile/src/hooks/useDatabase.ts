@@ -8,7 +8,8 @@ import { useEffect, useState } from 'react';
 import { initDatabase, isNativePlatform } from '../db/client';
 
 export function useDatabase() {
-  const [isReady, setIsReady] = useState(false);
+  // On web, DB init is skipped, so start as ready to avoid a flash on navigation
+  const [isReady, setIsReady] = useState(!isNativePlatform);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

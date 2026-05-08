@@ -29,7 +29,10 @@ export default function RootLayout() {
         headerShown: false,
         contentStyle: { backgroundColor: Colors.bg },
       }}
-    />
+    >
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
+    </Stack>
   );
 }
 

@@ -3,39 +3,15 @@
  * Hero image, meta info, tabs (ingredients/steps/memo), cooking start CTA
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
+import { ChevronLeft, MoreVertical } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
 import { Colors } from '../../../src/constants/theme';
-import { isNativePlatform } from '../../../src/db/client';
-import { getMockRecipeDetail } from '../../../src/db/mock';
-
-interface RecipeDetail {
-  id: string;
-  title: string;
-  servings: number | null;
-  cookTimeMin: number | null;
-  description: string | null;
-  rating: number | null;
-  tags: string[];
-  ingredients: {
-    id: string;
-    groupLabel: string | null;
-    name: string;
-    amount: string | null;
-    note: string | null;
-    sortOrder: number;
-  }[];
-  steps: {
-    id: string;
-    body: string;
-    timerSec: number | null;
-    sortOrder: number;
-  }[];
-}
+import { deleteRecipe, getRecipeDetail } from '../../../src/services/recipe.service';
+import type { RecipeDetail } from '../../../src/services/types';
 
 type TabKey = 'ingredients' | 'steps' | 'memo';
 
@@ -57,98 +33,36 @@ function getEmoji(title: string): string {
   return map[title] ?? '🍽️';
 }
 
-async function loadFromDb(id: string): Promise<RecipeDetail | null> {
-  const { eq } = await import('drizzle-orm');
-  const { getDb } = await import('../../../src/db/client');
-  const schema = await import('../../../src/db/schema');
-  const db = getDb();
-
-  const rows = await db.select().from(schema.recipes).where(eq(schema.recipes.id, id)).limit(1);
-  if (rows.length === 0) return null;
-  const r = rows[0];
-
-  let servings: number | null = null;
-  let cookTimeMin: number | null = null;
-  let description: string | null = null;
-
-  if (r.currentRevId) {
-    const revs = await db
-      .select()
-      .from(schema.recipeRevisions)
-      .where(eq(schema.recipeRevisions.id, r.currentRevId))
-      .limit(1);
-    if (revs.length > 0) {
-      servings = revs[0].servings;
-      cookTimeMin = revs[0].cookTimeMin;
-      description = revs[0].description;
-    }
-  }
-
-  const tagRows = await db
-    .select({ name: schema.tags.name })
-    .from(schema.recipeTags)
-    .leftJoin(schema.tags, eq(schema.recipeTags.tagId, schema.tags.id))
-    .where(eq(schema.recipeTags.recipeId, id));
-
-  const ratingRows = await db
-    .select({ rating: schema.cookingLogs.rating })
-    .from(schema.cookingLogs)
-    .where(eq(schema.cookingLogs.recipeId, id));
-  const ratings = ratingRows.filter((x) => x.rating != null);
-  const avgRating =
-    ratings.length > 0
-      ? Math.round(ratings.reduce((sum, x) => sum + (x.rating ?? 0), 0) / ratings.length)
-      : null;
-
-  let ingredientsList: RecipeDetail['ingredients'] = [];
-  if (r.currentRevId) {
-    ingredientsList = await db
-      .select()
-      .from(schema.ingredients)
-      .where(eq(schema.ingredients.revisionId, r.currentRevId))
-      .orderBy(schema.ingredients.sortOrder);
-  }
-
-  let stepsList: RecipeDetail['steps'] = [];
-  if (r.currentRevId) {
-    stepsList = await db
-      .select()
-      .from(schema.steps)
-      .where(eq(schema.steps.revisionId, r.currentRevId))
-      .orderBy(schema.steps.sortOrder);
-  }
-
-  return {
-    id: r.id,
-    title: r.title,
-    servings,
-    cookTimeMin,
-    description,
-    rating: avgRating,
-    tags: tagRows.map((t) => t.name ?? '').filter(Boolean),
-    ingredients: ingredientsList,
-    steps: stepsList,
-  };
-}
-
 export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
   const [tab, setTab] = useState<TabKey>('ingredients');
+  const [showMenu, setShowMenu] = useState(false);
 
   const loadRecipe = useCallback(async () => {
     if (!id) return;
-    if (isNativePlatform) {
-      setRecipe(await loadFromDb(id));
-    } else {
-      setRecipe(getMockRecipeDetail(id));
-    }
+    setRecipe(await getRecipeDetail(id));
   }, [id]);
 
   useEffect(() => {
     void loadRecipe();
   }, [loadRecipe]);
+
+  const handleDelete = () => {
+    if (!id) return;
+    Alert.alert('レシピを削除', 'このレシピを削除しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteRecipe(id);
+          router.back();
+        },
+      },
+    ]);
+  };
 
   if (!recipe) {
     return (
@@ -166,12 +80,37 @@ export default function RecipeDetailScreen() {
           <ChevronLeft size={20} color={Colors.goldDim} />
           <Text style={styles.backText}>戻る</Text>
         </Pressable>
+        <Pressable style={styles.menuButton} onPress={() => setShowMenu(!showMenu)}>
+          <MoreVertical size={20} color={Colors.goldDim} />
+        </Pressable>
+        {showMenu && (
+          <View style={styles.menuDropdown}>
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                router.push(`/recipes/${id}/edit`);
+              }}
+            >
+              <Text style={styles.menuItemText}>編集</Text>
+            </Pressable>
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                handleDelete();
+              }}
+            >
+              <Text style={[styles.menuItemText, styles.menuItemDestructive]}>削除</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <View style={styles.meta}>
         <Text style={styles.title}>{recipe.title}</Text>
         <View style={styles.metaRow}>
-          {recipe.rating != null && <Stars rating={recipe.rating} size={12} />}
+          {recipe.rating != null && <Stars rating={recipe.rating} size={13} />}
           {recipe.servings != null && <Text style={styles.metaText}>👥 {recipe.servings}人前</Text>}
           {recipe.cookTimeMin != null && (
             <Text style={styles.metaText}>⏱ {recipe.cookTimeMin}分</Text>
@@ -261,7 +200,13 @@ export default function RecipeDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  loadingText: { color: Colors.muted, textAlign: 'center', marginTop: 100 },
+  loadingText: {
+    fontSize: 15, // base
+    fontWeight: '400',
+    color: Colors.paperDim,
+    textAlign: 'center',
+    marginTop: 100,
+  },
   hero: {
     height: 140,
     backgroundColor: '#1A1108',
@@ -279,7 +224,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
-  backText: { fontSize: 13, color: Colors.goldDim },
+  backText: {
+    fontSize: 15, // base: ナビゲーションテキスト
+    fontWeight: '400',
+    color: Colors.goldDim,
+  },
+  menuButton: {
+    position: 'absolute',
+    top: 50,
+    right: 16,
+  },
+  menuDropdown: {
+    position: 'absolute',
+    top: 76,
+    right: 16,
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingVertical: 4,
+    minWidth: 100,
+    zIndex: 10,
+  },
+  menuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  menuItemText: {
+    fontSize: 15, // base: メニュー項目
+    fontWeight: '400',
+    color: Colors.paper,
+  },
+  menuItemDestructive: {
+    color: '#FF6B6B',
+  },
   meta: {
     paddingHorizontal: 20,
     paddingTop: 14,
@@ -287,19 +265,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  title: { fontSize: 20, color: Colors.paper, marginBottom: 6, letterSpacing: 1 },
+  title: {
+    fontSize: 20, // lg: レシピタイトル
+    fontWeight: '500',
+    color: Colors.paper,
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  metaText: { fontSize: 11, color: Colors.muted },
+  metaText: {
+    fontSize: 13, // sm: メタ情報（人数・調理時間）
+    fontWeight: '400',
+    color: Colors.paperDim,
+  },
   tagRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   tabBar: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Colors.border },
   tabItem: { flex: 1, alignItems: 'center', paddingVertical: 10 },
-  tabText: { fontSize: 12, color: Colors.muted },
-  tabTextActive: { color: Colors.gold },
+  tabText: {
+    fontSize: 13, // sm: タブラベル
+    fontWeight: '400',
+    color: Colors.muted,
+  },
+  tabTextActive: {
+    color: Colors.gold,
+    fontWeight: '500',
+  },
   tabUnderline: { height: 2, backgroundColor: Colors.gold, width: '100%', marginTop: 8 },
   content: { flex: 1 },
   contentInner: { padding: 20, paddingBottom: 20 },
   groupLabel: {
-    fontSize: 10,
+    fontSize: 12, // xs: グループラベル
+    fontWeight: '500',
     color: Colors.goldDim,
     marginTop: 12,
     marginBottom: 6,
@@ -308,27 +304,44 @@ const styles = StyleSheet.create({
   ingredientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  ingredientName: { fontSize: 13, color: Colors.paperDim },
-  ingredientAmount: { fontSize: 13, color: Colors.goldDim },
+  ingredientName: {
+    fontSize: 15, // base: 材料名
+    fontWeight: '400',
+    color: Colors.paper,
+  },
+  ingredientAmount: {
+    fontSize: 15, // base: 分量
+    fontWeight: '400',
+    color: Colors.goldDim,
+  },
   stepList: { gap: 14 },
   stepRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   stepNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: '#2A1E0E',
     borderWidth: 1,
     borderColor: Colors.goldDim,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepNumberText: { fontSize: 11, color: Colors.gold },
+  stepNumberText: {
+    fontSize: 13, // sm: ステップ番号
+    fontWeight: '500',
+    color: Colors.gold,
+  },
   stepContent: { flex: 1 },
-  stepBody: { fontSize: 13, color: Colors.paperDim, lineHeight: 22 },
+  stepBody: {
+    fontSize: 15, // base: 手順テキスト
+    fontWeight: '400',
+    color: Colors.paper,
+    lineHeight: 24,
+  },
   timerBadge: {
     marginTop: 6,
     alignSelf: 'flex-start',
@@ -339,9 +352,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  timerText: { fontSize: 11, color: Colors.gold },
+  timerText: {
+    fontSize: 13, // sm: タイマーバッジ
+    fontWeight: '400',
+    color: Colors.gold,
+  },
   memoContainer: { alignItems: 'center', paddingVertical: 40 },
-  memoPlaceholder: { color: Colors.muted, fontSize: 13 },
+  memoPlaceholder: {
+    fontSize: 15, // base
+    fontWeight: '400',
+    color: Colors.paperDim,
+  },
   ctaContainer: {
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -356,5 +377,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
-  ctaText: { color: Colors.bg, fontSize: 15, fontWeight: '600', letterSpacing: 2 },
+  ctaText: {
+    color: Colors.bg,
+    fontSize: 17, // md: CTAボタン
+    fontWeight: '600',
+    letterSpacing: 2,
+  },
 });

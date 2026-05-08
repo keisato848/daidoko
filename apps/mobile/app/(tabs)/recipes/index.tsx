@@ -9,17 +9,8 @@ import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fr
 
 import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
-import { isNativePlatform } from '../../../src/db/client';
-import { getMockRecipeList } from '../../../src/db/mock';
-
-interface RecipeListItem {
-  id: string;
-  title: string;
-  cookTimeMin: number | null;
-  rating: number | null;
-  tags: string[];
-  ingredientNames: string[];
-}
+import { getRecipeList } from '../../../src/services/recipe.service';
+import type { RecipeListItem } from '../../../src/services/types';
 
 const TAG_FILTERS = ['すべて', '肉', '魚', '野菜', '汁物', 'ご飯', '洋食'];
 
@@ -35,72 +26,6 @@ function getEmoji(title: string): string {
   return map[title] ?? '🍽️';
 }
 
-async function loadFromDb(): Promise<RecipeListItem[]> {
-  const { eq } = await import('drizzle-orm');
-  const { getDb } = await import('../../../src/db/client');
-  const schema = await import('../../../src/db/schema');
-  const db = getDb();
-
-  const allRecipes = await db
-    .select({
-      id: schema.recipes.id,
-      title: schema.recipes.title,
-      currentRevId: schema.recipes.currentRevId,
-    })
-    .from(schema.recipes)
-    .where(eq(schema.recipes.status, 'active'));
-
-  const result: RecipeListItem[] = [];
-
-  for (const recipe of allRecipes) {
-    let cookTimeMin: number | null = null;
-    if (recipe.currentRevId) {
-      const revs = await db
-        .select({ cookTimeMin: schema.recipeRevisions.cookTimeMin })
-        .from(schema.recipeRevisions)
-        .where(eq(schema.recipeRevisions.id, recipe.currentRevId))
-        .limit(1);
-      if (revs.length > 0) cookTimeMin = revs[0].cookTimeMin;
-    }
-
-    const tagRows = await db
-      .select({ name: schema.tags.name })
-      .from(schema.recipeTags)
-      .leftJoin(schema.tags, eq(schema.recipeTags.tagId, schema.tags.id))
-      .where(eq(schema.recipeTags.recipeId, recipe.id));
-
-    const ratingRows = await db
-      .select({ rating: schema.cookingLogs.rating })
-      .from(schema.cookingLogs)
-      .where(eq(schema.cookingLogs.recipeId, recipe.id));
-    const ratings = ratingRows.filter((r) => r.rating != null);
-    const avgRating =
-      ratings.length > 0
-        ? Math.round(ratings.reduce((sum, r) => sum + (r.rating ?? 0), 0) / ratings.length)
-        : null;
-
-    let ingredientNames: string[] = [];
-    if (recipe.currentRevId) {
-      const ings = await db
-        .select({ name: schema.ingredients.name })
-        .from(schema.ingredients)
-        .where(eq(schema.ingredients.revisionId, recipe.currentRevId));
-      ingredientNames = ings.map((i) => i.name);
-    }
-
-    result.push({
-      id: recipe.id,
-      title: recipe.title,
-      cookTimeMin,
-      rating: avgRating,
-      tags: tagRows.map((t) => t.name ?? '').filter(Boolean),
-      ingredientNames,
-    });
-  }
-
-  return result;
-}
-
 export default function RecipeListScreen() {
   const router = useRouter();
   const [recipes, setRecipes] = useState<RecipeListItem[]>([]);
@@ -108,11 +33,7 @@ export default function RecipeListScreen() {
   const [activeTagFilter, setActiveTagFilter] = useState('すべて');
 
   const loadRecipes = useCallback(async () => {
-    if (isNativePlatform) {
-      setRecipes(await loadFromDb());
-    } else {
-      setRecipes(getMockRecipeList());
-    }
+    setRecipes(await getRecipeList());
   }, []);
 
   useEffect(() => {
@@ -159,7 +80,7 @@ export default function RecipeListScreen() {
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle}>{item.title}</Text>
-          {item.rating != null && <Stars rating={item.rating} size={10} />}
+          {item.rating != null && <Stars rating={item.rating} size={12} />}
           {item.cookTimeMin != null && <Text style={styles.cardTime}>⏱ {item.cookTimeMin}分</Text>}
           {hasIngredientHit && (
             <View style={styles.ingredientBadge}>
@@ -178,7 +99,7 @@ export default function RecipeListScreen() {
     <View style={styles.container}>
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Search size={14} color={Colors.muted} />
+          <Search size={15} color={Colors.muted} />
           <TextInput
             style={styles.searchInput}
             value={query}
@@ -257,7 +178,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  searchInput: { flex: 1, color: Colors.paper, fontSize: 13, padding: 0 },
+  searchInput: {
+    flex: 1,
+    color: Colors.paper,
+    fontSize: 15, // base: 検索入力テキスト
+    fontWeight: '400',
+    padding: 0,
+  },
   filterContainer: { borderBottomWidth: 1, borderBottomColor: Colors.border, maxHeight: 50 },
   filterContent: { gap: 6, paddingHorizontal: 16, paddingVertical: 10 },
   filterChip: {
@@ -269,10 +196,18 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   filterChipActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
-  filterChipText: { fontSize: 11, color: Colors.muted },
-  filterChipTextActive: { color: Colors.bg },
+  filterChipText: {
+    fontSize: 13, // sm: フィルタータグ
+    fontWeight: '400',
+    color: Colors.paperDim,
+  },
+  filterChipTextActive: { color: Colors.bg, fontWeight: '500' },
   searchHint: { paddingHorizontal: 16, paddingTop: 6 },
-  searchHintText: { fontSize: 11, color: Colors.muted },
+  searchHintText: {
+    fontSize: 13, // sm: 検索ヒント
+    fontWeight: '400',
+    color: Colors.paperDim,
+  },
   searchHintHighlight: { color: Colors.goldDim },
   grid: { padding: 16 },
   row: { gap: 10 },
@@ -296,8 +231,18 @@ const styles = StyleSheet.create({
   },
   cardEmoji: { fontSize: 28 },
   cardBody: { padding: 10 },
-  cardTitle: { fontSize: 13, color: Colors.paper, marginBottom: 4 },
-  cardTime: { fontSize: 10, color: Colors.muted, marginTop: 4 },
+  cardTitle: {
+    fontSize: 15, // base: レシピカードタイトル
+    fontWeight: '500',
+    color: Colors.paper,
+    marginBottom: 4,
+  },
+  cardTime: {
+    fontSize: 12, // xs: 調理時間メタ情報
+    fontWeight: '400',
+    color: Colors.paperDim,
+    marginTop: 4,
+  },
   ingredientBadge: {
     marginTop: 5,
     backgroundColor: '#1E1509',
@@ -305,5 +250,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  ingredientBadgeText: { fontSize: 10, color: Colors.goldDim, lineHeight: 15 },
+  ingredientBadgeText: {
+    fontSize: 12, // xs: 食材ヒットバッジ
+    fontWeight: '400',
+    color: Colors.goldDim,
+    lineHeight: 16,
+  },
 });
