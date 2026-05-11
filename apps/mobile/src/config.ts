@@ -6,10 +6,12 @@ import { Platform } from 'react-native';
 
 const isWeb = Platform.OS === 'web';
 
-// On web (Expo Web), the server runs on localhost:3000
-// On native, use your local IP or staging URL
+// EXPO_PUBLIC_SERVER_URL を設定している場合はそちらを優先
+// 未設定時のデフォルト:
+//   Web (開発)  → localhost:3000
+//   Native      → Railway 本番サーバー
 export const SERVER_BASE_URL =
   process.env['EXPO_PUBLIC_SERVER_URL'] ??
-  (isWeb ? 'http://localhost:3000' : 'http://localhost:3000');
+  (isWeb ? 'http://localhost:3000' : 'https://daidoko-production.up.railway.app');
 
 export const API_V1 = `${SERVER_BASE_URL}/api/v1`;
