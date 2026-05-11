@@ -8,18 +8,23 @@ FROM base AS builder
 WORKDIR /app
 
 # Workspace manifests only (cache layer)
+COPY tsconfig.json ./
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY apps/server/package.json ./apps/server/
 
-RUN pnpm install --frozen-lockfile
+# shamefully-hoist puts all packages in /app/node_modules (no symlinks)
+# so TypeScript and sub-packages can find deps without pnpm's resolution
+RUN pnpm install --frozen-lockfile --shamefully-hoist
 
 # Source
 COPY packages/shared ./packages/shared
 COPY apps/server ./apps/server
 
-# Compile server (paths alias resolves shared/src directly)
-RUN pnpm --filter server build
+# Compile server — call tsc via workspace root bin to avoid pnpm symlink issues
+WORKDIR /app/apps/server
+RUN /app/node_modules/.bin/tsc -p tsconfig.build.json
+WORKDIR /app
 
 # Create a pruned production-only deployment folder
 RUN pnpm --filter server --prod deploy /deploy
