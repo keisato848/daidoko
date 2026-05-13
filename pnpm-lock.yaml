@@ -54,8 +54,8 @@ importers:
         specifier: ~51.0.0
         version: 51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.0(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0)
       expo-keep-awake:
-        specifier: ^55.0.8
-        version: 55.0.8(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.0(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))(react@18.2.0)
+        specifier: ^13.0.2
+        version: 13.0.2(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.0(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))
       expo-router:
         specifier: ~3.5.0
         version: 3.5.24(4kr44f5hbpdcctafmtolfnhlbi)
@@ -1553,7 +1553,7 @@ packages:
 
   '@expo/bunyan@4.0.1':
     resolution: {integrity: sha512-+Lla7nYSiHZirgK+U/uYzsLv/X+HaJienbD5AKX1UQZHYfWaP+9uuQluRB4GrEVWF0GZ7vEVp/jzaOT9k/SQlg==}
-    engines: {'0': node >=0.10.0}
+    engines: {node: '>=0.10.0'}
 
   '@expo/cli@0.18.31':
     resolution: {integrity: sha512-v9llw9fT3Uv+TCM6Xllo54t672CuYtinEQZ2LPJ2EJsCwuTc4Cd2gXQaouuIVD21VoeGQnr5JtJuWbF97sBKzQ==}
@@ -3857,12 +3857,6 @@ packages:
     resolution: {integrity: sha512-kKiwkVg/bY0AJ5q1Pxnm/GvpeB6hbNJhcFsoOWDh2NlpibhCLaHL826KHUM+WsnJRbVRxJ+K9vbPRHEMvFpVyw==}
     peerDependencies:
       expo: '*'
-
-  expo-keep-awake@55.0.8:
-    resolution: {integrity: sha512-PfIpMfM+STOBwkR5XOE+yVtER86c44MD+W8QD8JxuO0sT9pF7Y1SJYakWlpvX8xsGA+bjKLxftm9403s9kQhKA==}
-    peerDependencies:
-      expo: '*'
-      react: '*'
 
   expo-linking@55.0.14:
     resolution: {integrity: sha512-ZSqOvJyEquf04M5/ZpQo2diK9QRnNrzgqZo7p8gzxaPPHxP6IyUJnmcd12qT+dTxnRTVmUpxFQVHHWbvwPNIwQ==}
@@ -11575,11 +11569,6 @@ snapshots:
   expo-keep-awake@13.0.2(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.0(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0)):
     dependencies:
       expo: 51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.0(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0)
-
-  expo-keep-awake@55.0.8(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.0(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))(react@18.2.0):
-    dependencies:
-      expo: 51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.0(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0)
-      react: 18.2.0
 
   expo-linking@55.0.14(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.0(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))(react-native@0.74.0(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0):
     dependencies:
