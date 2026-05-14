@@ -29,10 +29,7 @@
       "output": "single",
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-router",
-      "expo-updates"
-    ],
+    "plugins": ["expo-router"],
     "experiments": {
       "typedRoutes": true
     },
@@ -43,12 +40,6 @@
       "router": {
         "origin": false
       }
-    },
-    "updates": {
-      "url": "https://u.expo.dev/ae12a2e5-cd4a-4dd4-a5f5-741511a52281"
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
     },
     "owner": "keisato848"
   }
