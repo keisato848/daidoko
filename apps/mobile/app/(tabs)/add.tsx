@@ -1,9 +1,9 @@
 /**
  * S08: Add Recipe — Method selection bottom sheet
- * Manual entry is active; URL import and OCR show "coming soon"
+ * Entry point for manual, text, URL, and OCR-based recipe creation.
  */
 import { useRouter } from 'expo-router';
-import { Camera, Globe, PenLine } from 'lucide-react-native';
+import { Camera, FileText, Globe, PenLine } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
@@ -22,6 +22,13 @@ const METHODS: MethodOption[] = [
     icon: <PenLine size={24} color={Colors.gold} />,
     label: '手動で入力',
     description: 'レシピを一から入力する',
+    enabled: true,
+  },
+  {
+    id: 'text',
+    icon: <FileText size={24} color={Colors.gold} />,
+    label: 'テキストから作成',
+    description: '本文を貼り付けて下書き化',
     enabled: true,
   },
   {
@@ -47,6 +54,8 @@ export default function AddScreen() {
     if (!method.enabled) return;
     if (method.id === 'manual') {
       router.push('/recipes/new');
+    } else if (method.id === 'text') {
+      router.push('/recipes/import-text');
     } else if (method.id === 'url') {
       router.push('/recipes/import-url');
     } else if (method.id === 'ocr') {

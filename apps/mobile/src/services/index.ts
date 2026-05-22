@@ -22,6 +22,8 @@ export type {
   SaveRecipeInput,
   UpdateRecipeInput,
   TagItem,
+  CookingPhotoItem,
   SaveCookingLogInput,
+  SaveCookingPhotoInput,
   CookingLogEntry,
 } from './types';

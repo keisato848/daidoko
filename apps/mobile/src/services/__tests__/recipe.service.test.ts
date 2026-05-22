@@ -17,6 +17,7 @@ import {
   updateRecipe,
 } from '../recipe.service';
 import type { SaveRecipeInput, UpdateRecipeInput } from '../types';
+import { parseRecipeText } from '../../utils/recipeTextParser';
 
 function assertDefined<T>(value: T | null | undefined): asserts value is T {
   expect(value).toBeDefined();
@@ -125,6 +126,40 @@ describe('recipe.service (mock/web)', () => {
       const created = list.find((r) => r.id === id);
       assertDefined(created);
       expect(created.title).toBe('テストレシピ');
+    });
+
+    it('creates a recipe from parsed freeform text', async () => {
+      const parsed = parseRecipeText(`
+鶏そぼろ丼
+2人分
+材料
+鶏ひき肉 200g
+しょうゆ 大さじ2
+みりん 大さじ2
+卵 2個
+作り方
+1. 鶏ひき肉と調味料を炒める
+2. 卵を炒り卵にする
+3. ごはんに盛る
+`);
+
+      const id = await createRecipe(parsed.formData);
+      const detail = await getRecipeDetail(id);
+
+      assertDefined(detail);
+      expect(detail.title).toBe('鶏そぼろ丼');
+      expect(detail.servings).toBe(2);
+      expect(detail.ingredients.map((ingredient) => ingredient.name)).toEqual([
+        '鶏ひき肉',
+        'しょうゆ',
+        'みりん',
+        '卵',
+      ]);
+      expect(detail.steps.map((step) => step.body)).toEqual([
+        '鶏ひき肉と調味料を炒める',
+        '卵を炒り卵にする',
+        'ごはんに盛る',
+      ]);
     });
   });
 
