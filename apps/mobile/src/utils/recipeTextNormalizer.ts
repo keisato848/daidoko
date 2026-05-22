@@ -30,7 +30,9 @@ export interface RecipeTextNormalizerFailure {
 export interface RecipeTextNormalizerProvider {
   source: Exclude<RecipeTextParseSource, 'parser'>;
   isAvailable: () => Promise<boolean>;
-  normalize: (input: RecipeTextNormalizerInput) => Promise<RecipeTextNormalizerOutput | RecipeTextNormalizerFailure>;
+  normalize: (
+    input: RecipeTextNormalizerInput,
+  ) => Promise<RecipeTextNormalizerOutput | RecipeTextNormalizerFailure>;
 }
 
 export interface ParseRecipeTextWithAssistanceOptions {
@@ -80,7 +82,9 @@ function confidenceAtLeast(actual: ParseConfidence, target: ParseConfidence): bo
 
 function improvesConfidence(candidate: ParsedRecipeText, base: ParsedRecipeText): boolean {
   if (CONFIDENCE_SCORE[candidate.confidence] > CONFIDENCE_SCORE[base.confidence]) return true;
-  const candidateIngredientCount = candidate.formData.ingredients.filter((item) => item.name.trim()).length;
+  const candidateIngredientCount = candidate.formData.ingredients.filter((item) =>
+    item.name.trim(),
+  ).length;
   const baseIngredientCount = base.formData.ingredients.filter((item) => item.name.trim()).length;
   const candidateStepCount = candidate.formData.steps.filter((item) => item.body.trim()).length;
   const baseStepCount = base.formData.steps.filter((item) => item.body.trim()).length;
@@ -93,7 +97,10 @@ function isNativeRecipeTextLlmModule(value: unknown): value is NativeRecipeTextL
     isAvailable?: unknown;
     normalizeRecipeText?: unknown;
   };
-  return typeof candidate.isAvailable === 'function' && typeof candidate.normalizeRecipeText === 'function';
+  return (
+    typeof candidate.isAvailable === 'function' &&
+    typeof candidate.normalizeRecipeText === 'function'
+  );
 }
 
 function getNativeRecipeTextLlmModule(): NativeRecipeTextLlmModule | null {
@@ -115,7 +122,11 @@ export function createGemmaNativeRecipeTextNormalizer(): RecipeTextNormalizerPro
     async normalize(input) {
       const module = getNativeRecipeTextLlmModule();
       if (!module || !(await module.isAvailable())) {
-        return { ok: false, source: 'gemma-native', reason: 'Gemma native provider is unavailable' };
+        return {
+          ok: false,
+          source: 'gemma-native',
+          reason: 'Gemma native provider is unavailable',
+        };
       }
 
       try {
@@ -143,12 +154,10 @@ export function createGemmaNativeRecipeTextNormalizer(): RecipeTextNormalizerPro
 
 function inferTitle(rawText: string, parsed: ParsedRecipeText): string {
   const parsedTitle = parsed.formData.title.trim();
-  if (parsedTitle && parsedTitle.length <= 30 && !OPERATION_PATTERN.test(parsedTitle)) return parsedTitle;
+  if (parsedTitle && parsedTitle.length <= 30 && !OPERATION_PATTERN.test(parsedTitle))
+    return parsedTitle;
 
-  const firstLine = rawText
-    .split(/\r?\n/)
-    .map(normalizeWhitespace)
-    .find(Boolean);
+  const firstLine = rawText.split(/\r?\n/).map(normalizeWhitespace).find(Boolean);
   if (firstLine && firstLine.length <= 30 && !/[\d０-９]/.test(firstLine)) return firstLine;
 
   const firstSentence = normalizeWhitespace(rawText.split(/[。.!！?？\n]/)[0] ?? '');
@@ -214,13 +223,19 @@ function normalizeWithLocalHeuristics(rawText: string, parsed: ParsedRecipeText)
   const title = inferTitle(rawText, parsed);
   const ingredients = collectIngredientMatches(rawText);
   const steps = collectStepSentences(rawText);
-  const servings = parsed.formData.servings ?? parsePositiveInt(rawText.match(/(\d+|[０-９]+)\s*(?:人分|人前)/)?.[1]);
+  const servings =
+    parsed.formData.servings ??
+    parsePositiveInt(rawText.match(/(\d+|[０-９]+)\s*(?:人分|人前)/)?.[1]);
   const cookTimeMin =
     parsed.formData.cookTimeMin ??
-    parsePositiveInt(rawText.match(/(?:調理時間|所要時間|cook(?:ing)? time)\D*(\d+|[０-９]+)/i)?.[1]);
+    parsePositiveInt(
+      rawText.match(/(?:調理時間|所要時間|cook(?:ing)? time)\D*(\d+|[０-９]+)/i)?.[1],
+    );
   const prepTimeMin =
     parsed.formData.prepTimeMin ??
-    parsePositiveInt(rawText.match(/(?:下準備|準備時間|prep(?:aration)? time)\D*(\d+|[０-９]+)/i)?.[1]);
+    parsePositiveInt(
+      rawText.match(/(?:下準備|準備時間|prep(?:aration)? time)\D*(\d+|[０-９]+)/i)?.[1],
+    );
 
   if (!title || ingredients.length === 0 || steps.length === 0) return null;
 
@@ -289,7 +304,10 @@ export async function parseRecipeTextWithAssistance(
     }
 
     const candidate = parseRecipeText(output.text);
-    if (!recipeFormSchema.safeParse(candidate.formData).success || !improvesConfidence(candidate, base)) {
+    if (
+      !recipeFormSchema.safeParse(candidate.formData).success ||
+      !improvesConfidence(candidate, base)
+    ) {
       failures.push(`${output.source}: normalized output did not improve parse confidence`);
       continue;
     }

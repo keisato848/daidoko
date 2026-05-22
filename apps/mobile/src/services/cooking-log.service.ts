@@ -23,10 +23,16 @@ function groupPhotosByLogId(
 }
 
 function validateCookingLogInput(input: SaveCookingLogInput): void {
-  if (input.rating != null && (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5)) {
+  if (
+    input.rating != null &&
+    (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5)
+  ) {
     throw new RangeError('rating must be an integer between 1 and 5');
   }
-  if (input.servings != null && (!Number.isInteger(input.servings) || input.servings < 1 || input.servings > 99)) {
+  if (
+    input.servings != null &&
+    (!Number.isInteger(input.servings) || input.servings < 1 || input.servings > 99)
+  ) {
     throw new RangeError('servings must be an integer between 1 and 99');
   }
   if (input.memo != null && input.memo.length > 500) {

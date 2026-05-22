@@ -107,7 +107,10 @@ export default function RecipeDetailScreen() {
         <View style={styles.notFoundContainer}>
           <Text style={styles.notFoundTitle}>レシピが見つかりません</Text>
           <Text style={styles.notFoundBody}>削除されたか、参照できないレシピです。</Text>
-          <Pressable style={styles.notFoundButton} onPress={() => router.replace('/(tabs)/recipes')}>
+          <Pressable
+            style={styles.notFoundButton}
+            onPress={() => router.replace('/(tabs)/recipes')}
+          >
             <Text style={styles.notFoundButtonText}>レシピ一覧へ戻る</Text>
           </Pressable>
         </View>
@@ -123,11 +126,7 @@ export default function RecipeDetailScreen() {
           <ChevronLeft size={20} color={Colors.goldDim} />
           <Text style={styles.backText}>戻る</Text>
         </Pressable>
-        <Pressable
-          style={styles.menuButton}
-          onPress={() => setShowMenu(!showMenu)}
-          hitSlop={12}
-        >
+        <Pressable style={styles.menuButton} onPress={() => setShowMenu(!showMenu)} hitSlop={12}>
           <MoreVertical size={20} color={Colors.goldDim} />
         </Pressable>
         {showMenu && (

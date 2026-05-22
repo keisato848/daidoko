@@ -11,10 +11,7 @@ import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
 import { createRecipe } from '../../../src/services/recipe.service';
-import {
-  RECIPE_TEXT_AI_PROMPT,
-  type ParsedRecipeText,
-} from '../../../src/utils/recipeTextParser';
+import { RECIPE_TEXT_AI_PROMPT, type ParsedRecipeText } from '../../../src/utils/recipeTextParser';
 import { parseRecipeTextWithAssistance } from '../../../src/utils/recipeTextNormalizer';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
