@@ -8,6 +8,7 @@ import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import * as schema from './schema';
 import {
   seedCookingLogs,
+  seedCookingPhotos,
   seedFamilies,
   seedIngredients,
   seedRecipeTags,
@@ -149,6 +150,8 @@ const CREATE_TABLES_SQL = `
     created_at TEXT NOT NULL
   );
 
+  CREATE INDEX IF NOT EXISTS idx_cooking_photos_log ON cooking_photos(log_id);
+
   CREATE TABLE IF NOT EXISTS memos (
     id TEXT PRIMARY KEY,
     recipe_id TEXT NOT NULL REFERENCES recipes(id),
@@ -212,6 +215,7 @@ export async function seedDatabase(database: DB): Promise<void> {
   await database.insert(schema.tags).values([...seedTags]);
   await database.insert(schema.recipeTags).values([...seedRecipeTags]);
   await database.insert(schema.cookingLogs).values([...seedCookingLogs]);
+  await database.insert(schema.cookingPhotos).values([...seedCookingPhotos]);
 
   // Populate FTS index
   await rebuildFts(database);

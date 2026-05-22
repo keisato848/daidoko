@@ -44,7 +44,7 @@ export default function NewRecipeScreen() {
       await createRecipe(input);
       clearDraft();
       setShowToast(true);
-      setTimeout(() => router.back(), 1500);
+      setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
     [clearDraft, router],
   );

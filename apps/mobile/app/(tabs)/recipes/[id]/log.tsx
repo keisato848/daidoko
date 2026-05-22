@@ -1,9 +1,10 @@
 /**
  * S07: Cooking Log Registration
- * Records rating + memo after cooking session completes
+ * Records photos + rating + memo after cooking session completes
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { Camera, X } from 'lucide-react-native';
+import { useCallback, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +19,11 @@ import {
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { createCookingLog } from '../../../../src/services/cooking-log.service';
+import type { SaveCookingPhotoInput } from '../../../../src/services/types';
+
+function getPhotoFilename(localPath: string): string {
+  return localPath.split('/').pop() ?? localPath;
+}
 
 function StarRow({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -42,8 +48,27 @@ export default function CookingLogScreen() {
   const router = useRouter();
   const [rating, setRating] = useState(0);
   const [memo, setMemo] = useState('');
+  const [photos, setPhotos] = useState<SaveCookingPhotoInput[]>([]);
   const [saving, setSaving] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const dummyPhotoSequence = useRef(1);
+
+  const handleAddPhoto = useCallback(() => {
+    const sequence = dummyPhotoSequence.current;
+    dummyPhotoSequence.current += 1;
+    const filename = `dummy-cooking-photo-${String(sequence).padStart(2, '0')}.jpg`;
+    setPhotos((current) => [
+      ...current,
+      {
+        localPath: `file:///daidoko/dummy/${filename}`,
+        takenAt: new Date().toISOString(),
+      },
+    ]);
+  }, []);
+
+  const handleRemovePhoto = useCallback((localPath: string) => {
+    setPhotos((current) => current.filter((photo) => photo.localPath !== localPath));
+  }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -53,13 +78,14 @@ export default function CookingLogScreen() {
         rating: rating > 0 ? rating : undefined,
         memo: memo.trim() || undefined,
         cookedAt: new Date().toISOString(),
+        photos: photos.length > 0 ? photos : undefined,
       });
       setShowToast(true);
       setTimeout(() => router.push('/(tabs)'), 1500);
     } finally {
       setSaving(false);
     }
-  }, [id, rating, memo, router]);
+  }, [id, rating, memo, photos, router]);
 
   const handleSkip = () => router.push('/(tabs)');
 
@@ -81,6 +107,35 @@ export default function CookingLogScreen() {
           <Text style={styles.completionEmoji}>🎉</Text>
           <Text style={styles.completionText}>お疲れさまでした！</Text>
           <Text style={styles.completionSub}>今日の料理を記録しておきましょう</Text>
+        </View>
+
+        {/* Photos */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>写真</Text>
+          <Pressable style={styles.photoAddButton} onPress={handleAddPhoto}>
+            <Camera color={Colors.gold} size={18} />
+            <Text style={styles.photoAddText}>写真を追加</Text>
+          </Pressable>
+          {photos.length > 0 && (
+            <View style={styles.photoList}>
+              {photos.map((photo, index) => (
+                <View key={photo.localPath} style={styles.photoRow}>
+                  <View style={styles.photoThumb}>
+                    <Text style={styles.photoThumbText}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.photoMeta}>
+                    <Text style={styles.photoName} numberOfLines={1}>
+                      {getPhotoFilename(photo.localPath)}
+                    </Text>
+                    <Text style={styles.photoState}>登録待ち</Text>
+                  </View>
+                  <Pressable onPress={() => handleRemovePhoto(photo.localPath)} hitSlop={8}>
+                    <X color={Colors.muted} size={18} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Rating */}
@@ -194,6 +249,63 @@ const styles = StyleSheet.create({
   },
   ratingHint: {
     fontSize: 13,
+    fontWeight: '400',
+    color: Colors.paperDim,
+  },
+  photoAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingVertical: 12,
+    backgroundColor: Colors.bgCard,
+  },
+  photoAddText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.gold,
+  },
+  photoList: {
+    gap: 8,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    padding: 10,
+    backgroundColor: '#120E08',
+  },
+  photoThumb: {
+    width: 42,
+    height: 42,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#261B0D',
+  },
+  photoThumbText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.gold,
+  },
+  photoMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+  photoName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.paper,
+  },
+  photoState: {
+    marginTop: 2,
+    fontSize: 12,
     fontWeight: '400',
     color: Colors.paperDim,
   },

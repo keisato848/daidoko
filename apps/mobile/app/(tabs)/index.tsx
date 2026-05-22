@@ -2,8 +2,8 @@
  * S01: Home / Timeline screen
  * Shows recent cooking logs with filter tabs
  */
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
@@ -52,9 +52,11 @@ export default function HomeScreen() {
     setEntries(filtered);
   }, [filter]);
 
-  useEffect(() => {
-    void loadTimeline();
-  }, [loadTimeline]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadTimeline();
+    }, [loadTimeline]),
+  );
 
   const renderItem = ({ item, index }: { item: TimelineEntry; index: number }) => {
     const showDateHeader =

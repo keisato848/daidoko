@@ -188,17 +188,23 @@ export const cookingLogs = sqliteTable(
 );
 
 // ─── CookingPhoto ─────────��──────────────────────────────────��──────────────
-export const cookingPhotos = sqliteTable('cooking_photos', {
-  id: text('id').primaryKey(),
-  logId: text('log_id')
-    .notNull()
-    .references(() => cookingLogs.id),
-  localPath: text('local_path').notNull(),
-  cloudUrl: text('cloud_url'),
-  sortOrder: integer('sort_order').notNull(),
-  takenAt: text('taken_at'),
-  createdAt: text('created_at').notNull(),
-});
+export const cookingPhotos = sqliteTable(
+  'cooking_photos',
+  {
+    id: text('id').primaryKey(),
+    logId: text('log_id')
+      .notNull()
+      .references(() => cookingLogs.id),
+    localPath: text('local_path').notNull(),
+    cloudUrl: text('cloud_url'),
+    sortOrder: integer('sort_order').notNull(),
+    takenAt: text('taken_at'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => ({
+    logIdx: index('idx_cooking_photos_log').on(table.logId),
+  }),
+);
 
 // ─── Memo ───────────────���───────────────────────────────────────────────────
 export const memos = sqliteTable(

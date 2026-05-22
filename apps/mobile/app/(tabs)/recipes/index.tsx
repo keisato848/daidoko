@@ -2,9 +2,9 @@
  * S04: Recipe List screen
  * Grid view with search (title, reading, tags, ingredient names) and filter tabs
  */
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Search } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Stars } from '../../../src/components/Stars';
@@ -36,9 +36,11 @@ export default function RecipeListScreen() {
     setRecipes(await getRecipeList());
   }, []);
 
-  useEffect(() => {
-    void loadRecipes();
-  }, [loadRecipes]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadRecipes();
+    }, [loadRecipes]),
+  );
 
   const filtered = useMemo(() => {
     let result = recipes;

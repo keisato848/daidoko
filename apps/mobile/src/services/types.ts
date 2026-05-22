@@ -46,8 +46,19 @@ export interface TimelineEntry {
   recipeTitle: string;
   userName: string;
   cookedAt: string;
+  servings: number | null;
   rating: number | null;
   memo: string | null;
+  photos: CookingPhotoItem[];
+}
+
+export interface CookingPhotoItem {
+  id: string;
+  localPath: string;
+  cloudUrl: string | null;
+  sortOrder: number;
+  takenAt: string | null;
+  createdAt: string;
 }
 
 export interface SaveRecipeInput {
@@ -83,9 +94,17 @@ export interface TagItem {
 
 export interface SaveCookingLogInput {
   recipeId?: string;
+  servings?: number;
   rating?: number;
   memo?: string;
   cookedAt: string;
+  photos?: SaveCookingPhotoInput[];
+}
+
+export interface SaveCookingPhotoInput {
+  localPath: string;
+  cloudUrl?: string | null;
+  takenAt?: string;
 }
 
 export interface CookingLogEntry {
@@ -94,6 +113,8 @@ export interface CookingLogEntry {
   recipeTitle: string;
   userName: string;
   cookedAt: string;
+  servings: number | null;
   rating: number | null;
   memo: string | null;
+  photos: CookingPhotoItem[];
 }

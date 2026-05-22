@@ -3,14 +3,26 @@
  */
 import { isNativePlatform } from '../db/client';
 import { getMockTimeline } from '../db/mock';
-import type { TimelineEntry } from './types';
+import type { CookingPhotoItem, TimelineEntry } from './types';
+
+function groupPhotosByLogId(
+  photos: (CookingPhotoItem & { logId: string })[],
+): Map<string, CookingPhotoItem[]> {
+  const grouped = new Map<string, CookingPhotoItem[]>();
+  for (const { logId, ...photo } of photos) {
+    const current = grouped.get(logId) ?? [];
+    current.push(photo);
+    grouped.set(logId, current);
+  }
+  return grouped;
+}
 
 export async function getTimeline(): Promise<TimelineEntry[]> {
   if (!isNativePlatform) {
     return getMockTimeline();
   }
 
-  const { eq } = await import('drizzle-orm');
+  const { eq, inArray } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
   const db = getDb();
@@ -20,8 +32,10 @@ export async function getTimeline(): Promise<TimelineEntry[]> {
       id: schema.cookingLogs.id,
       recipeId: schema.cookingLogs.recipeId,
       recipeTitle: schema.recipes.title,
+      recipeStatus: schema.recipes.status,
       userName: schema.users.displayName,
       cookedAt: schema.cookingLogs.cookedAt,
+      servings: schema.cookingLogs.servings,
       rating: schema.cookingLogs.rating,
       memo: schema.cookingLogs.memo,
     })
@@ -30,15 +44,39 @@ export async function getTimeline(): Promise<TimelineEntry[]> {
     .leftJoin(schema.users, eq(schema.cookingLogs.cookedBy, schema.users.id))
     .orderBy(schema.cookingLogs.cookedAt);
 
+  const photoRows =
+    logs.length > 0
+      ? await db
+          .select({
+            id: schema.cookingPhotos.id,
+            logId: schema.cookingPhotos.logId,
+            localPath: schema.cookingPhotos.localPath,
+            cloudUrl: schema.cookingPhotos.cloudUrl,
+            sortOrder: schema.cookingPhotos.sortOrder,
+            takenAt: schema.cookingPhotos.takenAt,
+            createdAt: schema.cookingPhotos.createdAt,
+          })
+          .from(schema.cookingPhotos)
+          .where(
+            inArray(
+              schema.cookingPhotos.logId,
+              logs.map((log) => log.id),
+            ),
+          )
+      : [];
+  const photosByLogId = groupPhotosByLogId(photoRows);
+
   return logs
     .sort((a, b) => b.cookedAt.localeCompare(a.cookedAt))
     .map((l) => ({
       id: l.id,
-      recipeId: l.recipeId,
+      recipeId: l.recipeStatus === 'archived' ? null : l.recipeId,
       recipeTitle: l.recipeTitle ?? 'フリー記録',
       userName: l.userName ?? '不明',
       cookedAt: l.cookedAt,
+      servings: l.servings,
       rating: l.rating,
       memo: l.memo,
+      photos: (photosByLogId.get(l.id) ?? []).sort((a, b) => a.sortOrder - b.sortOrder),
     }));
 }
