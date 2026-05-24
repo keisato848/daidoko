@@ -3,7 +3,7 @@
  * Drizzle ORM (expo-sqlite) definitions
  *
  * Entities: User, Family, Recipe, RecipeRevision, Ingredient, Step,
- *           Tag, RecipeTag, Source, CookingLog, CookingPhoto, Memo, SyncMeta
+ *           Tag, RecipeTag, Source, CookingLog, CookingPhoto, Memo, SyncMeta, AppMeta
  */
 import { sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -234,6 +234,13 @@ export const syncMeta = sqliteTable('sync_meta', {
   vectorClock: text('vector_clock').notNull(), // JSON string
   deletedAt: text('deleted_at'),
   lastSyncedAt: text('last_synced_at'),
+});
+
+// ─── AppMeta ────────────────────────────────────────────────────────────────
+export const appMeta = sqliteTable('app_meta', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: text('updated_at').notNull(),
 });
 
 // ─── FTS5 Virtual Table ────���────────────────────────────────────────────────

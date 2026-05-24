@@ -21,6 +21,39 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
+export const CURRENT_SCHEMA_VERSION = 1;
+
+const SAMPLE_DATA_VERSION = '1';
+const SAMPLE_DATA_META_KEY = 'sample_data_version';
+
+export interface SeedSnapshot {
+  userIds: string[];
+  familyIds: string[];
+  recipeIds: string[];
+  revisionIds: string[];
+  ingredientIds: string[];
+  stepIds: string[];
+  tagIds: string[];
+  cookingLogIds: string[];
+  cookingPhotoIds: string[];
+}
+
+export interface MigrationResult {
+  schemaVersion: number;
+}
+
+const seedIdSets = {
+  userIds: new Set(seedUsers.map((item) => item.id)),
+  familyIds: new Set(seedFamilies.map((item) => item.id)),
+  recipeIds: new Set(seedRecipes.map((item) => item.id)),
+  revisionIds: new Set(seedRevisions.map((item) => item.id)),
+  ingredientIds: new Set(seedIngredients.map((item) => item.id)),
+  stepIds: new Set(seedSteps.map((item) => item.id)),
+  tagIds: new Set(seedTags.map((item) => item.id)),
+  cookingLogIds: new Set(seedCookingLogs.map((item) => item.id)),
+  cookingPhotoIds: new Set(seedCookingPhotos.map((item) => item.id)),
+} satisfies Record<keyof SeedSnapshot, Set<string>>;
+
 const CREATE_TABLES_SQL = `
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -173,6 +206,12 @@ const CREATE_TABLES_SQL = `
     PRIMARY KEY (entity_type, entity_id)
   );
 
+  CREATE TABLE IF NOT EXISTS app_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS ingredient_nutrition (
     id TEXT PRIMARY KEY,
     ingredient_id TEXT NOT NULL UNIQUE REFERENCES ingredients(id),
@@ -195,30 +234,130 @@ const CREATE_TABLES_SQL = `
 `;
 
 /** Run migrations (create tables) */
-export function runMigrations(expoDb: { execSync: (sql: string) => void }): void {
+export function runMigrations(expoDb: { execSync: (sql: string) => void }): MigrationResult {
   expoDb.execSync(CREATE_TABLES_SQL);
+  expoDb.execSync(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
+  return { schemaVersion: CURRENT_SCHEMA_VERSION };
+}
+
+function isSubsetOfSeed(ids: string[], seedIds: Set<string>): boolean {
+  return ids.every((id) => seedIds.has(id));
+}
+
+export function shouldInstallSampleData(snapshot: SeedSnapshot): boolean {
+  const allIds = Object.values(snapshot).flat();
+  if (allIds.length === 0) return true;
+
+  return (Object.keys(seedIdSets) as (keyof SeedSnapshot)[]).every((key) =>
+    isSubsetOfSeed(snapshot[key], seedIdSets[key]),
+  );
+}
+
+async function getSeedSnapshot(database: DB): Promise<SeedSnapshot> {
+  const users = await database.select({ id: schema.users.id }).from(schema.users);
+  const families = await database.select({ id: schema.families.id }).from(schema.families);
+  const recipes = await database.select({ id: schema.recipes.id }).from(schema.recipes);
+  const revisions = await database
+    .select({ id: schema.recipeRevisions.id })
+    .from(schema.recipeRevisions);
+  const ingredients = await database.select({ id: schema.ingredients.id }).from(schema.ingredients);
+  const steps = await database.select({ id: schema.steps.id }).from(schema.steps);
+  const tags = await database.select({ id: schema.tags.id }).from(schema.tags);
+  const cookingLogs = await database.select({ id: schema.cookingLogs.id }).from(schema.cookingLogs);
+  const cookingPhotos = await database
+    .select({ id: schema.cookingPhotos.id })
+    .from(schema.cookingPhotos);
+
+  return {
+    userIds: users.map((item) => item.id),
+    familyIds: families.map((item) => item.id),
+    recipeIds: recipes.map((item) => item.id),
+    revisionIds: revisions.map((item) => item.id),
+    ingredientIds: ingredients.map((item) => item.id),
+    stepIds: steps.map((item) => item.id),
+    tagIds: tags.map((item) => item.id),
+    cookingLogIds: cookingLogs.map((item) => item.id),
+    cookingPhotoIds: cookingPhotos.map((item) => item.id),
+  };
+}
+
+async function markSampleDataVersion(database: DB): Promise<void> {
+  await database
+    .insert(schema.appMeta)
+    .values({
+      key: SAMPLE_DATA_META_KEY,
+      value: SAMPLE_DATA_VERSION,
+      updatedAt: new Date().toISOString(),
+    })
+    .onConflictDoUpdate({
+      target: schema.appMeta.key,
+      set: {
+        value: SAMPLE_DATA_VERSION,
+        updatedAt: new Date().toISOString(),
+      },
+    });
 }
 
 /** Seed the database with sample data */
 export async function seedDatabase(database: DB): Promise<void> {
-  // Check if data already exists
-  const existing = await database.select().from(schema.users).limit(1);
-  if (existing.length > 0) return;
+  const seedMeta = await database
+    .select({ value: schema.appMeta.value })
+    .from(schema.appMeta)
+    .where(eq(schema.appMeta.key, SAMPLE_DATA_META_KEY))
+    .limit(1);
+  if (seedMeta[0]?.value === SAMPLE_DATA_VERSION) return;
+
+  const snapshot = await getSeedSnapshot(database);
+  if (!shouldInstallSampleData(snapshot)) {
+    await markSampleDataVersion(database);
+    return;
+  }
 
   // Insert in order to satisfy foreign key constraints
-  await database.insert(schema.users).values([...seedUsers]);
-  await database.insert(schema.families).values([...seedFamilies]);
-  await database.insert(schema.recipes).values([...seedRecipes]);
-  await database.insert(schema.recipeRevisions).values([...seedRevisions]);
-  await database.insert(schema.ingredients).values([...seedIngredients]);
-  await database.insert(schema.steps).values([...seedSteps]);
-  await database.insert(schema.tags).values([...seedTags]);
-  await database.insert(schema.recipeTags).values([...seedRecipeTags]);
-  await database.insert(schema.cookingLogs).values([...seedCookingLogs]);
-  await database.insert(schema.cookingPhotos).values([...seedCookingPhotos]);
+  await database
+    .insert(schema.users)
+    .values([...seedUsers])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.families)
+    .values([...seedFamilies])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.recipes)
+    .values([...seedRecipes])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.recipeRevisions)
+    .values([...seedRevisions])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.ingredients)
+    .values([...seedIngredients])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.steps)
+    .values([...seedSteps])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.tags)
+    .values([...seedTags])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.recipeTags)
+    .values([...seedRecipeTags])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.cookingLogs)
+    .values([...seedCookingLogs])
+    .onConflictDoNothing();
+  await database
+    .insert(schema.cookingPhotos)
+    .values([...seedCookingPhotos])
+    .onConflictDoNothing();
 
   // Populate FTS index
   await rebuildFts(database);
+  await markSampleDataVersion(database);
 }
 
 /** Rebuild FTS5 index from current recipe data */
