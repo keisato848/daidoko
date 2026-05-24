@@ -129,38 +129,39 @@ export default function RecipeDetailScreen() {
         <Pressable style={styles.menuButton} onPress={() => setShowMenu(!showMenu)} hitSlop={12}>
           <MoreVertical size={20} color={Colors.goldDim} />
         </Pressable>
-        {showMenu && (
-          <View style={styles.menuDropdown}>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                router.push(`/recipes/${id}/edit`);
-              }}
-            >
-              <Text style={styles.menuItemText}>編集</Text>
-            </Pressable>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                router.push(`/(tabs)/recipes/${id}/revisions`);
-              }}
-            >
-              <Text style={styles.menuItemText}>版履歴</Text>
-            </Pressable>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                handleDelete();
-              }}
-            >
-              <Text style={[styles.menuItemText, styles.menuItemDestructive]}>削除</Text>
-            </Pressable>
-          </View>
-        )}
       </View>
+
+      {showMenu && (
+        <View style={styles.menuDropdown}>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
+              router.push(`/recipes/${id}/edit`);
+            }}
+          >
+            <Text style={styles.menuItemText}>編集</Text>
+          </Pressable>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
+              router.push(`/(tabs)/recipes/${id}/revisions`);
+            }}
+          >
+            <Text style={styles.menuItemText}>版履歴</Text>
+          </Pressable>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
+              handleDelete();
+            }}
+          >
+            <Text style={[styles.menuItemText, styles.menuItemDestructive]}>削除</Text>
+          </Pressable>
+        </View>
+      )}
 
       <View style={styles.meta}>
         <Text style={styles.title}>{recipe.title}</Text>

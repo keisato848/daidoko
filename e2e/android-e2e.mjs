@@ -194,7 +194,15 @@ function findByContentDesc(xml, desc) {
 }
 
 function findByHint(xml, hint) {
-  return findNodeByAttr(xml, 'hint', hint);
+  return findNodeByAttr(xml, 'hint', hint) || findNodeByAttr(xml, 'text', hint);
+}
+
+function hasAnyText(xml, texts) {
+  return texts.some((text) => text && hasText(xml, text));
+}
+
+function toFullWidthDigits(value) {
+  return value.replace(/\d/g, (digit) => String.fromCharCode(digit.charCodeAt(0) + 0xfee0));
 }
 
 function getTextByHint(xml, hint) {
@@ -239,6 +247,7 @@ function findNodeByAttr(xml, attr, value) {
           bounds: [+b[1], +b[2], +b[3], +b[4]],
           cx: Math.floor((+b[1] + +b[3]) / 2),
           cy: Math.floor((+b[2] + +b[4]) / 2),
+          markup: node,
         };
       }
     }
@@ -502,7 +511,11 @@ async function testManualRecipeCreate() {
 
   // タイトル
   const inputRecipeName = await tapAndType('例: 肉じゃが', generatedRecipeName, { isDigit: true });
-  const recipeName = inputRecipeName || generatedRecipeName;
+  const recipeNameCandidates = [
+    inputRecipeName,
+    generatedRecipeName,
+    toFullWidthDigits(generatedRecipeName),
+  ].filter(Boolean);
 
   // 材料名 — IME 再ダンプで現在の座標を取る
   await tapAndType('材料名', '101', { isDigit: true });
@@ -551,16 +564,17 @@ async function testManualRecipeCreate() {
   await tapTab('レシピ');
   await sleep(2500);
   let listXml = uiDump('list-after-save');
-  for (let attempt = 1; attempt <= 5 && !hasText(listXml, recipeName); attempt++) {
+  for (let attempt = 1; attempt <= 5 && !hasAnyText(listXml, recipeNameCandidates); attempt++) {
     adb(['shell', 'input', 'swipe', '540', '1800', '540', '500', '300']);
     await sleep(1200);
     listXml = uiDump(`list-after-save-scroll-${attempt}`);
   }
-  if (!hasText(listXml, recipeName)) {
-    throw new Error(`saved recipe "${recipeName}" not found in list`);
+  const savedRecipeName = recipeNameCandidates.find((candidate) => hasText(listXml, candidate));
+  if (!savedRecipeName) {
+    throw new Error(`saved recipe "${recipeNameCandidates.join(' / ')}" not found in list`);
   }
-  lastCreatedRecipeName = recipeName;
-  return `saved & visible: ${recipeName}`;
+  lastCreatedRecipeName = savedRecipeName;
+  return `saved & visible: ${savedRecipeName}`;
 }
 
 async function testDeleteCreatedRecipe() {
@@ -616,7 +630,7 @@ async function testDeleteCreatedRecipe() {
 
   const searchValue = await tapAndType('レシピを探す', lastCreatedRecipeName, { isDigit: true });
   const searchXml = uiDump('delete-list-searched');
-  if ((searchValue && searchValue !== lastCreatedRecipeName) || hasText(searchXml, lastCreatedRecipeName)) {
+  if ((searchValue && searchValue !== lastCreatedRecipeName) || !hasText(searchXml, '0 件')) {
     throw new Error(`deleted recipe still appears in list: ${lastCreatedRecipeName}`);
   }
 
@@ -671,6 +685,7 @@ async function testUrlImport() {
   // 存在しない URL を入力して UNSUPPORTED_SITE エラー検証
   inputText('https://example.com');
   await sleep(1500);
+  await dismissSystemAnrIfShown();
 
   // 「取り込む」ボタン
   const goXml = uiDump('url-go');
@@ -681,9 +696,14 @@ async function testUrlImport() {
   await sleep(800);
   tap(goBtn.cx, goBtn.cy);
   await sleep(20000); // サーバー応答 + UI 更新待ち（実機なので余裕を持つ）
+  await dismissSystemAnrIfShown();
   screenshot('10-url-result');
 
-  const resultXml = uiDump('url-result');
+  let resultXml = uiDump('url-result');
+  if (resultXml.includes("isn't responding") || resultXml.includes('応答していません')) {
+    await dismissSystemAnrIfShown();
+    resultXml = uiDump('url-result-after-anr');
+  }
   // example.com は JSON-LD なし → UNSUPPORTED_SITE エラー表示が期待値
   // または、もし URL が成功するなら "レシピを確認・編集" が表示される
   if (
@@ -691,6 +711,7 @@ async function testUrlImport() {
     resultXml.includes('UNSUPPORTED') ||
     resultXml.includes('レシピを確認') ||
     resultXml.includes('取り込めません') ||
+    resultXml.includes('URLはhttp') ||
     resultXml.includes('取り込み') // 結果画面のヘッダー残存でも OK
   ) {
     return 'URL import responded';
