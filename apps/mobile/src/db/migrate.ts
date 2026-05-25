@@ -2,10 +2,11 @@
  * Database migration and seeding for v0.1 Alpha
  * Uses raw SQL for table creation (expo-sqlite doesn't support Drizzle migrations natively)
  */
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 
 import * as schema from './schema';
+import { isSampleDataEnabled } from './sampleData';
 import {
   seedCookingLogs,
   seedCookingPhotos,
@@ -21,7 +22,14 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
+
+const DEFAULT_USER_ID = 'user-kei';
+const DEFAULT_FAMILY_ID = 'family-001';
+const DEFAULT_MEMBER_ID = 'member-family-001-user-kei';
+const DEFAULT_USER_NAME = 'あなた';
+const DEFAULT_FAMILY_NAME = 'わたしの台所';
+const DEFAULT_INVITE_CODE = 'DK0001';
 
 const SAMPLE_DATA_VERSION = '1';
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
@@ -71,6 +79,18 @@ const CREATE_TABLES_SQL = `
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS family_members (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    user_id TEXT NOT NULL REFERENCES users(id),
+    role TEXT NOT NULL DEFAULT 'member',
+    joined_at TEXT NOT NULL,
+    UNIQUE(family_id, user_id)
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_family_members_family_user ON family_members(family_id, user_id);
+  CREATE INDEX IF NOT EXISTS idx_family_members_family ON family_members(family_id);
 
   CREATE TABLE IF NOT EXISTS sources (
     id TEXT PRIMARY KEY,
@@ -240,6 +260,63 @@ export function runMigrations(expoDb: { execSync: (sql: string) => void }): Migr
   return { schemaVersion: CURRENT_SCHEMA_VERSION };
 }
 
+export async function ensureLocalIdentity(database: DB): Promise<void> {
+  const now = new Date().toISOString();
+
+  await database
+    .insert(schema.users)
+    .values({
+      id: DEFAULT_USER_ID,
+      displayName: DEFAULT_USER_NAME,
+      avatarUrl: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
+
+  await database
+    .insert(schema.families)
+    .values({
+      id: DEFAULT_FAMILY_ID,
+      name: DEFAULT_FAMILY_NAME,
+      inviteCode: DEFAULT_INVITE_CODE,
+      ownerId: DEFAULT_USER_ID,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
+
+  const existingMembers = await database
+    .select({ id: schema.familyMembers.id })
+    .from(schema.familyMembers)
+    .where(eq(schema.familyMembers.familyId, DEFAULT_FAMILY_ID));
+
+  if (existingMembers.length === 0 && !isSampleDataEnabled()) {
+    await database
+      .update(schema.users)
+      .set({ displayName: DEFAULT_USER_NAME, updatedAt: now })
+      .where(and(eq(schema.users.id, DEFAULT_USER_ID), eq(schema.users.displayName, '恵')));
+
+    await database
+      .update(schema.families)
+      .set({ name: DEFAULT_FAMILY_NAME, inviteCode: DEFAULT_INVITE_CODE, updatedAt: now })
+      .where(
+        and(eq(schema.families.id, DEFAULT_FAMILY_ID), eq(schema.families.name, '佐藤家の台所')),
+      );
+  }
+
+  await database
+    .insert(schema.familyMembers)
+    .values({
+      id: DEFAULT_MEMBER_ID,
+      familyId: DEFAULT_FAMILY_ID,
+      userId: DEFAULT_USER_ID,
+      role: 'owner',
+      joinedAt: now,
+    })
+    .onConflictDoNothing();
+}
+
 function isSubsetOfSeed(ids: string[], seedIds: Set<string>): boolean {
   return ids.every((id) => seedIds.has(id));
 }
@@ -300,6 +377,8 @@ async function markSampleDataVersion(database: DB): Promise<void> {
 
 /** Seed the database with sample data */
 export async function seedDatabase(database: DB): Promise<void> {
+  if (!isSampleDataEnabled()) return;
+
   const seedMeta = await database
     .select({ value: schema.appMeta.value })
     .from(schema.appMeta)

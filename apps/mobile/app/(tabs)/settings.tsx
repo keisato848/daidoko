@@ -2,13 +2,19 @@
  * S15: Settings hub
  * Account, family, data management, and app info sections
  */
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { Colors } from '../../src/constants/theme';
-import { getCurrentFamily, getCurrentUser } from '../../src/services/user.service';
+import {
+  getCurrentFamily,
+  getCurrentFamilyProfile,
+  getCurrentUser,
+  getCurrentUserProfile,
+} from '../../src/services/user.service';
 
 interface SettingItem {
   id: string;
@@ -25,8 +31,19 @@ interface SettingSection {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const user = getCurrentUser();
-  const family = getCurrentFamily();
+  const [user, setUser] = useState(getCurrentUser());
+  const [family, setFamily] = useState(getCurrentFamily());
+
+  useFocusEffect(
+    useCallback(() => {
+      void Promise.all([getCurrentUserProfile(), getCurrentFamilyProfile()]).then(
+        ([nextUser, nextFamily]) => {
+          setUser(nextUser);
+          setFamily(nextFamily);
+        },
+      );
+    }, []),
+  );
 
   const showComingSoon = () => {
     Alert.alert('準備中', 'この機能は今後のバージョンで追加予定です。');

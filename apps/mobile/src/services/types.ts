@@ -24,6 +24,23 @@ export interface RecipeDetail {
   steps: StepItem[];
 }
 
+export interface RecipeRevisionSummary {
+  id: string;
+  recipeId: string;
+  revisionNumber: number;
+  isMajor: boolean;
+  createdBy: string;
+  createdAt: string;
+  servings: number | null;
+  cookTimeMin: number | null;
+  prepTimeMin: number | null;
+  description: string | null;
+  authorNote: string | null;
+  ingredientCount: number;
+  stepCount: number;
+  isCurrent: boolean;
+}
+
 export interface IngredientItem {
   id: string;
   groupLabel: string | null;
@@ -90,6 +107,36 @@ export interface TagItem {
   id: string;
   name: string;
   color: string | null;
+}
+
+export type FamilyRole = 'owner' | 'member';
+
+export interface CurrentUser {
+  id: string;
+  displayName: string;
+}
+
+export interface CurrentFamily {
+  id: string;
+  name: string;
+  inviteCode: string;
+  ownerId: string;
+  memberCount: number;
+}
+
+export interface FamilyMember {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: FamilyRole;
+  joinedAt: string;
+  isCurrentUser: boolean;
+}
+
+export interface JoinFamilyResult {
+  status: 'joined' | 'already-member';
+  family: CurrentFamily;
 }
 
 export interface SaveCookingLogInput {

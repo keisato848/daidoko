@@ -31,6 +31,7 @@ describe('database migrations', () => {
 
     expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS users');
+    expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS family_members');
     expect(statements).toContain(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   });
 });

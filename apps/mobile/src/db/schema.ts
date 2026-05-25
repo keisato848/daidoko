@@ -2,7 +2,7 @@
  * SQLite schema for だいどこ mobile app
  * Drizzle ORM (expo-sqlite) definitions
  *
- * Entities: User, Family, Recipe, RecipeRevision, Ingredient, Step,
+ * Entities: User, Family, FamilyMember, Recipe, RecipeRevision, Ingredient, Step,
  *           Tag, RecipeTag, Source, CookingLog, CookingPhoto, Memo, SyncMeta, AppMeta
  */
 import { sql } from 'drizzle-orm';
@@ -28,6 +28,26 @@ export const families = sqliteTable('families', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+// ─── FamilyMember ──────────────────────────────────────────────────────────
+export const familyMembers = sqliteTable(
+  'family_members',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    role: text('role').notNull().default('member'), // 'owner' | 'member'
+    joinedAt: text('joined_at').notNull(),
+  },
+  (table) => ({
+    familyUserIdx: uniqueIndex('idx_family_members_family_user').on(table.familyId, table.userId),
+    familyIdx: index('idx_family_members_family').on(table.familyId),
+  }),
+);
 
 // ─── Source ──────────────────────────────────────���──────────────────────────
 export const sources = sqliteTable('sources', {
