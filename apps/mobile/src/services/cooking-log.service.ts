@@ -2,6 +2,7 @@
  * CookingLog service — create cooking records and fetch per-recipe history
  */
 import { isNativePlatform } from '../db/client';
+import { shouldHideSeedCookingLog } from '../db/sampleData';
 import { createMockCookingLog, getMockCookingLogsForRecipe, getMockTimeline } from '../db/mock';
 import type {
   CookingLogEntry,
@@ -141,6 +142,7 @@ export async function getLogsForRecipe(recipeId: string): Promise<CookingLogEntr
   const photosByLogId = groupPhotosByLogId(photoRows);
 
   return logs
+    .filter((log) => !shouldHideSeedCookingLog(log.id, log.recipeId))
     .sort((a, b) => b.cookedAt.localeCompare(a.cookedAt))
     .map((l) => ({
       id: l.id,

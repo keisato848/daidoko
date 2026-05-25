@@ -2,6 +2,7 @@
  * Timeline service — data access for home screen cooking logs
  */
 import { isNativePlatform } from '../db/client';
+import { shouldHideSeedCookingLog } from '../db/sampleData';
 import { getMockTimeline } from '../db/mock';
 import type { CookingPhotoItem, TimelineEntry } from './types';
 
@@ -67,6 +68,7 @@ export async function getTimeline(): Promise<TimelineEntry[]> {
   const photosByLogId = groupPhotosByLogId(photoRows);
 
   return logs
+    .filter((log) => !shouldHideSeedCookingLog(log.id, log.recipeId))
     .sort((a, b) => b.cookedAt.localeCompare(a.cookedAt))
     .map((l) => ({
       id: l.id,
