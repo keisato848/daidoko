@@ -1,25 +1,15 @@
 /**
  * S13: Recipe Version History
- * Lists all RecipeRevisions for a recipe in reverse chronological order
+ * Lists all RecipeRevisions for a recipe in reverse chronological order.
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, GitBranch } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../../../src/constants/theme';
-import { getRecipeDetail } from '../../../../src/services/recipe.service';
-
-interface RevisionSummary {
-  id: string;
-  revisionNumber: number;
-  isMajor: boolean;
-  createdAt: string;
-  servings: number | null;
-  cookTimeMin: number | null;
-  ingredientCount: number;
-  stepCount: number;
-}
+import { getRecipeDetail, getRecipeRevisions } from '../../../../src/services/recipe.service';
+import type { RecipeRevisionSummary } from '../../../../src/services/types';
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -29,30 +19,28 @@ function formatDate(iso: string): string {
 export default function RevisionsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const [revisions, setRevisions] = useState<RevisionSummary[]>([]);
+  const [revisions, setRevisions] = useState<RecipeRevisionSummary[]>([]);
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
 
   const loadRevisions = useCallback(async () => {
-    if (!id) return;
-    const detail = await getRecipeDetail(id);
-    if (!detail) return;
-    setTitle(detail.title);
-
-    // v1.0: only current revision is tracked in mock/local DB
-    // Show the current snapshot as "Version 1"
-    setRevisions([
-      {
-        id: detail.id,
-        revisionNumber: 1,
-        isMajor: true,
-        createdAt: new Date().toISOString(),
-        servings: detail.servings,
-        cookTimeMin: detail.cookTimeMin,
-        ingredientCount: detail.ingredients.length,
-        stepCount: detail.steps.length,
-      },
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const [detail, nextRevisions] = await Promise.all([
+      getRecipeDetail(id),
+      getRecipeRevisions(id),
     ]);
+    if (!detail) {
+      setTitle('');
+      setRevisions([]);
+      setLoading(false);
+      return;
+    }
+    setTitle(detail.title);
+    setRevisions(nextRevisions);
     setLoading(false);
   }, [id]);
 
@@ -79,42 +67,43 @@ export default function RevisionsScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.infoBox}>
-            <GitBranch size={14} color={Colors.goldDim} />
-            <Text style={styles.infoText}>
-              複数バージョンの管理はクラウド同期（v2.0）で対応予定です。
-              現在は最新版のみ表示されます。
-            </Text>
-          </View>
-
-          {revisions.map((rev, index) => (
-            <View key={rev.id} style={styles.revisionCard}>
-              <View style={styles.revisionHeader}>
-                <View style={styles.revisionBadge}>
-                  <Text style={styles.revisionBadgeText}>
-                    {rev.isMajor ? `v${rev.revisionNumber}` : `v${rev.revisionNumber} (修正)`}
-                  </Text>
-                </View>
-                {index === 0 && (
-                  <View style={styles.currentBadge}>
-                    <Text style={styles.currentBadgeText}>現在</Text>
-                  </View>
-                )}
-                <Text style={styles.revisionDate}>{formatDate(rev.createdAt)}</Text>
-              </View>
-
-              <View style={styles.revisionMeta}>
-                {rev.servings != null && (
-                  <Text style={styles.revisionMetaItem}>👥 {rev.servings}人前</Text>
-                )}
-                {rev.cookTimeMin != null && (
-                  <Text style={styles.revisionMetaItem}>⏱ {rev.cookTimeMin}分</Text>
-                )}
-                <Text style={styles.revisionMetaItem}>🥬 材料 {rev.ingredientCount}品</Text>
-                <Text style={styles.revisionMetaItem}>📋 手順 {rev.stepCount}ステップ</Text>
-              </View>
+          {revisions.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.mutedText}>版履歴がありません</Text>
             </View>
-          ))}
+          ) : (
+            revisions.map((rev) => (
+              <View key={rev.id} style={styles.revisionCard}>
+                <View style={styles.revisionHeader}>
+                  <View style={styles.revisionBadge}>
+                    <Text style={styles.revisionBadgeText}>
+                      {rev.isMajor ? `v${rev.revisionNumber}` : `v${rev.revisionNumber} 修正`}
+                    </Text>
+                  </View>
+                  {rev.isCurrent && (
+                    <View style={styles.currentBadge}>
+                      <Text style={styles.currentBadgeText}>現在</Text>
+                    </View>
+                  )}
+                  <Text style={styles.revisionDate}>{formatDate(rev.createdAt)}</Text>
+                </View>
+
+                <View style={styles.revisionMeta}>
+                  {rev.servings != null && (
+                    <Text style={styles.revisionMetaItem}>👥 {rev.servings}人前</Text>
+                  )}
+                  {rev.cookTimeMin != null && (
+                    <Text style={styles.revisionMetaItem}>⏱ {rev.cookTimeMin}分</Text>
+                  )}
+                  <Text style={styles.revisionMetaItem}>🥬 材料 {rev.ingredientCount}品</Text>
+                  <Text style={styles.revisionMetaItem}>📋 手順 {rev.stepCount}ステップ</Text>
+                </View>
+
+                {rev.description && <Text style={styles.revisionBody}>{rev.description}</Text>}
+                {rev.authorNote && <Text style={styles.revisionNote}>{rev.authorNote}</Text>}
+              </View>
+            ))
+          )}
         </ScrollView>
       )}
     </View>
@@ -168,23 +157,10 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 12,
   },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#1A1108',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 4,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '400',
-    color: Colors.paperDim,
-    lineHeight: 20,
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
   },
   revisionCard: {
     backgroundColor: Colors.bgCard,
@@ -239,5 +215,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     color: Colors.paperDim,
+  },
+  revisionBody: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: Colors.paper,
+    lineHeight: 20,
+  },
+  revisionNote: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: Colors.goldDim,
+    lineHeight: 20,
   },
 });

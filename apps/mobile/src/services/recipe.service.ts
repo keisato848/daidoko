@@ -3,15 +3,23 @@
  * Handles both native (SQLite) and web (mock) data paths
  */
 import { isNativePlatform } from '../db/client';
+import { shouldHideSeedRecipe } from '../db/sampleData';
 import {
   getMockRecipeDetail,
   getMockRecipeList,
+  getMockRecipeRevisions,
   createMockRecipe,
   updateMockRecipe,
   deleteMockRecipe,
 } from '../db/mock';
 import { generateId } from '../utils/id';
-import type { RecipeDetail, RecipeListItem, SaveRecipeInput, UpdateRecipeInput } from './types';
+import type {
+  RecipeDetail,
+  RecipeListItem,
+  RecipeRevisionSummary,
+  SaveRecipeInput,
+  UpdateRecipeInput,
+} from './types';
 
 const FAMILY_ID = 'family-001';
 const USER_ID = 'user-kei';
@@ -39,9 +47,11 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
     .from(schema.recipes)
     .where(eq(schema.recipes.status, 'active'));
 
+  const visibleRecipes = allRecipes.filter((recipe) => !shouldHideSeedRecipe(recipe.id));
+
   const result: RecipeListItem[] = [];
 
-  for (const recipe of allRecipes) {
+  for (const recipe of visibleRecipes) {
     let cookTimeMin: number | null = null;
     if (recipe.currentRevId) {
       const revs = await db
@@ -108,6 +118,7 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
   if (rows.length === 0) return null;
   const r = rows[0];
 
+  if (shouldHideSeedRecipe(r.id)) return null;
   if (r.status === 'archived') return null;
 
   let servings: number | null = null;
@@ -185,6 +196,68 @@ export async function searchRecipes(query: string): Promise<RecipeListItem[]> {
       r.tags.some((t) => t.includes(q)) ||
       r.ingredientNames.some((name) => name.includes(q)),
   );
+}
+
+export async function getRecipeRevisions(recipeId: string): Promise<RecipeRevisionSummary[]> {
+  if (!isNativePlatform) {
+    return getMockRecipeRevisions(recipeId);
+  }
+
+  const { desc, eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const recipeRows = await db
+    .select({
+      id: schema.recipes.id,
+      currentRevId: schema.recipes.currentRevId,
+      status: schema.recipes.status,
+    })
+    .from(schema.recipes)
+    .where(eq(schema.recipes.id, recipeId))
+    .limit(1);
+  if (recipeRows.length === 0) return [];
+  if (recipeRows[0].status === 'archived' || shouldHideSeedRecipe(recipeRows[0].id)) return [];
+
+  const revisionRows = await db
+    .select()
+    .from(schema.recipeRevisions)
+    .where(eq(schema.recipeRevisions.recipeId, recipeId))
+    .orderBy(desc(schema.recipeRevisions.revisionNumber));
+
+  const result: RecipeRevisionSummary[] = [];
+  for (const revision of revisionRows) {
+    const [ingredients, steps] = await Promise.all([
+      db
+        .select({ id: schema.ingredients.id })
+        .from(schema.ingredients)
+        .where(eq(schema.ingredients.revisionId, revision.id)),
+      db
+        .select({ id: schema.steps.id })
+        .from(schema.steps)
+        .where(eq(schema.steps.revisionId, revision.id)),
+    ]);
+
+    result.push({
+      id: revision.id,
+      recipeId: revision.recipeId,
+      revisionNumber: revision.revisionNumber,
+      isMajor: revision.isMajor,
+      createdBy: revision.createdBy,
+      createdAt: revision.createdAt,
+      servings: revision.servings,
+      cookTimeMin: revision.cookTimeMin,
+      prepTimeMin: revision.prepTimeMin,
+      description: revision.description,
+      authorNote: revision.authorNote,
+      ingredientCount: ingredients.length,
+      stepCount: steps.length,
+      isCurrent: recipeRows[0].currentRevId === revision.id,
+    });
+  }
+
+  return result;
 }
 
 export async function createRecipe(input: SaveRecipeInput): Promise<string> {

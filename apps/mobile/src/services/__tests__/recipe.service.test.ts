@@ -13,6 +13,7 @@ import {
   deleteRecipe,
   getRecipeDetail,
   getRecipeList,
+  getRecipeRevisions,
   searchRecipes,
   updateRecipe,
 } from '../recipe.service';
@@ -192,6 +193,22 @@ describe('recipe.service (mock/web)', () => {
       assertDefined(detail);
       expect(detail.title).toBe('更新テスト（改良版）');
       expect(detail.servings).toBe(6);
+
+      const revisions = await getRecipeRevisions(id);
+      expect(revisions).toHaveLength(2);
+      expect(revisions[0]).toMatchObject({
+        id: revId,
+        revisionNumber: 2,
+        isCurrent: true,
+        ingredientCount: 2,
+        stepCount: 2,
+      });
+      expect(revisions[1]).toMatchObject({
+        revisionNumber: 1,
+        isCurrent: false,
+        ingredientCount: 1,
+        stepCount: 1,
+      });
     });
   });
 

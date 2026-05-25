@@ -7,6 +7,7 @@ import type {
   CookingPhotoItem,
   RecipeDetail,
   RecipeListItem,
+  RecipeRevisionSummary,
   SaveCookingLogInput,
   SaveRecipeInput,
   TagItem,
@@ -223,6 +224,32 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     ingredients,
     steps,
   };
+}
+
+export function getMockRecipeRevisions(recipeId: string): RecipeRevisionSummary[] {
+  const recipe = mockRecipes.find((r) => r.id === recipeId && r.status === 'active');
+  if (!recipe) return [];
+
+  return mockRevisions
+    .filter((revision) => revision.recipeId === recipeId)
+    .sort((a, b) => b.revisionNumber - a.revisionNumber)
+    .map((revision) => ({
+      id: revision.id,
+      recipeId: revision.recipeId,
+      revisionNumber: revision.revisionNumber,
+      isMajor: revision.isMajor,
+      createdBy: revision.createdBy,
+      createdAt: revision.createdAt,
+      servings: revision.servings,
+      cookTimeMin: revision.cookTimeMin,
+      prepTimeMin: revision.prepTimeMin,
+      description: revision.description,
+      authorNote: revision.authorNote,
+      ingredientCount: mockIngredients.filter((ingredient) => ingredient.revisionId === revision.id)
+        .length,
+      stepCount: mockSteps.filter((step) => step.revisionId === revision.id).length,
+      isCurrent: recipe.currentRevId === revision.id,
+    }));
 }
 
 export function getMockTags(): TagItem[] {
