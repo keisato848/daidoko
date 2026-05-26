@@ -6,7 +6,7 @@ const sampleRecipeIds: ReadonlySet<string> = new Set(seedRecipes.map((item) => i
 const sampleCookingLogIds: ReadonlySet<string> = new Set(seedCookingLogs.map((item) => item.id));
 
 export function isSampleDataEnabled(): boolean {
-  const flag = process.env[SAMPLE_DATA_FLAG];
+  const flag = process.env.EXPO_PUBLIC_ENABLE_SAMPLE_DATA ?? process.env[SAMPLE_DATA_FLAG];
   return (
     flag === '1' ||
     flag === 'true' ||
