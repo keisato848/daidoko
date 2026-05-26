@@ -12,6 +12,8 @@ export {
 export { getTimeline } from './timeline.service';
 export { createCookingLog, deleteCookingLog, getLogsForRecipe } from './cooking-log.service';
 export { createOcrSource } from './source.service';
+export { capturePhoto, cleanupTemporaryPhotos } from './photo-capture.service';
+export { preprocessImageForOcr } from './image-preprocess.service';
 export { getTagsForFamily, upsertTags } from './tag.service';
 export {
   addFamilyMember,
