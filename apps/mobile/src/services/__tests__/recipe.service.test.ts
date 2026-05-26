@@ -17,6 +17,7 @@ import {
   searchRecipes,
   updateRecipe,
 } from '../recipe.service';
+import { createOcrSource } from '../source.service';
 import type { SaveRecipeInput, UpdateRecipeInput } from '../types';
 import { parseRecipeText } from '../../utils/recipeTextParser';
 
@@ -161,6 +162,24 @@ describe('recipe.service (mock/web)', () => {
         '卵を炒り卵にする',
         'ごはんに盛る',
       ]);
+    });
+
+    it('OCR-SVC-03 links an OCR source to the first recipe revision', async () => {
+      const sourceId = await createOcrSource({
+        rawText: '肉じゃが\n材料\nじゃがいも 3個\n作り方\n1. 煮る',
+        capturedAt: '2026-05-27T10:00:00.000Z',
+      });
+
+      const id = await createRecipe({
+        title: 'OCR由来レシピ',
+        sourceId,
+        ingredients: [{ name: 'じゃがいも', amount: '3個' }],
+        steps: [{ body: '煮る' }],
+        tags: [],
+      });
+
+      const revisions = await getRecipeRevisions(id);
+      expect(revisions[0]).toMatchObject({ sourceId });
     });
   });
 

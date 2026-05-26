@@ -36,6 +36,7 @@ export interface RecipeRevisionSummary {
   prepTimeMin: number | null;
   description: string | null;
   authorNote: string | null;
+  sourceId: string | null;
   ingredientCount: number;
   stepCount: number;
   isCurrent: boolean;
@@ -86,6 +87,7 @@ export interface SaveRecipeInput {
   cookTimeMin?: number;
   prepTimeMin?: number;
   authorNote?: string;
+  sourceId?: string;
   ingredients: {
     groupLabel?: string;
     name: string;

@@ -86,6 +86,18 @@ interface MutableRecipeTag {
   tagId: string;
 }
 
+interface MutableSource {
+  id: string;
+  type: string;
+  url: string | null;
+  ocrRawText: string | null;
+  siteName: string | null;
+  pageTitle: string | null;
+  thumbnailUrl: string | null;
+  capturedAt: string | null;
+  createdAt: string;
+}
+
 interface MutableCookingLog {
   id: string;
   recipeId: string | null;
@@ -116,6 +128,7 @@ const mockIngredients: MutableIngredient[] = seedIngredients.map((i) => ({ ...i 
 const mockSteps: MutableStep[] = seedSteps.map((s) => ({ ...s }));
 const mockTags: MutableTag[] = seedTags.map((t) => ({ ...t }));
 let mockRecipeTags: MutableRecipeTag[] = seedRecipeTags.map((rt) => ({ ...rt }));
+const mockSources: MutableSource[] = [];
 const mockCookingLogs: MutableCookingLog[] = seedCookingLogs.map((l) => ({ ...l }));
 const mockCookingPhotos: MutableCookingPhoto[] = seedCookingPhotos.map((p) => ({ ...p }));
 
@@ -245,6 +258,7 @@ export function getMockRecipeRevisions(recipeId: string): RecipeRevisionSummary[
       prepTimeMin: revision.prepTimeMin,
       description: revision.description,
       authorNote: revision.authorNote,
+      sourceId: revision.sourceId,
       ingredientCount: mockIngredients.filter((ingredient) => ingredient.revisionId === revision.id)
         .length,
       stepCount: mockSteps.filter((step) => step.revisionId === revision.id).length,
@@ -285,7 +299,7 @@ export function createMockRecipe(input: SaveRecipeInput): string {
     prepTimeMin: input.prepTimeMin ?? null,
     description: input.description ?? null,
     authorNote: input.authorNote ?? null,
-    sourceId: null,
+    sourceId: input.sourceId ?? null,
     createdBy: 'user-kei',
     createdAt: now,
   });
@@ -356,7 +370,7 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
     prepTimeMin: input.prepTimeMin ?? null,
     description: input.description ?? null,
     authorNote: input.authorNote ?? null,
-    sourceId: null,
+    sourceId: input.sourceId ?? null,
     createdBy: 'user-kei',
     createdAt: now,
   });
@@ -406,6 +420,23 @@ export function deleteMockRecipe(recipeId: string): void {
     recipe.status = 'archived';
     recipe.updatedAt = new Date().toISOString();
   }
+}
+
+export function createMockOcrSource(input: { rawText: string; capturedAt?: string }): string {
+  const id = generateId();
+  const now = new Date().toISOString();
+  mockSources.push({
+    id,
+    type: 'ocr',
+    url: null,
+    ocrRawText: input.rawText,
+    siteName: null,
+    pageTitle: null,
+    thumbnailUrl: null,
+    capturedAt: input.capturedAt ?? now,
+    createdAt: now,
+  });
+  return id;
 }
 
 export function deleteMockCookingLog(logId: string): void {

@@ -251,6 +251,7 @@ export async function getRecipeRevisions(recipeId: string): Promise<RecipeRevisi
       prepTimeMin: revision.prepTimeMin,
       description: revision.description,
       authorNote: revision.authorNote,
+      sourceId: revision.sourceId,
       ingredientCount: ingredients.length,
       stepCount: steps.length,
       isCurrent: recipeRows[0].currentRevId === revision.id,
@@ -297,7 +298,7 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
     prepTimeMin: input.prepTimeMin ?? null,
     description: input.description ?? null,
     authorNote: input.authorNote ?? null,
-    sourceId: null,
+    sourceId: input.sourceId ?? null,
     createdBy: USER_ID,
     createdAt: now,
   });
@@ -383,7 +384,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
     prepTimeMin: input.prepTimeMin ?? null,
     description: input.description ?? null,
     authorNote: input.authorNote ?? null,
-    sourceId: null,
+    sourceId: input.sourceId ?? null,
     createdBy: USER_ID,
     createdAt: now,
   });
