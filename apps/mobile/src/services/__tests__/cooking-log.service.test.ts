@@ -7,7 +7,7 @@ jest.mock('../../db/client', () => ({
   getExpoDb: jest.fn(),
 }));
 
-import { createCookingLog, getLogsForRecipe } from '../cooking-log.service';
+import { createCookingLog, deleteCookingLog, getLogsForRecipe } from '../cooking-log.service';
 import { getTimeline } from '../timeline.service';
 
 describe('createCookingLog', () => {
@@ -210,5 +210,22 @@ describe('getLogsForRecipe', () => {
     expect(found?.photos[0].localPath).toBe(
       'file:///data/user/0/com.daidoko.app/cache/timeline_photo.jpg',
     );
+  });
+
+  it('deletes a cooking log from timeline and recipe history', async () => {
+    const recipeId = 'recipe-1';
+    const id = await createCookingLog({
+      recipeId,
+      memo: '削除テスト用の調理ログ',
+      cookedAt: '2026-05-16T18:00:00.000Z',
+      photos: [{ localPath: 'file:///data/user/0/com.daidoko.app/cache/delete_me.jpg' }],
+    });
+
+    await deleteCookingLog(id);
+
+    const timeline = await getTimeline();
+    const logs = await getLogsForRecipe(recipeId);
+    expect(timeline.find((entry) => entry.id === id)).toBeUndefined();
+    expect(logs.find((entry) => entry.id === id)).toBeUndefined();
   });
 });

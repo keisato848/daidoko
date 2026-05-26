@@ -94,22 +94,18 @@ export default function RecipeListScreen() {
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;
     if (count === 0) return;
-    Alert.alert(
-      'レシピを削除',
-      `${count}件のレシピを削除しますか？この操作は取り消せません。`,
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: '削除',
-          style: 'destructive',
-          onPress: async () => {
-            await Promise.all([...selectedIds].map((id) => deleteRecipe(id)));
-            exitSelectMode();
-            await loadRecipes();
-          },
+    Alert.alert('レシピを削除', `${count}件のレシピを削除しますか？この操作は取り消せません。`, [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: async () => {
+          await Promise.all([...selectedIds].map((id) => deleteRecipe(id)));
+          exitSelectMode();
+          await loadRecipes();
         },
-      ],
-    );
+      },
+    ]);
   }, [selectedIds, exitSelectMode, loadRecipes]);
 
   const handleSelectAll = useCallback(() => {
@@ -253,12 +249,18 @@ export default function RecipeListScreen() {
       {selectMode && (
         <View style={styles.actionBar}>
           <Pressable
-            style={[styles.actionBtn, styles.actionBtnDelete, selectedIds.size === 0 && styles.actionBtnDisabled]}
+            style={[
+              styles.actionBtn,
+              styles.actionBtnDelete,
+              selectedIds.size === 0 && styles.actionBtnDisabled,
+            ]}
             onPress={handleBulkDelete}
             disabled={selectedIds.size === 0}
           >
             <Trash2 size={16} color={selectedIds.size === 0 ? Colors.muted : Colors.bg} />
-            <Text style={[styles.actionBtnText, selectedIds.size === 0 && styles.actionBtnTextDisabled]}>
+            <Text
+              style={[styles.actionBtnText, selectedIds.size === 0 && styles.actionBtnTextDisabled]}
+            >
               削除
             </Text>
           </Pressable>

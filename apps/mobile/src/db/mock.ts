@@ -408,6 +408,18 @@ export function deleteMockRecipe(recipeId: string): void {
   }
 }
 
+export function deleteMockCookingLog(logId: string): void {
+  const logIndex = mockCookingLogs.findIndex((log) => log.id === logId);
+  if (logIndex === -1) return;
+
+  mockCookingLogs.splice(logIndex, 1);
+  for (let index = mockCookingPhotos.length - 1; index >= 0; index -= 1) {
+    if (mockCookingPhotos[index].logId === logId) {
+      mockCookingPhotos.splice(index, 1);
+    }
+  }
+}
+
 export function createMockCookingLog(input: SaveCookingLogInput): string {
   const id = generateId();
   const now = new Date().toISOString();

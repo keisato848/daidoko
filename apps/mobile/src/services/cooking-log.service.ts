@@ -3,10 +3,14 @@
  */
 import { isNativePlatform } from '../db/client';
 import { shouldHideSeedCookingLog } from '../db/sampleData';
-import { createMockCookingLog, getMockCookingLogsForRecipe, getMockTimeline } from '../db/mock';
+import {
+  createMockCookingLog,
+  deleteMockCookingLog,
+  getMockCookingLogsForRecipe,
+  getMockTimeline,
+} from '../db/mock';
 import type {
   CookingLogEntry,
-  CookingPhotoItem,
   SaveCookingLogInput,
   TimelineEntry,
 } from './types';
@@ -79,6 +83,21 @@ export async function createCookingLog(input: SaveCookingLogInput): Promise<stri
   }
 
   return id;
+}
+
+export async function deleteCookingLog(logId: string): Promise<void> {
+  if (!isNativePlatform) {
+    deleteMockCookingLog(logId);
+    return;
+  }
+
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  await db.delete(schema.cookingPhotos).where(eq(schema.cookingPhotos.logId, logId));
+  await db.delete(schema.cookingLogs).where(eq(schema.cookingLogs.id, logId));
 }
 
 export async function getLogsForRecipe(recipeId: string): Promise<CookingLogEntry[]> {

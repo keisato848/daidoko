@@ -10,7 +10,7 @@ export {
   deleteRecipe,
 } from './recipe.service';
 export { getTimeline } from './timeline.service';
-export { createCookingLog, getLogsForRecipe } from './cooking-log.service';
+export { createCookingLog, deleteCookingLog, getLogsForRecipe } from './cooking-log.service';
 export { getTagsForFamily, upsertTags } from './tag.service';
 export {
   addFamilyMember,
