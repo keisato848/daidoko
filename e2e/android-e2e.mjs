@@ -30,20 +30,29 @@ const UI_DUMP_RETRIES = 8;
 const UI_DUMP_RETRY_DELAY_MS = 1200;
 const ADB_TIMEOUT_MS = Number(process.env.ADB_TIMEOUT_MS || 45000);
 const UI_DUMP_TIMEOUT_MS = Number(process.env.UI_DUMP_TIMEOUT_MS || 20000);
+// 対象デバイスのシリアル番号。TARGET_DEVICE 環境変数で上書き可。未設定時は preflightCheck で自動選択。
+let DEVICE_SERIAL = process.env.TARGET_DEVICE || null;
 
-// adb の絶対パス (Windows). カスタマイズしたい場合は ADB_PATH 環境変数で上書き可
+// adb の絶対パス. ADB_PATH 環境変数で上書き可。未設定の場合は PATH 上の adb を使用する。
+// Windows では ANDROID_HOME または LOCALAPPDATA から自動検出を試みる。
 const ADB =
   process.env.ADB_PATH ||
-  (process.platform === 'win32'
-    ? 'C:\\Users\\habnk\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe'
-    : 'adb');
+  (() => {
+    if (process.platform !== 'win32') return 'adb';
+    const androidHome = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
+    if (androidHome) return `${androidHome}\\platform-tools\\adb.exe`;
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) return `${localAppData}\\Android\\Sdk\\platform-tools\\adb.exe`;
+    return 'adb';
+  })();
 
 mkdirSync(SCREENSHOT_DIR, { recursive: true });
 mkdirSync(DUMP_DIR, { recursive: true });
 
 // ─── ADB ヘルパー ─────────────────────────────────────────────────────────
 function adbResult(args, timeout = ADB_TIMEOUT_MS) {
-  return spawnSync(ADB, args, { encoding: 'utf8', shell: false, timeout });
+  const fullArgs = DEVICE_SERIAL && args[0] !== 'devices' ? ['-s', DEVICE_SERIAL, ...args] : args;
+  return spawnSync(ADB, fullArgs, { encoding: 'utf8', shell: false, timeout });
 }
 
 function artifactName(name) {
@@ -393,12 +402,16 @@ function preflightCheck() {
     console.error(devices);
     process.exit(1);
   }
+  // TARGET_DEVICE 未指定の場合は最初の認証済みデバイスを自動選択
+  if (!DEVICE_SERIAL) {
+    DEVICE_SERIAL = authorized[0].split('\t')[0].trim();
+  }
   const installed = adb(['shell', 'pm', 'list', 'packages', PKG]);
   if (!installed.includes(PKG)) {
     console.error(`[NG] ${PKG} not installed.`);
     process.exit(1);
   }
-  console.log(`[OK] ${authorized[0]} + ${PKG} verified.`);
+  console.log(`[OK] ${DEVICE_SERIAL}      device + ${PKG} verified.`);
 }
 
 // ─── 各テスト ─────────────────────────────────────────────────────────────

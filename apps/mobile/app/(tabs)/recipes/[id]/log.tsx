@@ -73,12 +73,14 @@ export default function CookingLogScreen() {
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
+      // ダミーパス（カメラ未実装のプレースホルダー）は DB に保存しない
+      const realPhotos = photos.filter((p) => !p.localPath.startsWith('file:///daidoko/dummy/'));
       await createCookingLog({
         recipeId: id,
         rating: rating > 0 ? rating : undefined,
         memo: memo.trim() || undefined,
         cookedAt: new Date().toISOString(),
-        photos: photos.length > 0 ? photos : undefined,
+        photos: realPhotos.length > 0 ? realPhotos : undefined,
       });
       setShowToast(true);
       setTimeout(() => router.push('/(tabs)'), 1500);

@@ -5,18 +5,7 @@ import { isNativePlatform } from '../db/client';
 import { shouldHideSeedCookingLog } from '../db/sampleData';
 import { getMockTimeline } from '../db/mock';
 import type { CookingPhotoItem, TimelineEntry } from './types';
-
-function groupPhotosByLogId(
-  photos: (CookingPhotoItem & { logId: string })[],
-): Map<string, CookingPhotoItem[]> {
-  const grouped = new Map<string, CookingPhotoItem[]>();
-  for (const { logId, ...photo } of photos) {
-    const current = grouped.get(logId) ?? [];
-    current.push(photo);
-    grouped.set(logId, current);
-  }
-  return grouped;
-}
+import { groupPhotosByLogId } from './photo.utils';
 
 export async function getTimeline(): Promise<TimelineEntry[]> {
   if (!isNativePlatform) {
