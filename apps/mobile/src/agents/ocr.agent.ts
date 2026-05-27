@@ -10,7 +10,6 @@ import type { ParseConfidence, ParsedRecipeText } from '../utils/recipeTextParse
 
 export interface OcrAgentInput {
   imageUri: string;
-  useServerAI?: boolean;
 }
 
 export interface OcrAgentOutput {
@@ -53,7 +52,7 @@ export async function runOcrAgent(
     return errorResult('OCR_FAILED', '画像が選択されていません');
   }
   if (!dependencies.recognizeText) {
-    return errorResult('OCR_FAILED', 'OCR provider is not configured');
+    return errorResult('OCR_FAILED', 'クライアントOCR providerが設定されていません');
   }
 
   try {

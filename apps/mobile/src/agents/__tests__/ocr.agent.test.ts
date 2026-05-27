@@ -46,6 +46,19 @@ describe('OCR-AGT-01 runOcrAgent', () => {
 });
 
 describe('OCR-AGT-02 runOcrAgent errors', () => {
+  it('OCR-SEC-01 returns OCR_FAILED without falling back to server OCR', async () => {
+    const result = await runOcrAgent({ imageUri: 'file:///tmp/recipe.jpg' });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'OCR_FAILED',
+        message: 'クライアントOCR providerが設定されていません',
+        retryable: true,
+      },
+    });
+  });
+
   it('returns OCR_FAILED when text is too short', async () => {
     const result = await runOcrAgent(
       { imageUri: 'file:///tmp/empty.jpg' },

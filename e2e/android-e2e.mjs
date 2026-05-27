@@ -765,7 +765,7 @@ async function testTextImportPromptCopy() {
   return 'AI prompt copied and pasted';
 }
 
-async function testOcrStub() {
+async function testOcrEntry() {
   await launchApp();
   await tapTab('追加');
   await sleep(1200);
@@ -774,12 +774,16 @@ async function testOcrStub() {
   if (!ocrBtn) throw new Error('OCR button not found');
   tap(ocrBtn.cx, ocrBtn.cy);
   await sleep(2000);
-  screenshot('12-ocr-stub');
-  const stubXml = uiDump('ocr-stub');
-  if (!stubXml.includes('OCR') && !stubXml.includes('カメラ') && !stubXml.includes('対応予定')) {
-    throw new Error('OCR stub screen not as expected');
+  screenshot('12-ocr-entry');
+  const entryXml = uiDump('ocr-entry');
+  if (
+    !entryXml.includes('OCR') &&
+    !entryXml.includes('カメラで撮影') &&
+    !entryXml.includes('ギャラリーから選ぶ')
+  ) {
+    throw new Error('OCR entry screen not as expected');
   }
-  return 'OCR stub displayed';
+  return 'OCR entry displayed';
 }
 
 async function testSettingsAndFamily() {
@@ -851,7 +855,7 @@ async function main() {
   await test('T09 レシピ削除 → 一覧反映', testDeleteCreatedRecipe);
   await test('T10 URL 取り込み (例: example.com)', testUrlImport);
   await test('T11 テキスト取り込み AI 指示コピー', testTextImportPromptCopy);
-  await test('T12 OCR スタブ画面', testOcrStub);
+  await test('T12 OCR 入口画面', testOcrEntry);
   await test('T13 設定画面 + 家族グループ', testSettingsAndFamily);
 
   // サマリー

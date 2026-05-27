@@ -4,19 +4,173 @@
  * On web / Expo Go: shows requirements and manual fallback
  */
 import { useRouter } from 'expo-router';
-import { Camera, PenLine, X } from 'lucide-react-native';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Camera, Image as ImageIcon, PenLine, RotateCcw, X } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
+import { runOcrAgent, type OcrAgentOutput } from '../../../src/agents/ocr.agent';
+import { RecipeForm } from '../../../src/components/RecipeForm';
+import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
+import { createRecipe } from '../../../src/services/recipe.service';
+import { createOcrSource } from '../../../src/services/source.service';
+import {
+  createClientOcrRecognizer,
+  isClientOcrAvailable,
+} from '../../../src/services/client-ocr.provider';
+import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
+import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
+import { preprocessImageForOcr } from '../../../src/services/image-preprocess.service';
+import {
+  capturePhoto,
+  PhotoCaptureCancelledError,
+  type CapturedPhoto,
+  type PhotoCaptureSource,
+} from '../../../src/services/photo-capture.service';
+import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
-const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
+type Phase = 'select' | 'processing' | 'preview';
+
+const isAndroid = Platform.OS === 'android';
+
+const CONFIDENCE_LABEL: Record<OcrAgentOutput['confidence'], string> = {
+  high: '読み取り精度: 高',
+  medium: '読み取り精度: 中',
+  low: '読み取り精度: 低',
+};
 
 export default function ImportOcrScreen() {
   const router = useRouter();
+  const [phase, setPhase] = useState<Phase>('select');
+  const [providerReady, setProviderReady] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<CapturedPhoto | null>(null);
+  const [ocrResult, setOcrResult] = useState<OcrAgentOutput | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!isAndroid) {
+      setProviderReady(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    isClientOcrAvailable()
+      .then((available) => {
+        if (mounted) setProviderReady(available);
+      })
+      .catch(() => {
+        if (mounted) setProviderReady(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleManual = () => {
     router.replace('/recipes/new');
   };
+
+  const preprocessForAgent = useCallback(async (imageUri: string) => {
+    const processed = await preprocessImageForOcr(imageUri, expoImageManipulatorPreprocessAdapter);
+    return {
+      imageUri: processed.imageUri,
+      warnings: processed.warnings.map((warning) => warning.message),
+    };
+  }, []);
+
+  const handleRead = useCallback(
+    async (source: PhotoCaptureSource) => {
+      setErrorMsg(null);
+      setPhase('processing');
+      setOcrResult(null);
+
+      try {
+        const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
+        setCapturedPhoto(photo);
+
+        const result = await runOcrAgent(
+          { imageUri: photo.localPath },
+          {
+            preprocessImage: preprocessForAgent,
+            recognizeText: createClientOcrRecognizer(),
+          },
+        );
+
+        if (!result.ok || !result.data) {
+          setErrorMsg(result.error?.message ?? 'OCR 処理に失敗しました');
+          setPhase('select');
+          return;
+        }
+
+        setOcrResult(result.data);
+        setPhase('preview');
+      } catch (error) {
+        if (error instanceof PhotoCaptureCancelledError) {
+          setPhase('select');
+          return;
+        }
+        setErrorMsg(error instanceof Error ? error.message : 'OCR 処理に失敗しました');
+        setPhase('select');
+      }
+    },
+    [preprocessForAgent],
+  );
+
+  const handleSave = useCallback(
+    async (data: RecipeFormData) => {
+      if (!ocrResult) return;
+      const sourceId = await createOcrSource({
+        rawText: ocrResult.rawText,
+        capturedAt: capturedPhoto?.takenAt,
+      });
+      await createRecipe({ ...data, sourceId });
+      setToastMessage('レシピを保存しました');
+      setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
+    },
+    [capturedPhoto?.takenAt, ocrResult, router],
+  );
+
+  if (phase === 'preview') {
+    return (
+      <View style={styles.container}>
+        {ocrResult && (
+          <View style={styles.sourceBanner}>
+            <Camera size={12} color={Colors.goldDim} />
+            <Text style={styles.sourceName}>
+              {[CONFIDENCE_LABEL[ocrResult.confidence], ...ocrResult.warnings]
+                .filter(Boolean)
+                .join(' / ')}
+            </Text>
+          </View>
+        )}
+        <RecipeForm
+          initialValues={ocrResult?.draft}
+          onSubmit={handleSave}
+          onCancel={() => setPhase('select')}
+          title="読み取り結果を確認・編集"
+          submitLabel="保存"
+        />
+        <Toast
+          message={toastMessage ?? ''}
+          visible={toastMessage != null}
+          onDismiss={() => setToastMessage(null)}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -28,27 +182,64 @@ export default function ImportOcrScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.body}>
+      <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.iconWrapper}>
-          <Camera size={48} color={isNative ? Colors.gold : Colors.muted} />
+          <Camera size={48} color={isAndroid ? Colors.gold : Colors.muted} />
         </View>
 
-        {isNative ? (
-          /* Native placeholder — vision-camera not bundled yet */
+        {isAndroid ? (
           <>
-            <Text style={styles.title}>カメラ OCR（v1.5 対応予定）</Text>
+            <Text style={styles.title}>クライアント OCR</Text>
             <Text style={styles.description}>
-              レシピ本・手書きメモ・切り抜きを撮影するだけで、材料・手順を自動で読み取ります。
-              {'\n\n'}
-              現在の開発ビルドには含まれていません。v1.5 リリースまでお待ちください。
+              レシピ本・手書きメモ・切り抜きを端末内で読み取り、材料・手順の下書きを作成します。
             </Text>
+
+            {capturedPhoto && (
+              <Image source={{ uri: capturedPhoto.localPath }} style={styles.previewImage} />
+            )}
+
+            {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+            {!providerReady && (
+              <Text style={styles.noticeText}>
+                このビルドでは Android OCR provider を初期化できませんでした
+              </Text>
+            )}
+
+            {phase === 'processing' ? (
+              <View style={styles.processingBox}>
+                <ActivityIndicator size="large" color={Colors.gold} />
+                <Text style={styles.processingText}>端末内で読み取っています...</Text>
+              </View>
+            ) : (
+              <View style={styles.actionGrid}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="カメラで撮影"
+                  style={[styles.primaryButton, !providerReady && styles.buttonDisabled]}
+                  onPress={() => handleRead('camera')}
+                  disabled={!providerReady}
+                >
+                  <Camera size={18} color={Colors.bg} />
+                  <Text style={styles.primaryButtonText}>カメラで撮影</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="ギャラリーから選ぶ"
+                  style={[styles.secondaryButton, !providerReady && styles.buttonDisabled]}
+                  onPress={() => handleRead('gallery')}
+                  disabled={!providerReady}
+                >
+                  <ImageIcon size={18} color={Colors.gold} />
+                  <Text style={styles.secondaryButtonText}>ギャラリーから選ぶ</Text>
+                </Pressable>
+              </View>
+            )}
           </>
         ) : (
-          /* Web — OCR requires native APIs */
           <>
             <Text style={styles.title}>OCR はネイティブアプリ専用です</Text>
             <Text style={styles.description}>
-              カメラ文字認識（ML Kit）は iOS / Android アプリでのみ動作します。
+              カメラ文字認識は Android アプリで先行対応中です。
               {'\n\n'}
               Web ブラウザからお使いの場合は、手動入力をご利用ください。
             </Text>
@@ -62,7 +253,13 @@ export default function ImportOcrScreen() {
           <PenLine size={18} color={Colors.bg} />
           <Text style={styles.manualButtonText}>手動で入力する</Text>
         </Pressable>
-      </View>
+        {capturedPhoto && phase !== 'processing' && (
+          <Pressable style={styles.retryButton} onPress={() => setCapturedPhoto(null)}>
+            <RotateCcw size={14} color={Colors.muted} />
+            <Text style={styles.retryButtonText}>画像をクリア</Text>
+          </Pressable>
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -90,10 +287,11 @@ const styles = StyleSheet.create({
   },
   headerSpacer: { width: 20 },
   body: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingVertical: 36,
+    minHeight: '90%',
     gap: 16,
   },
   iconWrapper: {
@@ -119,6 +317,73 @@ const styles = StyleSheet.create({
     color: Colors.paperDim,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  previewImage: {
+    width: '100%',
+    maxWidth: 360,
+    aspectRatio: 4 / 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: '#130E08',
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#F2A07B',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  noticeText: {
+    fontSize: 12,
+    color: Colors.muted,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  processingBox: {
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 14,
+  },
+  processingText: {
+    fontSize: 13,
+    color: Colors.paperDim,
+  },
+  actionGrid: {
+    width: '100%',
+    gap: 12,
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: Colors.gold,
+    paddingVertical: 13,
+    borderRadius: 8,
+  },
+  primaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.bg,
+  },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 13,
+    borderRadius: 8,
+    backgroundColor: '#130E08',
+  },
+  secondaryButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.gold,
+  },
+  buttonDisabled: {
+    opacity: 0.45,
   },
   divider: {
     width: '60%',
@@ -146,5 +411,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: Colors.bg,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  retryButtonText: {
+    fontSize: 12,
+    color: Colors.muted,
+  },
+  sourceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: '#130E08',
+  },
+  sourceName: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.goldDim,
   },
 });
