@@ -439,6 +439,26 @@ export function createMockOcrSource(input: { rawText: string; capturedAt?: strin
   return id;
 }
 
+export function createMockPhotoSource(input: {
+  labelSummary?: string;
+  capturedAt?: string;
+}): string {
+  const id = generateId();
+  const now = new Date().toISOString();
+  mockSources.push({
+    id,
+    type: 'photo',
+    url: null,
+    ocrRawText: input.labelSummary ?? null,
+    siteName: null,
+    pageTitle: '料理写真から推測',
+    thumbnailUrl: null,
+    capturedAt: input.capturedAt ?? now,
+    createdAt: now,
+  });
+  return id;
+}
+
 export function deleteMockCookingLog(logId: string): void {
   const logIndex = mockCookingLogs.findIndex((log) => log.id === logId);
   if (logIndex === -1) return;

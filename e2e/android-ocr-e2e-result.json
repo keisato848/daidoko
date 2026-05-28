@@ -1,0 +1,23 @@
+{
+  "ts": "2026-05-28T10:23:11.190Z",
+  "pass": 3,
+  "fail": 0,
+  "total": 3,
+  "results": [
+    {
+      "name": "O01 同梱生成画像 OCR → 下書き表示",
+      "status": "PASS",
+      "detail": "bundled generated image parsed into preview"
+    },
+    {
+      "name": "O02 カメラ権限拒否",
+      "status": "PASS",
+      "detail": "camera denial handled"
+    },
+    {
+      "name": "O03 写真ライブラリ権限拒否",
+      "status": "PASS",
+      "detail": "gallery picker cancellation handled without selecting device files"
+    }
+  ]
+}

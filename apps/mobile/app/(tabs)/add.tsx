@@ -1,9 +1,9 @@
 /**
  * S08: Add Recipe — Method selection bottom sheet
- * Entry point for manual, text, URL, and OCR-based recipe creation.
+ * Entry point for manual, text, URL, photo inference, and OCR-based recipe creation.
  */
 import { useRouter } from 'expo-router';
-import { Camera, FileText, Globe, PenLine } from 'lucide-react-native';
+import { Camera, FileText, Globe, Image as ImageIcon, PenLine } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
@@ -39,10 +39,17 @@ const METHODS: MethodOption[] = [
     enabled: true,
   },
   {
-    id: 'ocr',
+    id: 'photo',
     icon: <Camera size={24} color={Colors.gold} />,
-    label: '写真から読み取り',
-    description: 'レシピ本や手書きメモを撮影',
+    label: '料理写真から推測',
+    description: '写っている料理から下書き案を作成',
+    enabled: true,
+  },
+  {
+    id: 'ocr',
+    icon: <ImageIcon size={24} color={Colors.gold} />,
+    label: '文字入り画像から作成',
+    description: 'レシピ本や手書きメモの文字を読み取り',
     enabled: true,
   },
 ];
@@ -58,6 +65,8 @@ export default function AddScreen() {
       router.push('/recipes/import-text');
     } else if (method.id === 'url') {
       router.push('/recipes/import-url');
+    } else if (method.id === 'photo') {
+      router.push('/recipes/import-photo');
     } else if (method.id === 'ocr') {
       router.push('/recipes/import-ocr');
     }

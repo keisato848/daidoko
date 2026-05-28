@@ -1,0 +1,23 @@
+{
+  "ts": "2026-05-28T10:18:32.259Z",
+  "pass": 3,
+  "fail": 0,
+  "total": 3,
+  "results": [
+    {
+      "name": "P01 同梱生成料理写真 → 推測下書き表示",
+      "status": "PASS",
+      "detail": "bundled generated food image inferred into preview"
+    },
+    {
+      "name": "P02 カメラ権限拒否",
+      "status": "PASS",
+      "detail": "camera denial handled"
+    },
+    {
+      "name": "P03 写真ライブラリ権限拒否",
+      "status": "PASS",
+      "detail": "gallery picker cancellation handled without selecting device files"
+    }
+  ]
+}

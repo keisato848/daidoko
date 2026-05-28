@@ -17,7 +17,7 @@ import {
   searchRecipes,
   updateRecipe,
 } from '../recipe.service';
-import { createOcrSource } from '../source.service';
+import { createOcrSource, createPhotoSource } from '../source.service';
 import type { SaveRecipeInput, UpdateRecipeInput } from '../types';
 import { parseRecipeText } from '../../utils/recipeTextParser';
 
@@ -176,6 +176,24 @@ describe('recipe.service (mock/web)', () => {
         ingredients: [{ name: 'じゃがいも', amount: '3個' }],
         steps: [{ body: '煮る' }],
         tags: [],
+      });
+
+      const revisions = await getRecipeRevisions(id);
+      expect(revisions[0]).toMatchObject({ sourceId });
+    });
+
+    it('IMG-RECIPE-SVC-02 links a photo source to the first recipe revision', async () => {
+      const sourceId = await createPhotoSource({
+        labelSummary: 'Food 92% / Curry 81%',
+        capturedAt: '2026-05-28T10:00:00.000Z',
+      });
+
+      const id = await createRecipe({
+        title: '料理写真からのレシピ案',
+        sourceId,
+        ingredients: [{ name: '主食材（写真を見て確認）' }],
+        steps: [{ body: '写真を確認して調理する' }],
+        tags: ['推測'],
       });
 
       const revisions = await getRecipeRevisions(id);

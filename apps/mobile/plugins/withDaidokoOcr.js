@@ -7,7 +7,10 @@ const {
 const fs = require('fs');
 const path = require('path');
 
-const ML_KIT_DEPENDENCY = 'implementation("com.google.mlkit:text-recognition-japanese:16.0.1")';
+const ML_KIT_DEPENDENCIES = [
+  'implementation("com.google.mlkit:text-recognition-japanese:16.0.1")',
+  'implementation("com.google.mlkit:image-labeling:17.0.9")',
+];
 const OCR_IMPORT = 'import com.daidoko.app.ocr.DaidokoOcrPackage';
 const OCR_PACKAGE_REGISTRATION = '            packages.add(DaidokoOcrPackage())';
 
@@ -30,6 +33,7 @@ class DaidokoOcrPackage : ReactPackage {
 
 const OCR_MODULE_SOURCE = `package com.daidoko.app.ocr
 
+import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.net.Uri
 import com.facebook.react.bridge.Arguments
@@ -40,6 +44,9 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabel
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
@@ -49,6 +56,9 @@ class DaidokoOcrModule(
 ) : ReactContextBaseJavaModule(reactContext) {
   private val recognizer by lazy {
     TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
+  }
+  private val imageLabeler by lazy {
+    ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
   }
 
   override fun getName(): String = NAME
@@ -61,7 +71,7 @@ class DaidokoOcrModule(
   @ReactMethod
   fun recognizeImage(imageUri: String, promise: Promise) {
     try {
-      val image = InputImage.fromFilePath(reactContext, Uri.parse(imageUri))
+      val image = createInputImage(imageUri)
       recognizer.process(image)
         .addOnSuccessListener { text -> promise.resolve(toWritableMap(text)) }
         .addOnFailureListener { error ->
@@ -72,6 +82,51 @@ class DaidokoOcrModule(
     }
   }
 
+  @ReactMethod
+  fun labelImage(imageUri: String, promise: Promise) {
+    try {
+      val image = createInputImage(imageUri)
+      imageLabeler.process(image)
+        .addOnSuccessListener { labels -> promise.resolve(toLabelArray(labels)) }
+        .addOnFailureListener { error ->
+          promise.reject("IMAGE_LABEL_FAILED", error.message ?: "Image labeling failed", error)
+        }
+    } catch (error: Exception) {
+      promise.reject("IMAGE_LABEL_INPUT_FAILED", error.message ?: "Invalid image", error)
+    }
+  }
+
+  private fun createInputImage(imageUri: String): InputImage {
+    val uri = Uri.parse(imageUri)
+    if (uri.scheme == "asset" || (uri.scheme == null && imageUri.startsWith("assets_"))) {
+      val assetPath = uri.path?.trimStart('/')?.takeIf { it.isNotBlank() }
+        ?: imageUri.removePrefix("asset:/").trimStart('/')
+      val bitmap = decodeBundledBitmap(assetPath)
+      return InputImage.fromBitmap(bitmap, 0)
+    }
+    return InputImage.fromFilePath(reactContext, uri)
+  }
+
+  private fun decodeBundledBitmap(assetPath: String) =
+    decodeAssetBitmap(assetPath)
+      ?: decodeDrawableBitmap(assetPath)
+      ?: throw IllegalArgumentException("Could not decode bundled OCR asset: $assetPath")
+
+  private fun decodeAssetBitmap(assetPath: String) = buildList {
+    add(assetPath)
+    if (!assetPath.endsWith(".png")) add("$assetPath.png")
+  }.firstNotNullOfOrNull { candidate ->
+    runCatching {
+      reactContext.assets.open(candidate).use { stream -> BitmapFactory.decodeStream(stream) }
+    }.getOrNull()
+  }
+
+  private fun decodeDrawableBitmap(assetPath: String) =
+    assetPath.substringAfterLast('/').substringBeforeLast('.').takeIf { it.isNotBlank() }?.let { name ->
+      val resourceId = reactContext.resources.getIdentifier(name, "drawable", reactContext.packageName)
+      if (resourceId == 0) null else BitmapFactory.decodeResource(reactContext.resources, resourceId)
+    }
+
   private fun toWritableMap(text: Text): WritableMap {
     val result = Arguments.createMap()
     result.putString("rawText", text.text)
@@ -79,6 +134,18 @@ class DaidokoOcrModule(
     result.putString("confidence", inferConfidence(text.text))
     result.putArray("warnings", buildWarnings(text.text))
     return result
+  }
+
+  private fun toLabelArray(labels: List<ImageLabel>): WritableArray {
+    val array = Arguments.createArray()
+    labels.forEach { label ->
+      val map = Arguments.createMap()
+      map.putString("text", label.text)
+      map.putDouble("confidence", label.confidence.toDouble())
+      map.putInt("index", label.index)
+      array.pushMap(map)
+    }
+    return array
   }
 
   private fun toBlocks(blocks: List<Text.TextBlock>): WritableArray {
@@ -152,11 +219,13 @@ function withDaidokoOcrManifest(config) {
 
 function withDaidokoOcrBuildGradle(config) {
   return withAppBuildGradle(config, (configWithGradle) => {
-    if (!configWithGradle.modResults.contents.includes(ML_KIT_DEPENDENCY)) {
-      configWithGradle.modResults.contents = configWithGradle.modResults.contents.replace(
-        '    implementation("com.facebook.react:react-android")',
-        `    implementation("com.facebook.react:react-android")\n    ${ML_KIT_DEPENDENCY}`,
-      );
+    for (const dependency of ML_KIT_DEPENDENCIES) {
+      if (!configWithGradle.modResults.contents.includes(dependency)) {
+        configWithGradle.modResults.contents = configWithGradle.modResults.contents.replace(
+          '    implementation("com.facebook.react:react-android")',
+          `    implementation("com.facebook.react:react-android")\n    ${dependency}`,
+        );
+      }
     }
     return configWithGradle;
   });

@@ -1,11 +1,10 @@
 /**
- * S10: OCR Import screen
- * On native: camera capture → A2 OCRAgent → RecipeForm preview
- * On web / Expo Go: shows requirements and manual fallback
+ * S11: Food photo import screen
+ * On native: camera capture → image labels → editable recipe draft
  */
-import { useRouter } from 'expo-router';
 import { Asset } from 'expo-asset';
-import { Camera, Image as ImageIcon, PenLine, RotateCcw, X } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Camera, Image as ImageIcon, PenLine, RotateCcw, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,16 +17,17 @@ import {
   View,
 } from 'react-native';
 
-import { runOcrAgent, type OcrAgentOutput } from '../../../src/agents/ocr.agent';
+import {
+  runRecipePhotoAgent,
+  type RecipePhotoAgentOutput,
+} from '../../../src/agents/recipe-photo.agent';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
-import { createRecipe } from '../../../src/services/recipe.service';
-import { createOcrSource } from '../../../src/services/source.service';
 import {
-  createClientOcrRecognizer,
-  isClientOcrAvailable,
-} from '../../../src/services/client-ocr.provider';
+  createClientImageLabeler,
+  isClientImageLabelingAvailable,
+} from '../../../src/services/client-image-label.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import { preprocessImageForOcr } from '../../../src/services/image-preprocess.service';
@@ -37,25 +37,29 @@ import {
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
+import { createRecipe } from '../../../src/services/recipe.service';
+import { createPhotoSource } from '../../../src/services/source.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
-import ocrE2eFixtureImage from '../../../assets/e2e/ocr-recipe-ja.png';
+import photoRecipeE2eFixtureImage from '../../../assets/e2e/food-photo-ja.png';
 
 type Phase = 'select' | 'processing' | 'preview';
 
 const isAndroid = Platform.OS === 'android';
-const isOcrE2eEnabled = process.env.EXPO_PUBLIC_ENABLE_OCR_E2E === '1';
+const isPhotoRecipeE2eEnabled =
+  process.env.EXPO_PUBLIC_ENABLE_PHOTO_RECIPE_E2E === '1' ||
+  process.env.EXPO_PUBLIC_ENABLE_OCR_E2E === '1';
 
-const CONFIDENCE_LABEL: Record<OcrAgentOutput['confidence'], string> = {
-  high: '読み取り精度: 高',
-  medium: '読み取り精度: 中',
-  low: '読み取り精度: 低',
+const CONFIDENCE_LABEL: Record<RecipePhotoAgentOutput['confidence'], string> = {
+  high: '推測信頼度: 高',
+  medium: '推測信頼度: 中',
+  low: '推測信頼度: 低',
 };
 
-async function loadOcrE2eFixturePhoto(): Promise<CapturedPhoto> {
-  const asset = Asset.fromModule(ocrE2eFixtureImage);
+async function loadPhotoRecipeE2eFixturePhoto(): Promise<CapturedPhoto> {
+  const asset = Asset.fromModule(photoRecipeE2eFixtureImage);
   await asset.downloadAsync();
   const localPath = asset.localUri ?? asset.uri;
-  if (!localPath) throw new Error('OCR E2E テスト画像を読み込めませんでした');
+  if (!localPath) throw new Error('料理写真 E2E テスト画像を読み込めませんでした');
 
   return {
     localPath,
@@ -68,12 +72,12 @@ async function loadOcrE2eFixturePhoto(): Promise<CapturedPhoto> {
   };
 }
 
-export default function ImportOcrScreen() {
+export default function ImportPhotoScreen() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('select');
   const [providerReady, setProviderReady] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<CapturedPhoto | null>(null);
-  const [ocrResult, setOcrResult] = useState<OcrAgentOutput | null>(null);
+  const [photoResult, setPhotoResult] = useState<RecipePhotoAgentOutput | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -86,7 +90,7 @@ export default function ImportOcrScreen() {
       };
     }
 
-    isClientOcrAvailable()
+    isClientImageLabelingAvailable()
       .then((available) => {
         if (mounted) setProviderReady(available);
       })
@@ -111,26 +115,26 @@ export default function ImportOcrScreen() {
     };
   }, []);
 
-  const recognizePhoto = useCallback(
+  const inferPhoto = useCallback(
     async (photo: CapturedPhoto, options: { preprocessImage?: boolean } = {}) => {
       setCapturedPhoto(photo);
       const shouldPreprocess = options.preprocessImage ?? true;
 
-      const result = await runOcrAgent(
+      const result = await runRecipePhotoAgent(
         { imageUri: photo.localPath },
         {
           preprocessImage: shouldPreprocess ? preprocessForAgent : undefined,
-          recognizeText: createClientOcrRecognizer(),
+          labelImage: createClientImageLabeler(),
         },
       );
 
       if (!result.ok || !result.data) {
-        setErrorMsg(result.error?.message ?? 'OCR 処理に失敗しました');
+        setErrorMsg(result.error?.message ?? '料理写真の推測に失敗しました');
         setPhase('select');
         return;
       }
 
-      setOcrResult(result.data);
+      setPhotoResult(result.data);
       setPhase('preview');
     },
     [preprocessForAgent],
@@ -140,69 +144,69 @@ export default function ImportOcrScreen() {
     async (source: PhotoCaptureSource) => {
       setErrorMsg(null);
       setPhase('processing');
-      setOcrResult(null);
+      setPhotoResult(null);
 
       try {
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-        await recognizePhoto(photo);
+        await inferPhoto(photo);
       } catch (error) {
         if (error instanceof PhotoCaptureCancelledError) {
           setPhase('select');
           return;
         }
-        setErrorMsg(error instanceof Error ? error.message : 'OCR 処理に失敗しました');
+        setErrorMsg(error instanceof Error ? error.message : '料理写真の推測に失敗しました');
         setPhase('select');
       }
     },
-    [recognizePhoto],
+    [inferPhoto],
   );
 
   const handleReadE2eFixture = useCallback(async () => {
     setErrorMsg(null);
     setPhase('processing');
-    setOcrResult(null);
+    setPhotoResult(null);
 
     try {
-      const photo = await loadOcrE2eFixturePhoto();
-      await recognizePhoto(photo, { preprocessImage: false });
+      const photo = await loadPhotoRecipeE2eFixturePhoto();
+      await inferPhoto(photo, { preprocessImage: false });
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : 'OCR 処理に失敗しました');
+      setErrorMsg(error instanceof Error ? error.message : '料理写真の推測に失敗しました');
       setPhase('select');
     }
-  }, [recognizePhoto]);
+  }, [inferPhoto]);
 
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
-      if (!ocrResult) return;
-      const sourceId = await createOcrSource({
-        rawText: ocrResult.rawText,
+      if (!photoResult) return;
+      const sourceId = await createPhotoSource({
+        labelSummary: photoResult.labelSummary,
         capturedAt: capturedPhoto?.takenAt,
       });
       await createRecipe({ ...data, sourceId });
       setToastMessage('レシピを保存しました');
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
-    [capturedPhoto?.takenAt, ocrResult, router],
+    [capturedPhoto?.takenAt, photoResult, router],
   );
 
   if (phase === 'preview') {
     return (
       <View style={styles.container}>
-        {ocrResult && (
+        {photoResult && (
           <View style={styles.sourceBanner}>
-            <Camera size={12} color={Colors.goldDim} />
+            <Sparkles size={12} color={Colors.goldDim} />
             <Text style={styles.sourceName}>
-              {[CONFIDENCE_LABEL[ocrResult.confidence], ...ocrResult.warnings]
+              {[CONFIDENCE_LABEL[photoResult.confidence], ...photoResult.warnings]
                 .filter(Boolean)
                 .join(' / ')}
             </Text>
           </View>
         )}
         <RecipeForm
-          initialValues={ocrResult?.draft}
+          initialValues={photoResult?.draft}
           onSubmit={handleSave}
           onCancel={() => setPhase('select')}
-          title="読み取り結果を確認・編集"
+          title="推測結果を確認・編集"
           submitLabel="保存"
         />
         <Toast
@@ -220,20 +224,20 @@ export default function ImportOcrScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>文字入り画像から読み取り</Text>
+        <Text style={styles.headerTitle}>料理写真から推測</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.iconWrapper}>
-          <Camera size={48} color={isAndroid ? Colors.gold : Colors.muted} />
+          <Sparkles size={46} color={isAndroid ? Colors.gold : Colors.muted} />
         </View>
 
         {isAndroid ? (
           <>
-            <Text style={styles.title}>文字入り画像を読み取り</Text>
+            <Text style={styles.title}>写真から下書き</Text>
             <Text style={styles.description}>
-              レシピ本・手書きメモ・切り抜きの文字を端末内で読み取り、材料・手順の下書きを作成します。
+              写っている料理・食材から、確認前提のレシピ案を作成します。
             </Text>
 
             {capturedPhoto && (
@@ -243,14 +247,14 @@ export default function ImportOcrScreen() {
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
             {!providerReady && (
               <Text style={styles.noticeText}>
-                このビルドでは Android OCR provider を初期化できませんでした
+                このビルドでは Android 画像推測 provider を初期化できませんでした
               </Text>
             )}
 
             {phase === 'processing' ? (
               <View style={styles.processingBox}>
                 <ActivityIndicator size="large" color={Colors.gold} />
-                <Text style={styles.processingText}>端末内で読み取っています...</Text>
+                <Text style={styles.processingText}>端末内で推測しています...</Text>
               </View>
             ) : (
               <View style={styles.actionGrid}>
@@ -274,16 +278,16 @@ export default function ImportOcrScreen() {
                   <ImageIcon size={18} color={Colors.gold} />
                   <Text style={styles.secondaryButtonText}>ギャラリーから選ぶ</Text>
                 </Pressable>
-                {isOcrE2eEnabled && (
+                {isPhotoRecipeE2eEnabled && (
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="E2Eテスト画像で読み取り"
+                    accessibilityLabel="E2E料理写真で推測"
                     style={[styles.secondaryButton, !providerReady && styles.buttonDisabled]}
                     onPress={handleReadE2eFixture}
                     disabled={!providerReady}
                   >
                     <ImageIcon size={18} color={Colors.gold} />
-                    <Text style={styles.secondaryButtonText}>E2Eテスト画像で読み取り</Text>
+                    <Text style={styles.secondaryButtonText}>E2E料理写真で推測</Text>
                   </Pressable>
                 )}
               </View>
@@ -291,9 +295,9 @@ export default function ImportOcrScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.title}>文字読み取りはネイティブアプリ専用です</Text>
+            <Text style={styles.title}>料理写真の推測はネイティブアプリ専用です</Text>
             <Text style={styles.description}>
-              カメラ文字認識は Android アプリで先行対応中です。
+              写真からの下書き作成は Android アプリで先行対応中です。
               {'\n\n'}
               Web ブラウザからお使いの場合は、手動入力をご利用ください。
             </Text>
