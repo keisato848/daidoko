@@ -4,7 +4,7 @@
 import { isNativePlatform } from '../db/client';
 import { shouldHideSeedCookingLog } from '../db/sampleData';
 import { getMockTimeline } from '../db/mock';
-import type { CookingPhotoItem, TimelineEntry } from './types';
+import type { TimelineEntry } from './types';
 import { groupPhotosByLogId } from './photo.utils';
 
 export async function getTimeline(): Promise<TimelineEntry[]> {

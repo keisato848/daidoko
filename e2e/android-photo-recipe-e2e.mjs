@@ -211,12 +211,16 @@ async function openPhotoRecipeScreen(namePrefix) {
   await sleep(1500);
 
   xml = uiDump(`${namePrefix}-add`);
-  const photoButton = findByText(xml, '料理写真から推測');
+  const photoButton =
+    findByContentDesc(xml, '料理写真から推測, 写っている料理から下書き案を作成') ||
+    findByText(xml, '料理写真から推測');
   if (!photoButton) throw new Error('料理写真から推測 button not found');
   tap(photoButton.cx, photoButton.cy);
-  await sleep(2200);
-
-  xml = uiDump(`${namePrefix}-photo`);
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    await sleep(1000);
+    xml = uiDump(`${namePrefix}-photo-${attempt}`);
+    if (xmlTextIncludes(xml, '写真から下書き')) break;
+  }
   if (!xmlTextIncludes(xml, '写真から下書き')) throw new Error('photo recipe entry did not open');
   return xml;
 }
@@ -305,6 +309,7 @@ async function refuseGalleryAccess(namePrefix) {
 }
 
 async function test(name, fn) {
+  console.log(`▶ ${name}`);
   try {
     const detail = await fn();
     console.log(`✅ ${name}${detail ? ` — ${detail}` : ''}`);
@@ -318,7 +323,7 @@ async function test(name, fn) {
 
 async function testBundledFixturePhotoRecipe() {
   const xml = await openPhotoRecipeScreen('fixture');
-  const fixtureButton = findByText(xml, 'E2E料理写真で推測');
+  const fixtureButton = findByContentDesc(xml, 'E2E料理写真で推測') || findByText(xml, 'E2E料理写真で推測');
   if (!fixtureButton)
     throw new Error(
       'E2E fixture button not found. Build with EXPO_PUBLIC_ENABLE_PHOTO_RECIPE_E2E=1.',
@@ -344,10 +349,47 @@ async function testBundledFixturePhotoRecipe() {
   return 'bundled generated food image inferred into preview';
 }
 
+async function testHundredGeneratedPhotoRecipes() {
+  const xml = await openPhotoRecipeScreen('batch');
+  const batchButton = findByContentDesc(xml, 'E2E100画像を検証') || findByText(xml, 'E2E100画像を検証');
+  if (!batchButton)
+    throw new Error(
+      'E2E batch button not found. Build with EXPO_PUBLIC_ENABLE_PHOTO_RECIPE_E2E=1.',
+    );
+  tap(batchButton.cx, batchButton.cy);
+
+  let resultXml = '';
+  for (let attempt = 1; attempt <= 220; attempt++) {
+    await sleep(2500);
+    resultXml = uiDump(`batch-result-${attempt}`);
+    if (attempt === 1 || attempt % 10 === 0) {
+      const progressMatch = decodeXml(resultXml).match(/画像検証中\s+(\d+)\/100/);
+      const progress = progressMatch ? ` ${progressMatch[1]}/100` : '';
+      console.log(`  batch wait ${attempt}/220${progress}`);
+    }
+    if (xmlTextIncludes(resultXml, '画像検証 PASS') || xmlTextIncludes(resultXml, '画像検証 FAIL')) {
+      break;
+    }
+  }
+
+  screenshot('batch-result');
+  const decoded = decodeXml(resultXml);
+  if (!decoded.includes('画像検証 PASS')) {
+    throw new Error(`100 image batch did not pass: ${decoded.slice(0, 500)}`);
+  }
+  if (!decoded.includes('100/100')) {
+    throw new Error('100 image batch did not validate all generated images');
+  }
+  if (!decoded.includes('OCRあり 100/100')) {
+    throw new Error('100 image batch did not OCR all generated recipe cards');
+  }
+  return '100 generated dish/recipe-card images produced save-ready drafts';
+}
+
 async function testCameraDenied() {
   resetPermissionPrompt('android.permission.CAMERA');
   const xml = await openPhotoRecipeScreen('camera-denied');
-  const cameraButton = findByText(xml, 'カメラで撮影');
+  const cameraButton = findByContentDesc(xml, 'カメラで撮影') || findByText(xml, 'カメラで撮影');
   if (!cameraButton) throw new Error('camera button not found');
   tap(cameraButton.cx, cameraButton.cy);
   await denyPermissionDialog('camera-denied');
@@ -370,7 +412,8 @@ async function testGalleryDenied() {
   }
 
   const xml = await openPhotoRecipeScreen('gallery-denied');
-  const galleryButton = findByText(xml, 'ギャラリーから選ぶ');
+  const galleryButton =
+    findByContentDesc(xml, 'ギャラリーから選ぶ') || findByText(xml, 'ギャラリーから選ぶ');
   if (!galleryButton) throw new Error('gallery button not found');
   tap(galleryButton.cx, galleryButton.cy);
   const refusal = await refuseGalleryAccess('gallery-denied');
@@ -409,6 +452,7 @@ async function main() {
 
   try {
     await test('P01 同梱生成料理写真 → 推測下書き表示', testBundledFixturePhotoRecipe);
+    await test('P04 100生成料理画像 → 入力下書き一括検証', testHundredGeneratedPhotoRecipes);
     await test('P02 カメラ権限拒否', testCameraDenied);
     await test('P03 写真ライブラリ権限拒否', testGalleryDenied);
   } finally {

@@ -1,13 +1,18 @@
 {
-  "ts": "2026-05-28T10:18:32.259Z",
-  "pass": 3,
+  "ts": "2026-05-28T13:20:43.686Z",
+  "pass": 4,
   "fail": 0,
-  "total": 3,
+  "total": 4,
   "results": [
     {
       "name": "P01 同梱生成料理写真 → 推測下書き表示",
       "status": "PASS",
       "detail": "bundled generated food image inferred into preview"
+    },
+    {
+      "name": "P04 100生成料理画像 → 入力下書き一括検証",
+      "status": "PASS",
+      "detail": "100 generated dish/recipe-card images produced save-ready drafts"
     },
     {
       "name": "P02 カメラ権限拒否",

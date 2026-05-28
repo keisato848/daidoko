@@ -2,10 +2,26 @@ import { AgentBridge } from '@daidoko/shared';
 
 import { registerRecipePhotoAgent, runRecipePhotoAgent } from '../recipe-photo.agent';
 import type { ClientImageLabel } from '../../services/client-image-label.provider';
+import type { OcrRecognitionResult } from '../../services/ocr.service';
 
 function label(text: string, confidence: number): ClientImageLabel {
   return { text, confidence };
 }
+
+function recognition(rawText: string): OcrRecognitionResult {
+  return { rawText, blocks: [], confidence: 'high', warnings: [] };
+}
+
+const recipeText = `チキンカレー
+2人分
+材料
+鶏もも肉 200g
+玉ねぎ 1個
+カレールー 2片
+作り方
+1. 具材を切る
+2. 炒めて水を加える
+3. ルーを入れて煮る`;
 
 afterEach(() => {
   AgentBridge._reset();
@@ -30,6 +46,26 @@ describe('IMG-RECIPE-AGT-01 runRecipePhotoAgent', () => {
 
     expect(result.ok).toBe(true);
     expect(result.data?.draft.title).toBe('写真から推測したカレー');
+  });
+
+  it('uses readable text in the image when OCR produces a recipe draft', async () => {
+    const result = await runRecipePhotoAgent(
+      { imageUri: 'file:///tmp/recipe-card.jpg' },
+      {
+        labelImage: async () => [label('Food', 0.9), label('Plate', 0.7)],
+        recognizeText: async () => recognition(recipeText),
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.data?.draft.title).toBe('チキンカレー');
+    expect(result.data?.draft.ingredients).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: '鶏もも肉', amount: '200g' })]),
+    );
+    expect(result.data?.rawText).toContain('カレールー');
+    expect(result.data?.warnings).toEqual(
+      expect.arrayContaining(['画像内の文字を読み取り、入力フォームに反映しました']),
+    );
   });
 });
 

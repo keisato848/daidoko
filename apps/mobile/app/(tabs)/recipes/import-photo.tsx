@@ -28,8 +28,10 @@ import {
   createClientImageLabeler,
   isClientImageLabelingAvailable,
 } from '../../../src/services/client-image-label.provider';
+import { createClientOcrRecognizer } from '../../../src/services/client-ocr.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
+import { PHOTO_RECIPE_BATCH_FIXTURES } from '../../../src/e2e/photo-recipe-batch-fixtures';
 import { preprocessImageForOcr } from '../../../src/services/image-preprocess.service';
 import {
   capturePhoto,
@@ -43,6 +45,16 @@ import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 import photoRecipeE2eFixtureImage from '../../../assets/e2e/food-photo-ja.png';
 
 type Phase = 'select' | 'processing' | 'preview';
+
+interface BatchValidationSummary {
+  total: number;
+  pass: number;
+  fail: number;
+  withText: number;
+  withLabels: number;
+  exactTitleMatches: number;
+  failures: string[];
+}
 
 const isAndroid = Platform.OS === 'android';
 const isPhotoRecipeE2eEnabled =
@@ -72,6 +84,38 @@ async function loadPhotoRecipeE2eFixturePhoto(): Promise<CapturedPhoto> {
   };
 }
 
+async function loadPhotoRecipeBatchFixturePhoto(
+  fixture: (typeof PHOTO_RECIPE_BATCH_FIXTURES)[number],
+): Promise<CapturedPhoto> {
+  const asset = Asset.fromModule(fixture.image);
+  await asset.downloadAsync();
+  const localPath = asset.localUri ?? asset.uri;
+  if (!localPath) throw new Error(`${fixture.id} を読み込めませんでした`);
+
+  return {
+    localPath,
+    source: 'gallery',
+    width: asset.width || undefined,
+    height: asset.height || undefined,
+    mimeType: 'image/png',
+    takenAt: new Date().toISOString(),
+    temporary: false,
+  };
+}
+
+function normalizeForComparison(value: string): string {
+  return value.replace(/[\s\u3000・、。.,，．:：\-ー]/g, '').toLowerCase();
+}
+
+function hasSaveReadyDraft(data: RecipePhotoAgentOutput): boolean {
+  return (
+    data.draft.title.trim().length > 0 &&
+    data.draft.ingredients.some((item) => item.name.trim().length > 0) &&
+    data.draft.steps.some((item) => item.body.trim().length > 0) &&
+    Boolean((data.rawText && data.rawText.trim()) || data.labelSummary.trim())
+  );
+}
+
 export default function ImportPhotoScreen() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('select');
@@ -80,6 +124,8 @@ export default function ImportPhotoScreen() {
   const [photoResult, setPhotoResult] = useState<RecipePhotoAgentOutput | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [batchSummary, setBatchSummary] = useState<BatchValidationSummary | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -125,6 +171,7 @@ export default function ImportPhotoScreen() {
         {
           preprocessImage: shouldPreprocess ? preprocessForAgent : undefined,
           labelImage: createClientImageLabeler(),
+          recognizeText: createClientOcrRecognizer(),
         },
       );
 
@@ -175,11 +222,70 @@ export default function ImportPhotoScreen() {
     }
   }, [inferPhoto]);
 
+  const handleRunBatchValidation = useCallback(async () => {
+    setErrorMsg(null);
+    setPhotoResult(null);
+    setCapturedPhoto(null);
+    setBatchSummary(null);
+    setPhase('processing');
+
+    const total = PHOTO_RECIPE_BATCH_FIXTURES.length;
+    const failures: string[] = [];
+    let pass = 0;
+    let withText = 0;
+    let withLabels = 0;
+    let exactTitleMatches = 0;
+
+    try {
+      const labelImage = createClientImageLabeler();
+      const recognizeText = createClientOcrRecognizer();
+
+      for (const [index, fixture] of PHOTO_RECIPE_BATCH_FIXTURES.entries()) {
+        setBatchProgress({ done: index, total });
+        const photo = await loadPhotoRecipeBatchFixturePhoto(fixture);
+        const result = await runRecipePhotoAgent(
+          { imageUri: photo.localPath },
+          { labelImage, recognizeText },
+        );
+
+        if (!result.ok || !result.data || !hasSaveReadyDraft(result.data)) {
+          failures.push(`${fixture.id}: 入力可能な下書きを作成できませんでした`);
+          continue;
+        }
+
+        pass += 1;
+        if (result.data.rawText?.trim()) withText += 1;
+        if (result.data.labelSummary.trim()) withLabels += 1;
+
+        const actualTitle = normalizeForComparison(result.data.draft.title);
+        const expectedTitle = normalizeForComparison(fixture.title);
+        if (actualTitle.includes(expectedTitle) || expectedTitle.includes(actualTitle)) {
+          exactTitleMatches += 1;
+        }
+      }
+
+      setBatchSummary({
+        total,
+        pass,
+        fail: total - pass,
+        withText,
+        withLabels,
+        exactTitleMatches,
+        failures: failures.slice(0, 5),
+      });
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : '100画像検証に失敗しました');
+    } finally {
+      setBatchProgress(null);
+      setPhase('select');
+    }
+  }, []);
+
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
       if (!photoResult) return;
       const sourceId = await createPhotoSource({
-        labelSummary: photoResult.labelSummary,
+        labelSummary: photoResult.evidenceSummary ?? photoResult.labelSummary,
         capturedAt: capturedPhoto?.takenAt,
       });
       await createRecipe({ ...data, sourceId });
@@ -255,6 +361,11 @@ export default function ImportPhotoScreen() {
               <View style={styles.processingBox}>
                 <ActivityIndicator size="large" color={Colors.gold} />
                 <Text style={styles.processingText}>端末内で推測しています...</Text>
+                {batchProgress && (
+                  <Text style={styles.processingSubText}>
+                    100枚検証中 {batchProgress.done}/{batchProgress.total}
+                  </Text>
+                )}
               </View>
             ) : (
               <View style={styles.actionGrid}>
@@ -290,6 +401,37 @@ export default function ImportPhotoScreen() {
                     <Text style={styles.secondaryButtonText}>E2E料理写真で推測</Text>
                   </Pressable>
                 )}
+                {isPhotoRecipeE2eEnabled && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="E2E100画像を検証"
+                    style={[styles.secondaryButton, !providerReady && styles.buttonDisabled]}
+                    onPress={handleRunBatchValidation}
+                    disabled={!providerReady}
+                  >
+                    <Sparkles size={18} color={Colors.gold} />
+                    <Text style={styles.secondaryButtonText}>E2E100画像を検証</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+
+            {batchSummary && (
+              <View style={styles.batchResultBox}>
+                <Text style={styles.batchResultTitle}>
+                  画像検証 {batchSummary.fail === 0 ? 'PASS' : 'FAIL'} {batchSummary.pass}/
+                  {batchSummary.total}
+                </Text>
+                <Text style={styles.batchResultText}>
+                  OCRあり {batchSummary.withText}/{batchSummary.total} / ラベルあり{' '}
+                  {batchSummary.withLabels}/{batchSummary.total} / タイトル一致{' '}
+                  {batchSummary.exactTitleMatches}/{batchSummary.total}
+                </Text>
+                {batchSummary.failures.map((failure) => (
+                  <Text key={failure} style={styles.batchFailureText}>
+                    {failure}
+                  </Text>
+                ))}
               </View>
             )}
           </>
@@ -406,6 +548,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.paperDim,
   },
+  processingSubText: {
+    fontSize: 12,
+    color: Colors.muted,
+  },
   actionGrid: {
     width: '100%',
     gap: 12,
@@ -479,6 +625,30 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontSize: 12,
     color: Colors.muted,
+  },
+  batchResultBox: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#130E08',
+    gap: 6,
+  },
+  batchResultTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.gold,
+  },
+  batchResultText: {
+    fontSize: 12,
+    color: Colors.paperDim,
+    lineHeight: 18,
+  },
+  batchFailureText: {
+    fontSize: 11,
+    color: '#F2A07B',
+    lineHeight: 16,
   },
   sourceBanner: {
     flexDirection: 'row',
