@@ -32,6 +32,7 @@ import {
   updateCurrentUserDisplayName,
 } from '../../src/services/user.service';
 import type { CurrentFamily, CurrentUser, FamilyMember } from '../../src/services/types';
+import { formatProfileDisplayName } from '../../src/utils/profile';
 
 function roleLabel(role: FamilyMember['role']): string {
   return role === 'owner' ? 'オーナー' : 'メンバー';
@@ -85,8 +86,12 @@ export default function FamilyScreen() {
 
   const handleSaveProfile = () => {
     void runAction(async () => {
-      await updateCurrentUserDisplayName(displayName);
-      await updateCurrentFamilyName(familyName);
+      if (displayName.trim() !== currentUser.displayName) {
+        await updateCurrentUserDisplayName(displayName);
+      }
+      if (familyName.trim() !== family.name) {
+        await updateCurrentFamilyName(familyName);
+      }
     });
   };
 
@@ -169,7 +174,7 @@ export default function FamilyScreen() {
             style={styles.input}
             value={displayName}
             onChangeText={setDisplayName}
-            placeholder="表示名"
+            placeholder="表示名を入力"
             placeholderTextColor={Colors.muted}
             maxLength={32}
           />
@@ -194,10 +199,10 @@ export default function FamilyScreen() {
           <Text style={styles.sectionTitle}>メンバー</Text>
           {members.map((member) => (
             <View key={member.id} style={styles.memberRow}>
-              <Avatar name={member.displayName} size={36} />
+              <Avatar name={formatProfileDisplayName(member.displayName)} size={36} />
               <View style={styles.memberInfo}>
                 <Text style={styles.memberName} numberOfLines={1}>
-                  {member.displayName}
+                  {formatProfileDisplayName(member.displayName)}
                   {member.isCurrentUser && <Text style={styles.memberYou}> (あなた)</Text>}
                 </Text>
                 <Text style={styles.memberRole}>{roleLabel(member.role)}</Text>

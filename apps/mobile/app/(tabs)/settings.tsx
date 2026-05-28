@@ -15,6 +15,7 @@ import {
   getCurrentUser,
   getCurrentUserProfile,
 } from '../../src/services/user.service';
+import { formatProfileDisplayName } from '../../src/utils/profile';
 
 interface SettingItem {
   id: string;
@@ -33,6 +34,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const [user, setUser] = useState(getCurrentUser());
   const [family, setFamily] = useState(getCurrentFamily());
+  const userDisplayName = formatProfileDisplayName(user.displayName);
 
   useFocusEffect(
     useCallback(() => {
@@ -56,7 +58,7 @@ export default function SettingsScreen() {
         {
           id: 'profile',
           label: 'プロフィール編集',
-          subtitle: user.displayName,
+          subtitle: userDisplayName,
           enabled: false,
           onPress: showComingSoon,
         },
@@ -126,9 +128,9 @@ export default function SettingsScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* User card */}
         <View style={styles.userCard}>
-          <Avatar name={user.displayName} size={48} />
+          <Avatar name={userDisplayName} size={48} />
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user.displayName}</Text>
+            <Text style={styles.userName}>{userDisplayName}</Text>
             <Text style={styles.familyName}>{family.name}</Text>
           </View>
         </View>

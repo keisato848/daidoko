@@ -13,6 +13,7 @@ import { Colors } from '../../src/constants/theme';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
 import { getTimeline } from '../../src/services/timeline.service';
 import type { TimelineEntry } from '../../src/services/types';
+import { formatProfileDisplayName } from '../../src/utils/profile';
 
 type FilterTab = 'week' | 'month' | 'all';
 
@@ -109,6 +110,7 @@ export default function HomeScreen() {
     const showDateHeader =
       index === 0 || formatDate(entries[index - 1].cookedAt) !== formatDate(item.cookedAt);
     const isSelected = selectedIds.has(item.id);
+    const userName = formatProfileDisplayName(item.userName);
 
     return (
       <View>
@@ -140,8 +142,8 @@ export default function HomeScreen() {
               {item.rating != null && <Stars rating={item.rating} size={12} />}
             </View>
             <View style={styles.cardUser}>
-              <Avatar name={item.userName} size={22} />
-              <Text style={styles.userName}>{item.userName}</Text>
+              <Avatar name={userName} size={22} />
+              <Text style={styles.userName}>{userName}</Text>
             </View>
             {item.memo ? (
               <Text style={styles.memo} numberOfLines={1}>

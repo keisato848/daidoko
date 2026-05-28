@@ -18,7 +18,7 @@ import type {
 export const CURRENT_USER_ID = 'user-kei';
 export const CURRENT_FAMILY_ID = 'family-001';
 
-const DEFAULT_USER_NAME = 'あなた';
+const DEFAULT_USER_NAME = '';
 const DEFAULT_FAMILY_NAME = 'わたしの台所';
 const DEFAULT_INVITE_CODE = 'DK0001';
 const INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -151,7 +151,6 @@ export async function getFamilyMembers(): Promise<FamilyMember[]> {
 
 export async function updateCurrentUserDisplayName(displayName: string): Promise<CurrentUser> {
   const trimmed = displayName.trim();
-  if (!trimmed) throw new RangeError('表示名を入力してください');
   if (trimmed.length > 32) throw new RangeError('表示名は32文字以内で入力してください');
 
   if (!isNativePlatform) {

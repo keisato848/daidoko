@@ -2,7 +2,7 @@
  * Database migration and seeding for v0.1 Alpha
  * Uses raw SQL for table creation (expo-sqlite doesn't support Drizzle migrations natively)
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 
 import * as schema from './schema';
@@ -27,7 +27,7 @@ export const CURRENT_SCHEMA_VERSION = 2;
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
 const DEFAULT_MEMBER_ID = 'member-family-001-user-kei';
-const DEFAULT_USER_NAME = 'あなた';
+const DEFAULT_USER_NAME = '';
 const DEFAULT_FAMILY_NAME = 'わたしの台所';
 const DEFAULT_INVITE_CODE = 'DK0001';
 
@@ -291,12 +291,19 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
     .from(schema.familyMembers)
     .where(eq(schema.familyMembers.familyId, DEFAULT_FAMILY_ID));
 
-  if (existingMembers.length === 0 && !isSampleDataEnabled()) {
+  if (!isSampleDataEnabled()) {
     await database
       .update(schema.users)
       .set({ displayName: DEFAULT_USER_NAME, updatedAt: now })
-      .where(and(eq(schema.users.id, DEFAULT_USER_ID), eq(schema.users.displayName, '恵')));
+      .where(
+        and(
+          eq(schema.users.id, DEFAULT_USER_ID),
+          inArray(schema.users.displayName, ['恵', 'あなた']),
+        ),
+      );
+  }
 
+  if (existingMembers.length === 0 && !isSampleDataEnabled()) {
     await database
       .update(schema.families)
       .set({ name: DEFAULT_FAMILY_NAME, inviteCode: DEFAULT_INVITE_CODE, updatedAt: now })

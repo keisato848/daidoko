@@ -14,6 +14,7 @@ import { Colors } from '../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
 import { deleteRecipe, getRecipeDetail } from '../../../src/services/recipe.service';
 import type { RecipeDetail, TimelineEntry } from '../../../src/services/types';
+import { formatProfileDisplayName } from '../../../src/utils/profile';
 
 type TabKey = 'ingredients' | 'steps' | 'memo' | 'history';
 
@@ -251,23 +252,26 @@ export default function RecipeDetailScreen() {
                 </Text>
               </View>
             ) : (
-              cookingLogs.map((log) => (
-                <View key={log.id} style={styles.logRow}>
-                  <View style={styles.logHeader}>
-                    <View style={styles.logUser}>
-                      <Avatar name={log.userName} size={24} />
-                      <Text style={styles.logUserName}>{log.userName}</Text>
+              cookingLogs.map((log) => {
+                const userName = formatProfileDisplayName(log.userName);
+                return (
+                  <View key={log.id} style={styles.logRow}>
+                    <View style={styles.logHeader}>
+                      <View style={styles.logUser}>
+                        <Avatar name={userName} size={24} />
+                        <Text style={styles.logUserName}>{userName}</Text>
+                      </View>
+                      <Text style={styles.logDate}>{formatDate(log.cookedAt)}</Text>
                     </View>
-                    <Text style={styles.logDate}>{formatDate(log.cookedAt)}</Text>
+                    {log.rating != null && (
+                      <View style={styles.logStars}>
+                        <Stars rating={log.rating} size={12} />
+                      </View>
+                    )}
+                    {log.memo && <Text style={styles.logMemo}>&quot;{log.memo}&quot;</Text>}
                   </View>
-                  {log.rating != null && (
-                    <View style={styles.logStars}>
-                      <Stars rating={log.rating} size={12} />
-                    </View>
-                  )}
-                  {log.memo && <Text style={styles.logMemo}>&quot;{log.memo}&quot;</Text>}
-                </View>
-              ))
+                );
+              })
             )}
           </View>
         )}

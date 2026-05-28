@@ -27,7 +27,7 @@ describe('user.service', () => {
   it('returns current user with id and displayName', () => {
     const user = getCurrentUser();
     expect(user.id).toBe('user-kei');
-    expect(user.displayName).toBe('あなた');
+    expect(user.displayName).toBe('');
   });
 
   it('returns current family with id and name', () => {
@@ -46,17 +46,24 @@ describe('user.service', () => {
     await expect(getCurrentFamilyProfile()).resolves.toMatchObject({ name: '週末の台所' });
   });
 
+  it('allows clearing the current user display name', async () => {
+    await updateCurrentUserDisplayName('台所係');
+    await updateCurrentUserDisplayName('');
+
+    await expect(getCurrentUserProfile()).resolves.toMatchObject({ displayName: '' });
+  });
+
   it('adds and removes local family members', async () => {
     const added = await addFamilyMember('健');
     expect(added.displayName).toBe('健');
 
     let members = await getFamilyMembers();
-    expect(members.map((member) => member.displayName)).toEqual(['あなた', '健']);
+    expect(members.map((member) => member.displayName)).toEqual(['', '健']);
     await expect(getCurrentFamilyProfile()).resolves.toMatchObject({ memberCount: 2 });
 
     await removeFamilyMember(added.id);
     members = await getFamilyMembers();
-    expect(members.map((member) => member.displayName)).toEqual(['あなた']);
+    expect(members.map((member) => member.displayName)).toEqual(['']);
   });
 
   it('does not remove the owner member', async () => {
