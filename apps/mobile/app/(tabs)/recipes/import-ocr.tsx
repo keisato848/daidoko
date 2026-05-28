@@ -4,7 +4,6 @@
  * On web / Expo Go: shows requirements and manual fallback
  */
 import { useRouter } from 'expo-router';
-import { Asset } from 'expo-asset';
 import { Camera, Image as ImageIcon, PenLine, RotateCcw, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -38,35 +37,16 @@ import {
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
-import ocrE2eFixtureImage from '../../../assets/e2e/ocr-recipe-ja.png';
 
 type Phase = 'select' | 'processing' | 'preview';
 
 const isAndroid = Platform.OS === 'android';
-const isOcrE2eEnabled = process.env.EXPO_PUBLIC_ENABLE_OCR_E2E === '1';
 
 const CONFIDENCE_LABEL: Record<OcrAgentOutput['confidence'], string> = {
   high: '読み取り精度: 高',
   medium: '読み取り精度: 中',
   low: '読み取り精度: 低',
 };
-
-async function loadOcrE2eFixturePhoto(): Promise<CapturedPhoto> {
-  const asset = Asset.fromModule(ocrE2eFixtureImage);
-  await asset.downloadAsync();
-  const localPath = asset.localUri ?? asset.uri;
-  if (!localPath) throw new Error('OCR E2E テスト画像を読み込めませんでした');
-
-  return {
-    localPath,
-    source: 'gallery',
-    width: asset.width || undefined,
-    height: asset.height || undefined,
-    mimeType: 'image/png',
-    takenAt: new Date().toISOString(),
-    temporary: false,
-  };
-}
 
 export default function ImportOcrScreen() {
   const router = useRouter();
@@ -156,20 +136,6 @@ export default function ImportOcrScreen() {
     },
     [recognizePhoto],
   );
-
-  const handleReadE2eFixture = useCallback(async () => {
-    setErrorMsg(null);
-    setPhase('processing');
-    setOcrResult(null);
-
-    try {
-      const photo = await loadOcrE2eFixturePhoto();
-      await recognizePhoto(photo, { preprocessImage: false });
-    } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : 'OCR 処理に失敗しました');
-      setPhase('select');
-    }
-  }, [recognizePhoto]);
 
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
@@ -274,18 +240,6 @@ export default function ImportOcrScreen() {
                   <ImageIcon size={18} color={Colors.gold} />
                   <Text style={styles.secondaryButtonText}>ギャラリーから選ぶ</Text>
                 </Pressable>
-                {isOcrE2eEnabled && (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="E2Eテスト画像で読み取り"
-                    style={[styles.secondaryButton, !providerReady && styles.buttonDisabled]}
-                    onPress={handleReadE2eFixture}
-                    disabled={!providerReady}
-                  >
-                    <ImageIcon size={18} color={Colors.gold} />
-                    <Text style={styles.secondaryButtonText}>E2Eテスト画像で読み取り</Text>
-                  </Pressable>
-                )}
               </View>
             )}
           </>

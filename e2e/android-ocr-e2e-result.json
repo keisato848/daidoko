@@ -1,13 +1,13 @@
 {
-  "ts": "2026-05-28T10:23:11.190Z",
+  "ts": "2026-05-28T14:42:30.564Z",
   "pass": 3,
   "fail": 0,
   "total": 3,
   "results": [
     {
-      "name": "O01 同梱生成画像 OCR → 下書き表示",
+      "name": "O01 リリース OCR 入口 → テスト導線なし",
       "status": "PASS",
-      "detail": "bundled generated image parsed into preview"
+      "detail": "release OCR entry has only production actions"
     },
     {
       "name": "O02 カメラ権限拒否",

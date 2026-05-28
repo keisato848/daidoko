@@ -434,27 +434,43 @@ async function testTabNavigation() {
   return 'all 4 tabs switchable';
 }
 
-async function testSeedRecipes() {
+function recipeCandidates(...fallbackTitles) {
+  return [...new Set([lastCreatedRecipeName, ...fallbackTitles].filter(Boolean))];
+}
+
+async function findRecipeInCurrentList(candidates, dumpPrefix) {
+  let xml = uiDump(`${dumpPrefix}-0`);
+  for (let attempt = 0; attempt <= 5; attempt++) {
+    for (const title of candidates) {
+      const node = findByText(xml, title);
+      if (node) return { title, node, xml };
+    }
+    if (attempt === 5) break;
+    adb(['shell', 'input', 'swipe', '540', '1800', '540', '500', '300']);
+    await sleep(1200);
+    xml = uiDump(`${dumpPrefix}-${attempt + 1}`);
+  }
+  throw new Error(`recipe card not found: ${candidates.join(' / ')}`);
+}
+
+async function testCreatedRecipeVisible() {
+  if (!lastCreatedRecipeName) throw new Error('created recipe name not available');
   await launchApp();
   await tapTab('レシピ');
   await sleep(1000);
-  const xml = uiDump('recipe-list-seed');
-  const seedTitles = ['肉じゃが', '味噌汁', '唐揚げ', '炊き込みご飯', '豚汁', 'ハンバーグ'];
-  const found = seedTitles.filter((t) => hasText(xml, t));
+  const { title } = await findRecipeInCurrentList(recipeCandidates(), 'recipe-list-created');
   screenshot('03-recipe-list');
-  if (found.length < 4) {
-    throw new Error(`seed recipes missing: only ${found.length}/6 found (${found.join(', ')})`);
-  }
-  return `${found.length}/6 seed recipes visible`;
+  return `created recipe visible: ${title}`;
 }
 
 async function testRecipeDetail() {
   await launchApp();
   await tapTab('レシピ');
   await sleep(1000);
-  const xml = uiDump('recipe-list-tap');
-  const recipe = findByText(xml, '肉じゃが');
-  if (!recipe) throw new Error('肉じゃが card not found');
+  const { title, node: recipe } = await findRecipeInCurrentList(
+    recipeCandidates('肉じゃが'),
+    'recipe-list-tap',
+  );
   tap(recipe.cx, recipe.cy);
   await sleep(2500);
   screenshot('04-recipe-detail');
@@ -462,19 +478,20 @@ async function testRecipeDetail() {
   if (!hasText(detail, '材料')) throw new Error('材料 tab not present');
   if (!hasText(detail, '手順')) throw new Error('手順 tab not present');
   if (!hasText(detail, '調理開始')) throw new Error('調理開始 button not present');
-  return 'detail screen has 材料/手順/調理開始';
+  return `detail screen has 材料/手順/調理開始: ${title}`;
 }
 
 async function testCookingMode() {
   await launchApp();
   await tapTab('レシピ');
   await sleep(1000);
-  let xml = uiDump('cook-step1');
-  const recipe = findByText(xml, '豚汁');
-  if (!recipe) throw new Error('豚汁 card not found');
+  const { title, node: recipe } = await findRecipeInCurrentList(
+    recipeCandidates('豚汁', '肉じゃが'),
+    'cook-step1',
+  );
   tap(recipe.cx, recipe.cy);
   await sleep(2000);
-  xml = uiDump('cook-step2');
+  let xml = uiDump('cook-step2');
   const cta = findByText(xml, '調理開始');
   if (!cta) throw new Error('調理開始 button not found');
   tap(cta.cx, cta.cy);
@@ -483,7 +500,7 @@ async function testCookingMode() {
   xml = uiDump('cook-step3');
   // ステップカウンター "1 / N" が含まれているか
   if (!/\d+\s*\/\s*\d+/.test(xml)) throw new Error('step counter not found');
-  return 'cooking mode started';
+  return `cooking mode started: ${title}`;
 }
 
 // IME 開閉後に再ダンプして現在のフィールド座標で操作するヘルパー
@@ -770,8 +787,10 @@ async function testOcrEntry() {
   await tapTab('追加');
   await sleep(1200);
   const xml = uiDump('ocr-method');
-  const ocrBtn = findByText(xml, '写真から読み取り');
-  if (!ocrBtn) throw new Error('OCR button not found');
+  const ocrBtn =
+    findByContentDesc(xml, '文字入り画像から作成, レシピ本や手書きメモの文字を読み取り') ||
+    findByText(xml, '文字入り画像から作成');
+  if (!ocrBtn) throw new Error('文字入り画像から作成 button not found');
   tap(ocrBtn.cx, ocrBtn.cy);
   await sleep(2000);
   screenshot('12-ocr-entry');
@@ -812,11 +831,14 @@ async function testTimelineHasContent() {
   await launchApp();
   await sleep(800);
   const xml = uiDump('timeline-check');
-  // タイムラインのシードデータ (肉じゃが etc.)
-  const found = ['肉じゃが', '味噌汁', '唐揚げ', '炊き込みご飯'].filter((t) => hasText(xml, t));
   screenshot('14-timeline');
-  if (found.length < 2) throw new Error(`timeline only has ${found.length} entries`);
-  return `${found.length} timeline entries`;
+  if (!hasText(xml, 'DAIDOKO')) throw new Error('DAIDOKO brand text not found');
+  const filters = ['今週', '今月', 'すべて'].filter((filter) => hasText(xml, filter));
+  if (filters.length !== 3) throw new Error(`only ${filters.length}/3 filter tabs`);
+  if (lastCreatedRecipeName && hasText(xml, lastCreatedRecipeName)) {
+    return `timeline rendered with created recipe: ${lastCreatedRecipeName}`;
+  }
+  return 'timeline rendered without requiring sample logs';
 }
 
 async function testFilterTabs() {
@@ -845,13 +867,13 @@ async function main() {
   preflightCheck();
 
   await test('T01 アプリ起動 + ホーム描画', testAppLaunch);
-  await test('T02 タイムラインに調理ログ表示', testTimelineHasContent);
-  await test('T03 フィルタータブ (今週/今月/すべて)', testFilterTabs);
-  await test('T04 タブ間ナビゲーション', testTabNavigation);
-  await test('T05 レシピ一覧シードデータ表示', testSeedRecipes);
+  await test('T02 フィルタータブ (今週/今月/すべて)', testFilterTabs);
+  await test('T03 タブ間ナビゲーション', testTabNavigation);
+  await test('T04 手動レシピ作成 → DB 保存検証', testManualRecipeCreate);
+  await test('T05 レシピ一覧に作成レシピ表示', testCreatedRecipeVisible);
   await test('T06 レシピ詳細画面', testRecipeDetail);
   await test('T07 料理中モード遷移', testCookingMode);
-  await test('T08 手動レシピ作成 → DB 保存検証', testManualRecipeCreate);
+  await test('T08 タイムライン表示', testTimelineHasContent);
   await test('T09 レシピ削除 → 一覧反映', testDeleteCreatedRecipe);
   await test('T10 URL 取り込み (例: example.com)', testUrlImport);
   await test('T11 テキスト取り込み AI 指示コピー', testTextImportPromptCopy);

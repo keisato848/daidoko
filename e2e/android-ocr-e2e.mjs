@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Android Pixel OCR E2E.
- * Uses only the OCR fixture image bundled in the test APK. It never selects files from the device.
+ * Android OCR release E2E.
+ * Verifies the production OCR entry and permission-denied paths without test-only fixture buttons.
  */
 import { spawnSync } from 'child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs';
@@ -212,7 +212,7 @@ async function openOcrScreen(namePrefix) {
 
   xml = uiDump(`${namePrefix}-add`);
   const ocrButton = findAny(xml, ['文字入り画像から作成', '写真から読み取り']);
-  if (!ocrButton) throw new Error('写真から読み取り button not found');
+  if (!ocrButton) throw new Error('文字入り画像から作成 button not found');
   tap(ocrButton.cx, ocrButton.cy);
   await sleep(2200);
 
@@ -316,30 +316,17 @@ async function test(name, fn) {
   }
 }
 
-async function testBundledFixtureOcr() {
-  const xml = await openOcrScreen('fixture');
-  const fixtureButton = findByText(xml, 'E2Eテスト画像で読み取り');
-  if (!fixtureButton)
-    throw new Error('E2E fixture button not found. Build with EXPO_PUBLIC_ENABLE_OCR_E2E=1.');
-  tap(fixtureButton.cx, fixtureButton.cy);
-
-  let previewXml = '';
-  for (let attempt = 1; attempt <= 12; attempt++) {
-    await sleep(2500);
-    previewXml = uiDump(`fixture-preview-${attempt}`);
-    if (xmlTextIncludes(previewXml, '読み取り結果を確認・編集')) break;
+async function testReleaseOcrEntry() {
+  const xml = await openOcrScreen('release-entry');
+  screenshot('release-entry');
+  const decoded = decodeXml(xml);
+  if (!decoded.includes('文字入り画像を読み取り')) throw new Error('OCR entry title was not shown');
+  if (!findByText(xml, 'カメラで撮影')) throw new Error('camera button not found');
+  if (!findByText(xml, 'ギャラリーから選ぶ')) throw new Error('gallery button not found');
+  if (decoded.includes('E2Eテスト画像で読み取り')) {
+    throw new Error('release build exposes the OCR E2E fixture button');
   }
-  screenshot('fixture-preview');
-  const decoded = decodeXml(previewXml);
-  if (!decoded.includes('読み取り結果を確認・編集')) throw new Error('OCR preview was not shown');
-  if (
-    !decoded.includes('OCRテスト') &&
-    !decoded.includes('じゃがいも') &&
-    !decoded.includes('野菜を切る')
-  ) {
-    throw new Error('OCR result did not contain the generated fixture recipe text');
-  }
-  return 'bundled generated image parsed into preview';
+  return 'release OCR entry has only production actions';
 }
 
 async function testCameraDenied() {
@@ -406,7 +393,7 @@ async function main() {
   }
 
   try {
-    await test('O01 同梱生成画像 OCR → 下書き表示', testBundledFixtureOcr);
+    await test('O01 リリース OCR 入口 → テスト導線なし', testReleaseOcrEntry);
     await test('O02 カメラ権限拒否', testCameraDenied);
     await test('O03 写真ライブラリ権限拒否', testGalleryDenied);
   } finally {

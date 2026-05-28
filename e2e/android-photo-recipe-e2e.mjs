@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Android Pixel food-photo recipe inference E2E.
- * Uses only the generated food fixture bundled in the test APK. It never selects files from the device.
+ * Android food-photo recipe release E2E.
+ * Verifies the production photo entry and permission-denied paths without test-only fixture buttons.
  */
 import { spawnSync } from 'child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs';
@@ -321,69 +321,21 @@ async function test(name, fn) {
   }
 }
 
-async function testBundledFixturePhotoRecipe() {
-  const xml = await openPhotoRecipeScreen('fixture');
-  const fixtureButton = findByContentDesc(xml, 'E2E料理写真で推測') || findByText(xml, 'E2E料理写真で推測');
-  if (!fixtureButton)
-    throw new Error(
-      'E2E fixture button not found. Build with EXPO_PUBLIC_ENABLE_PHOTO_RECIPE_E2E=1.',
-    );
-  tap(fixtureButton.cx, fixtureButton.cy);
-
-  let previewXml = '';
-  for (let attempt = 1; attempt <= 12; attempt++) {
-    await sleep(2500);
-    previewXml = uiDump(`fixture-preview-${attempt}`);
-    if (xmlTextIncludes(previewXml, '推測結果を確認・編集')) break;
+async function testReleasePhotoRecipeEntry() {
+  const xml = await openPhotoRecipeScreen('release-entry');
+  screenshot('release-entry');
+  const decoded = decodeXml(xml);
+  if (!decoded.includes('写真から下書き')) throw new Error('photo recipe entry title was not shown');
+  if (!findByContentDesc(xml, 'カメラで撮影') && !findByText(xml, 'カメラで撮影')) {
+    throw new Error('camera button not found');
   }
-  screenshot('fixture-preview');
-  const decoded = decodeXml(previewXml);
-  if (!decoded.includes('推測結果を確認・編集'))
-    throw new Error('photo recipe preview was not shown');
-  if (!decoded.includes('写真から推測') && !decoded.includes('料理写真からのレシピ案')) {
-    throw new Error('photo recipe result did not contain an inferred draft title');
+  if (!findByContentDesc(xml, 'ギャラリーから選ぶ') && !findByText(xml, 'ギャラリーから選ぶ')) {
+    throw new Error('gallery button not found');
   }
-  if (!decoded.includes('写真だけでは')) {
-    throw new Error('confirmation warning was not shown');
+  if (decoded.includes('E2E料理写真で推測') || decoded.includes('E2E100画像を検証')) {
+    throw new Error('release build exposes photo recipe E2E actions');
   }
-  return 'bundled generated food image inferred into preview';
-}
-
-async function testHundredGeneratedPhotoRecipes() {
-  const xml = await openPhotoRecipeScreen('batch');
-  const batchButton = findByContentDesc(xml, 'E2E100画像を検証') || findByText(xml, 'E2E100画像を検証');
-  if (!batchButton)
-    throw new Error(
-      'E2E batch button not found. Build with EXPO_PUBLIC_ENABLE_PHOTO_RECIPE_E2E=1.',
-    );
-  tap(batchButton.cx, batchButton.cy);
-
-  let resultXml = '';
-  for (let attempt = 1; attempt <= 220; attempt++) {
-    await sleep(2500);
-    resultXml = uiDump(`batch-result-${attempt}`);
-    if (attempt === 1 || attempt % 10 === 0) {
-      const progressMatch = decodeXml(resultXml).match(/画像検証中\s+(\d+)\/100/);
-      const progress = progressMatch ? ` ${progressMatch[1]}/100` : '';
-      console.log(`  batch wait ${attempt}/220${progress}`);
-    }
-    if (xmlTextIncludes(resultXml, '画像検証 PASS') || xmlTextIncludes(resultXml, '画像検証 FAIL')) {
-      break;
-    }
-  }
-
-  screenshot('batch-result');
-  const decoded = decodeXml(resultXml);
-  if (!decoded.includes('画像検証 PASS')) {
-    throw new Error(`100 image batch did not pass: ${decoded.slice(0, 500)}`);
-  }
-  if (!decoded.includes('100/100')) {
-    throw new Error('100 image batch did not validate all generated images');
-  }
-  if (!decoded.includes('OCRあり 100/100')) {
-    throw new Error('100 image batch did not OCR all generated recipe cards');
-  }
-  return '100 generated dish/recipe-card images produced save-ready drafts';
+  return 'release photo recipe entry has only production actions';
 }
 
 async function testCameraDenied() {
@@ -451,8 +403,7 @@ async function main() {
   }
 
   try {
-    await test('P01 同梱生成料理写真 → 推測下書き表示', testBundledFixturePhotoRecipe);
-    await test('P04 100生成料理画像 → 入力下書き一括検証', testHundredGeneratedPhotoRecipes);
+    await test('P01 リリース料理写真入口 → テスト導線なし', testReleasePhotoRecipeEntry);
     await test('P02 カメラ権限拒否', testCameraDenied);
     await test('P03 写真ライブラリ権限拒否', testGalleryDenied);
   } finally {
