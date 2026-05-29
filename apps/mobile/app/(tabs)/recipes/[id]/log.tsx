@@ -3,9 +3,11 @@
  * Records photos + rating + memo after cooking session completes
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera } from 'lucide-react-native';
+import { Camera, Image as ImageIcon, Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import {
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,6 +21,19 @@ import {
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { createCookingLog } from '../../../../src/services/cooking-log.service';
+import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
+import {
+  capturePhoto,
+  PhotoCaptureCancelledError,
+  type CapturedPhoto,
+  type PhotoCaptureSource,
+} from '../../../../src/services/photo-capture.service';
+import {
+  cleanupStoredCookingPhotos,
+  MAX_COOKING_LOG_PHOTOS,
+  persistCookingLogPhotos,
+} from '../../../../src/services/photo-storage.service';
+import type { SaveCookingPhotoInput } from '../../../../src/services/types';
 
 function StarRow({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -43,24 +58,55 @@ export default function CookingLogScreen() {
   const router = useRouter();
   const [rating, setRating] = useState(0);
   const [memo, setMemo] = useState('');
+  const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
   const [saving, setSaving] = useState(false);
   const [showToast, setShowToast] = useState(false);
 
+  const handleAddPhoto = useCallback(
+    async (source: PhotoCaptureSource) => {
+      if (photos.length >= MAX_COOKING_LOG_PHOTOS) {
+        Alert.alert('写真を追加できません', `写真は${MAX_COOKING_LOG_PHOTOS}枚まで追加できます。`);
+        return;
+      }
+
+      try {
+        const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
+        setPhotos((current) => [...current, photo].slice(0, MAX_COOKING_LOG_PHOTOS));
+      } catch (error) {
+        if (error instanceof PhotoCaptureCancelledError) return;
+        const message = error instanceof Error ? error.message : '写真を追加できませんでした';
+        Alert.alert('写真を追加できませんでした', message);
+      }
+    },
+    [photos.length],
+  );
+
+  const handleRemovePhoto = useCallback((index: number) => {
+    setPhotos((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  }, []);
+
   const handleSave = useCallback(async () => {
     setSaving(true);
+    let persistedPhotos: SaveCookingPhotoInput[] = [];
     try {
+      persistedPhotos = await persistCookingLogPhotos(photos);
       await createCookingLog({
         recipeId: id,
         rating: rating > 0 ? rating : undefined,
         memo: memo.trim() || undefined,
         cookedAt: new Date().toISOString(),
+        photos: persistedPhotos,
       });
       setShowToast(true);
       setTimeout(() => router.push('/(tabs)'), 1500);
+    } catch (error) {
+      await cleanupStoredCookingPhotos(persistedPhotos);
+      const message = error instanceof Error ? error.message : '記録を保存できませんでした';
+      Alert.alert('保存できませんでした', message);
     } finally {
       setSaving(false);
     }
-  }, [id, rating, memo, router]);
+  }, [id, rating, memo, photos, router]);
 
   const handleSkip = () => router.push('/(tabs)');
 
@@ -87,17 +133,49 @@ export default function CookingLogScreen() {
         {/* Photos */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>写真</Text>
-          <Pressable
-            style={[styles.photoAddButton, styles.photoAddButtonDisabled]}
-            disabled
-            accessibilityState={{ disabled: true }}
-          >
-            <Camera color={Colors.muted} size={18} />
-            <View style={styles.photoAddContent}>
-              <Text style={styles.photoAddTextDisabled}>写真を追加</Text>
-              <Text style={styles.photoFutureText}>今後追加予定</Text>
+          {photos.length > 0 && (
+            <View style={styles.photoGrid}>
+              {photos.map((photo, index) => (
+                <View key={`${photo.localPath}-${index}`} style={styles.photoPreviewWrap}>
+                  <Image source={{ uri: photo.localPath }} style={styles.photoPreview} />
+                  <Pressable
+                    style={styles.photoRemoveButton}
+                    onPress={() => handleRemovePhoto(index)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="写真を削除"
+                  >
+                    <Trash2 size={13} color={Colors.bg} />
+                  </Pressable>
+                </View>
+              ))}
             </View>
-          </Pressable>
+          )}
+          <View style={styles.photoActions}>
+            <Pressable
+              style={[styles.photoAddButton, saving && styles.photoAddButtonDisabled]}
+              onPress={() => handleAddPhoto('camera')}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="カメラで写真を追加"
+            >
+              <Camera color={Colors.gold} size={18} />
+              <Text style={styles.photoAddText}>カメラで撮影</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.photoAddButton, saving && styles.photoAddButtonDisabled]}
+              onPress={() => handleAddPhoto('gallery')}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="ギャラリーから写真を追加"
+            >
+              <ImageIcon color={Colors.gold} size={18} />
+              <Text style={styles.photoAddText}>ギャラリーから選ぶ</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.photoHint}>
+            {photos.length} / {MAX_COOKING_LOG_PHOTOS} 枚
+          </Text>
         </View>
 
         {/* Rating */}
@@ -214,7 +292,41 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: Colors.paperDim,
   },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  photoPreviewWrap: {
+    width: 92,
+    height: 92,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  photoPreview: {
+    width: '100%',
+    height: '100%',
+  },
+  photoRemoveButton: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   photoAddButton: {
+    flex: 1,
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -226,21 +338,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
   },
   photoAddButtonDisabled: {
-    opacity: 0.75,
+    opacity: 0.5,
   },
-  photoAddContent: {
-    alignItems: 'center',
-    gap: 2,
-  },
-  photoAddTextDisabled: {
+  photoAddText: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.paperDim,
+    color: Colors.paper,
   },
-  photoFutureText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: Colors.goldDim,
+  photoHint: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: Colors.muted,
+    textAlign: 'right',
   },
   memoInput: {
     backgroundColor: Colors.bgInput,
