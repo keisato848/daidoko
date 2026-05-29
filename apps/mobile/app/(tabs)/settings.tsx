@@ -92,10 +92,9 @@ export default function SettingsScreen() {
         {
           id: 'backup',
           label: 'バックアップ・復元',
-          subtitle: '端末内バックアップは今後追加予定です',
-          statusLabel: FUTURE_STATUS_LABEL,
-          enabled: false,
-          onPress: showComingSoon,
+          subtitle: '端末内にバックアップを作成・復元',
+          enabled: true,
+          onPress: () => router.push('/(tabs)/backup'),
         },
         {
           id: 'sync',
