@@ -453,6 +453,19 @@ async function findRecipeInCurrentList(candidates, dumpPrefix) {
   throw new Error(`recipe card not found: ${candidates.join(' / ')}`);
 }
 
+async function findTextWithScroll(text, dumpPrefix, maxScrolls = 4) {
+  let xml = uiDump(`${dumpPrefix}-0`);
+  for (let attempt = 0; attempt <= maxScrolls; attempt++) {
+    const node = findByText(xml, text);
+    if (node) return { node, xml };
+    if (attempt === maxScrolls) break;
+    adb(['shell', 'input', 'swipe', '540', '1800', '540', '500', '300']);
+    await sleep(1200);
+    xml = uiDump(`${dumpPrefix}-${attempt + 1}`);
+  }
+  throw new Error(`text not found after scroll: ${text}`);
+}
+
 async function testCreatedRecipeVisible() {
   if (!lastCreatedRecipeName) throw new Error('created recipe name not available');
   await launchApp();
@@ -500,7 +513,16 @@ async function testCookingMode() {
   xml = uiDump('cook-step3');
   // ステップカウンター "1 / N" が含まれているか
   if (!/\d+\s*\/\s*\d+/.test(xml)) throw new Error('step counter not found');
-  return `cooking mode started: ${title}`;
+  const finish = findByText(xml, '✓ 完成！記録する');
+  if (!finish) throw new Error('finish and log button not found');
+  tap(finish.cx, finish.cy);
+  await sleep(1800);
+  screenshot('05-cooking-log-photo-ui');
+  const logXml = uiDump('cooking-log-photo-ui');
+  if (!hasText(logXml, 'カメラで撮影')) throw new Error('camera photo action not found');
+  if (!hasText(logXml, 'ギャラリーから選ぶ')) throw new Error('gallery photo action not found');
+  if (hasText(logXml, '今後追加予定')) throw new Error('photo action is still marked as future');
+  return `cooking mode + photo log UI verified: ${title}`;
 }
 
 // IME 開閉後に再ダンプして現在のフィールド座標で操作するヘルパー
@@ -816,10 +838,43 @@ async function testSettingsAndFamily() {
   await tapTab('設定');
   await sleep(1500);
   screenshot('12-settings');
-  const xml = uiDump('settings');
+  let xml = uiDump('settings');
   const sections = ['アカウント', '家族', 'データ', 'アプリ'];
   const found = sections.filter((s) => hasText(xml, s));
   if (found.length < 3) throw new Error(`only ${found.length}/4 settings sections`);
+
+  const { node: backupLink } = await findTextWithScroll(
+    'バックアップ・復元',
+    'settings-backup-link',
+  );
+  tap(backupLink.cx, backupLink.cy);
+  await sleep(1500);
+  screenshot('13-backup');
+  const backupXml = uiDump('backup');
+  if (!hasText(backupXml, 'バックアップを作成')) throw new Error('backup create action not shown');
+  if (!hasText(backupXml, '最新バックアップから復元'))
+    throw new Error('backup restore action not shown');
+  key('KEYCODE_BACK');
+  await sleep(1200);
+
+  await tapTab('設定');
+  const { node: licensesLink } = await findTextWithScroll(
+    'ライセンス情報',
+    'settings-licenses-link',
+  );
+  tap(licensesLink.cx, licensesLink.cy);
+  await sleep(1500);
+  screenshot('13-licenses');
+  const licensesXml = uiDump('licenses');
+  if (!hasText(licensesXml, 'オープンソースライセンス')) {
+    throw new Error('license screen summary not shown');
+  }
+  if (!hasText(licensesXml, 'Expo / Expo SDK')) throw new Error('license package list not shown');
+  key('KEYCODE_BACK');
+  await sleep(1200);
+
+  await tapTab('設定');
+  xml = uiDump('settings-family-link');
 
   // 家族グループ画面へ
   const familyLink = findByText(xml, '家族グループ');
@@ -830,7 +885,7 @@ async function testSettingsAndFamily() {
     const famXml = uiDump('family');
     if (!hasText(famXml, '招待コード')) throw new Error('招待コード not shown');
   }
-  return 'settings + family verified';
+  return 'settings + backup/license/family verified';
 }
 
 async function testTimelineHasContent() {
