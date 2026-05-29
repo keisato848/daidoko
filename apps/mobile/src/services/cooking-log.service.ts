@@ -9,11 +9,7 @@ import {
   getMockCookingLogsForRecipe,
   getMockTimeline,
 } from '../db/mock';
-import type {
-  CookingLogEntry,
-  SaveCookingLogInput,
-  TimelineEntry,
-} from './types';
+import type { CookingLogEntry, SaveCookingLogInput, TimelineEntry } from './types';
 import { groupPhotosByLogId } from './photo.utils';
 
 function validateCookingLogInput(input: SaveCookingLogInput): void {

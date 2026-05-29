@@ -658,9 +658,15 @@ async function testDeleteCreatedRecipe() {
     throw new Error('did not return to recipe list after delete');
   }
 
-  const searchValue = await tapAndType('レシピを探す', lastCreatedRecipeName, { isDigit: true });
-  const searchXml = uiDump('delete-list-searched');
-  if ((searchValue && searchValue !== lastCreatedRecipeName) || !hasText(searchXml, '0 件')) {
+  let scanXml = afterDeleteXml;
+  let deletedRecipeStillVisible = hasText(scanXml, lastCreatedRecipeName);
+  for (let attempt = 1; attempt <= 5 && !deletedRecipeStillVisible; attempt++) {
+    adb(['shell', 'input', 'swipe', '540', '1800', '540', '500', '300']);
+    await sleep(1200);
+    scanXml = uiDump(`delete-list-after-confirm-scroll-${attempt}`);
+    deletedRecipeStillVisible = hasText(scanXml, lastCreatedRecipeName);
+  }
+  if (deletedRecipeStillVisible) {
     throw new Error(`deleted recipe still appears in list: ${lastCreatedRecipeName}`);
   }
 

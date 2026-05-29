@@ -1,5 +1,5 @@
 /**
- * Seed data for v0.1 Alpha
+ * Optional sample seed data
  * Based on mockup/app-mockup.jsx RECIPES, RECIPE_INGREDIENTS, STEPS, TIMELINE
  */
 

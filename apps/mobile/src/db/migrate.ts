@@ -1,5 +1,5 @@
 /**
- * Database migration and seeding for v0.1 Alpha
+ * Database migration and optional sample seeding
  * Uses raw SQL for table creation (expo-sqlite doesn't support Drizzle migrations natively)
  */
 import { and, eq, inArray, sql } from 'drizzle-orm';

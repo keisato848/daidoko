@@ -21,6 +21,7 @@ interface SettingItem {
   id: string;
   label: string;
   subtitle?: string;
+  statusLabel?: string;
   enabled: boolean;
   onPress?: () => void;
 }
@@ -29,6 +30,9 @@ interface SettingSection {
   title: string;
   items: SettingItem[];
 }
+
+const APP_VERSION_LABEL = 'v1.0.0';
+const FUTURE_STATUS_LABEL = '今後追加予定';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -59,8 +63,8 @@ export default function SettingsScreen() {
           id: 'profile',
           label: 'プロフィール編集',
           subtitle: userDisplayName,
-          enabled: false,
-          onPress: showComingSoon,
+          enabled: true,
+          onPress: () => router.push('/(tabs)/family'),
         },
       ],
     },
@@ -88,13 +92,16 @@ export default function SettingsScreen() {
         {
           id: 'backup',
           label: 'バックアップ・復元',
+          subtitle: '端末内バックアップは今後追加予定です',
+          statusLabel: FUTURE_STATUS_LABEL,
           enabled: false,
           onPress: showComingSoon,
         },
         {
           id: 'sync',
           label: 'クラウド同期',
-          subtitle: 'オフ',
+          subtitle: '現在は端末内のみ保存されます',
+          statusLabel: FUTURE_STATUS_LABEL,
           enabled: false,
           onPress: showComingSoon,
         },
@@ -106,12 +113,14 @@ export default function SettingsScreen() {
         {
           id: 'version',
           label: 'バージョン',
-          subtitle: 'v0.5.0 Beta',
-          enabled: false,
+          subtitle: APP_VERSION_LABEL,
+          enabled: true,
         },
         {
           id: 'licenses',
           label: 'ライセンス情報',
+          subtitle: 'ライセンス一覧は今後追加予定です',
+          statusLabel: FUTURE_STATUS_LABEL,
           enabled: false,
           onPress: showComingSoon,
         },
@@ -151,6 +160,7 @@ export default function SettingsScreen() {
                     {item.label}
                   </Text>
                   {item.subtitle && <Text style={styles.settingSubtitle}>{item.subtitle}</Text>}
+                  {item.statusLabel && <Text style={styles.statusBadge}>{item.statusLabel}</Text>}
                 </View>
                 {item.onPress && (
                   <ChevronRight size={16} color={item.enabled ? Colors.goldDim : Colors.muted} />
@@ -249,5 +259,17 @@ const styles = StyleSheet.create({
     fontSize: 13, // sm: 設定項目の補足
     fontWeight: '400',
     color: Colors.paperDim,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.goldDim,
+    color: Colors.goldDim,
+    fontSize: 11,
+    fontWeight: '500',
   },
 });

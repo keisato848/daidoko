@@ -90,7 +90,7 @@ export default function AddScreen() {
                 {method.label}
               </Text>
               <Text style={styles.methodDescription}>{method.description}</Text>
-              {!method.enabled && <Text style={styles.comingSoon}>Coming Soon</Text>}
+              {!method.enabled && <Text style={styles.comingSoon}>今後追加予定</Text>}
             </View>
           </Pressable>
         ))}
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     color: Colors.paperDim,
   },
   comingSoon: {
-    fontSize: 11, // xxs: Coming Soon ラベル
+    fontSize: 11, // xxs: 今後追加予定ラベル
     color: Colors.goldDim,
     fontStyle: 'italic',
     marginTop: 4,

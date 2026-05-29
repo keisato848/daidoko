@@ -3,8 +3,8 @@
  * Records photos + rating + memo after cooking session completes
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera, X } from 'lucide-react-native';
-import { useCallback, useRef, useState } from 'react';
+import { Camera } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -19,11 +19,6 @@ import {
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { createCookingLog } from '../../../../src/services/cooking-log.service';
-import type { SaveCookingPhotoInput } from '../../../../src/services/types';
-
-function getPhotoFilename(localPath: string): string {
-  return localPath.split('/').pop() ?? localPath;
-}
 
 function StarRow({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -48,46 +43,24 @@ export default function CookingLogScreen() {
   const router = useRouter();
   const [rating, setRating] = useState(0);
   const [memo, setMemo] = useState('');
-  const [photos, setPhotos] = useState<SaveCookingPhotoInput[]>([]);
   const [saving, setSaving] = useState(false);
   const [showToast, setShowToast] = useState(false);
-  const dummyPhotoSequence = useRef(1);
-
-  const handleAddPhoto = useCallback(() => {
-    const sequence = dummyPhotoSequence.current;
-    dummyPhotoSequence.current += 1;
-    const filename = `dummy-cooking-photo-${String(sequence).padStart(2, '0')}.jpg`;
-    setPhotos((current) => [
-      ...current,
-      {
-        localPath: `file:///daidoko/dummy/${filename}`,
-        takenAt: new Date().toISOString(),
-      },
-    ]);
-  }, []);
-
-  const handleRemovePhoto = useCallback((localPath: string) => {
-    setPhotos((current) => current.filter((photo) => photo.localPath !== localPath));
-  }, []);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      // ダミーパス（カメラ未実装のプレースホルダー）は DB に保存しない
-      const realPhotos = photos.filter((p) => !p.localPath.startsWith('file:///daidoko/dummy/'));
       await createCookingLog({
         recipeId: id,
         rating: rating > 0 ? rating : undefined,
         memo: memo.trim() || undefined,
         cookedAt: new Date().toISOString(),
-        photos: realPhotos.length > 0 ? realPhotos : undefined,
       });
       setShowToast(true);
       setTimeout(() => router.push('/(tabs)'), 1500);
     } finally {
       setSaving(false);
     }
-  }, [id, rating, memo, photos, router]);
+  }, [id, rating, memo, router]);
 
   const handleSkip = () => router.push('/(tabs)');
 
@@ -114,30 +87,17 @@ export default function CookingLogScreen() {
         {/* Photos */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>写真</Text>
-          <Pressable style={styles.photoAddButton} onPress={handleAddPhoto}>
-            <Camera color={Colors.gold} size={18} />
-            <Text style={styles.photoAddText}>写真を追加</Text>
-          </Pressable>
-          {photos.length > 0 && (
-            <View style={styles.photoList}>
-              {photos.map((photo, index) => (
-                <View key={photo.localPath} style={styles.photoRow}>
-                  <View style={styles.photoThumb}>
-                    <Text style={styles.photoThumbText}>{index + 1}</Text>
-                  </View>
-                  <View style={styles.photoMeta}>
-                    <Text style={styles.photoName} numberOfLines={1}>
-                      {getPhotoFilename(photo.localPath)}
-                    </Text>
-                    <Text style={styles.photoState}>登録待ち</Text>
-                  </View>
-                  <Pressable onPress={() => handleRemovePhoto(photo.localPath)} hitSlop={8}>
-                    <X color={Colors.muted} size={18} />
-                  </Pressable>
-                </View>
-              ))}
+          <Pressable
+            style={[styles.photoAddButton, styles.photoAddButtonDisabled]}
+            disabled
+            accessibilityState={{ disabled: true }}
+          >
+            <Camera color={Colors.muted} size={18} />
+            <View style={styles.photoAddContent}>
+              <Text style={styles.photoAddTextDisabled}>写真を追加</Text>
+              <Text style={styles.photoFutureText}>今後追加予定</Text>
             </View>
-          )}
+          </Pressable>
         </View>
 
         {/* Rating */}
@@ -265,51 +225,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: Colors.bgCard,
   },
-  photoAddText: {
+  photoAddButtonDisabled: {
+    opacity: 0.75,
+  },
+  photoAddContent: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  photoAddTextDisabled: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.gold,
-  },
-  photoList: {
-    gap: 8,
-  },
-  photoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 10,
-    backgroundColor: '#120E08',
-  },
-  photoThumb: {
-    width: 42,
-    height: 42,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#261B0D',
-  },
-  photoThumbText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.gold,
-  },
-  photoMeta: {
-    flex: 1,
-    minWidth: 0,
-  },
-  photoName: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: Colors.paper,
-  },
-  photoState: {
-    marginTop: 2,
-    fontSize: 12,
-    fontWeight: '400',
     color: Colors.paperDim,
+  },
+  photoFutureText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: Colors.goldDim,
   },
   memoInput: {
     backgroundColor: Colors.bgInput,

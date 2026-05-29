@@ -93,7 +93,10 @@ export async function runRecipePhotoAgent(
             : await parseOcrText(recognized.rawText);
 
           if (recipeFormSchema.safeParse(parsed.formData).success) {
-            const evidenceSummary = combineEvidenceSummary(labelInferred.labelSummary, recognized.rawText);
+            const evidenceSummary = combineEvidenceSummary(
+              labelInferred.labelSummary,
+              recognized.rawText,
+            );
 
             return {
               ok: true,
