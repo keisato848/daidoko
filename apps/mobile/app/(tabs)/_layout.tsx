@@ -50,6 +50,7 @@ export default function TabLayout() {
       {/* Non-tab screens within the (tabs) group — hidden from tab bar */}
       <Tabs.Screen name="family" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
+      <Tabs.Screen name="licenses" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-photo" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-ocr" options={{ href: null }} />
     </Tabs>

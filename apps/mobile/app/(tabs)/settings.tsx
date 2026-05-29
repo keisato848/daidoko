@@ -118,10 +118,9 @@ export default function SettingsScreen() {
         {
           id: 'licenses',
           label: 'ライセンス情報',
-          subtitle: 'ライセンス一覧は今後追加予定です',
-          statusLabel: FUTURE_STATUS_LABEL,
-          enabled: false,
-          onPress: showComingSoon,
+          subtitle: '利用している OSS ライセンスを表示',
+          enabled: true,
+          onPress: () => router.push('/(tabs)/licenses'),
         },
       ],
     },
