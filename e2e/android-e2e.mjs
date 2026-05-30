@@ -94,6 +94,19 @@ function sh(cmd) {
   return adb(['shell', ...cmd.split(' ')]);
 }
 
+function collapseSystemUi() {
+  adb(['shell', 'cmd', 'statusbar', 'collapse'], { silent: true });
+}
+
+function xmlLooksLikeNotificationShade(xml) {
+  return (
+    xml.includes('package="com.android.systemui"') &&
+    (xml.includes('notification_panel') ||
+      xml.includes('notification_stack_scroller') ||
+      xml.includes('quick_settings_container'))
+  );
+}
+
 function tap(x, y) {
   adb(['shell', 'input', 'tap', String(x), String(y)]);
 }
@@ -135,6 +148,7 @@ async function dismissSystemAnrIfShown() {
 }
 
 function screenshot(name) {
+  collapseSystemUi();
   const remote = '/sdcard/_e2e.png';
   const local = `${SCREENSHOT_DIR}/${artifactName(name)}.png`;
   assertAdbOk(adbResult(['shell', 'screencap', '-p', remote]), `screenshot ${name}`);
@@ -162,7 +176,14 @@ function uiDump(name = 'dump') {
     }
 
     const xml = readFileSync(local, 'utf8');
-    if (xml.trim().length > 0) return xml;
+    if (xml.trim().length > 0) {
+      if (xmlLooksLikeNotificationShade(xml)) {
+        lastError = `read attempt ${attempt}: notification shade was open`;
+        collapseSystemUi();
+        return null;
+      }
+      return xml;
+    }
 
     lastError = `read attempt ${attempt}: local dump was empty at ${local}`;
     return null;
@@ -341,6 +362,7 @@ async function dismissCompatWarningIfShown() {
 }
 
 async function launchApp() {
+  collapseSystemUi();
   adb(['shell', 'am', 'force-stop', PKG]);
   await sleep(800);
   adb(['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP']);
@@ -356,6 +378,7 @@ async function launchApp() {
   }
 
   await sleep(EXPO_DEV_URL ? 10000 : 5000); // splash + initial render
+  collapseSystemUi();
   await dismissSystemAnrIfShown();
   await dismissCompatWarningIfShown();
   await sleep(800);
@@ -774,7 +797,7 @@ async function testUrlImport() {
   ) {
     return 'URL import responded';
   }
-  return false;
+  throw new Error('URL import result did not show expected response');
 }
 
 async function testTextImportPromptCopy() {
