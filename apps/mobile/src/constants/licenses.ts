@@ -41,6 +41,21 @@ export const LICENSE_ITEMS: LicenseItem[] = [
     license: 'MIT',
   },
   {
+    packageName: 'expo-document-picker',
+    purpose: '移行バックアップファイルの選択',
+    license: 'MIT',
+  },
+  {
+    packageName: 'expo-sharing',
+    purpose: '移行バックアップファイルの共有',
+    license: 'MIT',
+  },
+  {
+    packageName: 'fflate',
+    purpose: '写真を含む移行バックアップの ZIP 作成と展開',
+    license: 'MIT',
+  },
+  {
     packageName: 'Drizzle ORM',
     purpose: '型安全な SQLite 操作',
     license: 'Apache-2.0',

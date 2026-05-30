@@ -877,6 +877,18 @@ async function testSettingsAndFamily() {
   if (!hasText(backupXml, 'バックアップを作成')) throw new Error('backup create action not shown');
   if (!hasText(backupXml, '最新バックアップから復元'))
     throw new Error('backup restore action not shown');
+  const { node: createMigrationButton } = await findTextWithScroll(
+    '移行ファイルを作成',
+    'backup-migration-create',
+  );
+  await findTextWithScroll('移行ファイルから復元', 'backup-migration-restore');
+  tap(createMigrationButton.cx, createMigrationButton.cy);
+  await sleep(5000);
+  screenshot('13-backup-migration-created');
+  const migrationCreatedXml = uiDump('backup-migration-created');
+  if (!migrationCreatedXml.includes('daidoko-transfer-')) {
+    throw new Error('migration backup package name not shown after create');
+  }
   key('KEYCODE_BACK');
   await sleep(1200);
 
@@ -908,7 +920,7 @@ async function testSettingsAndFamily() {
     const famXml = uiDump('family');
     if (!hasText(famXml, '招待コード')) throw new Error('招待コード not shown');
   }
-  return 'settings + backup/license/family verified';
+  return 'settings + backup/license/family/migration backup verified';
 }
 
 async function testTimelineHasContent() {

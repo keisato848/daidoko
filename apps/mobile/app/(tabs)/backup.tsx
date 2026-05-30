@@ -1,17 +1,29 @@
 /**
  * Local backup / restore screen.
  */
+import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronLeft, DatabaseBackup, RotateCcw } from 'lucide-react-native';
+import * as Sharing from 'expo-sharing';
+import {
+  ChevronLeft,
+  DatabaseBackup,
+  Download,
+  RotateCcw,
+  Share2,
+  Upload,
+} from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
 import {
+  createMigrationBackupPackage,
   createLocalBackup,
+  listMigrationBackupPackages,
   listLocalBackups,
   pickLatestBackup,
+  restoreMigrationBackupPackage,
   restoreLatestLocalBackup,
   type BackupFileSummary,
 } from '../../src/services/backup.service';
@@ -32,12 +44,19 @@ function formatDate(value: string | null): string {
 export default function BackupScreen() {
   const router = useRouter();
   const [backups, setBackups] = useState<BackupFileSummary[]>([]);
+  const [migrationBackups, setMigrationBackups] = useState<BackupFileSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const latest = pickLatestBackup(backups);
+  const latestMigration = pickLatestBackup(migrationBackups);
 
   const refresh = useCallback(async () => {
-    setBackups(await listLocalBackups());
+    const [localBackups, migrationPackages] = await Promise.all([
+      listLocalBackups(),
+      listMigrationBackupPackages(),
+    ]);
+    setBackups(localBackups);
+    setMigrationBackups(migrationPackages);
   }, []);
 
   useFocusEffect(
@@ -96,6 +115,93 @@ export default function BackupScreen() {
     );
   }, [latest, refresh]);
 
+  const handleCreateMigration = useCallback(async () => {
+    setBusy(true);
+    try {
+      const result = await createMigrationBackupPackage();
+      await refresh();
+      setToastMessage(
+        `移行ファイルを作成しました (${formatSize(result.sizeBytes)} / 写真${result.photoCount}枚)`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '移行ファイル作成に失敗しました';
+      Alert.alert('移行ファイルを作成できませんでした', message);
+    } finally {
+      setBusy(false);
+    }
+  }, [refresh]);
+
+  const handleShareMigration = useCallback(async () => {
+    if (!latestMigration) {
+      Alert.alert('共有できません', '移行ファイルがまだありません。');
+      return;
+    }
+
+    try {
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert('共有できません', 'この端末では共有シートを利用できません。');
+        return;
+      }
+
+      await Sharing.shareAsync(latestMigration.uri, {
+        dialogTitle: 'だいどこの移行バックアップを共有',
+        mimeType: 'application/zip',
+        UTI: 'public.zip',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '移行ファイル共有に失敗しました';
+      Alert.alert('共有できませんでした', message);
+    }
+  }, [latestMigration]);
+
+  const handleImportMigration = useCallback(async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: false,
+        type: [
+          'application/zip',
+          'application/octet-stream',
+          'application/x-zip-compressed',
+          '*/*',
+        ],
+      });
+      if (picked.canceled || picked.assets.length === 0) return;
+
+      const asset = picked.assets[0];
+      Alert.alert(
+        '移行ファイルから復元',
+        `${asset.name} で現在の端末内データを置き換えます。よろしいですか？`,
+        [
+          { text: 'キャンセル', style: 'cancel' },
+          {
+            text: '復元する',
+            style: 'destructive',
+            onPress: () => {
+              setBusy(true);
+              void restoreMigrationBackupPackage(asset.uri)
+                .then((result) => {
+                  setToastMessage(
+                    `移行ファイルから復元しました (写真${result.restoredPhotoCount}枚)`,
+                  );
+                  return refresh();
+                })
+                .catch((error) => {
+                  const message = error instanceof Error ? error.message : '復元に失敗しました';
+                  Alert.alert('復元できませんでした', message);
+                })
+                .finally(() => setBusy(false));
+            },
+          },
+        ],
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '移行ファイルを選択できませんでした';
+      Alert.alert('移行ファイルを選択できませんでした', message);
+    }
+  }, [refresh]);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -137,6 +243,45 @@ export default function BackupScreen() {
           >
             <RotateCcw size={18} color={Colors.gold} />
             <Text style={styles.secondaryButtonText}>最新バックアップから復元</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>機種変更バックアップ</Text>
+          <Text style={styles.summaryTitle}>
+            {latestMigration ? formatDate(latestMigration.exportedAt) : '未作成'}
+          </Text>
+          <Text style={styles.summaryMeta}>
+            {latestMigration
+              ? `${latestMigration.fileName} / ${formatSize(latestMigration.sizeBytes)}`
+              : '写真を含む移行ファイルを作成します'}
+          </Text>
+        </View>
+
+        <View style={styles.actionGroup}>
+          <Pressable
+            style={[styles.primaryButton, busy && styles.buttonDisabled]}
+            onPress={handleCreateMigration}
+            disabled={busy}
+          >
+            <Download size={18} color={Colors.bg} />
+            <Text style={styles.primaryButtonText}>移行ファイルを作成</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.secondaryButton, (!latestMigration || busy) && styles.buttonDisabled]}
+            onPress={handleShareMigration}
+            disabled={!latestMigration || busy}
+          >
+            <Share2 size={18} color={Colors.gold} />
+            <Text style={styles.secondaryButtonText}>最新移行ファイルを共有</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.secondaryButton, busy && styles.buttonDisabled]}
+            onPress={handleImportMigration}
+            disabled={busy}
+          >
+            <Upload size={18} color={Colors.gold} />
+            <Text style={styles.secondaryButtonText}>移行ファイルから復元</Text>
           </Pressable>
         </View>
 

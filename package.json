@@ -1,6 +1,6 @@
 {
   "name": "daidoko",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "だいどこ — 家族で育てる、台所のレシピ手帳",
   "packageManager": "pnpm@9.0.0",
