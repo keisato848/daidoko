@@ -17,6 +17,11 @@ overrides:
   react-native-reanimated: ~3.10.1
   '@react-native/codegen': 0.74.83
 
+patchedDependencies:
+  expo-modules-core@1.12.26:
+    hash: ghohaftlxlitigvhh6lgnjj3ou
+    path: patches/expo-modules-core@1.12.26.patch
+
 importers:
 
   .:
@@ -11708,7 +11713,7 @@ snapshots:
       require-from-string: 2.0.2
       resolve-from: 5.0.0
 
-  expo-modules-core@1.12.26:
+  expo-modules-core@1.12.26(patch_hash=ghohaftlxlitigvhh6lgnjj3ou):
     dependencies:
       invariant: 2.2.4
 
@@ -11773,7 +11778,7 @@ snapshots:
       expo-font: 12.0.10(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))
       expo-keep-awake: 13.0.2(expo@51.0.39(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(react-native@0.74.5(@babel/core@7.29.0)(@babel/preset-env@7.29.3(@babel/core@7.29.0))(@types/react@18.2.79)(react@18.2.0))(react@18.2.0))
       expo-modules-autolinking: 1.11.3
-      expo-modules-core: 1.12.26
+      expo-modules-core: 1.12.26(patch_hash=ghohaftlxlitigvhh6lgnjj3ou)
       fbemitter: 3.0.0
       whatwg-url-without-unicode: 8.0.0-3
     transitivePeerDependencies:

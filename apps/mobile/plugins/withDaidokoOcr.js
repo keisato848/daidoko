@@ -2,6 +2,7 @@ const {
   withAndroidManifest,
   withAppBuildGradle,
   withDangerousMod,
+  withGradleProperties,
   withMainApplication,
 } = require('@expo/config-plugins');
 const fs = require('fs');
@@ -11,6 +12,11 @@ const ML_KIT_DEPENDENCIES = [
   'implementation("com.google.mlkit:text-recognition-japanese:16.0.1")',
   'implementation("com.google.mlkit:image-labeling:17.0.9")',
 ];
+const ANDROID_BUILD_PROPERTIES = {
+  'android.compileSdkVersion': '35',
+  'android.targetSdkVersion': '35',
+  'android.suppressUnsupportedCompileSdk': '35',
+};
 const PLAY_SIGNING_SETUP = `
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('keystore.properties')
@@ -253,6 +259,29 @@ function withDaidokoOcrManifest(config) {
   });
 }
 
+function upsertGradleProperty(modResults, key, value) {
+  const existingProperty = modResults.find(
+    (item) => item.type === 'property' && item.key === key,
+  );
+  if (existingProperty) {
+    existingProperty.value = value;
+  } else {
+    modResults.push({ type: 'property', key, value });
+  }
+  return modResults;
+}
+
+function withDaidokoAndroidBuildProperties(config) {
+  return withGradleProperties(config, (configWithGradleProperties) => {
+    let { modResults } = configWithGradleProperties;
+    for (const [key, value] of Object.entries(ANDROID_BUILD_PROPERTIES)) {
+      modResults = upsertGradleProperty(modResults, key, value);
+    }
+    configWithGradleProperties.modResults = modResults;
+    return configWithGradleProperties;
+  });
+}
+
 function withDaidokoOcrBuildGradle(config) {
   return withAppBuildGradle(config, (configWithGradle) => {
     let contents = configWithGradle.modResults.contents;
@@ -337,6 +366,7 @@ function withDaidokoOcrSources(config) {
 
 module.exports = function withDaidokoOcr(config) {
   config = withDaidokoOcrManifest(config);
+  config = withDaidokoAndroidBuildProperties(config);
   config = withDaidokoOcrBuildGradle(config);
   config = withDaidokoOcrMainApplication(config);
   config = withDaidokoOcrSources(config);
