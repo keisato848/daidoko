@@ -12,6 +12,8 @@ build/
 ios/
 android/
 *.jks
+*.keystore
+keystore.properties
 *.p8
 *.p12
 *.key

@@ -11,6 +11,42 @@ const ML_KIT_DEPENDENCIES = [
   'implementation("com.google.mlkit:text-recognition-japanese:16.0.1")',
   'implementation("com.google.mlkit:image-labeling:17.0.9")',
 ];
+const PLAY_SIGNING_SETUP = `
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (keystorePropertiesFile.exists()) {
+  keystorePropertiesFile.withInputStream { stream ->
+    keystoreProperties.load(stream)
+  }
+}
+
+def propOrEnv = { name ->
+  def value = findProperty(name) ?: keystoreProperties.getProperty(name) ?: System.getenv(name)
+  value == null ? null : value.toString().trim()
+}
+
+def uploadStoreFilePath = propOrEnv('DAIDOKO_UPLOAD_STORE_FILE')
+def uploadStorePassword = propOrEnv('DAIDOKO_UPLOAD_STORE_PASSWORD')
+def uploadKeyAlias = propOrEnv('DAIDOKO_UPLOAD_KEY_ALIAS')
+def uploadKeyPassword = propOrEnv('DAIDOKO_UPLOAD_KEY_PASSWORD')
+def hasUploadSigning = [uploadStoreFilePath, uploadStorePassword, uploadKeyAlias, uploadKeyPassword].every { it }
+
+gradle.taskGraph.whenReady { taskGraph ->
+  def bundlesRelease = taskGraph.allTasks.any { it.path == ':app:bundleRelease' || it.name == 'bundleRelease' }
+  if (bundlesRelease && !hasUploadSigning) {
+    throw new RuntimeException('Google Play bundleRelease requires DAIDOKO_UPLOAD_STORE_FILE, DAIDOKO_UPLOAD_STORE_PASSWORD, DAIDOKO_UPLOAD_KEY_ALIAS, and DAIDOKO_UPLOAD_KEY_PASSWORD. Set them as environment variables or in apps/mobile/android/keystore.properties.')
+  }
+}
+`;
+const PLAY_RELEASE_SIGNING_CONFIG = `
+    if (hasUploadSigning) {
+      release {
+        storeFile rootProject.file(uploadStoreFilePath)
+        storePassword uploadStorePassword
+        keyAlias uploadKeyAlias
+        keyPassword uploadKeyPassword
+      }
+    }`;
 const OCR_IMPORT = 'import com.daidoko.app.ocr.DaidokoOcrPackage';
 const OCR_PACKAGE_REGISTRATION = '            packages.add(DaidokoOcrPackage())';
 
@@ -180,7 +216,7 @@ class DaidokoOcrModule(
   }
 
   private fun inferConfidence(rawText: String): String {
-    val length = rawText.replace(Regex("\\s"), "").length
+    val length = rawText.replace(Regex("\\\\s"), "").length
     return when {
       length >= 80 -> "high"
       length >= 20 -> "medium"
@@ -219,16 +255,48 @@ function withDaidokoOcrManifest(config) {
 
 function withDaidokoOcrBuildGradle(config) {
   return withAppBuildGradle(config, (configWithGradle) => {
+    let contents = configWithGradle.modResults.contents;
     for (const dependency of ML_KIT_DEPENDENCIES) {
-      if (!configWithGradle.modResults.contents.includes(dependency)) {
-        configWithGradle.modResults.contents = configWithGradle.modResults.contents.replace(
+      if (!contents.includes(dependency)) {
+        contents = contents.replace(
           '    implementation("com.facebook.react:react-android")',
           `    implementation("com.facebook.react:react-android")\n    ${dependency}`,
         );
       }
     }
+    contents = withDaidokoPlaySigning(contents);
+    configWithGradle.modResults.contents = contents;
     return configWithGradle;
   });
+}
+
+function withDaidokoPlaySigning(contents) {
+  if (!contents.includes("def uploadStoreFilePath = propOrEnv('DAIDOKO_UPLOAD_STORE_FILE')")) {
+    contents = contents.replace(
+      'def rnVersion = getRNVersion()\n',
+      `def rnVersion = getRNVersion()\n${PLAY_SIGNING_SETUP}\n`,
+    );
+  }
+  if (!contents.includes('storeFile rootProject.file(uploadStoreFilePath)')) {
+    contents = contents.replace(
+      `        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }`,
+      `        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }${PLAY_RELEASE_SIGNING_CONFIG}`,
+    );
+  }
+  return contents.replace(
+    'signingConfig signingConfigs.debug\n            shrinkResources',
+    'signingConfig hasUploadSigning ? signingConfigs.release : signingConfigs.debug\n            shrinkResources',
+  );
 }
 
 function withDaidokoOcrMainApplication(config) {
