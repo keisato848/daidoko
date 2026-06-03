@@ -43,7 +43,8 @@
       "@react-native/codegen": "0.74.83"
     },
     "patchedDependencies": {
-      "expo-modules-core@1.12.26": "patches/expo-modules-core@1.12.26.patch"
+      "expo-modules-core@1.12.26": "patches/expo-modules-core@1.12.26.patch",
+      "react-native-screens@3.31.1": "patches/react-native-screens@3.31.1.patch"
     }
   }
 }
