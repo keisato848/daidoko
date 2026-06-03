@@ -260,9 +260,7 @@ function withDaidokoOcrManifest(config) {
 }
 
 function upsertGradleProperty(modResults, key, value) {
-  const existingProperty = modResults.find(
-    (item) => item.type === 'property' && item.key === key,
-  );
+  const existingProperty = modResults.find((item) => item.type === 'property' && item.key === key);
   if (existingProperty) {
     existingProperty.value = value;
   } else {
