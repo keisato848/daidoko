@@ -24,6 +24,7 @@ export type AgentErrorCode =
   | 'PARSE_FAILED'
   | 'AI_API_UNAVAILABLE'
   | 'OCR_FAILED'
+  | 'PHOTO_RECIPE_FAILED'
   | 'SYNC_CONFLICT'
   | 'NETWORK_UNAVAILABLE'
   | 'RATE_LIMITED'

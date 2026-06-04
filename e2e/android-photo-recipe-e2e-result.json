@@ -1,0 +1,23 @@
+{
+  "ts": "2026-05-28T14:44:22.546Z",
+  "pass": 3,
+  "fail": 0,
+  "total": 3,
+  "results": [
+    {
+      "name": "P01 リリース料理写真入口 → テスト導線なし",
+      "status": "PASS",
+      "detail": "release photo recipe entry has only production actions"
+    },
+    {
+      "name": "P02 カメラ権限拒否",
+      "status": "PASS",
+      "detail": "camera denial handled"
+    },
+    {
+      "name": "P03 写真ライブラリ権限拒否",
+      "status": "PASS",
+      "detail": "gallery picker cancellation handled without selecting device files"
+    }
+  ]
+}

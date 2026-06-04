@@ -2,18 +2,26 @@
  * S15: Settings hub
  * Account, family, data management, and app info sections
  */
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { Colors } from '../../src/constants/theme';
-import { getCurrentFamily, getCurrentUser } from '../../src/services/user.service';
+import {
+  getCurrentFamily,
+  getCurrentFamilyProfile,
+  getCurrentUser,
+  getCurrentUserProfile,
+} from '../../src/services/user.service';
+import { formatProfileDisplayName } from '../../src/utils/profile';
 
 interface SettingItem {
   id: string;
   label: string;
   subtitle?: string;
+  statusLabel?: string;
   enabled: boolean;
   onPress?: () => void;
 }
@@ -23,10 +31,25 @@ interface SettingSection {
   items: SettingItem[];
 }
 
+const APP_VERSION_LABEL = 'v1.0.0';
+const FUTURE_STATUS_LABEL = '今後追加予定';
+
 export default function SettingsScreen() {
   const router = useRouter();
-  const user = getCurrentUser();
-  const family = getCurrentFamily();
+  const [user, setUser] = useState(getCurrentUser());
+  const [family, setFamily] = useState(getCurrentFamily());
+  const userDisplayName = formatProfileDisplayName(user.displayName);
+
+  useFocusEffect(
+    useCallback(() => {
+      void Promise.all([getCurrentUserProfile(), getCurrentFamilyProfile()]).then(
+        ([nextUser, nextFamily]) => {
+          setUser(nextUser);
+          setFamily(nextFamily);
+        },
+      );
+    }, []),
+  );
 
   const showComingSoon = () => {
     Alert.alert('準備中', 'この機能は今後のバージョンで追加予定です。');
@@ -39,9 +62,9 @@ export default function SettingsScreen() {
         {
           id: 'profile',
           label: 'プロフィール編集',
-          subtitle: user.displayName,
-          enabled: false,
-          onPress: showComingSoon,
+          subtitle: userDisplayName,
+          enabled: true,
+          onPress: () => router.push('/(tabs)/family'),
         },
       ],
     },
@@ -69,13 +92,15 @@ export default function SettingsScreen() {
         {
           id: 'backup',
           label: 'バックアップ・復元',
-          enabled: false,
-          onPress: showComingSoon,
+          subtitle: '端末内にバックアップを作成・復元',
+          enabled: true,
+          onPress: () => router.push('/(tabs)/backup'),
         },
         {
           id: 'sync',
           label: 'クラウド同期',
-          subtitle: 'オフ',
+          subtitle: '現在は端末内のみ保存されます',
+          statusLabel: FUTURE_STATUS_LABEL,
           enabled: false,
           onPress: showComingSoon,
         },
@@ -87,14 +112,15 @@ export default function SettingsScreen() {
         {
           id: 'version',
           label: 'バージョン',
-          subtitle: 'v0.5.0 Beta',
-          enabled: false,
+          subtitle: APP_VERSION_LABEL,
+          enabled: true,
         },
         {
           id: 'licenses',
           label: 'ライセンス情報',
-          enabled: false,
-          onPress: showComingSoon,
+          subtitle: '利用している OSS ライセンスを表示',
+          enabled: true,
+          onPress: () => router.push('/(tabs)/licenses'),
         },
       ],
     },
@@ -109,9 +135,9 @@ export default function SettingsScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {/* User card */}
         <View style={styles.userCard}>
-          <Avatar name={user.displayName} size={48} />
+          <Avatar name={userDisplayName} size={48} />
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user.displayName}</Text>
+            <Text style={styles.userName}>{userDisplayName}</Text>
             <Text style={styles.familyName}>{family.name}</Text>
           </View>
         </View>
@@ -132,6 +158,7 @@ export default function SettingsScreen() {
                     {item.label}
                   </Text>
                   {item.subtitle && <Text style={styles.settingSubtitle}>{item.subtitle}</Text>}
+                  {item.statusLabel && <Text style={styles.statusBadge}>{item.statusLabel}</Text>}
                 </View>
                 {item.onPress && (
                   <ChevronRight size={16} color={item.enabled ? Colors.goldDim : Colors.muted} />
@@ -230,5 +257,17 @@ const styles = StyleSheet.create({
     fontSize: 13, // sm: 設定項目の補足
     fontWeight: '400',
     color: Colors.paperDim,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.goldDim,
+    color: Colors.goldDim,
+    fontSize: 11,
+    fontWeight: '500',
   },
 });

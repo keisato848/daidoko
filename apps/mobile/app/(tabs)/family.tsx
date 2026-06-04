@@ -1,64 +1,164 @@
 /**
  * S16: Family Group Management
- * Shows current members, invite code, and join flow
- * Auth / server sync is v2.0; this screen handles local family state
+ * Local-first family profile, members, invite code, and join flow.
  */
-import { Copy, UserPlus, Users } from 'lucide-react-native';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { ChevronLeft, Copy, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { Colors } from '../../src/constants/theme';
-import { getCurrentFamily, getCurrentUser } from '../../src/services/user.service';
+import {
+  addFamilyMember,
+  getCurrentFamily,
+  getCurrentFamilyProfile,
+  getCurrentUser,
+  getCurrentUserProfile,
+  getFamilyMembers,
+  joinFamilyByInviteCode,
+  removeFamilyMember,
+  rotateCurrentFamilyInviteCode,
+  updateCurrentFamilyName,
+  updateCurrentUserDisplayName,
+} from '../../src/services/user.service';
+import type { CurrentFamily, CurrentUser, FamilyMember } from '../../src/services/types';
+import { formatProfileDisplayName } from '../../src/utils/profile';
 
-const SEED_MEMBERS = [
-  { id: 'user-kei', displayName: '恵', role: 'オーナー' },
-  { id: 'user-ken', displayName: '健', role: 'メンバー' },
-  { id: 'user-yo', displayName: '陽', role: 'メンバー' },
-] as const;
-
-function generateInviteCode(familyId: string): string {
-  // Deterministic 8-char code from familyId (local only until server auth)
-  const hash = familyId.split('').reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) & 0xffffffff, 0);
-  return Math.abs(hash).toString(36).toUpperCase().padStart(8, '0').slice(0, 8);
+function roleLabel(role: FamilyMember['role']): string {
+  return role === 'owner' ? 'オーナー' : 'メンバー';
 }
 
 export default function FamilyScreen() {
-  const family = getCurrentFamily();
-  const currentUser = getCurrentUser();
-  const inviteCode = generateInviteCode(family.id);
+  const router = useRouter();
+  const [family, setFamily] = useState<CurrentFamily>(getCurrentFamily());
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(getCurrentUser());
+  const [members, setMembers] = useState<FamilyMember[]>([]);
+  const [familyName, setFamilyName] = useState(family.name);
+  const [displayName, setDisplayName] = useState(currentUser.displayName);
+  const [newMemberName, setNewMemberName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const handleCopyCode = async () => {
+  const refresh = useCallback(async () => {
+    const [nextUser, nextFamily, nextMembers] = await Promise.all([
+      getCurrentUserProfile(),
+      getCurrentFamilyProfile(),
+      getFamilyMembers(),
+    ]);
+    setCurrentUser(nextUser);
+    setFamily(nextFamily);
+    setMembers(nextMembers);
+    setDisplayName(nextUser.displayName);
+    setFamilyName(nextFamily.name);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
+
+  const runAction = useCallback(
+    async (action: () => Promise<void>) => {
+      setSaving(true);
+      try {
+        await action();
+        await refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '保存に失敗しました';
+        Alert.alert('確認してください', message);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [refresh],
+  );
+
+  const handleSaveProfile = () => {
+    void runAction(async () => {
+      if (displayName.trim() !== currentUser.displayName) {
+        await updateCurrentUserDisplayName(displayName);
+      }
+      if (familyName.trim() !== family.name) {
+        await updateCurrentFamilyName(familyName);
+      }
+    });
+  };
+
+  const handleAddMember = () => {
+    void runAction(async () => {
+      await addFamilyMember(newMemberName);
+      setNewMemberName('');
+    });
+  };
+
+  const handleRemoveMember = (member: FamilyMember) => {
+    Alert.alert('メンバーを削除', `${member.displayName} をグループから削除しますか？`, [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: () => {
+          void runAction(async () => removeFamilyMember(member.id));
+        },
+      },
+    ]);
+  };
+
+  const handleRotateInviteCode = () => {
+    void runAction(async () => {
+      await rotateCurrentFamilyInviteCode();
+    });
+  };
+
+  const handleShareCode = async () => {
     await Share.share({
-      message: `だいどこの家族グループ「${family.name}」に招待します。\n招待コード: ${inviteCode}\nhttps://daidoko.app/join`,
+      message: `だいどこの家族グループ「${family.name}」に招待します。\n招待コード: ${family.inviteCode}\nhttps://daidoko.app/join`,
       title: 'だいどこ 招待コード',
     }).catch(() => {
-      Alert.alert('コピー', `招待コード: ${inviteCode}`);
+      Alert.alert('招待コード', family.inviteCode);
     });
   };
 
   const handleJoinWithCode = () => {
-    Alert.alert(
-      'コードで参加',
-      'クラウド同期は v2.0 で対応予定です。\n現在は同じ端末・iCloud でのみ家族データを共有できます。',
-      [{ text: 'OK' }],
-    );
+    void runAction(async () => {
+      const result = await joinFamilyByInviteCode(joinCode);
+      setJoinCode('');
+      if (result.status === 'already-member') {
+        Alert.alert('参加済み', `${result.family.name} に参加しています。`);
+      } else {
+        Alert.alert('参加しました', `${result.family.name} に参加しました。`);
+      }
+    });
   };
 
-  const handleLeave = () => {
-    Alert.alert('グループから抜ける', 'この機能はクラウド同期（v2.0）で対応予定です。', [
-      { text: 'OK' },
-    ]);
-  };
+  const hasProfileChanges =
+    familyName.trim() !== family.name || displayName.trim() !== currentUser.displayName;
+  const canAddMember = newMemberName.trim().length > 0 && !saving;
+  const canJoin = joinCode.trim().length > 0 && !saving;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
+          <ChevronLeft size={20} color={Colors.goldDim} />
+        </Pressable>
         <Text style={styles.headerTitle}>家族グループ</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Group info */}
-        <View style={styles.groupCard}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.groupSummary}>
           <View style={styles.groupIcon}>
             <Users size={28} color={Colors.gold} />
           </View>
@@ -68,55 +168,112 @@ export default function FamilyScreen() {
           </View>
         </View>
 
-        {/* Members */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>メンバー</Text>
-          {SEED_MEMBERS.map((member) => (
-            <View key={member.id} style={styles.memberRow}>
-              <Avatar name={member.displayName} size={36} />
-              <View style={styles.memberInfo}>
-                <Text style={styles.memberName}>
-                  {member.displayName}
-                  {member.id === currentUser.id && <Text style={styles.memberYou}> (あなた)</Text>}
-                </Text>
-                <Text style={styles.memberRole}>{member.role}</Text>
-              </View>
-            </View>
-          ))}
+          <Text style={styles.sectionTitle}>プロフィール</Text>
+          <TextInput
+            style={styles.input}
+            value={displayName}
+            onChangeText={setDisplayName}
+            placeholder="表示名を入力"
+            placeholderTextColor={Colors.muted}
+            maxLength={32}
+          />
+          <TextInput
+            style={styles.input}
+            value={familyName}
+            onChangeText={setFamilyName}
+            placeholder="グループ名"
+            placeholderTextColor={Colors.muted}
+            maxLength={40}
+          />
+          <Pressable
+            style={[styles.primaryButton, (!hasProfileChanges || saving) && styles.buttonDisabled]}
+            onPress={handleSaveProfile}
+            disabled={!hasProfileChanges || saving}
+          >
+            <Text style={styles.primaryButtonText}>保存</Text>
+          </Pressable>
         </View>
 
-        {/* Invite code */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>招待コード</Text>
-          <View style={styles.inviteCard}>
-            <Text style={styles.inviteCode}>{inviteCode}</Text>
-            <Text style={styles.inviteNote}>
-              このコードを家族に共有してグループに参加してもらいましょう
-            </Text>
-            <Pressable style={styles.shareButton} onPress={handleCopyCode}>
-              <Copy size={14} color={Colors.bg} />
-              <Text style={styles.shareButtonText}>招待コードを共有</Text>
+          <Text style={styles.sectionTitle}>メンバー</Text>
+          {members.map((member) => (
+            <View key={member.id} style={styles.memberRow}>
+              <Avatar name={formatProfileDisplayName(member.displayName)} size={36} />
+              <View style={styles.memberInfo}>
+                <Text style={styles.memberName} numberOfLines={1}>
+                  {formatProfileDisplayName(member.displayName)}
+                  {member.isCurrentUser && <Text style={styles.memberYou}> (あなた)</Text>}
+                </Text>
+                <Text style={styles.memberRole}>{roleLabel(member.role)}</Text>
+              </View>
+              {member.role !== 'owner' && (
+                <Pressable onPress={() => handleRemoveMember(member)} hitSlop={10}>
+                  <Trash2 size={17} color="#FF6B6B" />
+                </Pressable>
+              )}
+            </View>
+          ))}
+          <View style={styles.inlineForm}>
+            <TextInput
+              style={[styles.input, styles.inlineInput]}
+              value={newMemberName}
+              onChangeText={setNewMemberName}
+              placeholder="メンバー名"
+              placeholderTextColor={Colors.muted}
+              maxLength={32}
+            />
+            <Pressable
+              style={[styles.iconButton, !canAddMember && styles.buttonDisabled]}
+              onPress={handleAddMember}
+              disabled={!canAddMember}
+            >
+              <UserPlus size={17} color={Colors.bg} />
             </Pressable>
           </View>
         </View>
 
-        {/* Join with code */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>別のグループに参加</Text>
-          <Pressable style={styles.joinButton} onPress={handleJoinWithCode}>
-            <UserPlus size={16} color={Colors.goldDim} />
-            <Text style={styles.joinButtonText}>招待コードを入力して参加</Text>
-          </Pressable>
-          <Text style={styles.comingSoonNote}>
-            ※ クラウドを介した家族共有は v2.0 で対応予定です。
-          </Text>
+          <Text style={styles.sectionTitle}>招待コード</Text>
+          <View style={styles.inviteCodeBox}>
+            <Text style={styles.inviteCode}>{family.inviteCode}</Text>
+          </View>
+          <View style={styles.buttonRow}>
+            <Pressable style={styles.secondaryButton} onPress={handleShareCode} disabled={saving}>
+              <Copy size={14} color={Colors.gold} />
+              <Text style={styles.secondaryButtonText}>共有</Text>
+            </Pressable>
+            <Pressable
+              style={styles.secondaryButton}
+              onPress={handleRotateInviteCode}
+              disabled={saving}
+            >
+              <RefreshCw size={14} color={Colors.gold} />
+              <Text style={styles.secondaryButtonText}>更新</Text>
+            </Pressable>
+          </View>
         </View>
 
-        {/* Leave */}
         <View style={styles.section}>
-          <Pressable style={styles.leaveButton} onPress={handleLeave}>
-            <Text style={styles.leaveButtonText}>グループから抜ける</Text>
-          </Pressable>
+          <Text style={styles.sectionTitle}>コードで参加</Text>
+          <View style={styles.inlineForm}>
+            <TextInput
+              style={[styles.input, styles.inlineInput]}
+              value={joinCode}
+              onChangeText={(value) => setJoinCode(value.toUpperCase())}
+              placeholder="招待コード"
+              placeholderTextColor={Colors.muted}
+              autoCapitalize="characters"
+              maxLength={12}
+            />
+            <Pressable
+              style={[styles.iconButton, !canJoin && styles.buttonDisabled]}
+              onPress={handleJoinWithCode}
+              disabled={!canJoin}
+            >
+              <UserPlus size={17} color={Colors.bg} />
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -129,22 +286,31 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 58,
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  backButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '500',
     color: Colors.paper,
-    letterSpacing: 1,
   },
+  headerSpacer: { width: 36 },
   scrollContent: {
     paddingBottom: 48,
   },
-  groupCard: {
+  groupSummary: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
@@ -163,7 +329,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  groupInfo: { gap: 2 },
+  groupInfo: { flex: 1, gap: 2 },
   groupName: {
     fontSize: 17,
     fontWeight: '500',
@@ -176,26 +342,54 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 4,
+    paddingTop: 22,
+    paddingBottom: 18,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    gap: 10,
   },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '500',
     color: Colors.goldDim,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    marginBottom: 14,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  input: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: Colors.bgInput,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 15,
+    fontWeight: '400',
+    color: Colors.paper,
+  },
+  primaryButton: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.gold,
+    borderRadius: 8,
+    marginTop: 2,
+  },
+  primaryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.bg,
+  },
+  buttonDisabled: {
+    opacity: 0.4,
   },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 10,
+    minHeight: 52,
   },
-  memberInfo: { gap: 1 },
+  memberInfo: { flex: 1, gap: 1 },
   memberName: {
     fontSize: 15,
     fontWeight: '400',
@@ -211,79 +405,56 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: Colors.paperDim,
   },
-  inviteCard: {
-    backgroundColor: Colors.bgCard,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
-  },
-  inviteCode: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: Colors.gold,
-    letterSpacing: 8,
-  },
-  inviteNote: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: Colors.paperDim,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  shareButton: {
+  inlineForm: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: Colors.gold,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
     marginTop: 4,
   },
-  shareButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.bg,
+  inlineInput: {
+    flex: 1,
   },
-  joinButton: {
-    flexDirection: 'row',
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: Colors.gold,
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: Colors.bgCard,
+    justifyContent: 'center',
+  },
+  inviteCodeBox: {
+    minHeight: 64,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 8,
-    marginBottom: 10,
-  },
-  joinButtonText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: Colors.paperDim,
-  },
-  comingSoonNote: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: Colors.muted,
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  leaveButton: {
-    paddingVertical: 14,
+    backgroundColor: Colors.bgCard,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FF6B6B44',
-    borderRadius: 8,
-    marginBottom: 16,
+    justifyContent: 'center',
   },
-  leaveButtonText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: '#FF6B6B',
+  inviteCode: {
+    fontSize: 26,
+    fontWeight: '600',
+    color: Colors.gold,
+    letterSpacing: 6,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  secondaryButton: {
+    flex: 1,
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.goldDim,
+    borderRadius: 8,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.gold,
   },
 });

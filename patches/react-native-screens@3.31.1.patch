@@ -1,0 +1,15 @@
+diff --git a/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt b/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt
+index 4a2b5d5..2e5ad55 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt
+@@ -313,9 +313,9 @@ class ScreenStack(context: Context?) : ScreenContainer<ScreenFragmentWrapper?>(
+         // So if we are passing null here, we would crash anyway
+         super.drawChild(op.canvas!!, op.child, op.drawingTime)
+     }
+ 
+     private fun obtainDrawingOp(): DrawingOp =
+-        if (drawingOpPool.isEmpty()) DrawingOp() else drawingOpPool.removeLast()
++        if (drawingOpPool.isEmpty()) DrawingOp() else drawingOpPool.removeAt(drawingOpPool.lastIndex)
+ 
+     private inner class DrawingOp {
+         var canvas: Canvas? = null

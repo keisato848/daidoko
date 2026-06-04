@@ -14,6 +14,7 @@ import { Colors } from '../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
 import { deleteRecipe, getRecipeDetail } from '../../../src/services/recipe.service';
 import type { RecipeDetail, TimelineEntry } from '../../../src/services/types';
+import { formatProfileDisplayName } from '../../../src/utils/profile';
 
 type TabKey = 'ingredients' | 'steps' | 'memo' | 'history';
 
@@ -45,13 +46,20 @@ export default function RecipeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [tab, setTab] = useState<TabKey>('ingredients');
   const [showMenu, setShowMenu] = useState(false);
   const [cookingLogs, setCookingLogs] = useState<TimelineEntry[]>([]);
 
   const loadRecipe = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setRecipe(null);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
     setRecipe(await getRecipeDetail(id));
+    setIsLoading(false);
   }, [id]);
 
   const loadLogs = useCallback(async () => {
@@ -75,17 +83,38 @@ export default function RecipeDetailScreen() {
         text: '削除',
         style: 'destructive',
         onPress: async () => {
-          await deleteRecipe(id);
-          router.back();
+          try {
+            await deleteRecipe(id);
+            router.replace('/(tabs)/recipes');
+          } catch {
+            Alert.alert('削除に失敗しました', '時間をおいて再度お試しください。');
+          }
         },
       },
     ]);
   };
 
-  if (!recipe) {
+  if (isLoading) {
     return (
       <View style={styles.container}>
         <Text style={styles.loadingText}>読み込み中...</Text>
+      </View>
+    );
+  }
+
+  if (!recipe) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.notFoundContainer}>
+          <Text style={styles.notFoundTitle}>レシピが見つかりません</Text>
+          <Text style={styles.notFoundBody}>削除されたか、参照できないレシピです。</Text>
+          <Pressable
+            style={styles.notFoundButton}
+            onPress={() => router.replace('/(tabs)/recipes')}
+          >
+            <Text style={styles.notFoundButtonText}>レシピ一覧へ戻る</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -98,41 +127,42 @@ export default function RecipeDetailScreen() {
           <ChevronLeft size={20} color={Colors.goldDim} />
           <Text style={styles.backText}>戻る</Text>
         </Pressable>
-        <Pressable style={styles.menuButton} onPress={() => setShowMenu(!showMenu)}>
+        <Pressable style={styles.menuButton} onPress={() => setShowMenu(!showMenu)} hitSlop={12}>
           <MoreVertical size={20} color={Colors.goldDim} />
         </Pressable>
-        {showMenu && (
-          <View style={styles.menuDropdown}>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                router.push(`/recipes/${id}/edit`);
-              }}
-            >
-              <Text style={styles.menuItemText}>編集</Text>
-            </Pressable>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                router.push(`/(tabs)/recipes/${id}/revisions`);
-              }}
-            >
-              <Text style={styles.menuItemText}>版履歴</Text>
-            </Pressable>
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                handleDelete();
-              }}
-            >
-              <Text style={[styles.menuItemText, styles.menuItemDestructive]}>削除</Text>
-            </Pressable>
-          </View>
-        )}
       </View>
+
+      {showMenu && (
+        <View style={styles.menuDropdown}>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
+              router.push(`/recipes/${id}/edit`);
+            }}
+          >
+            <Text style={styles.menuItemText}>編集</Text>
+          </Pressable>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
+              router.push(`/(tabs)/recipes/${id}/revisions`);
+            }}
+          >
+            <Text style={styles.menuItemText}>版履歴</Text>
+          </Pressable>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
+              handleDelete();
+            }}
+          >
+            <Text style={[styles.menuItemText, styles.menuItemDestructive]}>削除</Text>
+          </Pressable>
+        </View>
+      )}
 
       <View style={styles.meta}>
         <Text style={styles.title}>{recipe.title}</Text>
@@ -222,23 +252,26 @@ export default function RecipeDetailScreen() {
                 </Text>
               </View>
             ) : (
-              cookingLogs.map((log) => (
-                <View key={log.id} style={styles.logRow}>
-                  <View style={styles.logHeader}>
-                    <View style={styles.logUser}>
-                      <Avatar name={log.userName} size={24} />
-                      <Text style={styles.logUserName}>{log.userName}</Text>
+              cookingLogs.map((log) => {
+                const userName = formatProfileDisplayName(log.userName);
+                return (
+                  <View key={log.id} style={styles.logRow}>
+                    <View style={styles.logHeader}>
+                      <View style={styles.logUser}>
+                        <Avatar name={userName} size={24} />
+                        <Text style={styles.logUserName}>{userName}</Text>
+                      </View>
+                      <Text style={styles.logDate}>{formatDate(log.cookedAt)}</Text>
                     </View>
-                    <Text style={styles.logDate}>{formatDate(log.cookedAt)}</Text>
+                    {log.rating != null && (
+                      <View style={styles.logStars}>
+                        <Stars rating={log.rating} size={12} />
+                      </View>
+                    )}
+                    {log.memo && <Text style={styles.logMemo}>&quot;{log.memo}&quot;</Text>}
                   </View>
-                  {log.rating != null && (
-                    <View style={styles.logStars}>
-                      <Stars rating={log.rating} size={12} />
-                    </View>
-                  )}
-                  {log.memo && <Text style={styles.logMemo}>&quot;{log.memo}&quot;</Text>}
-                </View>
-              ))
+                );
+              })
             )}
           </View>
         )}
@@ -264,6 +297,37 @@ const styles = StyleSheet.create({
     color: Colors.paperDim,
     textAlign: 'center',
     marginTop: 100,
+  },
+  notFoundContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  notFoundTitle: {
+    fontSize: 20,
+    fontWeight: '500',
+    color: Colors.paper,
+  },
+  notFoundBody: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: Colors.paperDim,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  notFoundButton: {
+    marginTop: 8,
+    backgroundColor: Colors.gold,
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  notFoundButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.bg,
   },
   hero: {
     height: 140,
@@ -303,6 +367,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     minWidth: 110,
     zIndex: 10,
+    elevation: 12,
   },
   menuItem: {
     paddingHorizontal: 16,

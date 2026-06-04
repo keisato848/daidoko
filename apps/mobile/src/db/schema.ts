@@ -2,8 +2,8 @@
  * SQLite schema for だいどこ mobile app
  * Drizzle ORM (expo-sqlite) definitions
  *
- * Entities: User, Family, Recipe, RecipeRevision, Ingredient, Step,
- *           Tag, RecipeTag, Source, CookingLog, CookingPhoto, Memo, SyncMeta
+ * Entities: User, Family, FamilyMember, Recipe, RecipeRevision, Ingredient, Step,
+ *           Tag, RecipeTag, Source, CookingLog, CookingPhoto, Memo, SyncMeta, AppMeta
  */
 import { sql } from 'drizzle-orm';
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -28,6 +28,26 @@ export const families = sqliteTable('families', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+// ─── FamilyMember ──────────────────────────────────────────────────────────
+export const familyMembers = sqliteTable(
+  'family_members',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id),
+    role: text('role').notNull().default('member'), // 'owner' | 'member'
+    joinedAt: text('joined_at').notNull(),
+  },
+  (table) => ({
+    familyUserIdx: uniqueIndex('idx_family_members_family_user').on(table.familyId, table.userId),
+    familyIdx: index('idx_family_members_family').on(table.familyId),
+  }),
+);
 
 // ─── Source ──────────────────────────────────────���──────────────────────────
 export const sources = sqliteTable('sources', {
@@ -188,17 +208,23 @@ export const cookingLogs = sqliteTable(
 );
 
 // ─── CookingPhoto ─────────��──────────────────────────────────��──────────────
-export const cookingPhotos = sqliteTable('cooking_photos', {
-  id: text('id').primaryKey(),
-  logId: text('log_id')
-    .notNull()
-    .references(() => cookingLogs.id),
-  localPath: text('local_path').notNull(),
-  cloudUrl: text('cloud_url'),
-  sortOrder: integer('sort_order').notNull(),
-  takenAt: text('taken_at'),
-  createdAt: text('created_at').notNull(),
-});
+export const cookingPhotos = sqliteTable(
+  'cooking_photos',
+  {
+    id: text('id').primaryKey(),
+    logId: text('log_id')
+      .notNull()
+      .references(() => cookingLogs.id),
+    localPath: text('local_path').notNull(),
+    cloudUrl: text('cloud_url'),
+    sortOrder: integer('sort_order').notNull(),
+    takenAt: text('taken_at'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => ({
+    logIdx: index('idx_cooking_photos_log').on(table.logId),
+  }),
+);
 
 // ─── Memo ───────────────���───────────────────────────────────────────────────
 export const memos = sqliteTable(
@@ -228,6 +254,13 @@ export const syncMeta = sqliteTable('sync_meta', {
   vectorClock: text('vector_clock').notNull(), // JSON string
   deletedAt: text('deleted_at'),
   lastSyncedAt: text('last_synced_at'),
+});
+
+// ─── AppMeta ────────────────────────────────────────────────────────────────
+export const appMeta = sqliteTable('app_meta', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: text('updated_at').notNull(),
 });
 
 // ─── FTS5 Virtual Table ────���────────────────────────────────────────────────

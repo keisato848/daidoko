@@ -4,6 +4,8 @@ jest.mock('../../db/client', () => ({
   getExpoDb: jest.fn(),
 }));
 
+import { createCookingLog } from '../cooking-log.service';
+import { createRecipe, deleteRecipe } from '../recipe.service';
 import { getTimeline } from '../timeline.service';
 
 describe('timeline.service (mock/web)', () => {
@@ -34,5 +36,29 @@ describe('timeline.service (mock/web)', () => {
     entries.forEach((entry) => {
       expect(entry.recipeTitle.length).toBeGreaterThan(0);
     });
+  });
+
+  it('prevents navigation to archived recipes from timeline entries', async () => {
+    const recipeId = await createRecipe({
+      title: '削除済みタイムライン確認',
+      ingredients: [{ name: '大根' }],
+      steps: [{ body: '煮る' }],
+      tags: [],
+    });
+
+    const logId = await createCookingLog({
+      recipeId,
+      memo: '削除前の調理記録',
+      cookedAt: '2026-05-22T11:00:00.000Z',
+    });
+
+    await deleteRecipe(recipeId);
+
+    const entries = await getTimeline();
+    const entry = entries.find((item) => item.id === logId);
+
+    expect(entry).toBeDefined();
+    expect(entry?.recipeTitle).toBe('削除済みタイムライン確認');
+    expect(entry?.recipeId).toBeNull();
   });
 });

@@ -61,11 +61,9 @@ export function extractJsonLdRecipe(html: string): Record<string, unknown> | nul
 /** "PT1H30M" → 90, "PT30M" → 30, "P0D" → null */
 export function parseDuration(iso: unknown): number | null {
   if (typeof iso !== 'string') return null;
-  const m = iso.match(/(?:(\d+)H)?(?:(\d+)M)?/);
-  if (!m) return null;
-  const hours = parseInt(m[1] ?? '0', 10);
-  const mins = parseInt(m[2] ?? '0', 10);
-  const total = hours * 60 + mins;
+  const hours = /(\d+)H/i.exec(iso)?.[1];
+  const mins = /(\d+)M/i.exec(iso)?.[1];
+  const total = parseInt(hours ?? '0', 10) * 60 + parseInt(mins ?? '0', 10);
   return total > 0 ? total : null;
 }
 

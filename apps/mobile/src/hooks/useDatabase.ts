@@ -19,9 +19,11 @@ export function useDatabase() {
           await initDatabase();
 
           const { getDb, getExpoDb } = await import('../db/client');
-          const { runMigrations, seedDatabase } = await import('../db/migrate');
+          const { ensureLocalIdentity, runMigrations, seedDatabase } =
+            await import('../db/migrate');
 
           runMigrations(getExpoDb());
+          await ensureLocalIdentity(getDb());
           await seedDatabase(getDb());
         }
         // Web: no DB, screens use mock data

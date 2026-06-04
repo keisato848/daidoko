@@ -1,9 +1,9 @@
 /**
  * S08: Add Recipe — Method selection bottom sheet
- * Manual entry is active; URL import and OCR show "coming soon"
+ * Entry point for manual, text, URL, photo inference, and OCR-based recipe creation.
  */
 import { useRouter } from 'expo-router';
-import { Camera, Globe, PenLine } from 'lucide-react-native';
+import { Camera, FileText, Globe, Image as ImageIcon, PenLine } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
@@ -25,6 +25,13 @@ const METHODS: MethodOption[] = [
     enabled: true,
   },
   {
+    id: 'text',
+    icon: <FileText size={24} color={Colors.gold} />,
+    label: 'テキストから作成',
+    description: '本文を貼り付けて下書き化',
+    enabled: true,
+  },
+  {
     id: 'url',
     icon: <Globe size={24} color={Colors.gold} />,
     label: 'URLから取り込み',
@@ -32,10 +39,17 @@ const METHODS: MethodOption[] = [
     enabled: true,
   },
   {
-    id: 'ocr',
+    id: 'photo',
     icon: <Camera size={24} color={Colors.gold} />,
-    label: '写真から読み取り',
-    description: 'レシピ本や手書きメモを撮影',
+    label: '料理写真から推測',
+    description: '写っている料理から下書き案を作成',
+    enabled: true,
+  },
+  {
+    id: 'ocr',
+    icon: <ImageIcon size={24} color={Colors.gold} />,
+    label: '文字入り画像から作成',
+    description: 'レシピ本や手書きメモの文字を読み取り',
     enabled: true,
   },
 ];
@@ -47,8 +61,12 @@ export default function AddScreen() {
     if (!method.enabled) return;
     if (method.id === 'manual') {
       router.push('/recipes/new');
+    } else if (method.id === 'text') {
+      router.push('/recipes/import-text');
     } else if (method.id === 'url') {
       router.push('/recipes/import-url');
+    } else if (method.id === 'photo') {
+      router.push('/recipes/import-photo');
     } else if (method.id === 'ocr') {
       router.push('/recipes/import-ocr');
     }
@@ -72,7 +90,7 @@ export default function AddScreen() {
                 {method.label}
               </Text>
               <Text style={styles.methodDescription}>{method.description}</Text>
-              {!method.enabled && <Text style={styles.comingSoon}>Coming Soon</Text>}
+              {!method.enabled && <Text style={styles.comingSoon}>今後追加予定</Text>}
             </View>
           </Pressable>
         ))}
@@ -145,7 +163,7 @@ const styles = StyleSheet.create({
     color: Colors.paperDim,
   },
   comingSoon: {
-    fontSize: 11, // xxs: Coming Soon ラベル
+    fontSize: 11, // xxs: 今後追加予定ラベル
     color: Colors.goldDim,
     fontStyle: 'italic',
     marginTop: 4,

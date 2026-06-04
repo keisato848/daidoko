@@ -1,15 +1,16 @@
 /**
  * だいどこ API Server — Hono on Node.js
  * v1.0: URL import endpoint only (no auth yet)
+ *
+ * app is exported separately so tests can import without starting the server.
  */
-import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
 import importRouter from './routes/import.js';
 
-const app = new Hono();
+export const app = new Hono();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
@@ -30,22 +31,22 @@ app.get('/health', (c) => c.json({ status: 'ok', ts: new Date().toISOString() })
 
 app.route('/api/v1/import', importRouter);
 
-// ─── 404 ─────────────────────────────────────────────────────────────────────
+// ─── 404 / Error ─────────────────────────────────────────────────────────────
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));
-
-// ─── Error handler ────────────────────────────────────────────────────────────
-
 app.onError((err, c) => {
   process.stderr.write(`${String(err)}\n`);
   return c.json({ error: 'Internal Server Error' }, 500);
 });
 
-// ─── Start ────────────────────────────────────────────────────────────────────
+// ─── Start (only when run directly, not imported by tests) ───────────────────
 
-const port = Number(process.env['PORT'] ?? 3000);
-serve({ fetch: app.fetch, port }, () => {
-  process.stdout.write(`🍳 だいどこ API サーバー起動 → http://localhost:${port}\n`);
-});
+if (process.argv[1]?.endsWith('index.ts') || process.argv[1]?.endsWith('index.js')) {
+  const { serve } = await import('@hono/node-server');
+  const port = Number(process.env['PORT'] ?? 3000);
+  serve({ fetch: app.fetch, port }, () => {
+    process.stdout.write(`🍳 だいどこ API サーバー起動 → http://localhost:${port}\n`);
+  });
+}
 
 export default app;

@@ -1,0 +1,23 @@
+{
+  "ts": "2026-05-28T14:42:30.564Z",
+  "pass": 3,
+  "fail": 0,
+  "total": 3,
+  "results": [
+    {
+      "name": "O01 リリース OCR 入口 → テスト導線なし",
+      "status": "PASS",
+      "detail": "release OCR entry has only production actions"
+    },
+    {
+      "name": "O02 カメラ権限拒否",
+      "status": "PASS",
+      "detail": "camera denial handled"
+    },
+    {
+      "name": "O03 写真ライブラリ権限拒否",
+      "status": "PASS",
+      "detail": "gallery picker cancellation handled without selecting device files"
+    }
+  ]
+}

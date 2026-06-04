@@ -1,5 +1,5 @@
 /**
- * Seed data for v0.1 Alpha
+ * Optional sample seed data
  * Based on mockup/app-mockup.jsx RECIPES, RECIPE_INGREDIENTS, STEPS, TIMELINE
  */
 
@@ -930,6 +930,28 @@ export const seedCookingLogs = [
     rating: 4,
     memo: null,
     createdAt: '2024-04-20T12:30:00.000Z',
+  },
+] as const;
+
+// ─── CookingPhotos ──────────────────────────────────────────────────────────
+export const seedCookingPhotos = [
+  {
+    id: 'photo-log-1-1',
+    logId: 'log-1',
+    localPath: 'file:///data/user/0/com.daidoko.app/cache/nikujaga-20240504-1.jpg',
+    cloudUrl: null,
+    sortOrder: 1,
+    takenAt: '2024-05-04T18:35:00.000Z',
+    createdAt: '2024-05-04T19:00:00.000Z',
+  },
+  {
+    id: 'photo-log-3-1',
+    logId: 'log-3',
+    localPath: 'file:///data/user/0/com.daidoko.app/cache/karaage-20240428-1.jpg',
+    cloudUrl: 'https://r2.example.com/daidoko/photos/photo-log-3-1.webp',
+    sortOrder: 1,
+    takenAt: '2024-04-28T18:08:00.000Z',
+    createdAt: '2024-04-28T18:30:00.000Z',
   },
 ] as const;
 

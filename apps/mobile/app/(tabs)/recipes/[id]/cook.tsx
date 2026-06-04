@@ -1,5 +1,5 @@
 /**
- * S06: Cooking Mode screen (v0.5 enhanced)
+ * S06: Cooking Mode screen
  * Full-screen step display with working timer, keep-awake, completion flow
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';

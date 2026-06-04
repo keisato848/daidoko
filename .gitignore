@@ -12,6 +12,8 @@ build/
 ios/
 android/
 *.jks
+*.keystore
+keystore.properties
 *.p8
 *.p12
 *.key
@@ -51,6 +53,22 @@ Thumbs.db
 coverage/
 .vitest/
 
+# E2E generated artifacts
+e2e/android-e2e-result.json
+e2e/screenshots/
+e2e/ui-dumps/
+e2e/ui*.xml
+
+# Local on-device LLM artifacts
+apps/mobile/android/app/src/main/assets/models/*.bin
+apps/mobile/android/app/src/main/assets/models/*.task
+!apps/mobile/android/app/src/main/assets/models/README.md
+
 # Temporary
 tmp/
 temp/
+
+# Claude Code
+.claude/
+chat.json
+nul

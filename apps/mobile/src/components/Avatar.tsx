@@ -8,7 +8,7 @@ interface AvatarProps {
 }
 
 export function Avatar({ name, size = 28 }: AvatarProps) {
-  const char = name.charAt(0);
+  const char = name.trim().charAt(0) || '?';
 
   return (
     <View style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}>

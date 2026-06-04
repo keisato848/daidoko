@@ -13,10 +13,13 @@ import {
   deleteRecipe,
   getRecipeDetail,
   getRecipeList,
+  getRecipeRevisions,
   searchRecipes,
   updateRecipe,
 } from '../recipe.service';
+import { createOcrSource, createPhotoSource } from '../source.service';
 import type { SaveRecipeInput, UpdateRecipeInput } from '../types';
+import { parseRecipeText } from '../../utils/recipeTextParser';
 
 function assertDefined<T>(value: T | null | undefined): asserts value is T {
   expect(value).toBeDefined();
@@ -126,6 +129,76 @@ describe('recipe.service (mock/web)', () => {
       assertDefined(created);
       expect(created.title).toBe('テストレシピ');
     });
+
+    it('creates a recipe from parsed freeform text', async () => {
+      const parsed = parseRecipeText(`
+鶏そぼろ丼
+2人分
+材料
+鶏ひき肉 200g
+しょうゆ 大さじ2
+みりん 大さじ2
+卵 2個
+作り方
+1. 鶏ひき肉と調味料を炒める
+2. 卵を炒り卵にする
+3. ごはんに盛る
+`);
+
+      const id = await createRecipe(parsed.formData);
+      const detail = await getRecipeDetail(id);
+
+      assertDefined(detail);
+      expect(detail.title).toBe('鶏そぼろ丼');
+      expect(detail.servings).toBe(2);
+      expect(detail.ingredients.map((ingredient) => ingredient.name)).toEqual([
+        '鶏ひき肉',
+        'しょうゆ',
+        'みりん',
+        '卵',
+      ]);
+      expect(detail.steps.map((step) => step.body)).toEqual([
+        '鶏ひき肉と調味料を炒める',
+        '卵を炒り卵にする',
+        'ごはんに盛る',
+      ]);
+    });
+
+    it('OCR-SVC-03 links an OCR source to the first recipe revision', async () => {
+      const sourceId = await createOcrSource({
+        rawText: '肉じゃが\n材料\nじゃがいも 3個\n作り方\n1. 煮る',
+        capturedAt: '2026-05-27T10:00:00.000Z',
+      });
+
+      const id = await createRecipe({
+        title: 'OCR由来レシピ',
+        sourceId,
+        ingredients: [{ name: 'じゃがいも', amount: '3個' }],
+        steps: [{ body: '煮る' }],
+        tags: [],
+      });
+
+      const revisions = await getRecipeRevisions(id);
+      expect(revisions[0]).toMatchObject({ sourceId });
+    });
+
+    it('IMG-RECIPE-SVC-02 links a photo source to the first recipe revision', async () => {
+      const sourceId = await createPhotoSource({
+        labelSummary: 'Food 92% / Curry 81%',
+        capturedAt: '2026-05-28T10:00:00.000Z',
+      });
+
+      const id = await createRecipe({
+        title: '料理写真からのレシピ案',
+        sourceId,
+        ingredients: [{ name: '主食材（写真を見て確認）' }],
+        steps: [{ body: '写真を確認して調理する' }],
+        tags: ['推測'],
+      });
+
+      const revisions = await getRecipeRevisions(id);
+      expect(revisions[0]).toMatchObject({ sourceId });
+    });
   });
 
   describe('updateRecipe', () => {
@@ -157,6 +230,22 @@ describe('recipe.service (mock/web)', () => {
       assertDefined(detail);
       expect(detail.title).toBe('更新テスト（改良版）');
       expect(detail.servings).toBe(6);
+
+      const revisions = await getRecipeRevisions(id);
+      expect(revisions).toHaveLength(2);
+      expect(revisions[0]).toMatchObject({
+        id: revId,
+        revisionNumber: 2,
+        isCurrent: true,
+        ingredientCount: 2,
+        stepCount: 2,
+      });
+      expect(revisions[1]).toMatchObject({
+        revisionNumber: 1,
+        isCurrent: false,
+        ingredientCount: 1,
+        stepCount: 1,
+      });
     });
   });
 
