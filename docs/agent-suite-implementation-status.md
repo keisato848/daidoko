@@ -1,6 +1,6 @@
 # Agent Suite 実装進捗
 
-更新日: 2026-06-06
+更新日: 2026-06-06 (Step 01 guardrails aligned)
 
 ## 目的
 
@@ -8,20 +8,24 @@
 
 ## 現在の基準コミット
 
-- Foundation 実装コミット: `ceae66a` `feat: add agent suite automation foundation`
+- `ceae66a` `feat: add agent suite automation foundation` — scripts, hooks, skills, entrypoints
+- `7c265e7` `docs: add agent suite implementation status` — この進捗台帳
+- `593fdc3` `docs: add agent suite progress prompts` — `.github/prompts/agent-suite-step-*.prompt.md`
+
+上記 3 コミットで、現在リポジトリにある Agent Suite 資産を再現できる。
 
 ## 進捗サマリー
 
-| Step | 内容                                                | 状態        | 現在の成果物                                                                                                      | 残作業                                                          |
-| ---- | --------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| 01   | 常時 system prompt とガードレール固定               | Done        | `.github/copilot-instructions.md`                                                                                 | docs 側の更新に追随する運用を残す                               |
-| 02   | repo-shared skills と workspace hooks の追加        | Done        | `.github/skills/*`, `.github/hooks/agent-suite.json`                                                              | skill 説明の精緻化、将来の custom agent 追加                    |
-| 03   | Agent 用の core task scripts 整備                   | In progress | `scripts/agent/preflight.mjs`, `validate-changed-slice.mjs`, `triage-e2e-report.mjs`, `scaffold-feature-plan.mjs` | fixture tests、play-signing check、device-health 専用スクリプト |
-| 04   | git hooks / VS Code tasks / shared entrypoints 整備 | In progress | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                            | 実運用での hook install、有効化確認、運用ガイドの追記           |
-| 05   | custom agents の追加                                | Not started | なし                                                                                                              | repo-research / android-verifier / release-orchestrator の実装  |
-| 06   | Android failure signal と自動復旧の強化             | In progress | Android build/install/loop の土台、E2E triage                                                                     | `NO_AUTHORIZED_DEVICE` などの構造化 signal 定義と retry policy  |
-| 07   | ドキュメントと step prompt 群の整備                 | In progress | この進捗ドキュメント、`.github/prompts/agent-suite-step-*.prompt.md`                                              | README への導線追加、運用例の補強                               |
-| 08   | rollout と本番運用への有効化                        | Not started | なし                                                                                                              | `pnpm agent:init` 実行、real-device loop、運用観測              |
+| Step | 内容                                                | 状態        | 現在の成果物                                                                                                      | 残作業                                                                                                        |
+| ---- | --------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 01   | 常時 system prompt とガードレール固定               | Done        | `.github/copilot-instructions.md`                                                                                 | docs 更新時に追随する運用のみ（CLAUDE.md / 品質基準 / アーキテクチャ設計 / エージェントフック設計と整合済み） |
+| 02   | repo-shared skills と workspace hooks の追加        | Done        | `.github/skills/*`, `.github/hooks/agent-suite.json`                                                              | skill 説明の精緻化、将来の custom agent 追加                                                                  |
+| 03   | Agent 用の core task scripts 整備                   | In progress | `scripts/agent/preflight.mjs`, `validate-changed-slice.mjs`, `triage-e2e-report.mjs`, `scaffold-feature-plan.mjs` | fixture tests、play-signing check、device-health 専用スクリプト                                               |
+| 04   | git hooks / VS Code tasks / shared entrypoints 整備 | In progress | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                            | 実運用での hook install、有効化確認、運用ガイドの追記                                                         |
+| 05   | custom agents の追加                                | Not started | なし                                                                                                              | repo-research / android-verifier / release-orchestrator の実装                                                |
+| 06   | Android failure signal と自動復旧の強化             | In progress | Android build/install/loop の土台、E2E triage                                                                     | `NO_AUTHORIZED_DEVICE` などの構造化 signal 定義と retry policy                                                |
+| 07   | ドキュメントと step prompt 群の整備                 | In progress | この進捗ドキュメント、`.github/prompts/agent-suite-step-*.prompt.md`                                              | README への導線追加、運用例の補強                                                                             |
+| 08   | rollout と本番運用への有効化                        | Not started | なし                                                                                                              | `pnpm agent:init` 実行、real-device loop、運用観測                                                            |
 
 ## 現時点で実装済みの主な資産
 
@@ -70,19 +74,23 @@
 
 ### Priority A
 
-1. `scripts/agent/test-customizations.mjs` に prompt / custom agent / hook fixture の検証を広げる。
-2. `validate-changed-slice.mjs` の mobile / server テスト選別をもっと細かくする。
-3. Android loop に device health と failure signal を明示的に組み込む。
+1. `validate-changed-slice.mjs` の mobile / server テスト選別をもっと細かくする。
+2. Android loop に device health と failure signal を明示的に組み込む（Step 06）。
 
 ### Priority B
 
-1. `.github/prompts/` を追加し、各実装ステップを再利用可能 prompt に落とす。
-2. `pnpm agent:init` と `docs/デプロイ手順.md` の導線を README に追加する。
-3. custom agents を最小構成で追加する。
+1. `pnpm agent:init` と `docs/デプロイ手順.md` の導線を README に追加する。
+2. custom agents を最小構成で追加する（Step 05）。
+
+### 完了済み（参考）
+
+- ~~`.github/prompts/` を追加し、各実装ステップを再利用可能 prompt に落とす。~~ → `593fdc3` で完了。
+- ~~prompt / prompt links を customization smoke test に含める。~~ → `test-customizations.mjs` が prompt を検証済み。
+- ~~`test-customizations.mjs` に prompt / custom agent / hook fixture の検証を広げる。~~ → prompt・hook は検証済み。agent は Step 05 で追加後に対応。
 
 ## 次に進める順序
 
-1. step prompt 群を追加する。
-2. prompt / prompt links を customization smoke test に含める。
-3. そのまとまりを独立コミットする。
-4. その後で Android failure signal と custom agents に進む。
+1. `validate-changed-slice.mjs` のテスト選別を精緻化する（Step 03 の残作業）。
+2. Android failure signal の構造化 signal 定義と retry policy を実装する（Step 06）。
+3. custom agents を最小構成で追加する（Step 05）。
+4. README への導線追加と運用ガイド補強（Step 07）。
