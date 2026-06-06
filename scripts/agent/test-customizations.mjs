@@ -10,6 +10,7 @@ const passes = [];
 await checkExists('.github/copilot-instructions.md', 'copilot instructions exist');
 await validateHookFiles();
 await validateSkillFiles();
+await validatePromptFiles();
 await validateAgentFiles();
 await validateGitHooks();
 await validateOptionalJson('.vscode/extensions.json');
@@ -106,6 +107,30 @@ async function validateAgentFiles() {
   const dirPath = join(rootDir, '.github', 'agents');
   const entries = await safeReadDir(dirPath);
   const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.agent.md'));
+
+  for (const entry of files) {
+    const filePath = join(dirPath, entry.name);
+    try {
+      const raw = await readFile(filePath, 'utf8');
+      const frontmatter = extractFrontmatter(raw);
+      if (!frontmatter.description) {
+        failures.push(`${relativePath(filePath)} missing frontmatter description`);
+        continue;
+      }
+      validateMarkdownLinks(filePath, raw);
+      passes.push(`${relativePath(filePath)} parsed`);
+    } catch (error) {
+      failures.push(
+        `${relativePath(filePath)} failed to parse: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+}
+
+async function validatePromptFiles() {
+  const dirPath = join(rootDir, '.github', 'prompts');
+  const entries = await safeReadDir(dirPath);
+  const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.prompt.md'));
 
   for (const entry of files) {
     const filePath = join(dirPath, entry.name);

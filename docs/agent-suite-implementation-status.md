@@ -20,7 +20,7 @@
 | 04   | git hooks / VS Code tasks / shared entrypoints 整備 | In progress | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                            | 実運用での hook install、有効化確認、運用ガイドの追記           |
 | 05   | custom agents の追加                                | Not started | なし                                                                                                              | repo-research / android-verifier / release-orchestrator の実装  |
 | 06   | Android failure signal と自動復旧の強化             | In progress | Android build/install/loop の土台、E2E triage                                                                     | `NO_AUTHORIZED_DEVICE` などの構造化 signal 定義と retry policy  |
-| 07   | ドキュメントと step prompt 群の整備                 | In progress | この進捗ドキュメント                                                                                              | `.github/prompts/` の整備、README への導線追加                  |
+| 07   | ドキュメントと step prompt 群の整備                 | In progress | この進捗ドキュメント、`.github/prompts/agent-suite-step-*.prompt.md`                                              | README への導線追加、運用例の補強                               |
 | 08   | rollout と本番運用への有効化                        | Not started | なし                                                                                                              | `pnpm agent:init` 実行、real-device loop、運用観測              |
 
 ## 現時点で実装済みの主な資産
@@ -33,6 +33,7 @@
 - `.github/skills/android-release-loop/SKILL.md`
 - `.github/skills/e2e-triage/SKILL.md`
 - `.github/skills/scaffold-feature/SKILL.md`
+- `.github/prompts/agent-suite-step-*.prompt.md`
 
 ### Agent scripts
 
