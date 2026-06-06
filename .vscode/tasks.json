@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Agent: Preflight",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["agent:preflight"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Agent: Customizations Test",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["agent:customizations:test"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Agent: Validate Changed Slice",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/agent/validate-changed-slice.mjs"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Agent: Triage Android E2E",
+      "type": "shell",
+      "command": "node",
+      "args": ["scripts/agent/triage-e2e-report.mjs", "e2e/android-e2e-result.json"],
+      "problemMatcher": []
+    }
+  ]
+}
