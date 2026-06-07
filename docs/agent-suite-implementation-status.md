@@ -25,7 +25,7 @@
 | 05   | custom agents の追加                                | Done        | `.github/agents/android-verifier.agent.md`, `repo-research.agent.md`, `release-orchestrator.agent.md`                                        | なし（3 agent 追加完了）                                                                                      |
 | 06   | Android failure signal と自動復旧の強化             | Done        | Android build/install/loop の土台、E2E triage、failure signals / retry policy / recovery executor                                            | なし（構造化 signal・ポリシー・リカバリ実装完了）                                                             |
 | 07   | ドキュメントと step prompt 群の整備                 | Done        | `README.md`（導線・運用例）, この進捗ドキュメント, `.github/prompts/agent-suite-step-*.prompt.md`                                            | なし（README 導線・運用例拡充完了）                                                                           |
-| 08   | rollout と本番運用への有効化                        | Not started | なし                                                                                                                                         | `pnpm agent:init` 実行、real-device loop、運用観測                                                            |
+| 08   | rollout と本番運用への有効化                        | In progress | `pnpm agent:init` 実行済み、preflight OK、customizations OK (24 checks)、hook 有効化済み                                                     | authorized real device で base loop 実行（blocker: NO_CONNECTED_DEVICE）                                      |
 
 ## 現時点で実装済みの主な資産
 
@@ -80,7 +80,7 @@
 
 ### Priority A
 
-1. rollout と本番運用への有効化（Step 08）。
+1. authorized real device を接続し、`pnpm agent:android:loop -- --suite base` を実行する（Step 08）。
 
 ### Priority B
 
@@ -95,4 +95,4 @@
 
 ## 次に進める順序
 
-1. rollout と本番運用への有効化（Step 08）。
+1. authorized real device を接続し、`pnpm agent:android:loop -- --suite base` を実行する（Step 08）。
