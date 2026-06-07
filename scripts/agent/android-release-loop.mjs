@@ -1,14 +1,16 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRetryPolicy } from './lib/android-retry-policy.mjs';
+import { executeRecovery } from './lib/android-recovery-executor.mjs';
 
 import { runCommand } from './lib/runtime.mjs';
 
 const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const options = parseArgs(process.argv.slice(2));
 const steps = [];
+const recoveryAttempts = [];
 
-steps.push(runStep('preflight', [process.execPath, 'scripts/agent/preflight.mjs', '--json']));
+steps.push(runStepWithRecovery('preflight', [process.execPath, 'scripts/agent/preflight.mjs', '--json']));
 
 const needsDevice = !options.skipInstall || !options.skipE2e;
 let healthOk = true;
@@ -18,7 +20,7 @@ if (needsDevice) {
   if (options.device) {
     healthArgs.push('--device', options.device);
   }
-  const healthStep = runStep('device-health', healthArgs);
+  const healthStep = runStepWithRecovery('device-health', healthArgs, undefined, options.device);
   steps.push(healthStep);
   if (!healthStep.ok) {
     healthOk = false;
@@ -27,13 +29,13 @@ if (needsDevice) {
 
 if (!options.skipBuild && healthOk) {
   steps.push(
-    runStep('build', [
+    runStepWithRecovery('build', [
       process.execPath,
       'scripts/agent/build-android.mjs',
       '--arch',
       options.arch,
       '--json',
-    ]),
+    ], undefined, options.device),
   );
 }
 
@@ -42,18 +44,19 @@ if (!options.skipInstall && healthOk) {
   if (options.device) {
     installArgs.push('--device', options.device);
   }
-  steps.push(runStep('install', installArgs));
+  steps.push(runStepWithRecovery('install', installArgs, undefined, options.device));
 }
 
 if (!options.skipE2e && healthOk) {
   for (const suite of resolveSuites(options.suite)) {
-    steps.push(runStep(suite, suiteCommand(suite), buildSuiteEnv(options.device)));
+    steps.push(runStepWithRecovery(suite, suiteCommand(suite), buildSuiteEnv(options.device), options.device));
   }
 }
 
 const summary = {
   ok: steps.every((step) => step.ok),
   steps,
+  recoveryAttempts,
 };
 
 // If the loop failed, find the first failing step with a signal to surface the policy at the top level
@@ -76,6 +79,10 @@ for (const step of steps) {
     console.log(`  Signal: ${step.signal.code}`);
     const policy = getRetryPolicy(step.signal.code);
     console.log(`  Action: ${policy.suggestedAction}`);
+  }
+  const recovery = recoveryAttempts.find((r) => r.stepId === step.id);
+  if (recovery) {
+    console.log(`  Recovery: ${recovery.executed ? 'EXECUTED' : 'SKIPPED'} - ${recovery.detail}`);
   }
   if (step.output && !step.output.trim().startsWith('{')) {
     console.log(step.output);
@@ -154,6 +161,24 @@ function buildSuiteEnv(device) {
     return undefined;
   }
   return { TARGET_DEVICE: device };
+}
+
+function runStepWithRecovery(id, [command, ...args], env = undefined, device = null) {
+  let stepResult = runStep(id, [command, ...args], env);
+
+  if (!stepResult.ok && stepResult.signal && stepResult.retryPolicy?.strategy === 'retry_candidate') {
+    const recoveryRes = executeRecovery(stepResult.signal.code, device, 'adb', { id });
+    recoveryRes.stepId = id;
+    recoveryAttempts.push(recoveryRes);
+
+    if (recoveryRes.executed && recoveryRes.rerunRecommended) {
+      const retryResult = runStep(id, [command, ...args], env);
+      stepResult = retryResult;
+      stepResult.retried = true;
+    }
+  }
+
+  return stepResult;
 }
 
 function runStep(id, [command, ...args], env = undefined) {
