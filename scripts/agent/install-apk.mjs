@@ -1,5 +1,6 @@
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SIGNAL_CODES, createSignal } from './lib/android-signals.mjs';
 
 import { runCommand } from './lib/runtime.mjs';
 
@@ -24,6 +25,10 @@ const summary = {
   commandLine: result.commandLine,
   output: result.combinedOutput,
 };
+
+if (!result.ok) {
+  summary.signal = createSignal(SIGNAL_CODES.APK_INSTALL_FAILED, result.combinedOutput || 'APK install failed');
+}
 
 if (options.json) {
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);

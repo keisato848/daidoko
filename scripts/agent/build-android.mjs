@@ -1,6 +1,7 @@
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SIGNAL_CODES, createSignal } from './lib/android-signals.mjs';
 
 import { runCommand } from './lib/runtime.mjs';
 
@@ -55,6 +56,13 @@ const summary = {
   commandLine: result.commandLine,
   output: result.combinedOutput,
 };
+
+if (!summary.ok) {
+  const output = summary.output || '';
+  if (output.includes('.cxx') && output.includes('lock')) {
+    summary.signal = createSignal(SIGNAL_CODES.GRADLE_CXX_LOCK, 'Gradle CXX lock detected in build output.');
+  }
+}
 
 if (options.json) {
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);

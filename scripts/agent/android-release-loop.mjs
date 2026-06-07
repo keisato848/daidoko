@@ -9,7 +9,22 @@ const steps = [];
 
 steps.push(runStep('preflight', [process.execPath, 'scripts/agent/preflight.mjs', '--json']));
 
-if (!options.skipBuild) {
+const needsDevice = !options.skipInstall || !options.skipE2e;
+let healthOk = true;
+
+if (needsDevice) {
+  const healthArgs = [process.execPath, 'scripts/agent/check-device-health.mjs', '--json'];
+  if (options.device) {
+    healthArgs.push('--device', options.device);
+  }
+  const healthStep = runStep('device-health', healthArgs);
+  steps.push(healthStep);
+  if (!healthStep.ok) {
+    healthOk = false;
+  }
+}
+
+if (!options.skipBuild && healthOk) {
   steps.push(
     runStep('build', [
       process.execPath,
@@ -21,7 +36,7 @@ if (!options.skipBuild) {
   );
 }
 
-if (!options.skipInstall) {
+if (!options.skipInstall && healthOk) {
   const installArgs = [process.execPath, 'scripts/agent/install-apk.mjs', '--json'];
   if (options.device) {
     installArgs.push('--device', options.device);
@@ -29,7 +44,7 @@ if (!options.skipInstall) {
   steps.push(runStep('install', installArgs));
 }
 
-if (!options.skipE2e) {
+if (!options.skipE2e && healthOk) {
   for (const suite of resolveSuites(options.suite)) {
     steps.push(runStep(suite, suiteCommand(suite), buildSuiteEnv(options.device)));
   }
@@ -48,7 +63,10 @@ if (options.json) {
 console.log(`Android release loop: ${summary.ok ? 'OK' : 'FAILED'}`);
 for (const step of steps) {
   console.log(`${step.ok ? '[OK]' : '[NG]'} ${step.id}`);
-  if (step.output) {
+  if (step.signal) {
+    console.log(`  Signal: ${step.signal.code}`);
+  }
+  if (step.output && !step.output.trim().startsWith('{')) {
     console.log(step.output);
   }
 }
@@ -129,10 +147,26 @@ function buildSuiteEnv(device) {
 
 function runStep(id, [command, ...args], env = undefined) {
   const result = runCommand(command, args, { cwd: rootDir, env });
-  return {
+  const stepResult = {
     id,
     ok: result.ok,
     commandLine: result.commandLine,
     output: result.combinedOutput,
   };
+
+  if (result.combinedOutput && result.combinedOutput.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(result.combinedOutput);
+      if (parsed.signal) {
+        stepResult.signal = parsed.signal;
+      }
+      if (parsed.error) {
+        stepResult.error = parsed.error;
+      }
+    } catch (e) {
+      // ignore JSON parse errors
+    }
+  }
+
+  return stepResult;
 }
