@@ -22,7 +22,7 @@
 | 02   | repo-shared skills と workspace hooks の追加        | Done        | `.github/skills/*`, `.github/hooks/agent-suite.json`                                                                                         | skill 説明の精緻化、将来の custom agent 追加                                                                  |
 | 03   | Agent 用の core task scripts 整備                   | Done        | `scripts/agent/preflight.mjs`, `validate-changed-slice.mjs`, `triage-e2e-report.mjs`, `scaffold-feature-plan.mjs`, `check-device-health.mjs` | なし（slice-test 精緻化・signing/healthチェック完了）                                                         |
 | 04   | git hooks / VS Code tasks / shared entrypoints 整備 | In progress | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                                                       | 実運用での hook install、有効化確認、運用ガイドの追記                                                         |
-| 05   | custom agents の追加                                | Not started | なし                                                                                                                                         | repo-research / android-verifier / release-orchestrator の実装                                                |
+| 05   | custom agents の追加                                | In progress | `.github/agents/android-verifier.agent.md`                                                                                                   | repo-research / release-orchestrator など未追加 agent                                                         |
 | 06   | Android failure signal と自動復旧の強化             | Done        | Android build/install/loop の土台、E2E triage、failure signals / retry policy / recovery executor                                            | なし（構造化 signal・ポリシー・リカバリ実装完了）                                                             |
 | 07   | ドキュメントと step prompt 群の整備                 | In progress | この進捗ドキュメント、`.github/prompts/agent-suite-step-*.prompt.md`                                                                         | README への導線追加、運用例の補強                                                                             |
 | 08   | rollout と本番運用への有効化                        | Not started | なし                                                                                                                                         | `pnpm agent:init` 実行、real-device loop、運用観測                                                            |
@@ -38,6 +38,10 @@
 - `.github/skills/e2e-triage/SKILL.md`
 - `.github/skills/scaffold-feature/SKILL.md`
 - `.github/prompts/agent-suite-step-*.prompt.md`
+
+### Custom Agents
+
+- `.github/agents/android-verifier.agent.md`
 
 ### Agent scripts
 
@@ -79,7 +83,6 @@
 ### Priority B
 
 1. `pnpm agent:init` と `docs/デプロイ手順.md` の導線を README に追加する。
-2. custom agents を最小構成で追加する（Step 05）。
 
 ### 完了済み（参考）
 
