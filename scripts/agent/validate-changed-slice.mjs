@@ -3,6 +3,19 @@ import { fileURLToPath } from 'node:url';
 
 import { pnpmBinary, runCommand, tail, toPosixPath, unique } from './lib/runtime.mjs';
 
+/** Directories under apps/mobile/src/ that have co-located __tests__ */
+const MOBILE_TESTABLE_DIRS = [
+  'agents',
+  'components',
+  'constants',
+  'db',
+  'hooks',
+  'services',
+  'stores',
+  'utils',
+  'validation',
+];
+
 const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const options = parseArgs(process.argv.slice(2));
 const files = unique(
@@ -164,7 +177,19 @@ function buildValidationPlan(files) {
     addWorkspaceTask('server-lint', 'server lint', ['--filter', 'server', 'lint'], taskMap);
     addWorkspaceTask('server-typecheck', 'server typecheck', ['--filter', 'server', 'typecheck'], taskMap);
     if (files.some((file) => file.startsWith('apps/server/src/'))) {
-      addWorkspaceTask('server-test', 'server test', ['--filter', 'server', 'test'], taskMap);
+      const serverTargets = serverTestTargets(files);
+      if (serverTargets.length > 0) {
+        addTask(
+          'server-test',
+          `server test (${serverTargets.length} target${serverTargets.length > 1 ? 's' : ''})`,
+          pnpmBinary(),
+          ['--filter', 'server', 'exec', 'vitest', 'run', '--passWithNoTests', ...serverTargets],
+          `Targeted server tests: ${serverTargets.join(', ')}`,
+          taskMap,
+        );
+      } else {
+        addWorkspaceTask('server-test', 'server test', ['--filter', 'server', 'test'], taskMap);
+      }
     }
   }
 
@@ -172,7 +197,19 @@ function buildValidationPlan(files) {
     addWorkspaceTask('mobile-lint', 'mobile lint', ['--filter', 'mobile', 'lint'], taskMap);
     addWorkspaceTask('mobile-typecheck', 'mobile typecheck', ['--filter', 'mobile', 'typecheck'], taskMap);
     if (shouldRunMobileTests(files)) {
-      addWorkspaceTask('mobile-test', 'mobile test', ['--filter', 'mobile', 'test'], taskMap);
+      const pattern = mobileTestPattern(files);
+      if (pattern) {
+        addTask(
+          'mobile-test',
+          `mobile test (${pattern})`,
+          pnpmBinary(),
+          ['--filter', 'mobile', 'exec', 'jest', '--passWithNoTests', '--testPathPattern', pattern],
+          `Targeted mobile tests matching: ${pattern}`,
+          taskMap,
+        );
+      } else {
+        addWorkspaceTask('mobile-test', 'mobile test', ['--filter', 'mobile', 'test'], taskMap);
+      }
     }
   }
 
@@ -218,10 +255,93 @@ function shouldRunMobileTests(files) {
     (file) =>
       file.startsWith('apps/mobile/app/') ||
       file.includes('/__tests__/') ||
-      file.startsWith('apps/mobile/src/agents/') ||
-      file.startsWith('apps/mobile/src/components/') ||
-      file.startsWith('apps/mobile/src/services/'),
+      MOBILE_TESTABLE_DIRS.some((dir) => file.startsWith(`apps/mobile/src/${dir}/`)),
   );
+}
+
+/**
+ * Derive a Jest --testPathPattern from the changed mobile files.
+ * Groups by the first directory under src/ (e.g. "services", "hooks")
+ * and returns a regex matching their __tests__ directories.
+ * Returns null if the change spans app/ or too many dirs to target.
+ */
+function mobileTestPattern(files) {
+  const mobileFiles = files.filter(
+    (f) => f.startsWith('apps/mobile/src/') || f.startsWith('apps/mobile/app/'),
+  );
+
+  // If app/ screens changed, run full suite (screen tests may touch anything)
+  if (mobileFiles.some((f) => f.startsWith('apps/mobile/app/'))) {
+    return null;
+  }
+
+  const dirs = new Set();
+  for (const f of mobileFiles) {
+    const match = f.match(/^apps\/mobile\/src\/([^/]+)\//);
+    if (match && MOBILE_TESTABLE_DIRS.includes(match[1])) {
+      dirs.add(match[1]);
+    } else if (match && match[1] === '__tests__') {
+      // File is directly in src/__tests__/, run full suite
+      return null;
+    }
+  }
+
+  if (dirs.size === 0 || dirs.size > 4) {
+    return null;
+  }
+
+  // Produce pattern like "src/(services|hooks)/__tests__"
+  const dirList = [...dirs].sort();
+  return dirList.length === 1
+    ? `src/${dirList[0]}/__tests__`
+    : `src/(${dirList.join('|')})/__tests__`;
+}
+
+// ── Server test targeting ──────────────────────────────────────
+
+/**
+ * Map changed server source files to their related test files.
+ * Returns an array of relative paths (from server package root) to run,
+ * or an empty array to fall back to the full test suite.
+ *
+ * Strategy:
+ * - Test files (already in __tests__/) → run as-is
+ * - src/routes/X.ts → src/__tests__/X.route.test.ts (if naming convention matches)
+ * - Other src/ files → fall back to full suite
+ */
+function serverTestTargets(files) {
+  const serverFiles = files.filter((f) => f.startsWith('apps/server/src/'));
+  if (serverFiles.length === 0) return [];
+
+  const targets = new Set();
+  let needsFallback = false;
+
+  for (const f of serverFiles) {
+    const rel = f.replace('apps/server/', '');
+
+    if (rel.includes('__tests__/')) {
+      // Already a test file — run it directly
+      targets.add(rel);
+      continue;
+    }
+
+    const routeMatch = rel.match(/^src\/routes\/([^/]+)\.\w+$/);
+    if (routeMatch) {
+      // Map routes/import.ts → src/__tests__/import.route.test.ts
+      targets.add(`src/__tests__/${routeMatch[1]}.route.test.ts`);
+      continue;
+    }
+
+    // Non-route, non-test source file — cannot reliably narrow
+    needsFallback = true;
+    break;
+  }
+
+  if (needsFallback || targets.size === 0 || targets.size > 5) {
+    return [];
+  }
+
+  return [...targets].sort();
 }
 
 function isCustomizationFile(file) {
