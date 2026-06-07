@@ -22,6 +22,7 @@
     "agent:android:install": "node scripts/agent/install-apk.mjs",
     "agent:android:loop": "node scripts/agent/android-release-loop.mjs",
     "agent:android:signing:check": "node scripts/agent/check-play-signing.mjs",
+    "agent:android:device:health": "node scripts/agent/check-device-health.mjs",
     "agent:customizations:test": "node scripts/agent/test-customizations.mjs",
     "agent:hooks:install": "node scripts/agent/install-git-hooks.mjs",
     "agent:hooks:test": "node scripts/agent/test-customizations.mjs",
