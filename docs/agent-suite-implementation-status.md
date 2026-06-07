@@ -6,13 +6,13 @@
 
 このドキュメントは、だいどこの Agent Suite 基盤整備について、現時点でどこまで完了しているかをリポジトリ内で明示するための進捗台帳です。チャット履歴に依存せず、次回セッションで現在地を再開できることを目的とします。
 
-## 現在の基準コミット
+## Foundation Baseline (初期の基準コミット)
 
 - `ceae66a` `feat: add agent suite automation foundation` — scripts, hooks, skills, entrypoints
 - `7c265e7` `docs: add agent suite implementation status` — この進捗台帳
 - `593fdc3` `docs: add agent suite progress prompts` — `.github/prompts/agent-suite-step-*.prompt.md`
 
-上記 3 コミットで、現在リポジトリにある Agent Suite 資産を再現できる。
+上記 3 コミットで、Agent Suite の初期基盤を再現できる。
 
 ## 進捗サマリー
 
@@ -23,7 +23,7 @@
 | 03   | Agent 用の core task scripts 整備                   | Done        | `scripts/agent/preflight.mjs`, `validate-changed-slice.mjs`, `triage-e2e-report.mjs`, `scaffold-feature-plan.mjs`, `check-device-health.mjs` | なし（slice-test 精緻化・signing/healthチェック完了）                                                         |
 | 04   | git hooks / VS Code tasks / shared entrypoints 整備 | In progress | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                                                       | 実運用での hook install、有効化確認、運用ガイドの追記                                                         |
 | 05   | custom agents の追加                                | Not started | なし                                                                                                                                         | repo-research / android-verifier / release-orchestrator の実装                                                |
-| 06   | Android failure signal と自動復旧の強化             | In progress | Android build/install/loop の土台、E2E triage、構造化 signal 定義、retry policy                                                              | auto-recovery executor 未着手                                                                                 |
+| 06   | Android failure signal と自動復旧の強化             | Done        | Android build/install/loop の土台、E2E triage、failure signals / retry policy / recovery executor                                            | なし（構造化 signal・ポリシー・リカバリ実装完了）                                                             |
 | 07   | ドキュメントと step prompt 群の整備                 | In progress | この進捗ドキュメント、`.github/prompts/agent-suite-step-*.prompt.md`                                                                         | README への導線追加、運用例の補強                                                                             |
 | 08   | rollout と本番運用への有効化                        | Not started | なし                                                                                                                                         | `pnpm agent:init` 実行、real-device loop、運用観測                                                            |
 
@@ -74,7 +74,7 @@
 
 ### Priority A
 
-1. Android ループでの自動復旧 (auto-recovery executor) の実装と組み込み（Step 06）。
+1. custom agents を最小構成で追加する（Step 05）。
 
 ### Priority B
 
@@ -90,6 +90,5 @@
 
 ## 次に進める順序
 
-1. Android ループでの自動復旧 (auto-recovery executor) の実装と組み込み（Step 06）。
-2. custom agents を最小構成で追加する（Step 05）。
-3. README への導線追加と運用ガイド補強（Step 07）。
+1. custom agents を最小構成で追加する（Step 05）。
+2. README への導線追加と運用ガイド補強（Step 07）。
