@@ -23,7 +23,7 @@
 | 03   | Agent 用の core task scripts 整備                   | Done        | `scripts/agent/preflight.mjs`, `validate-changed-slice.mjs`, `triage-e2e-report.mjs`, `scaffold-feature-plan.mjs`, `check-device-health.mjs` | なし（slice-test 精緻化・signing/healthチェック完了）                                                         |
 | 04   | git hooks / VS Code tasks / shared entrypoints 整備 | In progress | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                                                       | 実運用での hook install、有効化確認、運用ガイドの追記                                                         |
 | 05   | custom agents の追加                                | Not started | なし                                                                                                                                         | repo-research / android-verifier / release-orchestrator の実装                                                |
-| 06   | Android failure signal と自動復旧の強化             | In progress | Android build/install/loop の土台、E2E triage、構造化 signal 定義                                                                            | signal に基づく retry policy の実装                                                                           |
+| 06   | Android failure signal と自動復旧の強化             | In progress | Android build/install/loop の土台、E2E triage、構造化 signal 定義、retry policy                                                              | auto-recovery executor 未着手                                                                                 |
 | 07   | ドキュメントと step prompt 群の整備                 | In progress | この進捗ドキュメント、`.github/prompts/agent-suite-step-*.prompt.md`                                                                         | README への導線追加、運用例の補強                                                                             |
 | 08   | rollout と本番運用への有効化                        | Not started | なし                                                                                                                                         | `pnpm agent:init` 実行、real-device loop、運用観測                                                            |
 
@@ -74,7 +74,7 @@
 
 ### Priority A
 
-1. Android failure signal に基づく retry policy の実装と、ループでの自動復旧 executor の組み込み（Step 06）。
+1. Android ループでの自動復旧 (auto-recovery executor) の実装と組み込み（Step 06）。
 
 ### Priority B
 
@@ -90,6 +90,6 @@
 
 ## 次に進める順序
 
-1. Android failure signal に基づく retry policy の定義と自動復旧 executor の実装（Step 06）。
+1. Android ループでの自動復旧 (auto-recovery executor) の実装と組み込み（Step 06）。
 2. custom agents を最小構成で追加する（Step 05）。
 3. README への導線追加と運用ガイド補強（Step 07）。

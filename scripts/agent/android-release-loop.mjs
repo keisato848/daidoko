@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getRetryPolicy } from './lib/android-retry-policy.mjs';
 
 import { runCommand } from './lib/runtime.mjs';
 
@@ -55,6 +56,14 @@ const summary = {
   steps,
 };
 
+// If the loop failed, find the first failing step with a signal to surface the policy at the top level
+if (!summary.ok) {
+  const failedStepWithSignal = steps.find((step) => !step.ok && step.signal);
+  if (failedStepWithSignal) {
+    summary.retryPolicy = getRetryPolicy(failedStepWithSignal.signal.code);
+  }
+}
+
 if (options.json) {
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
   process.exit(summary.ok ? 0 : 1);
@@ -65,6 +74,8 @@ for (const step of steps) {
   console.log(`${step.ok ? '[OK]' : '[NG]'} ${step.id}`);
   if (step.signal) {
     console.log(`  Signal: ${step.signal.code}`);
+    const policy = getRetryPolicy(step.signal.code);
+    console.log(`  Action: ${policy.suggestedAction}`);
   }
   if (step.output && !step.output.trim().startsWith('{')) {
     console.log(step.output);
@@ -159,6 +170,7 @@ function runStep(id, [command, ...args], env = undefined) {
       const parsed = JSON.parse(result.combinedOutput);
       if (parsed.signal) {
         stepResult.signal = parsed.signal;
+        stepResult.retryPolicy = getRetryPolicy(parsed.signal.code);
       }
       if (parsed.error) {
         stepResult.error = parsed.error;
