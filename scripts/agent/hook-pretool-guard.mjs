@@ -1,4 +1,5 @@
 import { readStdinJson } from './lib/runtime.mjs';
+import { classifySigningEnv } from './lib/signing.mjs';
 
 const payload = await readStdinJson();
 const commandText = extractCommandText(payload);
@@ -56,10 +57,5 @@ function extractCommandText(value) {
 }
 
 function missingSigningEnv() {
-  return [
-    'DAIDOKO_UPLOAD_STORE_FILE',
-    'DAIDOKO_UPLOAD_STORE_PASSWORD',
-    'DAIDOKO_UPLOAD_KEY_ALIAS',
-    'DAIDOKO_UPLOAD_KEY_PASSWORD',
-  ].filter((key) => !process.env[key]);
+  return classifySigningEnv().missing;
 }

@@ -4,6 +4,7 @@ import { platform } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { classifySigningEnv } from './lib/signing.mjs';
 
 const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
@@ -182,21 +183,14 @@ async function verifyGradleWrapper() {
 }
 
 async function verifyPlaySigningEnv() {
-  const keys = [
-    'DAIDOKO_UPLOAD_STORE_FILE',
-    'DAIDOKO_UPLOAD_STORE_PASSWORD',
-    'DAIDOKO_UPLOAD_KEY_ALIAS',
-    'DAIDOKO_UPLOAD_KEY_PASSWORD',
-  ];
-  const present = keys.filter((key) => Boolean(process.env[key]));
+  const env = classifySigningEnv();
 
-  if (present.length === 0) {
+  if (env.status === 'none') {
     return 'not configured (acceptable for local APK validation)';
   }
 
-  const missing = keys.filter((key) => !process.env[key]);
-  if (missing.length > 0) {
-    throw new Error(`partially configured. Missing: ${missing.join(', ')}`);
+  if (env.status === 'partial') {
+    throw new Error(`partially configured. Missing: ${env.missing.join(', ')}`);
   }
 
   return 'configured';
