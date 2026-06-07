@@ -21,7 +21,7 @@
 | 01   | 常時 system prompt とガードレール固定               | Done        | `.github/copilot-instructions.md`                                                                                                            | docs 更新時に追随する運用のみ（CLAUDE.md / 品質基準 / アーキテクチャ設計 / エージェントフック設計と整合済み） |
 | 02   | repo-shared skills と workspace hooks の追加        | Done        | `.github/skills/*`, `.github/hooks/agent-suite.json`                                                                                         | skill 説明の精緻化、将来の custom agent 追加                                                                  |
 | 03   | Agent 用の core task scripts 整備                   | Done        | `scripts/agent/preflight.mjs`, `validate-changed-slice.mjs`, `triage-e2e-report.mjs`, `scaffold-feature-plan.mjs`, `check-device-health.mjs` | なし（slice-test 精緻化・signing/healthチェック完了）                                                         |
-| 04   | git hooks / VS Code tasks / shared entrypoints 整備 | In progress | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                                                       | 実運用での hook install、有効化確認、運用ガイドの追記                                                         |
+| 04   | git hooks / VS Code tasks / shared entrypoints 整備 | Done        | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                                                       | なし（hook install・有効化確認完了）                                                                          |
 | 05   | custom agents の追加                                | Done        | `.github/agents/android-verifier.agent.md`, `repo-research.agent.md`, `release-orchestrator.agent.md`                                        | なし（3 agent 追加完了）                                                                                      |
 | 06   | Android failure signal と自動復旧の強化             | Done        | Android build/install/loop の土台、E2E triage、failure signals / retry policy / recovery executor                                            | なし（構造化 signal・ポリシー・リカバリ実装完了）                                                             |
 | 07   | ドキュメントと step prompt 群の整備                 | Done        | `README.md`（導線・運用例）, この進捗ドキュメント, `.github/prompts/agent-suite-step-*.prompt.md`                                            | なし（README 導線・運用例拡充完了）                                                                           |
@@ -80,11 +80,11 @@
 
 ### Priority A
 
-1. 実運用での hook install と有効化確認（Step 04）。
+1. rollout と本番運用への有効化（Step 08）。
 
 ### Priority B
 
-1. rollout と本番運用への有効化（Step 08）。
+1. なし。
 
 ### 完了済み（参考）
 
@@ -95,5 +95,4 @@
 
 ## 次に進める順序
 
-1. 実運用での hook install と有効化確認（Step 04）。
-2. rollout と本番運用への有効化（Step 08）。
+1. rollout と本番運用への有効化（Step 08）。
