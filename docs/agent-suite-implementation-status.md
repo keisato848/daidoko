@@ -24,7 +24,7 @@
 | 04   | git hooks / VS Code tasks / shared entrypoints 整備 | In progress | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                                                       | 実運用での hook install、有効化確認、運用ガイドの追記                                                         |
 | 05   | custom agents の追加                                | Done        | `.github/agents/android-verifier.agent.md`, `repo-research.agent.md`, `release-orchestrator.agent.md`                                        | なし（3 agent 追加完了）                                                                                      |
 | 06   | Android failure signal と自動復旧の強化             | Done        | Android build/install/loop の土台、E2E triage、failure signals / retry policy / recovery executor                                            | なし（構造化 signal・ポリシー・リカバリ実装完了）                                                             |
-| 07   | ドキュメントと step prompt 群の整備                 | In progress | `README.md`, この進捗ドキュメント、`.github/prompts/agent-suite-step-*.prompt.md`                                                            | 運用例の補強、実例コマンドの拡充                                                                              |
+| 07   | ドキュメントと step prompt 群の整備                 | Done        | `README.md`（導線・運用例）, この進捗ドキュメント, `.github/prompts/agent-suite-step-*.prompt.md`                                            | なし（README 導線・運用例拡充完了）                                                                           |
 | 08   | rollout と本番運用への有効化                        | Not started | なし                                                                                                                                         | `pnpm agent:init` 実行、real-device loop、運用観測                                                            |
 
 ## 現時点で実装済みの主な資産
@@ -80,11 +80,11 @@
 
 ### Priority A
 
-1. 運用例の補強と実例コマンドの拡充（Step 07）。
+1. 実運用での hook install と有効化確認（Step 04）。
 
 ### Priority B
 
-1. 実運用での hook install と有効化確認（Step 04）。
+1. rollout と本番運用への有効化（Step 08）。
 
 ### 完了済み（参考）
 
@@ -95,6 +95,5 @@
 
 ## 次に進める順序
 
-1. 運用例の補強と実例コマンドの拡充（Step 07）。
-2. 実運用での hook install と有効化確認（Step 04）。
-3. rollout と本番運用への有効化（Step 08）。
+1. 実運用での hook install と有効化確認（Step 04）。
+2. rollout と本番運用への有効化（Step 08）。

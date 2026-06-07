@@ -56,6 +56,55 @@ scripts/agent/
 - **データ保持を最優先する** — `git reset --hard`、`.cxx` 削除、`adb kill-server` などの破壊的操作は自動化しない。
 - 失敗時は signal と retryPolicy の出力を確認し、次の安全な手順だけを提示する。
 
+### よくある運用例
+
+#### 1. 変更スライスの検証
+
+コミット前に、変更したファイルだけを対象に Prettier と smoke test を実行します。
+
+```bash
+pnpm agent:validate -- --files src/components/Toast.tsx docs/agent-suite-implementation-status.md
+```
+
+#### 2. Android 事前確認
+
+環境要件の充足と、デバイスが正常に接続・起動しているかを確認します。ビルドや E2E を走らせる前に必ず実行してください。
+
+```bash
+pnpm agent:preflight
+pnpm agent:android:device:health
+```
+
+#### 3. Play 配布前チェック
+
+Play Store 向けの署名環境変数（キーストアパス、パスワード等）が設定されているかを確認します。ローカル APK ビルドだけの場合は省略できます。
+
+```bash
+pnpm agent:android:signing:check
+```
+
+#### 4. Android release loop の実行
+
+preflight → build → install → E2E を順に実行します。失敗時は signal と retryPolicy が JSON で返されるため、次の安全な手順を判断できます。
+
+```bash
+pnpm agent:android:loop
+# JSON 出力が必要な場合
+pnpm agent:android:loop -- --json
+# ビルド済み APK で install + E2E だけ実行する場合
+pnpm agent:android:loop -- --skip-build
+```
+
+#### 5. E2E 結果のトリアージ
+
+既存のテスト結果 JSON を読み取り、失敗テストの分類と次のアクションを提示します。
+
+```bash
+pnpm agent:triage:e2e -- --file e2e/android-e2e-result.json
+```
+
+> **注意**: すべての運用例はデータ保持・非破壊を前提としています。`adb uninstall`、`pm clear`、`git reset --hard` などの破壊的操作は含まれません。
+
 ### 詳細ドキュメント
 
 - 進捗台帳: [`docs/agent-suite-implementation-status.md`](docs/agent-suite-implementation-status.md)
