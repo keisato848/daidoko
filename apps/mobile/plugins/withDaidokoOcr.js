@@ -1,4 +1,5 @@
 const {
+  AndroidConfig,
   withAndroidManifest,
   withAppBuildGradle,
   withDangerousMod,
@@ -254,9 +255,20 @@ function withDaidokoOcrManifest(config) {
   return withAndroidManifest(config, (configWithManifest) => {
     const manifest = configWithManifest.modResults.manifest;
     ensureManifestPermission(manifest, 'android.permission.CAMERA');
-    ensureManifestPermission(manifest, 'android.permission.READ_MEDIA_IMAGES');
     return configWithManifest;
   });
+}
+
+// expo-file-system's config plugin unconditionally requests broad media-library
+// access, but this app only reads/writes its own app-private documentDirectory,
+// which never requires these permissions. Block them to satisfy Google Play's
+// Photo and Video Permissions policy.
+function withDaidokoBlockedStoragePermissions(config) {
+  return AndroidConfig.Permissions.withBlockedPermissions(config, [
+    'android.permission.READ_EXTERNAL_STORAGE',
+    'android.permission.WRITE_EXTERNAL_STORAGE',
+    'android.permission.READ_MEDIA_IMAGES',
+  ]);
 }
 
 function upsertGradleProperty(modResults, key, value) {
@@ -364,6 +376,7 @@ function withDaidokoOcrSources(config) {
 
 module.exports = function withDaidokoOcr(config) {
   config = withDaidokoOcrManifest(config);
+  config = withDaidokoBlockedStoragePermissions(config);
   config = withDaidokoAndroidBuildProperties(config);
   config = withDaidokoOcrBuildGradle(config);
   config = withDaidokoOcrMainApplication(config);
