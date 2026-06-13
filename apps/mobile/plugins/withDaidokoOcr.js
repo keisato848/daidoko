@@ -40,9 +40,11 @@ def hasUploadSigning = [uploadStoreFilePath, uploadStorePassword, uploadKeyAlias
 
 gradle.taskGraph.whenReady { taskGraph ->
   def bundlesRelease = taskGraph.allTasks.any { it.path == ':app:bundleRelease' || it.name == 'bundleRelease' }
-  // EAS Build (and other CI signing tools) inject release credentials via AGP's
-  // android.injected.signing.* properties rather than our DAIDOKO_UPLOAD_* vars.
-  def hasInjectedSigning = project.hasProperty('android.injected.signing.store.file')
+  // EAS Build injects its own managed release keystore into this file before
+  // running gradle and sets EAS_BUILD=true; AGP's android.injected.signing.*
+  // properties aren't populated at configuration time, so check the env var.
+  def hasInjectedSigning = project.hasProperty('android.injected.signing.store.file') ||
+    System.getenv('EAS_BUILD') == 'true'
   if (bundlesRelease && !hasUploadSigning && !hasInjectedSigning) {
     throw new RuntimeException('Google Play bundleRelease requires DAIDOKO_UPLOAD_STORE_FILE, DAIDOKO_UPLOAD_STORE_PASSWORD, DAIDOKO_UPLOAD_KEY_ALIAS, and DAIDOKO_UPLOAD_KEY_PASSWORD. Set them as environment variables or in apps/mobile/android/keystore.properties.')
   }
