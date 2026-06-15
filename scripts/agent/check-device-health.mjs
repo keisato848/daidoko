@@ -136,9 +136,9 @@ async function checkDeviceHealth() {
   // 3. Boot completion check
   try {
     const propsToCheck = [
-      { name: 'sys.boot_completed', expected: '1' },
-      { name: 'dev.bootcomplete', expected: '1' },
-      { name: 'init.svc.bootanim', expected: 'stopped' },
+      { name: 'sys.boot_completed', expected: ['1'] },
+      { name: 'dev.bootcomplete', expected: ['1'] },
+      { name: 'init.svc.bootanim', expected: ['stopped', ''] },
     ];
 
     const propResults = {};
@@ -160,9 +160,9 @@ async function checkDeviceHealth() {
       const val = res.stdout.trim();
       propResults[prop.name] = val;
 
-      if (val !== prop.expected) {
+      if (!prop.expected.includes(val)) {
         bootOk = false;
-        failures.push(`${prop.name} is '${val}' (expected: '${prop.expected}')`);
+        failures.push(`${prop.name} is '${val}' (expected: ${prop.expected.map((e) => `'${e}'`).join(' or ')})`);
       }
     }
 
@@ -171,7 +171,7 @@ async function checkDeviceHealth() {
         id: 'boot-completed',
         label: 'Android boot completion',
         ok: true,
-        detail: `sys.boot_completed=1, dev.bootcomplete=1, init.svc.bootanim=stopped`,
+        detail: `sys.boot_completed=${propResults['sys.boot_completed']}, dev.bootcomplete=${propResults['dev.bootcomplete']}, init.svc.bootanim=${propResults['init.svc.bootanim']}`,
       });
     } else {
       checks.push({
