@@ -32,18 +32,15 @@ describe('OCR-REQ-01 Expo photo capture adapter', () => {
     expect(mockedImagePicker.launchCameraAsync).not.toHaveBeenCalled();
   });
 
-  it('does not open the gallery when media library permission is denied', async () => {
-    mockedImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({
-      granted: false,
-      canAskAgain: false,
-      expires: 'never',
-      status: ImagePicker.PermissionStatus.DENIED,
-      accessPrivileges: 'none',
+  it('opens the gallery via the system photo picker without requesting media library permission', async () => {
+    mockedImagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: true,
+      assets: null,
     });
 
-    await expect(expoImagePickerPhotoCaptureAdapter.pickFromGallery()).rejects.toThrow(
-      '写真ライブラリの使用が許可されていません',
-    );
-    expect(mockedImagePicker.launchImageLibraryAsync).not.toHaveBeenCalled();
+    await expoImagePickerPhotoCaptureAdapter.pickFromGallery();
+
+    expect(mockedImagePicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockedImagePicker.launchImageLibraryAsync).toHaveBeenCalled();
   });
 });

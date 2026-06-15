@@ -19,11 +19,6 @@ async function ensureCameraPermission(): Promise<void> {
   if (!permission.granted) throw new Error('カメラの使用が許可されていません');
 }
 
-async function ensureGalleryPermission(): Promise<void> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) throw new Error('写真ライブラリの使用が許可されていません');
-}
-
 export const expoImagePickerPhotoCaptureAdapter: PhotoCaptureAdapter = {
   async captureFromCamera() {
     await ensureCameraPermission();
@@ -35,7 +30,9 @@ export const expoImagePickerPhotoCaptureAdapter: PhotoCaptureAdapter = {
     return result.canceled ? null : toCapturedPhoto(result.assets[0]);
   },
   async pickFromGallery() {
-    await ensureGalleryPermission();
+    // Uses the system Photo Picker (Android 13+ / iOS 14+), which grants
+    // scoped access to the selected item without requiring a media-library
+    // permission.
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: false,
       mediaTypes: ImagePicker.MediaTypeOptions.Images,

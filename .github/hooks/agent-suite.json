@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node scripts/agent/hook-session-start.mjs",
+        "timeout": 20
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "node scripts/agent/hook-pretool-guard.mjs",
+        "timeout": 20
+      }
+    ],
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "node scripts/agent/hook-posttool-validate.mjs",
+        "timeout": 90
+      }
+    ]
+  }
+}
