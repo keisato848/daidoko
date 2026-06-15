@@ -8,10 +8,12 @@ argument-hint: 'Pass a result json path or ask for all known E2E result files'
 # E2E Triage
 
 ## When To Use
+
 - After `android-e2e.mjs`, `android-ocr-e2e.mjs`, or `android-photo-recipe-e2e.mjs` fails.
 - When a report exists but the user should not have to inspect raw JSON.
 
 ## Procedure
+
 1. Run `pnpm agent:triage:e2e -- --file <result-json>`.
 2. Review the failing cases, inferred hints, and recovery steps.
 3. If the issue is environment-related, fix the environment first and rerun the same suite.
