@@ -204,29 +204,30 @@ export default function RecipeListScreen() {
             </View>
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterContainer}
-            contentContainerStyle={styles.filterContent}
-          >
-            {TAG_FILTERS.map((tag) => (
-              <Pressable
-                key={tag}
-                style={[styles.filterChip, activeTagFilter === tag && styles.filterChipActive]}
-                onPress={() => setActiveTagFilter(tag)}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    activeTagFilter === tag && styles.filterChipTextActive,
-                  ]}
+          <View style={styles.filterContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterContent}
+            >
+              {TAG_FILTERS.map((tag) => (
+                <Pressable
+                  key={tag}
+                  style={[styles.filterChip, activeTagFilter === tag && styles.filterChipActive]}
+                  onPress={() => setActiveTagFilter(tag)}
                 >
-                  {tag}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      activeTagFilter === tag && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {tag}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
 
           {query.length > 0 && (
             <View style={styles.searchHint}>
