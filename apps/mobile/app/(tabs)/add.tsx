@@ -4,8 +4,9 @@
  */
 import { useRouter } from 'expo-router';
 import { Camera, FileText, Globe, Image as ImageIcon, PenLine } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PressableScale } from '../../src/components/PressableScale';
 import { Colors } from '../../src/constants/theme';
 
 interface MethodOption {
@@ -79,7 +80,7 @@ export default function AddScreen() {
 
       <View style={styles.methods}>
         {METHODS.map((method) => (
-          <Pressable
+          <PressableScale
             key={method.id}
             style={[styles.methodCard, !method.enabled && styles.methodCardDisabled]}
             onPress={() => handleSelect(method)}
@@ -92,7 +93,7 @@ export default function AddScreen() {
               <Text style={styles.methodDescription}>{method.description}</Text>
               {!method.enabled && <Text style={styles.comingSoon}>今後追加予定</Text>}
             </View>
-          </Pressable>
+          </PressableScale>
         ))}
       </View>
     </View>
