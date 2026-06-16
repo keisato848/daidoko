@@ -4,16 +4,21 @@
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Trash2, X } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
+import { EmptyState } from '../../src/components/EmptyState';
+import { Loading } from '../../src/components/Loading';
+import { MonthlyStats } from '../../src/components/MonthlyStats';
+import { PressableScale } from '../../src/components/PressableScale';
 import { Stars } from '../../src/components/Stars';
 import { Colors } from '../../src/constants/theme';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
 import { getTimeline } from '../../src/services/timeline.service';
 import type { TimelineEntry } from '../../src/services/types';
 import { formatProfileDisplayName } from '../../src/utils/profile';
+import { computeMonthlyStats } from '../../src/utils/timelineStats';
 
 type FilterTab = 'week' | 'month' | 'all';
 
@@ -45,17 +50,24 @@ function getFilterDate(filter: FilterTab): Date | null {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [entries, setEntries] = useState<TimelineEntry[]>([]);
+  const [allEntries, setAllEntries] = useState<TimelineEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const loadTimeline = useCallback(async () => {
-    const all = await getTimeline();
+    setAllEntries(await getTimeline());
+    setLoading(false);
+  }, []);
+
+  const entries = useMemo(() => {
     const filterDate = getFilterDate(filter);
-    const filtered = filterDate ? all.filter((l) => new Date(l.cookedAt) >= filterDate) : all;
-    setEntries(filtered);
-  }, [filter]);
+    return filterDate ? allEntries.filter((l) => new Date(l.cookedAt) >= filterDate) : allEntries;
+  }, [allEntries, filter]);
+
+  const monthlyStats = useMemo(() => computeMonthlyStats(allEntries), [allEntries]);
+  const monthLabel = `${new Date().getMonth() + 1}月`;
 
   useFocusEffect(
     useCallback(() => {
@@ -115,7 +127,7 @@ export default function HomeScreen() {
     return (
       <View>
         {showDateHeader && <Text style={styles.dateHeader}>{formatDate(item.cookedAt)}</Text>}
-        <Pressable
+        <PressableScale
           style={[styles.card, isSelected && styles.cardSelected]}
           onPress={() => {
             if (selectMode) {
@@ -136,22 +148,32 @@ export default function HomeScreen() {
               {isSelected && <Text style={styles.checkMark}>✓</Text>}
             </View>
           )}
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.recipeTitle}>{item.recipeTitle}</Text>
-              {item.rating != null && <Stars rating={item.rating} size={12} />}
+          <View style={styles.cardRow}>
+            {item.photos.length > 0 && (
+              <Image
+                source={{ uri: item.photos[0].cloudUrl ?? item.photos[0].localPath }}
+                style={styles.thumbnail}
+              />
+            )}
+            <View style={styles.cardContent}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.recipeTitle} numberOfLines={1}>
+                  {item.recipeTitle}
+                </Text>
+                {item.rating != null && <Stars rating={item.rating} size={12} />}
+              </View>
+              <View style={styles.cardUser}>
+                <Avatar name={userName} size={22} />
+                <Text style={styles.userName}>{userName}</Text>
+              </View>
+              {item.memo ? (
+                <Text style={styles.memo} numberOfLines={1}>
+                  &quot;{item.memo}&quot;
+                </Text>
+              ) : null}
             </View>
-            <View style={styles.cardUser}>
-              <Avatar name={userName} size={22} />
-              <Text style={styles.userName}>{userName}</Text>
-            </View>
-            {item.memo ? (
-              <Text style={styles.memo} numberOfLines={1}>
-                &quot;{item.memo}&quot;
-              </Text>
-            ) : null}
           </View>
-        </Pressable>
+        </PressableScale>
       </View>
     );
   };
@@ -184,13 +206,43 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <FlatList
-        data={entries}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={[styles.list, selectMode && styles.listWithActionBar]}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <Loading message="調理記録を読み込んでいます" />
+      ) : (
+        <FlatList
+          data={entries}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={[
+            styles.list,
+            selectMode && styles.listWithActionBar,
+            entries.length === 0 && styles.listEmpty,
+          ]}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            !selectMode && monthlyStats.count > 0 ? (
+              <MonthlyStats stats={monthlyStats} monthLabel={monthLabel} />
+            ) : null
+          }
+          ListEmptyComponent={
+            <EmptyState
+              icon={filter === 'all' ? '🍳' : '🗓'}
+              title={
+                filter === 'all'
+                  ? 'まだ調理記録がありません'
+                  : `${FILTER_LABELS[filter]}の記録がありません`
+              }
+              message={
+                filter === 'all'
+                  ? '料理をつくったら「＋」から記録しましょう。家族の記録もここに並びます。'
+                  : '別の期間を選ぶか、新しく記録を追加してみましょう。'
+              }
+              actionLabel={filter === 'all' ? '記録を追加' : undefined}
+              onAction={filter === 'all' ? () => router.push('/(tabs)/add') : undefined}
+            />
+          }
+        />
+      )}
 
       {selectMode ? (
         <View style={styles.actionBar}>
@@ -212,9 +264,14 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       ) : (
-        <Pressable style={styles.fab} onPress={() => router.push('/(tabs)/add')}>
+        <PressableScale
+          style={styles.fab}
+          containerStyle={styles.fabContainer}
+          scaleTo={0.9}
+          onPress={() => router.push('/(tabs)/add')}
+        >
           <Text style={styles.fabText}>＋</Text>
-        </Pressable>
+        </PressableScale>
       )}
     </View>
   );
@@ -269,6 +326,9 @@ const styles = StyleSheet.create({
   listWithActionBar: {
     paddingBottom: 104,
   },
+  listEmpty: {
+    flexGrow: 1,
+  },
   dateHeader: {
     paddingHorizontal: 20,
     paddingTop: 10,
@@ -290,7 +350,21 @@ const styles = StyleSheet.create({
     borderColor: Colors.gold,
     borderWidth: 2,
   },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  thumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: '#1A1108',
+  },
   cardContent: {
+    flex: 1,
     gap: 4,
   },
   checkBadge: {
@@ -413,10 +487,12 @@ const styles = StyleSheet.create({
   actionBtnTextDisabled: {
     color: Colors.muted,
   },
-  fab: {
+  fabContainer: {
     position: 'absolute',
     bottom: 16,
     right: 16,
+  },
+  fab: {
     width: 48,
     height: 48,
     borderRadius: 24,
