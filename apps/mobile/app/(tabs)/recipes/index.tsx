@@ -17,6 +17,9 @@ import {
   View,
 } from 'react-native';
 
+import { EmptyState } from '../../../src/components/EmptyState';
+import { Loading } from '../../../src/components/Loading';
+import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
 import { deleteRecipe, getRecipeList } from '../../../src/services/recipe.service';
@@ -39,6 +42,7 @@ function getEmoji(title: string): string {
 export default function RecipeListScreen() {
   const router = useRouter();
   const [recipes, setRecipes] = useState<RecipeListItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [activeTagFilter, setActiveTagFilter] = useState('すべて');
   const [selectMode, setSelectMode] = useState(false);
@@ -46,6 +50,7 @@ export default function RecipeListScreen() {
 
   const loadRecipes = useCallback(async () => {
     setRecipes(await getRecipeList());
+    setLoading(false);
   }, []);
 
   useFocusEffect(
@@ -124,7 +129,8 @@ export default function RecipeListScreen() {
     const isSelected = selectedIds.has(item.id);
 
     return (
-      <Pressable
+      <PressableScale
+        containerStyle={styles.cardOuter}
         style={[
           styles.card,
           hasIngredientHit && !selectMode && styles.cardHighlight,
@@ -165,7 +171,7 @@ export default function RecipeListScreen() {
             </View>
           )}
         </View>
-      </Pressable>
+      </PressableScale>
     );
   };
 
@@ -235,15 +241,40 @@ export default function RecipeListScreen() {
         </>
       )}
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={renderRecipeCard}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={[styles.grid, selectMode && styles.gridWithActionBar]}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <Loading message="レシピを読み込んでいます" />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRecipeCard}
+          numColumns={2}
+          columnWrapperStyle={filtered.length > 0 ? styles.row : undefined}
+          contentContainerStyle={[
+            styles.grid,
+            selectMode && styles.gridWithActionBar,
+            filtered.length === 0 && styles.gridEmpty,
+          ]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            recipes.length === 0 ? (
+              <EmptyState
+                icon="📖"
+                title="まだレシピがありません"
+                message="URL・写真・手動入力でレシピを追加すると、ここに蔵書として並びます。"
+                actionLabel="レシピを追加"
+                onAction={() => router.push('/(tabs)/add')}
+              />
+            ) : (
+              <EmptyState
+                icon="🔍"
+                title="条件に合うレシピが見つかりません"
+                message="検索キーワードやフィルターを変えてお試しください。"
+              />
+            )
+          }
+        />
+      )}
 
       {/* ── 選択モード アクションバー ── */}
       {selectMode && (
@@ -332,15 +363,18 @@ const styles = StyleSheet.create({
   },
   searchHintHighlight: { color: Colors.goldDim },
   grid: { padding: 16 },
+  gridEmpty: { flexGrow: 1, padding: 0 },
   row: { gap: 10 },
-  card: {
+  cardOuter: {
     flex: 1,
+    marginBottom: 10,
+  },
+  card: {
     backgroundColor: Colors.bgCard,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
-    marginBottom: 10,
   },
   cardHighlight: { borderColor: Colors.goldDim },
   cardImage: {
