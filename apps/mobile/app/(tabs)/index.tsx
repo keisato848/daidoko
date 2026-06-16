@@ -3,7 +3,7 @@
  * Shows recent cooking logs with filter tabs
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Trash2, X } from 'lucide-react-native';
+import { CalendarDays, LayoutGrid, Trash2, X } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -202,7 +202,23 @@ export default function HomeScreen() {
               </Pressable>
             ))}
           </View>
-          <Text style={styles.wordmark}>DAIDOKO</Text>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => router.push('/calendar')}
+              hitSlop={10}
+              accessibilityLabel="カレンダー"
+            >
+              <CalendarDays size={19} color={Colors.goldDim} />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/gallery')}
+              hitSlop={10}
+              accessibilityLabel="ギャラリー"
+            >
+              <LayoutGrid size={19} color={Colors.goldDim} />
+            </Pressable>
+            <Text style={styles.wordmark}>DAIDOKO</Text>
+          </View>
         </View>
       )}
 
@@ -293,6 +309,12 @@ const styles = StyleSheet.create({
   tabs: {
     flex: 1,
     flexDirection: 'row',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingBottom: 8,
   },
   tab: {
     paddingHorizontal: 14,
