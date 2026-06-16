@@ -8,6 +8,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
+import { EmptyState } from '../../../src/components/EmptyState';
+import { Loading } from '../../../src/components/Loading';
+import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
 import { Colors } from '../../../src/constants/theme';
@@ -97,7 +100,7 @@ export default function RecipeDetailScreen() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingText}>読み込み中...</Text>
+        <Loading message="レシピを読み込んでいます" />
       </View>
     );
   }
@@ -105,16 +108,13 @@ export default function RecipeDetailScreen() {
   if (!recipe) {
     return (
       <View style={styles.container}>
-        <View style={styles.notFoundContainer}>
-          <Text style={styles.notFoundTitle}>レシピが見つかりません</Text>
-          <Text style={styles.notFoundBody}>削除されたか、参照できないレシピです。</Text>
-          <Pressable
-            style={styles.notFoundButton}
-            onPress={() => router.replace('/(tabs)/recipes')}
-          >
-            <Text style={styles.notFoundButtonText}>レシピ一覧へ戻る</Text>
-          </Pressable>
-        </View>
+        <EmptyState
+          icon="📖"
+          title="レシピが見つかりません"
+          message="削除されたか、参照できないレシピです。"
+          actionLabel="レシピ一覧へ戻る"
+          onAction={() => router.replace('/(tabs)/recipes')}
+        />
       </View>
     );
   }
@@ -236,11 +236,14 @@ export default function RecipeDetailScreen() {
           </View>
         )}
 
-        {tab === 'memo' && (
-          <View style={styles.memoContainer}>
-            <Text style={styles.memoPlaceholder}>メモはまだありません</Text>
-          </View>
-        )}
+        {tab === 'memo' &&
+          (recipe.description ? (
+            <Text style={styles.memoBody}>{recipe.description}</Text>
+          ) : (
+            <View style={styles.memoContainer}>
+              <Text style={styles.memoPlaceholder}>メモはまだありません</Text>
+            </View>
+          ))}
 
         {tab === 'history' && (
           <View>
@@ -278,12 +281,13 @@ export default function RecipeDetailScreen() {
       </ScrollView>
 
       <View style={styles.ctaContainer}>
-        <Pressable
+        <PressableScale
           style={styles.ctaButton}
+          scaleTo={0.97}
           onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
         >
           <Text style={styles.ctaText}>調理開始</Text>
-        </Pressable>
+        </PressableScale>
       </View>
     </View>
   );
@@ -291,44 +295,6 @@ export default function RecipeDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
-  loadingText: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: Colors.paperDim,
-    textAlign: 'center',
-    marginTop: 100,
-  },
-  notFoundContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 12,
-  },
-  notFoundTitle: {
-    fontSize: 20,
-    fontWeight: '500',
-    color: Colors.paper,
-  },
-  notFoundBody: {
-    fontSize: 15,
-    fontWeight: '400',
-    color: Colors.paperDim,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  notFoundButton: {
-    marginTop: 8,
-    backgroundColor: Colors.gold,
-    borderRadius: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
-  notFoundButtonText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: Colors.bg,
-  },
   hero: {
     height: 140,
     backgroundColor: '#1A1108',
@@ -485,6 +451,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     color: Colors.paperDim,
+  },
+  memoBody: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: Colors.paper,
+    lineHeight: 24,
   },
   historyHint: {
     fontSize: 13,
