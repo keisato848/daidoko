@@ -10,6 +10,10 @@ export interface RecipeListItem {
   rating: number | null;
   tags: string[];
   ingredientNames: string[];
+  /** ISO timestamp the recipe was created (for "newest" sort) */
+  createdAt: string;
+  /** Number of cooking logs recorded for this recipe (for "most cooked" sort) */
+  cookCount: number;
 }
 
 export interface RecipeDetail {

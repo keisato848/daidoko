@@ -180,7 +180,8 @@ export function getMockRecipeList(): RecipeListItem[] {
         ? mockIngredients.filter((i) => i.revisionId === recipe.currentRevId).map((i) => i.name)
         : [];
 
-      const logs = seedCookingLogs.filter((l) => l.recipeId === recipe.id && l.rating != null);
+      const recipeLogs = seedCookingLogs.filter((l) => l.recipeId === recipe.id);
+      const logs = recipeLogs.filter((l) => l.rating != null);
       const avgRating =
         logs.length > 0
           ? Math.round(logs.reduce((sum, l) => sum + (l.rating ?? 0), 0) / logs.length)
@@ -193,6 +194,8 @@ export function getMockRecipeList(): RecipeListItem[] {
         rating: avgRating,
         tags,
         ingredientNames: ings,
+        createdAt: recipe.createdAt,
+        cookCount: recipeLogs.length,
       };
     });
 }
