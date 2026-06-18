@@ -43,6 +43,7 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       id: schema.recipes.id,
       title: schema.recipes.title,
       currentRevId: schema.recipes.currentRevId,
+      createdAt: schema.recipes.createdAt,
     })
     .from(schema.recipes)
     .where(eq(schema.recipes.status, 'active'));
@@ -94,6 +95,8 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       rating: avgRating,
       tags: tagRows.map((t) => t.name ?? '').filter(Boolean),
       ingredientNames,
+      createdAt: recipe.createdAt,
+      cookCount: ratingRows.length,
     });
   }
 

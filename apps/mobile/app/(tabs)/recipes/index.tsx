@@ -4,7 +4,7 @@
  * Long-press enables multi-select mode with bulk delete action.
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Search, Trash2, X } from 'lucide-react-native';
+import { ArrowUpDown, Check, Search, Trash2, X } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 
+import { BottomSheet } from '../../../src/components/BottomSheet';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
@@ -24,6 +25,13 @@ import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
 import { deleteRecipe, getRecipeList } from '../../../src/services/recipe.service';
 import type { RecipeListItem } from '../../../src/services/types';
+import {
+  DEFAULT_RECIPE_SORT,
+  RECIPE_SORT_OPTIONS,
+  recipeSortLabel,
+  sortRecipes,
+  type RecipeSortKey,
+} from '../../../src/utils/recipeSort';
 
 const TAG_FILTERS = ['すべて', '肉', '魚', '野菜', '汁物', 'ご飯', '洋食'];
 
@@ -45,6 +53,8 @@ export default function RecipeListScreen() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [activeTagFilter, setActiveTagFilter] = useState('すべて');
+  const [sortKey, setSortKey] = useState<RecipeSortKey>(DEFAULT_RECIPE_SORT);
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -93,8 +103,8 @@ export default function RecipeListScreen() {
       );
     }
 
-    return result;
-  }, [recipes, query, activeTagFilter]);
+    return sortRecipes(result, sortKey);
+  }, [recipes, query, activeTagFilter, sortKey]);
 
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;
@@ -202,6 +212,14 @@ export default function RecipeListScreen() {
                 placeholderTextColor={Colors.muted}
               />
             </View>
+            <Pressable
+              style={styles.sortButton}
+              onPress={() => setSortSheetOpen(true)}
+              accessibilityLabel="並び替え"
+            >
+              <ArrowUpDown size={14} color={Colors.gold} />
+              <Text style={styles.sortButtonText}>{recipeSortLabel(sortKey)}</Text>
+            </Pressable>
           </View>
 
           <View style={styles.filterContainer}>
@@ -298,6 +316,27 @@ export default function RecipeListScreen() {
           </Pressable>
         </View>
       )}
+
+      <BottomSheet visible={sortSheetOpen} onClose={() => setSortSheetOpen(false)} title="並び替え">
+        {RECIPE_SORT_OPTIONS.map((option) => {
+          const active = option.key === sortKey;
+          return (
+            <Pressable
+              key={option.key}
+              style={styles.sortOption}
+              onPress={() => {
+                setSortKey(option.key);
+                setSortSheetOpen(false);
+              }}
+            >
+              <Text style={[styles.sortOptionText, active && styles.sortOptionTextActive]}>
+                {option.label}
+              </Text>
+              {active && <Check size={18} color={Colors.gold} />}
+            </Pressable>
+          );
+        })}
+      </BottomSheet>
     </View>
   );
 }
@@ -305,6 +344,9 @@ export default function RecipeListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg, paddingTop: 54 },
   searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: 10,
@@ -312,6 +354,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -321,6 +364,39 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgCard,
+  },
+  sortButtonText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: Colors.gold,
+  },
+  sortOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  sortOptionText: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: Colors.paperDim,
+  },
+  sortOptionTextActive: {
+    color: Colors.gold,
+    fontWeight: '500',
   },
   searchInput: {
     flex: 1,

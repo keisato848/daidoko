@@ -3,7 +3,7 @@
  * Hero image, meta info, tabs (ingredients/steps/memo/history), cooking start CTA
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, MoreVertical } from 'lucide-react-native';
+import { ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -282,6 +282,13 @@ export default function RecipeDetailScreen() {
 
       <View style={styles.ctaContainer}>
         <PressableScale
+          style={styles.shopButton}
+          scaleTo={0.97}
+          onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/shop`)}
+        >
+          <ShoppingCart size={18} color={Colors.gold} />
+        </PressableScale>
+        <PressableScale
           style={styles.ctaButton}
           scaleTo={0.97}
           onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
@@ -501,14 +508,27 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   ctaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     backgroundColor: Colors.bg,
   },
+  shopButton: {
+    width: 52,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.bgCard,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   ctaButton: {
-    width: '100%',
+    flex: 1,
     paddingVertical: 14,
     backgroundColor: Colors.gold,
     borderRadius: 8,
