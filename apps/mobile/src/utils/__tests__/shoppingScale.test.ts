@@ -49,4 +49,13 @@ describe('scaleAmount', () => {
   it('最初の数値のみスケールする', () => {
     expect(scaleAmount('2〜3本', 2)).toBe('4〜3本');
   });
+
+  it('全角数字をスケールする（日本語IME入力対応）', () => {
+    expect(scaleAmount('２００ｇ', 1.5)).toBe('300ｇ');
+    expect(scaleAmount('大さじ２', 2)).toBe('大さじ4');
+  });
+
+  it('全角の小数もスケールする', () => {
+    expect(scaleAmount('１．５カップ', 2)).toBe('3カップ');
+  });
 });
