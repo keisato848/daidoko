@@ -13,7 +13,7 @@ const config = getDefaultConfig(projectRoot);
 // On EAS Build, packages are installed in apps/mobile/node_modules only,
 // so monorepoNodeModules does not exist — skip it to avoid Metro resolution errors.
 if (fs.existsSync(monorepoNodeModules)) {
-  config.watchFolders = [monorepoRoot];
+  config.watchFolders = [...(config.watchFolders ?? []), monorepoRoot];
   config.resolver.nodeModulesPaths = [
     path.resolve(projectRoot, 'node_modules'),
     monorepoNodeModules,
