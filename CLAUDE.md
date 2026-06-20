@@ -37,7 +37,7 @@
 ```
 daidoko/
 ├── apps/
-│   ├── mobile/          # Expo SDK 51 + Expo Router v3
+│   ├── mobile/          # Expo SDK 54 + Expo Router v6
 │   └── server/          # Hono + Node.js 20 + PostgreSQL 16
 └── packages/
     └── shared/          # 共通型・Zod スキーマ・定数
@@ -49,8 +49,8 @@ daidoko/
 
 | 役割             | ライブラリ                          |
 | ---------------- | ----------------------------------- |
-| フレームワーク   | Expo SDK 51                         |
-| ナビゲーション   | Expo Router v3（ファイルベース）    |
+| フレームワーク   | Expo SDK 54                         |
+| ナビゲーション   | Expo Router v6（ファイルベース）    |
 | ローカル DB      | expo-sqlite + Drizzle ORM           |
 | サーバー状態     | TanStack Query v5                   |
 | クライアント状態 | Zustand                             |
