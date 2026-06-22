@@ -24,7 +24,7 @@ export const expoImagePickerPhotoCaptureAdapter: PhotoCaptureAdapter = {
     await ensureCameraPermission();
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: false,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 1,
     });
     return result.canceled ? null : toCapturedPhoto(result.assets[0]);
@@ -35,7 +35,7 @@ export const expoImagePickerPhotoCaptureAdapter: PhotoCaptureAdapter = {
     // permission.
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: false,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 1,
     });
     return result.canceled ? null : toCapturedPhoto(result.assets[0]);

@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.daidoko.app",
-      "versionCode": 10007,
+      "versionCode": 10008,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"

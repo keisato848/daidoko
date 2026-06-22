@@ -2,6 +2,7 @@
  * S15: Settings hub
  * Account, family, data management, and app info sections
  */
+import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
@@ -31,7 +32,7 @@ interface SettingSection {
   items: SettingItem[];
 }
 
-const APP_VERSION_LABEL = 'v1.0.0';
+const APP_VERSION_LABEL = `v${Constants.expoConfig?.version ?? '1.1.0'}`;
 const FUTURE_STATUS_LABEL = '今後追加予定';
 
 export default function SettingsScreen() {
