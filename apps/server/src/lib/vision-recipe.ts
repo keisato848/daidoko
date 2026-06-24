@@ -96,6 +96,15 @@ const GEMINI_RESPONSE_SCHEMA = {
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const REQUEST_TIMEOUT_MS = 30_000;
+// Gemini Flash returns transient 503 (high demand) / 429 (rate) fairly often;
+// these are retryable. Back off between attempts.
+const MAX_ATTEMPTS = 4;
+const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
+const BACKOFF_MS = [0, 1_500, 4_000, 8_000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /** Google Gemini (Flash) implementation via the REST generateContent API. */
 export class GeminiVisionRecipeProvider implements VisionRecipeProvider {
@@ -134,41 +143,52 @@ export class GeminiVisionRecipeProvider implements VisionRecipeProvider {
       },
     };
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    let res: Response;
-    try {
-      res = await fetch(`${GEMINI_ENDPOINT}/${this.model}:generateContent?key=${this.apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-    } catch (err) {
-      throw new VisionRequestError(
-        err instanceof Error ? `Gemini request failed: ${err.message}` : 'Gemini request failed',
-      );
-    } finally {
-      clearTimeout(timer);
+    const url = `${GEMINI_ENDPOINT}/${this.model}:generateContent?key=${this.apiKey}`;
+    let lastError = '';
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      if (attempt > 0) await sleep(BACKOFF_MS[attempt] ?? 8_000);
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        // Network/timeout errors are transient — retry.
+        lastError = err instanceof Error ? err.message : 'request failed';
+        continue;
+      } finally {
+        clearTimeout(timer);
+      }
+
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        lastError = `Gemini responded ${res.status}: ${detail.slice(0, 200)}`;
+        if (RETRYABLE_STATUS.has(res.status)) continue;
+        throw new VisionRequestError(lastError);
+      }
+
+      const json = (await res.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        throw new VisionRequestError('Gemini returned no content');
+      }
+
+      try {
+        return JSON.parse(text) as VisionRecipeRaw;
+      } catch {
+        throw new VisionRequestError('Gemini returned non-JSON content');
+      }
     }
 
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      throw new VisionRequestError(`Gemini responded ${res.status}: ${detail.slice(0, 300)}`);
-    }
-
-    const json = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
-    };
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      throw new VisionRequestError('Gemini returned no content');
-    }
-
-    try {
-      return JSON.parse(text) as VisionRecipeRaw;
-    } catch {
-      throw new VisionRequestError('Gemini returned non-JSON content');
-    }
+    throw new VisionRequestError(`Gemini unavailable after ${MAX_ATTEMPTS} attempts: ${lastError}`);
   }
 }
