@@ -108,7 +108,7 @@ export class GeminiVisionRecipeProvider implements VisionRecipeProvider {
       throw new VisionConfigError('GEMINI_API_KEY is not configured');
     }
     this.apiKey = apiKey;
-    this.model = opts?.model ?? process.env['GEMINI_MODEL'] ?? 'gemini-2.5-flash';
+    this.model = opts?.model?.trim() || process.env['GEMINI_MODEL']?.trim() || 'gemini-2.5-flash';
   }
 
   async infer(input: VisionRecipeInput): Promise<VisionRecipeRaw> {

@@ -8,6 +8,7 @@ name: Vision Recipe PoC
 # path (relative to the repo root) and the free-text context/notes.
 
 on:
+  # workflow_dispatch only works once this file is on the default branch.
   workflow_dispatch:
     inputs:
       imagePath:
@@ -22,6 +23,15 @@ on:
         description: 'Gemini model id'
         required: false
         default: 'gemini-2.5-flash'
+  # Path-scoped push trigger so the PoC can be run from the feature branch
+  # (before it reaches the default branch). Only fires when the PoC files change.
+  push:
+    branches: [feat/photo-recipe-vision]
+    paths:
+      - '.github/workflows/vision-poc.yml'
+      - 'apps/server/scripts/vision-poc.ts'
+      - 'apps/server/src/lib/vision-recipe.ts'
+      - 'apps/server/src/agents/photo-infer.agent.ts'
 
 jobs:
   poc:
@@ -45,12 +55,15 @@ jobs:
       - name: Run Vision PoC
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ inputs.model }}
+          GEMINI_MODEL: ${{ inputs.model || 'gemini-2.5-flash' }}
+          INPUT_IMAGE_PATH: ${{ inputs.imagePath }}
+          INPUT_CONTEXT: ${{ inputs.context }}
         run: |
           if [ -z "${GEMINI_API_KEY}" ]; then
             echo "::error::GEMINI_API_KEY secret is not set. Add it under Settings → Secrets and variables → Actions."
             exit 1
           fi
+          IMAGE_PATH="${INPUT_IMAGE_PATH:-apps/mobile/assets/e2e/food-photo-ja.png}"
           pnpm --filter server exec tsx scripts/vision-poc.ts \
-            "${{ github.workspace }}/${{ inputs.imagePath }}" \
-            "${{ inputs.context }}"
+            "${{ github.workspace }}/${IMAGE_PATH}" \
+            "${INPUT_CONTEXT}"
