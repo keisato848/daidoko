@@ -69,6 +69,68 @@ describe('IMG-RECIPE-AGT-01 runRecipePhotoAgent', () => {
   });
 });
 
+describe('IMG-RECIPE-AGT-03 Vision LLM primary path', () => {
+  const visionDraft = {
+    title: '四川風 麻婆豆腐',
+    titleReading: '',
+    description: '',
+    ingredients: [{ groupLabel: '', name: '木綿豆腐', amount: '1丁', note: '' }],
+    steps: [{ body: '豆腐を切る' }],
+    tags: ['中華'],
+  };
+
+  it('uses Vision inference when allowed and returns its draft', async () => {
+    const labelImage = jest.fn(async () => [label('Food', 0.9)]);
+    const result = await runRecipePhotoAgent(
+      { imageUri: 'file:///tmp/mabo.jpg', context: '痺れ強め', allowCloudInference: true },
+      {
+        labelImage,
+        inferRecipeFromVision: async () => ({
+          draft: visionDraft,
+          confidence: 'medium',
+          warnings: ['AI による推論結果です。'],
+        }),
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.data?.draft.title).toBe('四川風 麻婆豆腐');
+    expect(result.data?.confidence).toBe('medium');
+    // Vision succeeded → on-device labeling should not be invoked.
+    expect(labelImage).not.toHaveBeenCalled();
+  });
+
+  it('falls back to on-device labels when Vision inference fails', async () => {
+    const result = await runRecipePhotoAgent(
+      { imageUri: 'file:///tmp/curry.jpg', allowCloudInference: true },
+      {
+        labelImage: async () => [label('Food', 0.9), label('Curry', 0.8)],
+        inferRecipeFromVision: async () => {
+          throw new Error('network down');
+        },
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.data?.draft.title).toBe('写真から推測したカレー');
+    expect(result.data?.warnings.some((w) => w.includes('AI 推論に失敗'))).toBe(true);
+  });
+
+  it('skips Vision when not opted in (allowCloudInference falsy)', async () => {
+    const inferRecipeFromVision = jest.fn();
+    const result = await runRecipePhotoAgent(
+      { imageUri: 'file:///tmp/curry.jpg' },
+      {
+        labelImage: async () => [label('Food', 0.9), label('Curry', 0.8)],
+        inferRecipeFromVision,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(inferRecipeFromVision).not.toHaveBeenCalled();
+  });
+});
+
 describe('IMG-RECIPE-AGT-02 runRecipePhotoAgent errors', () => {
   it('returns PHOTO_RECIPE_FAILED when the client label provider is missing', async () => {
     const result = await runRecipePhotoAgent({ imageUri: 'file:///tmp/curry.jpg' });

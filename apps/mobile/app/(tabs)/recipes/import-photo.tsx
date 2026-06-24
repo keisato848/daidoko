@@ -7,12 +7,14 @@ import { Camera, Image as ImageIcon, PenLine, RotateCcw, Sparkles, X } from 'luc
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -28,6 +30,11 @@ import {
   isClientImageLabelingAvailable,
 } from '../../../src/services/client-image-label.provider';
 import { createClientOcrRecognizer } from '../../../src/services/client-ocr.provider';
+import {
+  hasCloudInferenceConsent,
+  setCloudInferenceConsent,
+} from '../../../src/services/app-meta.service';
+import { inferRecipeFromVision } from '../../../src/services/vision-recipe.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import { preprocessImageForOcr } from '../../../src/services/image-preprocess.service';
@@ -59,6 +66,8 @@ export default function ImportPhotoScreen() {
   const [photoResult, setPhotoResult] = useState<RecipePhotoAgentOutput | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [cloudConsent, setCloudConsent] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -77,6 +86,14 @@ export default function ImportPhotoScreen() {
         if (mounted) setProviderReady(false);
       });
 
+    hasCloudInferenceConsent()
+      .then((granted) => {
+        if (mounted) setCloudConsent(granted);
+      })
+      .catch(() => {
+        if (mounted) setCloudConsent(false);
+      });
+
     return () => {
       mounted = false;
     };
@@ -85,6 +102,28 @@ export default function ImportPhotoScreen() {
   const handleManual = () => {
     router.replace('/recipes/new');
   };
+
+  // Returns whether cloud Vision inference is permitted, prompting for opt-in
+  // consent the first time (the photo is sent to the analysis server + AI).
+  const ensureCloudConsent = useCallback(async (): Promise<boolean> => {
+    if (cloudConsent) return true;
+    const granted = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'AIで写真からレシピを推論',
+        'この機能は、選んだ料理写真と入力した感想を解析サーバー（および AI 提供元）に送信してレシピを推論します。写真は推論のためだけに使われ、サーバーには保存されません。\n\n送信に同意しますか？',
+        [
+          { text: 'キャンセル', style: 'cancel', onPress: () => resolve(false) },
+          { text: '同意して続ける', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      );
+    });
+    if (granted) {
+      setCloudConsent(true);
+      await setCloudInferenceConsent(true).catch(() => undefined);
+    }
+    return granted;
+  }, [cloudConsent]);
 
   const preprocessForAgent = useCallback(async (imageUri: string) => {
     const processed = await preprocessImageForOcr(imageUri, expoImageManipulatorPreprocessAdapter);
@@ -95,16 +134,24 @@ export default function ImportPhotoScreen() {
   }, []);
 
   const inferPhoto = useCallback(
-    async (photo: CapturedPhoto, options: { preprocessImage?: boolean } = {}) => {
+    async (
+      photo: CapturedPhoto,
+      options: { preprocessImage?: boolean; allowCloudInference?: boolean } = {},
+    ) => {
       setCapturedPhoto(photo);
       const shouldPreprocess = options.preprocessImage ?? true;
 
       const result = await runRecipePhotoAgent(
-        { imageUri: photo.localPath },
+        {
+          imageUri: photo.localPath,
+          ...(notes.trim() && { context: notes.trim() }),
+          ...(options.allowCloudInference && { allowCloudInference: true }),
+        },
         {
           preprocessImage: shouldPreprocess ? preprocessForAgent : undefined,
           labelImage: createClientImageLabeler(),
           recognizeText: createClientOcrRecognizer(),
+          inferRecipeFromVision,
         },
       );
 
@@ -117,18 +164,23 @@ export default function ImportPhotoScreen() {
       setPhotoResult(result.data);
       setPhase('preview');
     },
-    [preprocessForAgent],
+    [notes, preprocessForAgent],
   );
 
   const handleRead = useCallback(
     async (source: PhotoCaptureSource) => {
       setErrorMsg(null);
+
+      // Cloud Vision inference is the primary path; require opt-in consent first.
+      const allowCloud = await ensureCloudConsent();
+      if (!allowCloud) return; // user declined — stay on the select screen
+
       setPhase('processing');
       setPhotoResult(null);
 
       try {
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-        await inferPhoto(photo);
+        await inferPhoto(photo, { allowCloudInference: true });
       } catch (error) {
         if (error instanceof PhotoCaptureCancelledError) {
           setPhase('select');
@@ -138,7 +190,7 @@ export default function ImportPhotoScreen() {
         setPhase('select');
       }
     },
-    [inferPhoto],
+    [ensureCloudConsent, inferPhoto],
   );
 
   const handleSave = useCallback(
@@ -201,35 +253,47 @@ export default function ImportPhotoScreen() {
 
         {isAndroid ? (
           <>
-            <Text style={styles.title}>写真から下書き</Text>
+            <Text style={styles.title}>写真からレシピを推論</Text>
             <Text style={styles.description}>
-              写っている料理・食材から、確認前提のレシピ案を作成します。
+              料理の写真から、AI が材料・分量・手順を推論してレシピ下書きを作成します。
+              お店で食べた料理の感想やお店の名前を添えると、より近い再現になります。
             </Text>
 
             {capturedPhoto && (
               <Image source={{ uri: capturedPhoto.localPath }} style={styles.previewImage} />
             )}
 
+            {phase !== 'processing' && (
+              <TextInput
+                style={styles.notesInput}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="感想・お店の名前など（任意）例: ○○屋の麻婆豆腐。痺れ強め"
+                placeholderTextColor={Colors.muted}
+                multiline
+                maxLength={1000}
+              />
+            )}
+
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
             {!providerReady && (
               <Text style={styles.noticeText}>
-                このビルドでは Android 画像推測 provider を初期化できませんでした
+                オフライン時の端末内推測は利用できません（AI 推論にはインターネット接続が必要です）
               </Text>
             )}
 
             {phase === 'processing' ? (
               <View style={styles.processingBox}>
                 <ActivityIndicator size="large" color={Colors.gold} />
-                <Text style={styles.processingText}>端末内で推測しています...</Text>
+                <Text style={styles.processingText}>AI が写真からレシピを推論しています...</Text>
               </View>
             ) : (
               <View style={styles.actionGrid}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="カメラで撮影"
-                  style={[styles.primaryButton, !providerReady && styles.buttonDisabled]}
+                  style={styles.primaryButton}
                   onPress={() => handleRead('camera')}
-                  disabled={!providerReady}
                 >
                   <Camera size={18} color={Colors.bg} />
                   <Text style={styles.primaryButtonText}>カメラで撮影</Text>
@@ -237,9 +301,8 @@ export default function ImportPhotoScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="ギャラリーから選ぶ"
-                  style={[styles.secondaryButton, !providerReady && styles.buttonDisabled]}
+                  style={styles.secondaryButton}
                   onPress={() => handleRead('gallery')}
-                  disabled={!providerReady}
                 >
                   <ImageIcon size={18} color={Colors.gold} />
                   <Text style={styles.secondaryButtonText}>ギャラリーから選ぶ</Text>
@@ -338,6 +401,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: '#130E08',
+  },
+  notesInput: {
+    width: '100%',
+    minHeight: 64,
+    maxHeight: 140,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: '#130E08',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: Colors.paper,
+    textAlignVertical: 'top',
   },
   errorText: {
     fontSize: 13,

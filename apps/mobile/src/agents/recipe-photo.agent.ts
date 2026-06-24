@@ -11,10 +11,20 @@ import {
 import type { ClientImageLabel } from '../services/client-image-label.provider';
 import { hasEnoughOcrText, parseOcrText, type OcrRecognitionResult } from '../services/ocr.service';
 import type { ParseConfidence, ParsedRecipeText } from '../utils/recipeTextParser';
-import { recipeFormSchema } from '../validation/recipe.schema';
+import { recipeFormSchema, type RecipeFormData } from '../validation/recipe.schema';
 
 export interface RecipePhotoAgentInput {
   imageUri: string;
+  /** Optional free-text notes (taste, restaurant, etc.) for Vision inference. */
+  context?: string;
+  /** Whether cloud Vision inference is permitted (user opt-in). */
+  allowCloudInference?: boolean;
+}
+
+export interface VisionInferenceData {
+  draft: RecipeFormData;
+  confidence: PhotoRecipeConfidence;
+  warnings: string[];
 }
 
 export interface RecipePhotoPreprocessResult {
@@ -36,6 +46,11 @@ export interface RecipePhotoAgentDependencies {
   inferRecipe?: (labels: ClientImageLabel[]) => RecipePhotoInferenceResult;
   recognizeText?: (imageUri: string) => Promise<OcrRecognitionResult>;
   parseText?: (rawText: string) => Promise<ParsedRecipeText & { normalizedText: string }>;
+  /** Cloud Vision LLM inference (primary path when allowed). Throws on failure. */
+  inferRecipeFromVision?: (args: {
+    imageUri: string;
+    context?: string;
+  }) => Promise<VisionInferenceData>;
 }
 
 function errorResult(message: string): AgentResult<RecipePhotoAgentOutput> {
@@ -73,16 +88,59 @@ export async function runRecipePhotoAgent(
   dependencies: RecipePhotoAgentDependencies = {},
 ): Promise<AgentResult<RecipePhotoAgentOutput>> {
   if (!input.imageUri.trim()) return errorResult('画像が選択されていません');
-  if (!dependencies.labelImage) return errorResult('画像ラベル provider が設定されていません');
+
+  const preprocessImage = dependencies.preprocessImage ?? defaultPreprocessImage;
+  const visionWarnings: string[] = [];
+
+  // 1. Cloud Vision LLM inference (primary path, when the user has opted in).
+  //    On any failure we fall through to the on-device heuristic / OCR path.
+  if (input.allowCloudInference && dependencies.inferRecipeFromVision) {
+    let visionImageUri = input.imageUri;
+    try {
+      const processed = await preprocessImage(input.imageUri);
+      visionImageUri = processed.imageUri;
+    } catch {
+      // resize failed — send the original image instead
+    }
+    try {
+      const vision = await dependencies.inferRecipeFromVision({
+        imageUri: visionImageUri,
+        ...(input.context !== undefined && { context: input.context }),
+      });
+      return {
+        ok: true,
+        data: {
+          draft: vision.draft,
+          confidence: vision.confidence,
+          labels: [],
+          labelSummary: 'AI 推論',
+          warnings: vision.warnings,
+          imageUri: input.imageUri,
+          ...(visionImageUri !== input.imageUri && { processedImageUri: visionImageUri }),
+          evidenceSummary: 'AI による推論',
+        },
+      };
+    } catch (error) {
+      visionWarnings.push(
+        error instanceof Error
+          ? `AI 推論に失敗したため端末内推測に切り替えました: ${error.message}`
+          : 'AI 推論に失敗したため端末内推測に切り替えました',
+      );
+    }
+  }
+
+  // 2/3. On-device fallback: image-label heuristic (+ OCR text if present).
+  if (!dependencies.labelImage) {
+    return errorResult(visionWarnings[0] ?? '画像ラベル provider が設定されていません');
+  }
 
   try {
-    const preprocessImage = dependencies.preprocessImage ?? defaultPreprocessImage;
     const processed = await preprocessImage(input.imageUri);
     const labels = await dependencies.labelImage(processed.imageUri);
     const labelInferred = dependencies.inferRecipe
       ? dependencies.inferRecipe(labels)
       : inferRecipeFromPhotoLabels(labels);
-    const warnings = [...(processed.warnings ?? [])];
+    const warnings = [...visionWarnings, ...(processed.warnings ?? [])];
 
     if (dependencies.recognizeText) {
       try {
