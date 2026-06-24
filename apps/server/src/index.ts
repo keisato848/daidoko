@@ -9,6 +9,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
 import importRouter from './routes/import.js';
+import inferRouter from './routes/infer.js';
 
 export const app = new Hono();
 
@@ -30,6 +31,7 @@ app.get('/', (c) => c.json({ name: 'だいどこ API', version: '1.0.0', status:
 app.get('/health', (c) => c.json({ status: 'ok', ts: new Date().toISOString() }));
 
 app.route('/api/v1/import', importRouter);
+app.route('/api/v1/infer', inferRouter);
 
 // ─── 404 / Error ─────────────────────────────────────────────────────────────
 
