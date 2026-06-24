@@ -1,0 +1,56 @@
+name: Vision Recipe PoC
+
+# Manual proof-of-concept: run the dish-photo → recipe inference against a real
+# Gemini Flash call, using the GEMINI_API_KEY repository secret. The secret is
+# injected only at runtime and masked in logs — its value is never exposed.
+#
+# Trigger from the Actions tab ("Run workflow"). Optionally override the image
+# path (relative to the repo root) and the free-text context/notes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      imagePath:
+        description: 'Image path (relative to repo root)'
+        required: false
+        default: 'apps/mobile/assets/e2e/food-photo-ja.png'
+      context:
+        description: 'Optional notes (taste, restaurant, etc.)'
+        required: false
+        default: ''
+      model:
+        description: 'Gemini model id'
+        required: false
+        default: 'gemini-2.5-flash'
+
+jobs:
+  poc:
+    name: Run Vision inference PoC
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Vision PoC
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ inputs.model }}
+        run: |
+          if [ -z "${GEMINI_API_KEY}" ]; then
+            echo "::error::GEMINI_API_KEY secret is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          pnpm --filter server exec tsx scripts/vision-poc.ts \
+            "${{ github.workspace }}/${{ inputs.imagePath }}" \
+            "${{ inputs.context }}"
