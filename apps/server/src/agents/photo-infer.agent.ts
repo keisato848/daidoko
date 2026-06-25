@@ -19,6 +19,7 @@ import {
 export type AgentErrorCode =
   | 'AI_API_UNAVAILABLE'
   | 'PHOTO_RECIPE_FAILED'
+  | 'VISION_NOT_A_DISH'
   | 'RATE_LIMITED'
   | 'UNKNOWN';
 
@@ -152,7 +153,7 @@ export async function runPhotoInferAgent(
   }
 
   if (!raw.isDish) {
-    return fail('PHOTO_RECIPE_FAILED', NOT_A_DISH_MESSAGE, false);
+    return fail('VISION_NOT_A_DISH', NOT_A_DISH_MESSAGE, false);
   }
 
   const draft = normalizeDraft(raw);

@@ -82,13 +82,13 @@ describe('POST /api/v1/infer/photo', () => {
   });
 
   describe('エラーケース', () => {
-    it('料理でない画像 → ok:false, PHOTO_RECIPE_FAILED', async () => {
+    it('料理でない画像 → ok:false, VISION_NOT_A_DISH', async () => {
       stubProvider(async () => ({ isDish: false, confidence: 'low' }));
       const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
       expect(res.status).toBe(200);
       const body = (await res.json()) as { ok: boolean; error?: { code: string } };
       expect(body.ok).toBe(false);
-      expect(body.error?.code).toBe('PHOTO_RECIPE_FAILED');
+      expect(body.error?.code).toBe('VISION_NOT_A_DISH');
     });
 
     it('材料/手順が空の推論結果 → ok:false（下書きに変換不可）', async () => {
@@ -115,12 +115,39 @@ describe('POST /api/v1/infer/photo', () => {
   });
 
   describe('レート制限', () => {
-    it('上限超過で RATE_LIMITED', async () => {
+    afterEach(() => {
+      delete process.env['INFER_DAILY_LIMIT'];
+      delete process.env['INFER_GLOBAL_DAILY_LIMIT'];
+    });
+
+    function postFromIp(ip: string) {
+      return app.request('/api/v1/infer/photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': ip },
+        body: JSON.stringify({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' }),
+      });
+    }
+
+    it('per-client 上限超過で RATE_LIMITED', async () => {
+      process.env['INFER_DAILY_LIMIT'] = '3';
       stubProvider(async () => VALID_DISH);
-      // INFER_DAILY_LIMIT default is 20; exhaust it then expect a block.
       let lastBody: { ok: boolean; error?: { code: string } } = { ok: true };
-      for (let i = 0; i < 21; i++) {
-        const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+      for (let i = 0; i < 4; i++) {
+        const res = await postFromIp('10.0.0.1');
+        lastBody = (await res.json()) as { ok: boolean; error?: { code: string } };
+      }
+      expect(lastBody.ok).toBe(false);
+      expect(lastBody.error?.code).toBe('RATE_LIMITED');
+    });
+
+    it('global 上限超過で RATE_LIMITED（別クライアントでも）', async () => {
+      process.env['INFER_DAILY_LIMIT'] = '0'; // disable per-client
+      process.env['INFER_GLOBAL_DAILY_LIMIT'] = '3';
+      stubProvider(async () => VALID_DISH);
+      // Different IPs each time — only the global cap should block.
+      let lastBody: { ok: boolean; error?: { code: string } } = { ok: true };
+      for (let i = 0; i < 4; i++) {
+        const res = await postFromIp(`10.0.0.${i + 1}`);
         lastBody = (await res.json()) as { ok: boolean; error?: { code: string } };
       }
       expect(lastBody.ok).toBe(false);

@@ -121,6 +121,17 @@ export async function runRecipePhotoAgent(
         },
       };
     } catch (error) {
+      // When the model is confident the photo is not a dish, surface a clear
+      // error instead of falling back to a misleading on-device heuristic draft.
+      const kind = (error as { kind?: string } | null)?.kind;
+      if (kind === 'not_a_dish') {
+        return errorResult(
+          error instanceof Error
+            ? error.message
+            : '写真から料理を認識できませんでした。料理がはっきり写った写真でお試しください。',
+        );
+      }
+      // Transient / other failures: degrade gracefully to the on-device path.
       visionWarnings.push(
         error instanceof Error
           ? `AI 推論に失敗したため端末内推測に切り替えました: ${error.message}`

@@ -1,13 +1,22 @@
 /**
  * Best-effort in-memory daily rate limiter for the Vision inference endpoint.
  *
+ * Two independent caps, both configurable via env and both enforced per 24h:
+ *   - INFER_DAILY_LIMIT          per-client (by IP) requests/day   (default 20)
+ *   - INFER_GLOBAL_DAILY_LIMIT   total requests/day across clients (default 200)
+ *
+ * The global cap is the real cost ceiling — it bounds total Gemini calls/day
+ * regardless of how many clients hit the endpoint. Set either to 0 to disable.
+ *
  * Not durable across restarts and not shared across instances — sufficient as a
  * cost guardrail for a single Railway instance. Replace with a shared store if
  * the deployment scales horizontally.
  */
 
-const DEFAULT_DAILY_LIMIT = Number(process.env['INFER_DAILY_LIMIT'] ?? 20);
 const WINDOW_MS = 24 * 60 * 60 * 1000;
+const GLOBAL_KEY = '__global__';
+
+export type RateLimitResult = { allowed: true } | { allowed: false; scope: 'client' | 'global' };
 
 interface Bucket {
   count: number;
@@ -16,19 +25,45 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
-/** Returns true if the request is allowed; increments the client's counter. */
-export function checkRateLimit(clientId: string, now = Date.now()): boolean {
-  const limit = DEFAULT_DAILY_LIMIT;
-  if (limit <= 0) return true; // disabled
+function limitFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
-  const bucket = buckets.get(clientId);
-  if (!bucket || now >= bucket.resetAt) {
-    buckets.set(clientId, { count: 1, resetAt: now + WINDOW_MS });
-    return true;
+// Returns the live bucket for a key, resetting it if the window has elapsed.
+function currentBucket(key: string, now: number): Bucket {
+  const existing = buckets.get(key);
+  if (!existing || now >= existing.resetAt) {
+    const fresh: Bucket = { count: 0, resetAt: now + WINDOW_MS };
+    buckets.set(key, fresh);
+    return fresh;
   }
-  if (bucket.count >= limit) return false;
-  bucket.count += 1;
-  return true;
+  return existing;
+}
+
+/**
+ * Returns whether the request is allowed and, if not, which cap was hit.
+ * Increments both the global and per-client counters only when allowed.
+ */
+export function checkRateLimit(clientId: string, now = Date.now()): RateLimitResult {
+  const clientLimit = limitFromEnv('INFER_DAILY_LIMIT', 20);
+  const globalLimit = limitFromEnv('INFER_GLOBAL_DAILY_LIMIT', 200);
+
+  const globalBucket = currentBucket(GLOBAL_KEY, now);
+  if (globalLimit > 0 && globalBucket.count >= globalLimit) {
+    return { allowed: false, scope: 'global' };
+  }
+
+  const clientBucket = currentBucket(`client:${clientId}`, now);
+  if (clientLimit > 0 && clientBucket.count >= clientLimit) {
+    return { allowed: false, scope: 'client' };
+  }
+
+  globalBucket.count += 1;
+  clientBucket.count += 1;
+  return { allowed: true };
 }
 
 /** Test helper: clear all counters. */

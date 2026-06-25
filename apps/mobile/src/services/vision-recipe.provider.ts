@@ -45,13 +45,24 @@ interface ServerAgentResult {
   error?: { code: string; message: string; retryable: boolean };
 }
 
+export type VisionErrorKind = 'not_a_dish' | 'rate_limited' | 'transient' | 'failed';
+
 export class VisionInferenceError extends Error {
   readonly retryable: boolean;
-  constructor(message: string, retryable: boolean) {
+  readonly kind: VisionErrorKind;
+  constructor(message: string, retryable: boolean, kind: VisionErrorKind = 'failed') {
     super(message);
     this.name = 'VisionInferenceError';
     this.retryable = retryable;
+    this.kind = kind;
   }
+}
+
+function kindFromCode(code: string | undefined): VisionErrorKind {
+  if (code === 'VISION_NOT_A_DISH') return 'not_a_dish';
+  if (code === 'RATE_LIMITED') return 'rate_limited';
+  if (code === 'AI_API_UNAVAILABLE') return 'transient';
+  return 'failed';
 }
 
 function toFormData(draft: ServerRecipeDraft): RecipeFormData {
@@ -120,6 +131,7 @@ export async function inferRecipeFromVision(args: {
       throw new VisionInferenceError(
         result.error?.message ?? 'AI 推論に失敗しました',
         result.error?.retryable ?? true,
+        kindFromCode(result.error?.code),
       );
     }
 

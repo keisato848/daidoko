@@ -116,6 +116,27 @@ describe('IMG-RECIPE-AGT-03 Vision LLM primary path', () => {
     expect(result.data?.warnings.some((w) => w.includes('AI 推論に失敗'))).toBe(true);
   });
 
+  it('surfaces a not-a-dish error instead of falling back', async () => {
+    const labelImage = jest.fn(async () => [label('Plant', 0.9)]);
+    const notADish = Object.assign(new Error('写真から料理を認識できませんでした。'), {
+      kind: 'not_a_dish',
+    });
+    const result = await runRecipePhotoAgent(
+      { imageUri: 'file:///tmp/plant.jpg', allowCloudInference: true },
+      {
+        labelImage,
+        inferRecipeFromVision: async () => {
+          throw notADish;
+        },
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toContain('料理を認識できませんでした');
+    // Must NOT fall back to the on-device heuristic for a confident not-a-dish.
+    expect(labelImage).not.toHaveBeenCalled();
+  });
+
   it('skips Vision when not opted in (allowCloudInference falsy)', async () => {
     const inferRecipeFromVision = jest.fn();
     const result = await runRecipePhotoAgent(

@@ -163,6 +163,12 @@ export default function ImportPhotoScreen() {
 
       setPhotoResult(result.data);
       setPhase('preview');
+      // Surface confidence + caveats as a dismissible toast rather than a
+      // cramped header banner over the form.
+      const toast = [CONFIDENCE_LABEL[result.data.confidence], ...result.data.warnings]
+        .filter(Boolean)
+        .join(' / ');
+      setToastMessage(toast);
     },
     [notes, preprocessForAgent],
   );
@@ -210,16 +216,6 @@ export default function ImportPhotoScreen() {
   if (phase === 'preview') {
     return (
       <View style={styles.container}>
-        {photoResult && (
-          <View style={styles.sourceBanner}>
-            <Sparkles size={12} color={Colors.goldDim} />
-            <Text style={styles.sourceName}>
-              {[CONFIDENCE_LABEL[photoResult.confidence], ...photoResult.warnings]
-                .filter(Boolean)
-                .join(' / ')}
-            </Text>
-          </View>
-        )}
         <RecipeForm
           initialValues={photoResult?.draft}
           onSubmit={handleSave}
@@ -230,6 +226,7 @@ export default function ImportPhotoScreen() {
         <Toast
           message={toastMessage ?? ''}
           visible={toastMessage != null}
+          duration={4000}
           onDismiss={() => setToastMessage(null)}
         />
       </View>
@@ -510,20 +507,5 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontSize: 12,
     color: Colors.muted,
-  },
-  sourceBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: '#130E08',
-  },
-  sourceName: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.goldDim,
   },
 });

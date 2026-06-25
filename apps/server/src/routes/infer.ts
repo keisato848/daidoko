@@ -43,10 +43,15 @@ inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
     c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
-  if (!checkRateLimit(clientId)) {
+  const rate = checkRateLimit(clientId);
+  if (!rate.allowed) {
+    const message =
+      rate.scope === 'global'
+        ? '本日の利用上限に達しました。時間をおいてお試しください。'
+        : '本日の利用上限に達しました。';
     return c.json({
       ok: false,
-      error: { code: 'RATE_LIMITED', message: '本日の利用上限に達しました', retryable: false },
+      error: { code: 'RATE_LIMITED', message, retryable: false },
     });
   }
 
