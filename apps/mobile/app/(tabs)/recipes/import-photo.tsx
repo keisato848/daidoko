@@ -44,7 +44,9 @@ import {
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
-import { createRecipe } from '../../../src/services/recipe.service';
+import { createRecipe, createRecipeMemo } from '../../../src/services/recipe.service';
+import { createCookingLog } from '../../../src/services/cooking-log.service';
+import { persistCookingLogPhotos } from '../../../src/services/photo-storage.service';
 import { createPhotoSource } from '../../../src/services/source.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
@@ -206,11 +208,36 @@ export default function ImportPhotoScreen() {
         labelSummary: photoResult.evidenceSummary ?? photoResult.labelSummary,
         capturedAt: capturedPhoto?.takenAt,
       });
-      await createRecipe({ ...data, sourceId });
+      const recipeId = await createRecipe({ ...data, sourceId });
+
+      // Preserve the user's impression as a recipe memo (best-effort).
+      if (notes.trim()) {
+        try {
+          await createRecipeMemo(recipeId, notes.trim());
+        } catch {
+          // non-fatal — the recipe itself is already saved
+        }
+      }
+
+      // Persist the dish photo and attach it as a cooking record so it appears
+      // on the home timeline and as the recipe's hero image (best-effort).
+      if (capturedPhoto) {
+        try {
+          const persisted = await persistCookingLogPhotos([capturedPhoto]);
+          await createCookingLog({
+            recipeId,
+            cookedAt: new Date().toISOString(),
+            photos: persisted,
+          });
+        } catch {
+          // non-fatal — recipe is saved even if the photo could not be stored
+        }
+      }
+
       setToastMessage('レシピを保存しました');
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
-    [capturedPhoto?.takenAt, photoResult, router],
+    [capturedPhoto, notes, photoResult, router],
   );
 
   if (phase === 'preview') {
