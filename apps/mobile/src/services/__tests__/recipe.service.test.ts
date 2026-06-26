@@ -45,6 +45,15 @@ describe('recipe.service (mock/web)', () => {
       expect(item).toHaveProperty('ingredientNames');
     });
 
+    it('each item exposes heroPhotoUri', async () => {
+      const list = await getRecipeList();
+      for (const item of list) {
+        expect(item).toHaveProperty('heroPhotoUri');
+        // web/mock path has no persisted cooking photos
+        expect(item.heroPhotoUri).toBeNull();
+      }
+    });
+
     it('only includes active recipes', async () => {
       const list = await getRecipeList();
       expect(list.length).toBeGreaterThanOrEqual(6);
@@ -63,6 +72,13 @@ describe('recipe.service (mock/web)', () => {
     it('returns null for invalid id', async () => {
       const detail = await getRecipeDetail('nonexistent');
       expect(detail).toBeNull();
+    });
+
+    it('exposes heroPhotoUri (null on web/mock path)', async () => {
+      const detail = await getRecipeDetail('recipe-1');
+      assertDefined(detail);
+      expect(detail).toHaveProperty('heroPhotoUri');
+      expect(detail.heroPhotoUri).toBeNull();
     });
 
     it('includes tags', async () => {

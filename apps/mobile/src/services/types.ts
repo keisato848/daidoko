@@ -14,6 +14,8 @@ export interface RecipeListItem {
   createdAt: string;
   /** Number of cooking logs recorded for this recipe (for "most cooked" sort) */
   cookCount: number;
+  /** Latest cooking photo (cloud or local) shown as the card image, if any */
+  heroPhotoUri: string | null;
 }
 
 export interface RecipeDetail {
@@ -26,6 +28,8 @@ export interface RecipeDetail {
   tags: string[];
   ingredients: IngredientItem[];
   steps: StepItem[];
+  /** Latest cooking photo (cloud or local) shown as the detail header, if any */
+  heroPhotoUri: string | null;
 }
 
 export interface MemoItem {

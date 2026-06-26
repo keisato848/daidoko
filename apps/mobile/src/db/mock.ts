@@ -196,6 +196,7 @@ export function getMockRecipeList(): RecipeListItem[] {
         ingredientNames: ings,
         createdAt: recipe.createdAt,
         cookCount: recipeLogs.length,
+        heroPhotoUri: null,
       };
     });
 }
@@ -239,6 +240,7 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     tags,
     ingredients,
     steps,
+    heroPhotoUri: null,
   };
 }
 

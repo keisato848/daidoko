@@ -3,6 +3,8 @@
  * Handles both native (SQLite) and web (mock) data paths
  */
 import { isNativePlatform } from '../db/client';
+import type { getDb } from '../db/client';
+import type * as DbSchema from '../db/schema';
 import { shouldHideSeedRecipe } from '../db/sampleData';
 import {
   getMockRecipeDetail,
@@ -89,6 +91,8 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       ingredientNames = ings.map((i) => i.name);
     }
 
+    const heroPhotoUri = await getLatestCookingPhotoUri(db, schema, recipe.id);
+
     result.push({
       id: recipe.id,
       title: recipe.title,
@@ -98,10 +102,32 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       ingredientNames,
       createdAt: recipe.createdAt,
       cookCount: ratingRows.length,
+      heroPhotoUri,
     });
   }
 
   return result;
+}
+
+// Latest cooking photo (cloud preferred, else local) for a recipe, or null.
+async function getLatestCookingPhotoUri(
+  db: Awaited<ReturnType<typeof getDb>>,
+  schema: typeof DbSchema,
+  recipeId: string,
+): Promise<string | null> {
+  const { eq, desc } = await import('drizzle-orm');
+  const rows = await db
+    .select({
+      localPath: schema.cookingPhotos.localPath,
+      cloudUrl: schema.cookingPhotos.cloudUrl,
+    })
+    .from(schema.cookingPhotos)
+    .innerJoin(schema.cookingLogs, eq(schema.cookingPhotos.logId, schema.cookingLogs.id))
+    .where(eq(schema.cookingLogs.recipeId, recipeId))
+    .orderBy(desc(schema.cookingPhotos.createdAt))
+    .limit(1);
+  if (rows.length === 0) return null;
+  return rows[0].cloudUrl ?? rows[0].localPath;
 }
 
 export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | null> {
@@ -176,6 +202,8 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
       .orderBy(schema.steps.sortOrder);
   }
 
+  const heroPhotoUri = await getLatestCookingPhotoUri(db, schema, recipeId);
+
   return {
     id: r.id,
     title: r.title,
@@ -186,6 +214,7 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
     tags: tagRows.map((t) => t.name ?? '').filter(Boolean),
     ingredients: ingredientsList,
     steps: stepsList,
+    heroPhotoUri,
   };
 }
 

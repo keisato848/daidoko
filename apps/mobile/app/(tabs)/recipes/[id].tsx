@@ -5,7 +5,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
 import { EmptyState } from '../../../src/components/EmptyState';
@@ -122,7 +122,15 @@ export default function RecipeDetailScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
-        <Text style={styles.heroEmoji}>{getEmoji(recipe.title)}</Text>
+        {recipe.heroPhotoUri ? (
+          <Image
+            source={{ uri: recipe.heroPhotoUri }}
+            style={styles.heroPhoto}
+            resizeMode="cover"
+          />
+        ) : (
+          <Text style={styles.heroEmoji}>{getEmoji(recipe.title)}</Text>
+        )}
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={20} color={Colors.goldDim} />
           <Text style={styles.backText}>戻る</Text>
@@ -311,6 +319,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   heroEmoji: { fontSize: 56 },
+  heroPhoto: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   backButton: {
     position: 'absolute',
     top: 50,
