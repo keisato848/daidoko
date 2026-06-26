@@ -6,6 +6,8 @@ export {
   getRecipeDetail,
   searchRecipes,
   createRecipe,
+  createRecipeMemo,
+  getMemosForRecipe,
   updateRecipe,
   deleteRecipe,
 } from './recipe.service';
@@ -33,6 +35,7 @@ export { searchByFts, updateFtsIndex, removeFtsEntry } from './fts.service';
 export type {
   RecipeListItem,
   RecipeDetail,
+  MemoItem,
   IngredientItem,
   StepItem,
   TimelineEntry,

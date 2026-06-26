@@ -28,6 +28,13 @@ export interface RecipeDetail {
   steps: StepItem[];
 }
 
+export interface MemoItem {
+  id: string;
+  body: string;
+  authorId: string;
+  createdAt: string;
+}
+
 export interface RecipeRevisionSummary {
   id: string;
   recipeId: string;

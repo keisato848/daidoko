@@ -10,7 +10,9 @@ jest.mock('../../db/client', () => ({
 
 import {
   createRecipe,
+  createRecipeMemo,
   deleteRecipe,
+  getMemosForRecipe,
   getRecipeDetail,
   getRecipeList,
   getRecipeRevisions,
@@ -246,6 +248,18 @@ describe('recipe.service (mock/web)', () => {
         ingredientCount: 1,
         stepCount: 1,
       });
+    });
+  });
+
+  describe('recipe memos', () => {
+    it('getMemosForRecipe returns an array (empty on web/mock path)', async () => {
+      const memos = await getMemosForRecipe('recipe-1');
+      expect(Array.isArray(memos)).toBe(true);
+      expect(memos).toHaveLength(0);
+    });
+
+    it('createRecipeMemo ignores blank input', async () => {
+      expect(await createRecipeMemo('recipe-1', '   ')).toBeNull();
     });
   });
 

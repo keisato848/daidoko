@@ -14,6 +14,7 @@ import {
 } from '../db/mock';
 import { generateId } from '../utils/id';
 import type {
+  MemoItem,
   RecipeDetail,
   RecipeListItem,
   RecipeRevisionSummary,
@@ -342,6 +343,54 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
   await updateFtsForRecipe(recipeId, input);
 
   return recipeId;
+}
+
+/** Save a free-text memo (e.g. the user's impression) on a recipe. */
+export async function createRecipeMemo(recipeId: string, body: string): Promise<string | null> {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  if (!isNativePlatform) return null;
+
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const { getCurrentUser } = await import('./user.service');
+  const db = getDb();
+  const id = generateId();
+  const now = nowIso();
+
+  await db.insert(schema.memos).values({
+    id,
+    recipeId,
+    authorId: getCurrentUser().id,
+    body: trimmed,
+    isPrivate: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return id;
+}
+
+/** Free-text memos (newest first) recorded on a recipe. */
+export async function getMemosForRecipe(recipeId: string): Promise<MemoItem[]> {
+  if (!isNativePlatform) return [];
+
+  const { eq, desc } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const rows = await db
+    .select({
+      id: schema.memos.id,
+      body: schema.memos.body,
+      authorId: schema.memos.authorId,
+      createdAt: schema.memos.createdAt,
+    })
+    .from(schema.memos)
+    .where(eq(schema.memos.recipeId, recipeId))
+    .orderBy(desc(schema.memos.createdAt));
+
+  return rows;
 }
 
 export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): Promise<string> {
