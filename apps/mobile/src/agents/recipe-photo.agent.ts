@@ -113,11 +113,11 @@ export async function runRecipePhotoAgent(
           draft: vision.draft,
           confidence: vision.confidence,
           labels: [],
-          labelSummary: 'AI 推論',
+          labelSummary: 'AIでレシピ作成',
           warnings: vision.warnings,
           imageUri: input.imageUri,
           ...(visionImageUri !== input.imageUri && { processedImageUri: visionImageUri }),
-          evidenceSummary: 'AI による推論',
+          evidenceSummary: 'AIで写真から作成',
         },
       };
     } catch (error) {
@@ -134,8 +134,8 @@ export async function runRecipePhotoAgent(
       // Transient / other failures: degrade gracefully to the on-device path.
       visionWarnings.push(
         error instanceof Error
-          ? `AI 推論に失敗したため端末内推測に切り替えました: ${error.message}`
-          : 'AI 推論に失敗したため端末内推測に切り替えました',
+          ? `AIにつながらなかったので、端末内でかんたんに下書きしました: ${error.message}`
+          : 'AIにつながらなかったので、端末内でかんたんに下書きしました',
       );
     }
   }
@@ -213,7 +213,7 @@ export async function runRecipePhotoAgent(
       },
     };
   } catch (error) {
-    return errorResult(error instanceof Error ? error.message : '料理写真の推測に失敗しました');
+    return errorResult(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
   }
 }
 

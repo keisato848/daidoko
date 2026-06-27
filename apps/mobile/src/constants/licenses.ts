@@ -32,7 +32,7 @@ export const LICENSE_ITEMS: LicenseItem[] = [
   },
   {
     packageName: 'expo-image-manipulator',
-    purpose: 'OCR / 写真推測前の画像前処理',
+    purpose: 'OCR / 写真からのレシピ作成前の画像前処理',
     license: 'MIT',
   },
   {

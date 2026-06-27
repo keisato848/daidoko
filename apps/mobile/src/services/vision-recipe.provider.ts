@@ -129,7 +129,7 @@ export async function inferRecipeFromVision(args: {
     const result = (await res.json()) as ServerAgentResult;
     if (!result.ok || !result.data) {
       throw new VisionInferenceError(
-        result.error?.message ?? 'AI 推論に失敗しました',
+        result.error?.message ?? '写真からレシピをつくれませんでした',
         result.error?.retryable ?? true,
         kindFromCode(result.error?.code),
       );
@@ -138,7 +138,7 @@ export async function inferRecipeFromVision(args: {
     return {
       draft: toFormData(result.data),
       confidence: result.data.confidence,
-      warnings: ['AI による推論結果です。分量・手順は必ず確認・調整してください。'],
+      warnings: ['AIがつくったレシピです。分量・手順は必ず確認・調整してください。'],
     };
   } catch (err) {
     if (err instanceof VisionInferenceError) throw err;

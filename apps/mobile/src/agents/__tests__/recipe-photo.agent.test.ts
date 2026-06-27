@@ -35,7 +35,7 @@ describe('IMG-RECIPE-AGT-01 runRecipePhotoAgent', () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result.data?.draft.title).toBe('写真から推測したカレー');
+    expect(result.data?.draft.title).toBe('写真からつくったカレー');
     expect(result.data?.warnings[0]).toContain('写真だけでは');
   });
 
@@ -45,7 +45,7 @@ describe('IMG-RECIPE-AGT-01 runRecipePhotoAgent', () => {
     const result = await AgentBridge.call('A2', { imageUri: 'file:///tmp/curry.jpg' });
 
     expect(result.ok).toBe(true);
-    expect(result.data?.draft.title).toBe('写真から推測したカレー');
+    expect(result.data?.draft.title).toBe('写真からつくったカレー');
   });
 
   it('uses readable text in the image when OCR produces a recipe draft', async () => {
@@ -88,7 +88,7 @@ describe('IMG-RECIPE-AGT-03 Vision LLM primary path', () => {
         inferRecipeFromVision: async () => ({
           draft: visionDraft,
           confidence: 'medium',
-          warnings: ['AI による推論結果です。'],
+          warnings: ['AIがつくったレシピです。'],
         }),
       },
     );
@@ -112,8 +112,8 @@ describe('IMG-RECIPE-AGT-03 Vision LLM primary path', () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result.data?.draft.title).toBe('写真から推測したカレー');
-    expect(result.data?.warnings.some((w) => w.includes('AI 推論に失敗'))).toBe(true);
+    expect(result.data?.draft.title).toBe('写真からつくったカレー');
+    expect(result.data?.warnings.some((w) => w.includes('端末内'))).toBe(true);
   });
 
   it('surfaces a not-a-dish error instead of falling back', async () => {

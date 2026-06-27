@@ -13,7 +13,7 @@ describe('IMG-RECIPE-01 inferRecipeFromPhotoLabels', () => {
       label('Tableware', 0.7),
     ]);
 
-    expect(result.draft.title).toBe('写真から推測したカレー');
+    expect(result.draft.title).toBe('写真からつくったカレー');
     expect(result.confidence).toBe('medium');
     expect(result.draft.ingredients.map((ingredient) => ingredient.name)).toContain(
       'カレー粉またはルー',

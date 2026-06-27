@@ -211,7 +211,7 @@ describe('recipe.service (mock/web)', () => {
         sourceId,
         ingredients: [{ name: '主食材（写真を見て確認）' }],
         steps: [{ body: '写真を確認して調理する' }],
-        tags: ['推測'],
+        tags: ['写真から'],
       });
 
       const revisions = await getRecipeRevisions(id);

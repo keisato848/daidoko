@@ -456,7 +456,7 @@ export function createMockPhotoSource(input: {
     url: null,
     ocrRawText: input.labelSummary ?? null,
     siteName: null,
-    pageTitle: '料理写真から推測',
+    pageTitle: '写真からレシピ',
     thumbnailUrl: null,
     capturedAt: input.capturedAt ?? now,
     createdAt: now,

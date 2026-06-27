@@ -56,9 +56,9 @@ type Phase = 'select' | 'processing' | 'preview';
 const isAndroid = Platform.OS === 'android';
 
 const CONFIDENCE_LABEL: Record<RecipePhotoAgentOutput['confidence'], string> = {
-  high: '推測信頼度: 高',
-  medium: '推測信頼度: 中',
-  low: '推測信頼度: 低',
+  high: 'バッチリ読み取れました',
+  medium: 'だいたい読み取れました',
+  low: 'ざっくり読み取りました',
 };
 
 export default function ImportPhotoScreen() {
@@ -113,8 +113,8 @@ export default function ImportPhotoScreen() {
     if (cloudConsent) return true;
     const granted = await new Promise<boolean>((resolve) => {
       Alert.alert(
-        'AIで写真からレシピを推論',
-        'この機能は、選んだ料理写真と入力した感想を解析サーバー（および AI 提供元）に送信してレシピを推論します。写真は推論のためだけに使われ、サーバーには保存されません。\n\n送信に同意しますか？',
+        'AIで写真からレシピをつくる',
+        'この機能は、選んだ料理写真とコメントを解析サーバー（および AI 提供元）に送ってレシピをつくります。写真はレシピづくりのためだけに使われ、サーバーには保存されません。\n\n送信してもいいですか？',
         [
           { text: 'キャンセル', style: 'cancel', onPress: () => resolve(false) },
           { text: '同意して続ける', onPress: () => resolve(true) },
@@ -160,7 +160,7 @@ export default function ImportPhotoScreen() {
       );
 
       if (!result.ok || !result.data) {
-        setErrorMsg(result.error?.message ?? '料理写真の推測に失敗しました');
+        setErrorMsg(result.error?.message ?? '写真からレシピをつくれませんでした');
         setPhase('select');
         return;
       }
@@ -193,7 +193,7 @@ export default function ImportPhotoScreen() {
         setPendingPhoto(photo);
       } catch (error) {
         if (error instanceof PhotoCaptureCancelledError) return;
-        setErrorMsg(error instanceof Error ? error.message : '料理写真の推測に失敗しました');
+        setErrorMsg(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
       }
     },
     [ensureCloudConsent],
@@ -209,7 +209,7 @@ export default function ImportPhotoScreen() {
     try {
       await inferPhoto(photo, { allowCloudInference: true });
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : '料理写真の推測に失敗しました');
+      setErrorMsg(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
       setPhase('select');
     }
   }, [pendingPhoto, inferPhoto]);
@@ -265,7 +265,7 @@ export default function ImportPhotoScreen() {
           initialValues={photoResult?.draft}
           onSubmit={handleSave}
           onCancel={() => setPhase('select')}
-          title="推測結果を確認・編集"
+          title="できたレシピを確認・編集"
           submitLabel="保存"
         />
         <Toast
@@ -284,7 +284,7 @@ export default function ImportPhotoScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>料理写真から推測</Text>
+        <Text style={styles.headerTitle}>写真からレシピ</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -295,10 +295,10 @@ export default function ImportPhotoScreen() {
 
         {isAndroid ? (
           <>
-            <Text style={styles.title}>写真からレシピを推論</Text>
+            <Text style={styles.title}>写真からレシピをつくろう</Text>
             <Text style={styles.description}>
-              料理の写真から、AI が材料・分量・手順を推論してレシピ下書きを作成します。
-              お店で食べた料理の感想やお店の名前を添えると、より近い再現になります。
+              料理の写真をえらぶだけで、材料・分量・手順をAIが考えてレシピの下書きをつくります。
+              お店の名前や味の感想をひとこと添えると、より近い仕上がりになります。
             </Text>
 
             {capturedPhoto && (
@@ -308,14 +308,14 @@ export default function ImportPhotoScreen() {
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
             {!providerReady && (
               <Text style={styles.noticeText}>
-                オフライン時の端末内推測は利用できません（AI 推論にはインターネット接続が必要です）
+                インターネットにつながっていると、写真からレシピをつくれます
               </Text>
             )}
 
             {phase === 'processing' ? (
               <View style={styles.processingBox}>
                 <ActivityIndicator size="large" color={Colors.gold} />
-                <Text style={styles.processingText}>AI が写真からレシピを推論しています...</Text>
+                <Text style={styles.processingText}>写真からレシピをつくっています...</Text>
               </View>
             ) : (
               <View style={styles.actionGrid}>
@@ -342,7 +342,7 @@ export default function ImportPhotoScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.title}>料理写真の推測はネイティブアプリ専用です</Text>
+            <Text style={styles.title}>写真からのレシピづくりはアプリでつかえます</Text>
             <Text style={styles.description}>
               写真からの下書き作成は Android アプリで先行対応中です。
               {'\n\n'}
