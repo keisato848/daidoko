@@ -1,47 +1,14 @@
 /**
- * だいどこ API Server — Hono on Node.js
- * v1.0: URL import endpoint only (no auth yet)
+ * だいどこ API Server — Node.js bootstrap.
  *
- * app is exported separately so tests can import without starting the server.
+ * The Hono app lives in app.ts. This file only starts the HTTP server when run
+ * directly (local dev / Railway), not when imported by tests or the Lambda entry.
  */
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
+import { app } from './app.js';
 
-import importRouter from './routes/import.js';
-import inferRouter from './routes/infer.js';
+export { app };
 
-export const app = new Hono();
-
-// ─── Middleware ───────────────────────────────────────────────────────────────
-
-app.use('*', logger());
-app.use(
-  '*',
-  cors({
-    origin: ['http://localhost:8081', 'http://localhost:8082', 'http://localhost:19006'],
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-  }),
-);
-
-// ─── Routes ───────────────────────────────────────────────────────────────────
-
-app.get('/', (c) => c.json({ name: 'だいどこ API', version: '1.0.0', status: 'ok' }));
-app.get('/health', (c) => c.json({ status: 'ok', ts: new Date().toISOString() }));
-
-app.route('/api/v1/import', importRouter);
-app.route('/api/v1/infer', inferRouter);
-
-// ─── 404 / Error ─────────────────────────────────────────────────────────────
-
-app.notFound((c) => c.json({ error: 'Not Found' }, 404));
-app.onError((err, c) => {
-  process.stderr.write(`${String(err)}\n`);
-  return c.json({ error: 'Internal Server Error' }, 500);
-});
-
-// ─── Start (only when run directly, not imported by tests) ───────────────────
+// ─── Start (only when run directly, not imported by tests / Lambda) ──────────
 
 if (process.argv[1]?.endsWith('index.ts') || process.argv[1]?.endsWith('index.js')) {
   const { serve } = await import('@hono/node-server');
