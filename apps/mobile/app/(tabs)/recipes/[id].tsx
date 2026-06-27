@@ -316,11 +316,14 @@ export default function RecipeDetailScreen() {
           <ShoppingCart size={18} color={Colors.gold} />
         </PressableScale>
         <PressableScale
+          containerStyle={styles.ctaButtonOuter}
           style={styles.ctaButton}
           scaleTo={0.97}
           onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
         >
-          <Text style={styles.ctaText}>調理開始</Text>
+          <Text style={styles.ctaText} numberOfLines={1}>
+            調理開始
+          </Text>
         </PressableScale>
       </View>
     </View>
@@ -569,17 +572,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaButton: {
+  ctaButtonOuter: {
     flex: 1,
+  },
+  ctaButton: {
     paddingVertical: 14,
+    paddingHorizontal: 16,
     backgroundColor: Colors.gold,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaText: {
     color: Colors.bg,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
 });
