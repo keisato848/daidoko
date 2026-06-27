@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -69,6 +70,7 @@ export default function ImportPhotoScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [pendingPhoto, setPendingPhoto] = useState<CapturedPhoto | null>(null);
   const [cloudConsent, setCloudConsent] = useState(false);
 
   useEffect(() => {
@@ -183,23 +185,39 @@ export default function ImportPhotoScreen() {
       const allowCloud = await ensureCloudConsent();
       if (!allowCloud) return; // user declined — stay on the select screen
 
-      setPhase('processing');
-      setPhotoResult(null);
-
       try {
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-        await inferPhoto(photo, { allowCloudInference: true });
+        // After picking the photo, ask for a short comment in a popup before
+        // running inference (the comment is optional but improves the result).
+        setNotes('');
+        setPendingPhoto(photo);
       } catch (error) {
-        if (error instanceof PhotoCaptureCancelledError) {
-          setPhase('select');
-          return;
-        }
+        if (error instanceof PhotoCaptureCancelledError) return;
         setErrorMsg(error instanceof Error ? error.message : '料理写真の推測に失敗しました');
-        setPhase('select');
       }
     },
-    [ensureCloudConsent, inferPhoto],
+    [ensureCloudConsent],
   );
+
+  // Confirm the popup comment and start inference on the pending photo.
+  const handleConfirmComment = useCallback(async () => {
+    const photo = pendingPhoto;
+    if (!photo) return;
+    setPendingPhoto(null);
+    setPhase('processing');
+    setPhotoResult(null);
+    try {
+      await inferPhoto(photo, { allowCloudInference: true });
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : '料理写真の推測に失敗しました');
+      setPhase('select');
+    }
+  }, [pendingPhoto, inferPhoto]);
+
+  const handleCancelComment = useCallback(() => {
+    setPendingPhoto(null);
+    setNotes('');
+  }, []);
 
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
@@ -287,18 +305,6 @@ export default function ImportPhotoScreen() {
               <Image source={{ uri: capturedPhoto.localPath }} style={styles.previewImage} />
             )}
 
-            {phase !== 'processing' && (
-              <TextInput
-                style={styles.notesInput}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="感想・お店の名前など（任意）例: ○○屋の麻婆豆腐。痺れ強め"
-                placeholderTextColor={Colors.muted}
-                multiline
-                maxLength={1000}
-              />
-            )}
-
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
             {!providerReady && (
               <Text style={styles.noticeText}>
@@ -359,6 +365,43 @@ export default function ImportPhotoScreen() {
           </Pressable>
         )}
       </ScrollView>
+
+      <Modal
+        visible={pendingPhoto != null}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelComment}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {pendingPhoto && (
+              <Image source={{ uri: pendingPhoto.localPath }} style={styles.modalImage} />
+            )}
+            <Text style={styles.modalTitle}>ひとことコメント（任意）</Text>
+            <Text style={styles.modalHint}>
+              お店の名前や味の感想を書くと、より近いレシピになります。
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="例: ○○屋の麻婆豆腐。しびれ強め"
+              placeholderTextColor={Colors.muted}
+              maxLength={1000}
+              multiline
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelButton} onPress={handleCancelComment}>
+                <Text style={styles.modalCancelText}>やめる</Text>
+              </Pressable>
+              <Pressable style={styles.modalConfirmButton} onPress={handleConfirmComment}>
+                <Text style={styles.modalConfirmText}>レシピをつくる</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -426,19 +469,81 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     backgroundColor: '#130E08',
   },
-  notesInput: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+    padding: 20,
+  },
+  modalImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: Colors.paper,
+    marginBottom: 4,
+  },
+  modalHint: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: Colors.paperDim,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  modalInput: {
     width: '100%',
     minHeight: 64,
-    maxHeight: 140,
+    maxHeight: 160,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 8,
     backgroundColor: '#130E08',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 13,
+    fontSize: 15,
     color: Colors.paper,
     textAlignVertical: 'top',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.paperDim,
+  },
+  modalConfirmButton: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.bg,
   },
   errorText: {
     fontSize: 13,
