@@ -9,3 +9,13 @@ apps/mobile/ios
 **/dist
 **/build
 **/.expo
+
+# Binary assets — not formattable by Prettier
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.webp
+**/*.ico
+**/*.aab
+**/*.apk
