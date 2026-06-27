@@ -149,7 +149,6 @@ export function RecipeForm({
             onChangeText={(v) => setValue('description', v)}
             placeholder="レシピの簡単な説明（任意）"
             multiline
-            numberOfLines={3}
             style={styles.multilineInput}
           />
           <View style={styles.stepperRow}>

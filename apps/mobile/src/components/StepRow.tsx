@@ -1,6 +1,7 @@
 /**
  * Editable step row for recipe form
  */
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
@@ -23,6 +24,8 @@ export function StepRow({
   onRemove,
 }: StepRowProps) {
   const timerMin = timerSec != null ? Math.floor(timerSec / 60) : undefined;
+  // Grow the step field to fit its content (minHeight in styles.bodyInput floors it).
+  const [bodyHeight, setBodyHeight] = useState(0);
 
   const handleTimerChange = (text: string) => {
     const num = parseInt(text, 10);
@@ -44,14 +47,14 @@ export function StepRow({
         </Pressable>
       </View>
       <TextInput
-        style={styles.bodyInput}
+        style={[styles.bodyInput, bodyHeight > 0 ? { height: bodyHeight } : undefined]}
         value={body}
         onChangeText={onChangeBody}
         placeholder="手順を入力..."
         placeholderTextColor={Colors.muted}
         multiline
-        numberOfLines={3}
         textAlignVertical="top"
+        onContentSizeChange={(e) => setBodyHeight(e.nativeEvent.contentSize.height)}
       />
       <View style={styles.timerRow}>
         <Text style={styles.timerLabel}>⏱ タイマー</Text>
