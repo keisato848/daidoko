@@ -43,7 +43,17 @@ if (!options.bundle) {
 
 const result = runCommand(wrapperPath, args, {
   cwd: androidDir,
-  env: options.bundle ? { NODE_ENV: 'production' } : undefined,
+  env: {
+    // Release bundling needs NODE_ENV; Expo only sets it for `expo export`.
+    NODE_ENV: 'production',
+    // pnpm workspace: hoisted deps live in the repo-root node_modules, which
+    // metro.config.js watches. Without this flag Expo treats the workspace root
+    // as Metro's server root, but the RN Gradle plugin relativizes --entry-file
+    // and bakes expo-router's app dir against apps/mobile — the mismatch makes
+    // local release builds fail ("Unable to resolve ./index.js" / "No routes
+    // found"). Pinning the server root to the project keeps them consistent.
+    EXPO_NO_METRO_WORKSPACE_ROOT: '1',
+  },
 });
 
 const summary = {
