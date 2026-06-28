@@ -42,8 +42,7 @@
           "cameraPermission": "レシピ写真を撮影するためにカメラを使用します。"
         }
       ],
-      "./plugins/withDaidokoOcr",
-      "./plugins/withCleartextDev"
+      "./plugins/withDaidokoOcr"
     ],
     "experiments": {
       "typedRoutes": true

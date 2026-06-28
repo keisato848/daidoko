@@ -11,9 +11,6 @@
     },
     "preview": {
       "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_SERVER_URL": "http://localhost:3000"
-      },
       "android": {
         "buildType": "apk"
       }
