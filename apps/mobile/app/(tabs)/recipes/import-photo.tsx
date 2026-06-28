@@ -7,7 +7,6 @@ import { Camera, Image as ImageIcon, PenLine, RotateCcw, Sparkles, X } from 'luc
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Platform,
@@ -31,10 +30,6 @@ import {
   isClientImageLabelingAvailable,
 } from '../../../src/services/client-image-label.provider';
 import { createClientOcrRecognizer } from '../../../src/services/client-ocr.provider';
-import {
-  hasCloudInferenceConsent,
-  setCloudInferenceConsent,
-} from '../../../src/services/app-meta.service';
 import { inferRecipeFromVision } from '../../../src/services/vision-recipe.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
@@ -76,7 +71,6 @@ export default function ImportPhotoScreen() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState<CapturedPhoto | null>(null);
-  const [cloudConsent, setCloudConsent] = useState(false);
   const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
 
   // Refresh the freemium quota on focus (e.g. after returning from the paywall).
@@ -105,14 +99,6 @@ export default function ImportPhotoScreen() {
         if (mounted) setProviderReady(false);
       });
 
-    hasCloudInferenceConsent()
-      .then((granted) => {
-        if (mounted) setCloudConsent(granted);
-      })
-      .catch(() => {
-        if (mounted) setCloudConsent(false);
-      });
-
     return () => {
       mounted = false;
     };
@@ -121,28 +107,6 @@ export default function ImportPhotoScreen() {
   const handleManual = () => {
     router.replace('/recipes/new');
   };
-
-  // Returns whether cloud Vision inference is permitted, prompting for opt-in
-  // consent the first time (the photo is sent to the analysis server + AI).
-  const ensureCloudConsent = useCallback(async (): Promise<boolean> => {
-    if (cloudConsent) return true;
-    const granted = await new Promise<boolean>((resolve) => {
-      Alert.alert(
-        'AIで写真からレシピをつくる',
-        'この機能は、選んだ料理写真とコメントを解析サーバー（および AI 提供元）に送ってレシピをつくります。写真はレシピづくりのためだけに使われ、サーバーには保存されません。\n\n送信してもいいですか？',
-        [
-          { text: 'キャンセル', style: 'cancel', onPress: () => resolve(false) },
-          { text: '同意して続ける', onPress: () => resolve(true) },
-        ],
-        { cancelable: true, onDismiss: () => resolve(false) },
-      );
-    });
-    if (granted) {
-      setCloudConsent(true);
-      await setCloudInferenceConsent(true).catch(() => undefined);
-    }
-    return granted;
-  }, [cloudConsent]);
 
   const preprocessForAgent = useCallback(async (imageUri: string) => {
     const processed = await preprocessImageForOcr(imageUri, expoImageManipulatorPreprocessAdapter);
@@ -202,16 +166,12 @@ export default function ImportPhotoScreen() {
     async (source: PhotoCaptureSource) => {
       setErrorMsg(null);
 
-      // Freemium gate: free users past the monthly limit go to the paywall.
+      // Freemium gate: free users past the daily limit go to the paywall.
       const status = freemium ?? (await getFreemiumStatus().catch(() => null));
       if (status && !status.canInfer) {
         router.push('/recipes/paywall');
         return;
       }
-
-      // Cloud Vision inference is the primary path; require opt-in consent first.
-      const allowCloud = await ensureCloudConsent();
-      if (!allowCloud) return; // user declined — stay on the select screen
 
       try {
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
@@ -224,7 +184,7 @@ export default function ImportPhotoScreen() {
         setErrorMsg(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
       }
     },
-    [ensureCloudConsent, freemium, router],
+    [freemium, router],
   );
 
   // Confirm the popup comment and start inference on the pending photo.
@@ -335,7 +295,7 @@ export default function ImportPhotoScreen() {
               ) : (
                 <Pressable onPress={() => router.push('/recipes/paywall')} hitSlop={8}>
                   <Text style={styles.quotaText}>
-                    今月の無料作成：あと {freemium.remaining} 回 ・ 使い放題にする
+                    今日の無料作成：あと {freemium.remaining} 回 ・ 使い放題にする
                   </Text>
                 </Pressable>
               ))}
@@ -345,6 +305,9 @@ export default function ImportPhotoScreen() {
             )}
 
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+            <Text style={styles.disclosureText}>
+              写真は解析のためサーバー（AI 提供元）に送信されます。保存はされません。
+            </Text>
             {!providerReady && (
               <Text style={styles.noticeText}>
                 インターネットにつながっていると、写真からレシピをつくれます
@@ -595,6 +558,12 @@ const styles = StyleSheet.create({
     color: Colors.muted,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  disclosureText: {
+    fontSize: 11,
+    color: Colors.muted,
+    textAlign: 'center',
+    lineHeight: 16,
   },
   quotaText: {
     fontSize: 12,
