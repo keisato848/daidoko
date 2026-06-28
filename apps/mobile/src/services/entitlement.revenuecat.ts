@@ -7,10 +7,7 @@
  * paths never run. Premium state is the store receipt (validated by RevenueCat),
  * so it cannot be spoofed by the device-local free-quota store.
  */
-import Purchases, {
-  type CustomerInfo,
-  type PurchasesPackage,
-} from 'react-native-purchases';
+import Purchases, { type CustomerInfo, type PurchasesPackage } from 'react-native-purchases';
 
 import { REVENUECAT_API_KEY } from '../config';
 import {

@@ -5,7 +5,15 @@
 import { useRouter } from 'expo-router';
 import { Check, Crown, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Colors } from '../../../src/constants/theme';
 import { getEntitlementProvider } from '../../../src/services/entitlement.service';
@@ -116,7 +124,9 @@ export default function PaywallScreen() {
           ) : (
             <>
               <Text style={styles.priceValue}>{price ?? '月額サブスク'}</Text>
-              <Text style={styles.priceUnit}>{price ? '/ 月（いつでも解約可能）' : 'いつでも解約可能'}</Text>
+              <Text style={styles.priceUnit}>
+                {price ? '/ 月（いつでも解約可能）' : 'いつでも解約可能'}
+              </Text>
             </>
           )}
         </View>

@@ -218,7 +218,9 @@ export async function runRecipePhotoAgent(
       },
     };
   } catch (error) {
-    return errorResult(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
+    return errorResult(
+      error instanceof Error ? error.message : '写真からレシピをつくれませんでした',
+    );
   }
 }
 
