@@ -1,12 +1,23 @@
 /**
  * Best-effort in-memory daily rate limiter for the Vision inference endpoint.
  *
+ * These are COST / ABUSE guards, NOT the freemium gate. The per-user free
+ * quota (3 AI photo-recipes/month) is enforced client-side and premium is
+ * validated by RevenueCat — the server has no auth, so it cannot tell premium
+ * from free. See docs/フリーミアム設計.md.
+ *
  * Two independent caps, both configurable via env and both enforced per 24h:
  *   - INFER_DAILY_LIMIT          per-client (by IP) requests/day   (default 20)
  *   - INFER_GLOBAL_DAILY_LIMIT   total requests/day across clients (default 200)
  *
  * The global cap is the real cost ceiling — it bounds total Gemini calls/day
  * regardless of how many clients hit the endpoint. Set either to 0 to disable.
+ *
+ * Note: INFER_DAILY_LIMIT is coarse anti-abuse only. Because premium users are
+ * "unlimited" but indistinguishable here, keep it generous (or 0) so it does
+ * not block a paying household sharing one IP; rely on the GLOBAL cap (+ the
+ * Gemini quota) for cost. A real per-user cap would need accounts + a shared
+ * store (DynamoDB) — see infra/README.md follow-ups.
  *
  * Not durable across restarts and not shared across instances — sufficient as a
  * cost guardrail for a single Railway instance. Replace with a shared store if

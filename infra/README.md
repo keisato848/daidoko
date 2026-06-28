@@ -21,6 +21,12 @@ on AWS **Lambda** behind a public **Function URL**, with **cost guardrails**.
 > in-app daily limits (`INFER_DAILY_LIMIT` / `INFER_GLOBAL_DAILY_LIMIT`) are
 > best-effort on Lambda (in-memory, per warm instance); strict enforcement would
 > need a shared store (DynamoDB) — see "Follow-ups".
+>
+> **Freemium:** the per-user free quota (3 AI photo-recipes/month) is enforced
+> **client-side**, and premium is validated by **RevenueCat** — these server caps
+> are only cost / abuse guards (no auth here, so the server can't tell premium
+> from free). Keep `INFER_DAILY_LIMIT` generous or `0` so it never blocks a
+> paying household sharing one IP. See `docs/フリーミアム設計.md`.
 
 ## Prerequisites (one-time)
 
