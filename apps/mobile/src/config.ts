@@ -15,3 +15,7 @@ export const SERVER_BASE_URL =
   (isWeb ? 'http://localhost:3000' : 'https://daidoko-production.up.railway.app');
 
 export const API_V1 = `${SERVER_BASE_URL}/api/v1`;
+
+// RevenueCat の公開 SDK キー（プラットフォーム別）。
+// 未設定なら課金は無効化され、無料枠のみでアプリは完全に動作する（Stub プロバイダ）。
+export const REVENUECAT_API_KEY = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] ?? '';

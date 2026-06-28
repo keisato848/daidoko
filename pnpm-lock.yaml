@@ -110,6 +110,9 @@ importers:
       react-native:
         specifier: 0.81.5
         version: 0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@types/react@19.1.17)(react@19.1.0)
+      react-native-purchases:
+        specifier: ^10.4.0
+        version: 10.4.0(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-safe-area-context:
         specifier: ~5.6.0
         version: 5.6.2(react-native@0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -2524,6 +2527,15 @@ packages:
 
   '@react-navigation/routers@7.6.0':
     resolution: {integrity: sha512-lblhDXfS75jLc7G2K7BZGM+7cjqQXk13X/MA4fq/12r62zM+fBhhreLzYflSitrDDXFRJpSvJXy0ziiGU04Xow==}
+
+  '@revenuecat/purchases-js-hybrid-mappings@18.15.1':
+    resolution: {integrity: sha512-wJqvPiDE2ra9byoeOerBqNCJFzZQL8HNVbkhGRjAZZ3Us7kXzWvIT4LSgTO70bKre7iPaCYif10fd4Lh/eQi8w==}
+
+  '@revenuecat/purchases-js@1.42.4':
+    resolution: {integrity: sha512-Zayh/4VqjUa/iDtXpgDmur3Vp5r9dO3axGs1zNp9RIKv8iH/fufJOH64jCRcZ31Ft7O7c5UNjYWIThXDjCn1Iw==}
+
+  '@revenuecat/purchases-typescript-internal@18.15.1':
+    resolution: {integrity: sha512-OaaBxOpmO/Jp33DVCUfnqqOC+hFlXQyNXlZTgFrRCFWW3jVRo+8MQYOV8pVPo20cIrjlUQhnBB3qx+ECUkaJ+Q==}
 
   '@rollup/rollup-android-arm-eabi@4.60.3':
     resolution: {integrity: sha512-x35CNW/ANXG3hE/EZpRU8MXX1JDN86hBb2wMGAtltkz7pc6cxgjpy1OMMfDosOQ+2hWqIkag/fGok1Yady9nGw==}
@@ -5683,6 +5695,16 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  react-native-purchases@10.4.0:
+    resolution: {integrity: sha512-jM1FWdLKchMlBONoqIM+Fw9iGYloWPBx097iMVYk28V/BHY61tUS5YflGgmSHkL3rpJQQxBfsYWhAPpBSABvpg==}
+    peerDependencies:
+      react: '>= 16.6.3'
+      react-native: '>= 0.73.0'
+      react-native-web: '*'
+    peerDependenciesMeta:
+      react-native-web:
+        optional: true
 
   react-native-reanimated@3.10.1:
     resolution: {integrity: sha512-sfxg6vYphrDc/g4jf/7iJ7NRi+26z2+BszPmvmk0Vnrz6FL7HYljJqTf531F1x6tFmsf+FEAmuCtTUIXFLVo9w==}
@@ -9267,6 +9289,14 @@ snapshots:
   '@react-navigation/routers@7.6.0':
     dependencies:
       nanoid: 3.3.12
+
+  '@revenuecat/purchases-js-hybrid-mappings@18.15.1':
+    dependencies:
+      '@revenuecat/purchases-js': 1.42.4
+
+  '@revenuecat/purchases-js@1.42.4': {}
+
+  '@revenuecat/purchases-typescript-internal@18.15.1': {}
 
   '@rollup/rollup-android-arm-eabi@4.60.3':
     optional: true
@@ -12997,6 +13027,15 @@ snapshots:
     dependencies:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@types/react@19.1.17)(react@19.1.0)
+
+  react-native-purchases@10.4.0(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+    dependencies:
+      '@revenuecat/purchases-js-hybrid-mappings': 18.15.1
+      '@revenuecat/purchases-typescript-internal': 18.15.1
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@types/react@19.1.17)(react@19.1.0)
+    optionalDependencies:
+      react-native-web: 0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
 
   react-native-reanimated@3.10.1(@babel/core@7.29.0)(react-native@0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
