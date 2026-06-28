@@ -16,6 +16,7 @@ import {
   getCurrentUser,
   getCurrentUserProfile,
 } from '../../src/services/user.service';
+import { getFreemiumStatus, type FreemiumStatus } from '../../src/services/usage.service';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 
 interface SettingItem {
@@ -39,6 +40,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const [user, setUser] = useState(getCurrentUser());
   const [family, setFamily] = useState(getCurrentFamily());
+  const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
   const userDisplayName = formatProfileDisplayName(user.displayName);
 
   useFocusEffect(
@@ -49,14 +51,47 @@ export default function SettingsScreen() {
           setFamily(nextFamily);
         },
       );
+      void getFreemiumStatus()
+        .then(setFreemium)
+        .catch(() => setFreemium(null));
     }, []),
   );
+
+  // Plan row content depends on premium state (avoid nested ternaries).
+  let planLabel = 'プレミアムにする';
+  let planSubtitle = '読み込み中…';
+  let planOnPress = () => router.push('/recipes/paywall');
+  if (freemium) {
+    if (freemium.isPremium) {
+      planLabel = 'プレミアム';
+      planSubtitle = 'プレミアム・使い放題';
+      planOnPress = () =>
+        Alert.alert(
+          'プレミアム',
+          'プレミアムをご利用中です。解約はストアの定期購入設定からいつでも行えます。',
+        );
+    } else {
+      planSubtitle = `無料・今月あと ${freemium.remaining} 回`;
+    }
+  }
 
   const showComingSoon = () => {
     Alert.alert('準備中', 'この機能は今後のバージョンで追加予定です。');
   };
 
   const sections: SettingSection[] = [
+    {
+      title: 'プラン',
+      items: [
+        {
+          id: 'plan',
+          label: planLabel,
+          subtitle: planSubtitle,
+          enabled: true,
+          onPress: planOnPress,
+        },
+      ],
+    },
     {
       title: 'アカウント',
       items: [

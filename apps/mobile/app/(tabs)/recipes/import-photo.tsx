@@ -2,7 +2,7 @@
  * S11: Food photo import screen
  * On native: camera capture → image labels → editable recipe draft
  */
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Camera, Image as ImageIcon, PenLine, RotateCcw, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -46,6 +46,11 @@ import {
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
 import { createRecipe, createRecipeMemo } from '../../../src/services/recipe.service';
+import {
+  getFreemiumStatus,
+  recordCloudInference,
+  type FreemiumStatus,
+} from '../../../src/services/usage.service';
 import { createCookingLog } from '../../../src/services/cooking-log.service';
 import { persistCookingLogPhotos } from '../../../src/services/photo-storage.service';
 import { createPhotoSource } from '../../../src/services/source.service';
@@ -72,6 +77,16 @@ export default function ImportPhotoScreen() {
   const [notes, setNotes] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState<CapturedPhoto | null>(null);
   const [cloudConsent, setCloudConsent] = useState(false);
+  const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
+
+  // Refresh the freemium quota on focus (e.g. after returning from the paywall).
+  const refreshFreemium = useCallback(() => {
+    if (!isAndroid) return;
+    getFreemiumStatus()
+      .then(setFreemium)
+      .catch(() => setFreemium(null));
+  }, []);
+  useFocusEffect(refreshFreemium);
 
   useEffect(() => {
     let mounted = true;
@@ -167,6 +182,12 @@ export default function ImportPhotoScreen() {
 
       setPhotoResult(result.data);
       setPhase('preview');
+      // Count only successful cloud (paid) inferences against the free quota.
+      if (result.data.source === 'cloud') {
+        recordCloudInference()
+          .then(refreshFreemium)
+          .catch(() => undefined);
+      }
       // Surface confidence + caveats as a dismissible toast rather than a
       // cramped header banner over the form.
       const toast = [CONFIDENCE_LABEL[result.data.confidence], ...result.data.warnings]
@@ -174,12 +195,19 @@ export default function ImportPhotoScreen() {
         .join(' / ');
       setToastMessage(toast);
     },
-    [notes, preprocessForAgent],
+    [notes, preprocessForAgent, refreshFreemium],
   );
 
   const handleRead = useCallback(
     async (source: PhotoCaptureSource) => {
       setErrorMsg(null);
+
+      // Freemium gate: free users past the monthly limit go to the paywall.
+      const status = freemium ?? (await getFreemiumStatus().catch(() => null));
+      if (status && !status.canInfer) {
+        router.push('/recipes/paywall');
+        return;
+      }
 
       // Cloud Vision inference is the primary path; require opt-in consent first.
       const allowCloud = await ensureCloudConsent();
@@ -196,7 +224,7 @@ export default function ImportPhotoScreen() {
         setErrorMsg(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
       }
     },
-    [ensureCloudConsent],
+    [ensureCloudConsent, freemium, router],
   );
 
   // Confirm the popup comment and start inference on the pending photo.
@@ -300,6 +328,17 @@ export default function ImportPhotoScreen() {
               料理の写真をえらぶだけで、材料・分量・手順をAIが考えてレシピの下書きをつくります。
               お店の名前や味の感想をひとこと添えると、より近い仕上がりになります。
             </Text>
+
+            {freemium &&
+              (freemium.isPremium ? (
+                <Text style={styles.quotaPremium}>プレミアム・使い放題</Text>
+              ) : (
+                <Pressable onPress={() => router.push('/recipes/paywall')} hitSlop={8}>
+                  <Text style={styles.quotaText}>
+                    今月の無料作成：あと {freemium.remaining} 回 ・ 使い放題にする
+                  </Text>
+                </Pressable>
+              ))}
 
             {capturedPhoto && (
               <Image source={{ uri: capturedPhoto.localPath }} style={styles.previewImage} />
@@ -555,6 +594,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.muted,
     textAlign: 'center',
+    lineHeight: 18,
+  },
+  quotaText: {
+    fontSize: 12,
+    color: Colors.gold,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  quotaPremium: {
+    fontSize: 12,
+    color: Colors.gold,
+    textAlign: 'center',
+    fontWeight: '600',
     lineHeight: 18,
   },
   processingBox: {

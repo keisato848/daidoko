@@ -38,6 +38,8 @@ export interface RecipePhotoAgentOutput extends RecipePhotoInferenceResult {
   rawText?: string;
   normalizedText?: string;
   evidenceSummary?: string;
+  /** Which path produced the draft. 'cloud' is the paid/metered AI call. */
+  source?: 'cloud' | 'on-device';
 }
 
 export interface RecipePhotoAgentDependencies {
@@ -118,6 +120,7 @@ export async function runRecipePhotoAgent(
           imageUri: input.imageUri,
           ...(visionImageUri !== input.imageUri && { processedImageUri: visionImageUri }),
           evidenceSummary: 'AIで写真から作成',
+          source: 'cloud',
         },
       };
     } catch (error) {
@@ -179,6 +182,7 @@ export async function runRecipePhotoAgent(
                 rawText: recognized.rawText,
                 normalizedText: parsed.normalizedText,
                 evidenceSummary,
+                source: 'on-device',
                 warnings: [
                   ...warnings,
                   ...recognized.warnings,
@@ -209,6 +213,7 @@ export async function runRecipePhotoAgent(
         imageUri: input.imageUri,
         processedImageUri: processed.imageUri !== input.imageUri ? processed.imageUri : undefined,
         evidenceSummary: combineEvidenceSummary(labelInferred.labelSummary),
+        source: 'on-device',
         warnings: [...warnings, ...labelInferred.warnings],
       },
     };

@@ -37,6 +37,7 @@ describe('IMG-RECIPE-AGT-01 runRecipePhotoAgent', () => {
     expect(result.ok).toBe(true);
     expect(result.data?.draft.title).toBe('写真からつくったカレー');
     expect(result.data?.warnings[0]).toContain('写真だけでは');
+    expect(result.data?.source).toBe('on-device');
   });
 
   it('can be registered as a photo import agent on AgentBridge', async () => {
@@ -96,6 +97,8 @@ describe('IMG-RECIPE-AGT-03 Vision LLM primary path', () => {
     expect(result.ok).toBe(true);
     expect(result.data?.draft.title).toBe('四川風 麻婆豆腐');
     expect(result.data?.confidence).toBe('medium');
+    // Cloud path is the metered/paid one — must be tagged for quota counting.
+    expect(result.data?.source).toBe('cloud');
     // Vision succeeded → on-device labeling should not be invoked.
     expect(labelImage).not.toHaveBeenCalled();
   });
@@ -114,6 +117,8 @@ describe('IMG-RECIPE-AGT-03 Vision LLM primary path', () => {
     expect(result.ok).toBe(true);
     expect(result.data?.draft.title).toBe('写真からつくったカレー');
     expect(result.data?.warnings.some((w) => w.includes('端末内'))).toBe(true);
+    // Fell back to on-device → must NOT be counted as a paid cloud use.
+    expect(result.data?.source).toBe('on-device');
   });
 
   it('surfaces a not-a-dish error instead of falling back', async () => {
