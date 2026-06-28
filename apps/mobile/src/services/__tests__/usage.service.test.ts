@@ -13,12 +13,12 @@ jest.mock('../entitlement.service', () => ({
 }));
 
 import {
-  currentMonthKey,
+  currentDayKey,
   deriveFreemiumStatus,
-  FREE_MONTHLY_LIMIT,
+  FREE_DAILY_LIMIT,
+  getDailyUsage,
   getFreemiumStatus,
-  getMonthlyUsage,
-  incrementMonthlyUsage,
+  incrementDailyUsage,
   recordCloudInference,
   remainingFree,
 } from '../usage.service';
@@ -29,21 +29,20 @@ describe('usage.service', () => {
     mockPremium = false;
   });
 
-  describe('currentMonthKey', () => {
-    it('formats year-month with a zero-padded month', () => {
-      // Local-time constructors (the function uses the user's calendar month).
-      expect(currentMonthKey(new Date(2026, 5, 28))).toBe('2026-06');
-      expect(currentMonthKey(new Date(2026, 0, 1))).toBe('2026-01');
-      expect(currentMonthKey(new Date(2026, 11, 31))).toBe('2026-12');
+  describe('currentDayKey', () => {
+    it('formats year-month-day, zero-padded', () => {
+      // Local-time constructors (the function uses the user's calendar day).
+      expect(currentDayKey(new Date(2026, 5, 28))).toBe('2026-06-28');
+      expect(currentDayKey(new Date(2026, 0, 1))).toBe('2026-01-01');
+      expect(currentDayKey(new Date(2026, 11, 9))).toBe('2026-12-09');
     });
   });
 
   describe('remainingFree', () => {
     it('never goes negative', () => {
-      expect(remainingFree(0)).toBe(3);
-      expect(remainingFree(2)).toBe(1);
+      expect(remainingFree(0)).toBe(1);
+      expect(remainingFree(1)).toBe(0);
       expect(remainingFree(3)).toBe(0);
-      expect(remainingFree(5)).toBe(0);
     });
   });
 
@@ -55,36 +54,35 @@ describe('usage.service', () => {
       expect(status.remaining).toBe(Number.POSITIVE_INFINITY);
     });
 
-    it('gates the free tier by the monthly limit', () => {
-      expect(deriveFreemiumStatus(false, 0)).toMatchObject({ remaining: 3, canInfer: true });
-      expect(deriveFreemiumStatus(false, 2)).toMatchObject({ remaining: 1, canInfer: true });
-      expect(deriveFreemiumStatus(false, 3)).toMatchObject({ remaining: 0, canInfer: false });
+    it('gates the free tier by the daily limit', () => {
+      expect(deriveFreemiumStatus(false, 0)).toMatchObject({ remaining: 1, canInfer: true });
+      expect(deriveFreemiumStatus(false, 1)).toMatchObject({ remaining: 0, canInfer: false });
+      expect(deriveFreemiumStatus(false, 2)).toMatchObject({ remaining: 0, canInfer: false });
     });
   });
 
-  describe('monthly counter', () => {
-    it('starts at zero and increments within a month', async () => {
+  describe('daily counter', () => {
+    it('starts at zero and increments within a day', async () => {
       const date = new Date(2026, 5, 10);
-      expect(await getMonthlyUsage(date)).toBe(0);
-      expect(await incrementMonthlyUsage(date)).toBe(1);
-      expect(await incrementMonthlyUsage(date)).toBe(2);
-      expect(await getMonthlyUsage(date)).toBe(2);
+      expect(await getDailyUsage(date)).toBe(0);
+      expect(await incrementDailyUsage(date)).toBe(1);
+      expect(await incrementDailyUsage(date)).toBe(2);
+      expect(await getDailyUsage(date)).toBe(2);
     });
 
-    it('auto-resets when the month changes', async () => {
-      const june = new Date(2026, 5, 30);
-      const july = new Date(2026, 6, 1);
-      await incrementMonthlyUsage(june);
-      await incrementMonthlyUsage(june);
-      expect(await getMonthlyUsage(june)).toBe(2);
-      expect(await getMonthlyUsage(july)).toBe(0);
+    it('auto-resets when the day changes', async () => {
+      const day1 = new Date(2026, 5, 30);
+      const day2 = new Date(2026, 6, 1);
+      await incrementDailyUsage(day1);
+      expect(await getDailyUsage(day1)).toBe(1);
+      expect(await getDailyUsage(day2)).toBe(0);
     });
   });
 
   describe('getFreemiumStatus', () => {
     it('reflects the device-local count for free users', async () => {
       const status = await getFreemiumStatus();
-      expect(status).toMatchObject({ isPremium: false, used: 0, remaining: FREE_MONTHLY_LIMIT });
+      expect(status).toMatchObject({ isPremium: false, used: 0, remaining: FREE_DAILY_LIMIT });
     });
 
     it('reports unlimited for premium users', async () => {
@@ -98,13 +96,13 @@ describe('usage.service', () => {
   describe('recordCloudInference', () => {
     it('counts a use for free users', async () => {
       await recordCloudInference();
-      expect(await getMonthlyUsage()).toBe(1);
+      expect(await getDailyUsage()).toBe(1);
     });
 
     it('does not count for premium users', async () => {
       mockPremium = true;
       await recordCloudInference();
-      expect(await getMonthlyUsage()).toBe(0);
+      expect(await getDailyUsage()).toBe(0);
     });
   });
 });

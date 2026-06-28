@@ -2,7 +2,7 @@
  * Best-effort in-memory daily rate limiter for the Vision inference endpoint.
  *
  * These are COST / ABUSE guards, NOT the freemium gate. The per-user free
- * quota (3 AI photo-recipes/month) is enforced client-side and premium is
+ * quota (1 AI photo-recipe/day) is enforced client-side and premium is
  * validated by RevenueCat — the server has no auth, so it cannot tell premium
  * from free. See docs/フリーミアム設計.md.
  *

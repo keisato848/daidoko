@@ -16,8 +16,8 @@ Design of record: `docs/フリーミアム設計.md`.
 
 ## Where Things Live (apps/mobile)
 
-- `src/services/usage.service.ts` — device-local monthly quota (`FREE_MONTHLY_LIMIT = 3`,
-  `app_meta` key `ai_photo_recipe_usage:YYYY-MM`, auto-resets monthly). `getFreemiumStatus()`,
+- `src/services/usage.service.ts` — device-local daily quota (`FREE_DAILY_LIMIT = 1`,
+  `app_meta` key `ai_photo_recipe_usage:YYYY-MM-DD`, auto-resets daily). `getFreemiumStatus()`,
   `recordCloudInference()`.
 - `src/services/entitlement.service.ts` — provider factory (RevenueCat when
   `EXPO_PUBLIC_REVENUECAT_API_KEY` set + native, else `StubEntitlementProvider`).

@@ -18,11 +18,11 @@ import {
 import { Colors } from '../../../src/constants/theme';
 import { getEntitlementProvider } from '../../../src/services/entitlement.service';
 import { EntitlementUnavailableError } from '../../../src/services/entitlement.types';
-import { FREE_MONTHLY_LIMIT } from '../../../src/services/usage.service';
+import { FREE_DAILY_LIMIT } from '../../../src/services/usage.service';
 
 const BENEFITS = [
   '写真からのレシピづくりが使い放題',
-  '今月の上限を気にせず、思いついたときにすぐ',
+  '回数の上限を気にせず、思いついたときにすぐ',
   'これからふえる便利な機能もぜんぶ',
 ];
 
@@ -105,7 +105,7 @@ export default function PaywallScreen() {
         </View>
         <Text style={styles.title}>DAIDOKO プレミアム</Text>
         <Text style={styles.subtitle}>
-          無料で使えるAI写真レシピは月{FREE_MONTHLY_LIMIT}回まで。{'\n'}
+          無料で使えるAI写真レシピは1日{FREE_DAILY_LIMIT}回まで。{'\n'}
           プレミアムなら、回数を気にせず使えます。
         </Text>
 

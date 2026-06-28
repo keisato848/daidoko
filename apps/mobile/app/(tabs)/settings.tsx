@@ -71,7 +71,7 @@ export default function SettingsScreen() {
           'プレミアムをご利用中です。解約はストアの定期購入設定からいつでも行えます。',
         );
     } else {
-      planSubtitle = `無料・今月あと ${freemium.remaining} 回`;
+      planSubtitle = `無料・今日あと ${freemium.remaining} 回`;
     }
   }
 
