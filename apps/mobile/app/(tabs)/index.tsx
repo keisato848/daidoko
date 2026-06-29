@@ -3,7 +3,7 @@
  * Shows recent cooking logs with filter tabs
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { CalendarDays, LayoutGrid, Trash2, X } from 'lucide-react-native';
+import { CalendarDays, LayoutGrid, ShoppingCart, Trash2, X } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -216,6 +216,13 @@ export default function HomeScreen() {
               accessibilityLabel="ギャラリー"
             >
               <LayoutGrid size={19} color={Colors.goldDim} />
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/(tabs)/shopping')}
+              hitSlop={10}
+              accessibilityLabel="買い物リスト"
+            >
+              <ShoppingCart size={19} color={Colors.goldDim} />
             </Pressable>
             <Text style={styles.wordmark}>DAIDOKO</Text>
           </View>

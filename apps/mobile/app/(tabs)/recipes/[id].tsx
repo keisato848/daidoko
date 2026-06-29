@@ -15,6 +15,7 @@ import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
 import { Colors } from '../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
+import { addRecipeIngredientsToList } from '../../../src/services/shopping-list.service';
 import {
   deleteRecipe,
   getMemosForRecipe,
@@ -227,6 +228,19 @@ export default function RecipeDetailScreen() {
                 </View>
               );
             })}
+            <Pressable
+              style={styles.addToListButton}
+              onPress={async () => {
+                const added = await addRecipeIngredientsToList(recipe.id);
+                Alert.alert(
+                  '買い物リスト',
+                  added > 0 ? `${added}件を買い物リストに追加しました` : 'すべて追加済みです',
+                );
+              }}
+            >
+              <ShoppingCart size={16} color={Colors.gold} />
+              <Text style={styles.addToListText}>材料を買い物リストに追加</Text>
+            </Pressable>
           </View>
         )}
 
@@ -445,6 +459,19 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: Colors.goldDim,
   },
+  addToListButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.gold,
+    backgroundColor: '#150F07',
+  },
+  addToListText: { fontSize: 14, fontWeight: '600', color: Colors.gold },
   stepList: { gap: 14 },
   stepRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   stepNumber: {

@@ -19,6 +19,14 @@ export { preprocessImageForOcr } from './image-preprocess.service';
 export { createClientOcrRecognizer, isClientOcrAvailable } from './client-ocr.provider';
 export { getTagsForFamily, upsertTags } from './tag.service';
 export {
+  getShoppingItems,
+  addShoppingItem,
+  addRecipeIngredientsToList,
+  setShoppingItemChecked,
+  removeShoppingItem,
+  clearCheckedShoppingItems,
+} from './shopping-list.service';
+export {
   addFamilyMember,
   getCurrentFamily,
   getCurrentFamilyProfile,
@@ -42,6 +50,8 @@ export type {
   SaveRecipeInput,
   UpdateRecipeInput,
   TagItem,
+  ShoppingItem,
+  ShoppingItemSource,
   CookingPhotoItem,
   SaveCookingLogInput,
   SaveCookingPhotoInput,
