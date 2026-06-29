@@ -237,18 +237,30 @@ function withDaidokoBlockedStoragePermissions(config) {
 
 // Ask Google Play Services to download the ML Kit models at install time so the
 // first OCR / image-labeling call doesn't have to wait on (or fail without) a
-// model download. "ocr" = text recognition, "ica" = image-labeling. The
-// Japanese script model is fetched on demand by the recognizer when needed.
+// model download. "ocr" = text recognition, "ica" = image-labeling,
+// "barcode_ui" = expo-camera's GMS barcode scanner. expo-camera declares the
+// same `com.google.mlkit.vision.DEPENDENCIES` meta-data with only `barcode_ui`,
+// so we emit the UNION here and add `tools:replace` to win the manifest merge
+// (otherwise the two conflicting values fail `processReleaseMainManifest`).
 function withDaidokoMlKitModelMetadata(config) {
   return withAndroidManifest(config, (configWithManifest) => {
+    const manifest = configWithManifest.modResults.manifest;
+    manifest.$['xmlns:tools'] = manifest.$['xmlns:tools'] || 'http://schemas.android.com/tools';
+
     const application = AndroidConfig.Manifest.getMainApplicationOrThrow(
       configWithManifest.modResults,
     );
     AndroidConfig.Manifest.addMetaDataItemToMainApplication(
       application,
       'com.google.mlkit.vision.DEPENDENCIES',
-      'ocr,ica',
+      'ocr,ica,barcode_ui',
     );
+    const metaData = (application['meta-data'] ?? []).find(
+      (item) => item.$?.['android:name'] === 'com.google.mlkit.vision.DEPENDENCIES',
+    );
+    if (metaData) {
+      metaData.$['tools:replace'] = 'android:value';
+    }
     return configWithManifest;
   });
 }
