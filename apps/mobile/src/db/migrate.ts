@@ -22,7 +22,7 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -251,6 +251,22 @@ const CREATE_TABLES_SQL = `
     ingredient_names,
     tokenize='unicode61'
   );
+
+  CREATE TABLE IF NOT EXISTS shopping_items (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    name TEXT NOT NULL,
+    name_normalized TEXT NOT NULL,
+    amount TEXT,
+    checked INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'manual',
+    recipe_id TEXT REFERENCES recipes(id),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    checked_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_shopping_items_family_checked ON shopping_items(family_id, checked);
 `;
 
 /** Run migrations (create tables) */

@@ -291,3 +291,27 @@ export const ingredientNutrition = sqliteTable('ingredient_nutrition', {
   dataSource: text('data_source').notNull().default('manual'), // 'manual' | 'api' | 'estimated'
   updatedAt: text('updated_at').notNull(),
 });
+
+// ─── ShoppingItem（買い物リスト, P1）────────────────────────────────────────
+// 集約買い物リスト。家族グループ単位。名前正規化キーで突合（docs/買い物リスト・在庫設計.md）。
+export const shoppingItems = sqliteTable(
+  'shopping_items',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    name: text('name').notNull(),
+    nameNormalized: text('name_normalized').notNull(),
+    amount: text('amount'),
+    checked: integer('checked').notNull().default(0),
+    source: text('source').notNull().default('manual'), // 'manual' | 'recipe' | 'low_stock' | 'receipt'
+    recipeId: text('recipe_id').references(() => recipes.id),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: text('created_at').notNull(),
+    checkedAt: text('checked_at'),
+  },
+  (table) => ({
+    familyCheckedIdx: index('idx_shopping_items_family_checked').on(table.familyId, table.checked),
+  }),
+);

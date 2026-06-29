@@ -182,3 +182,14 @@ export interface CookingLogEntry {
   memo: string | null;
   photos: CookingPhotoItem[];
 }
+
+export type ShoppingItemSource = 'manual' | 'recipe' | 'low_stock' | 'receipt';
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  amount: string | null;
+  checked: boolean;
+  source: ShoppingItemSource;
+  recipeId: string | null;
+}
