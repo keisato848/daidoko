@@ -51,6 +51,12 @@
           "cameraPermission": "レシピ写真を撮影するためにカメラを使用します。"
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "バーコード（JAN）を読み取るためにカメラを使用します。"
+        }
+      ],
       "./plugins/withDaidokoOcr",
       [
         "react-native-google-mobile-ads",

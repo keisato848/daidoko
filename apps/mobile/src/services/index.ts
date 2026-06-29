@@ -35,6 +35,7 @@ export {
   getInStockNormalizedNames,
   moveCheckedShoppingItemsToPantry,
 } from './pantry.service';
+export { lookupJan, rememberJan } from './jan.service';
 export {
   addFamilyMember,
   getCurrentFamily,
