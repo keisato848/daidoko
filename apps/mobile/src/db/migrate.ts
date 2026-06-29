@@ -22,7 +22,7 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -282,6 +282,17 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_pantry_items_family_name ON pantry_items(family_id, name_normalized);
+
+  CREATE TABLE IF NOT EXISTS jan_catalog (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    jan_code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    unit TEXT,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_jan_catalog_family_jan ON jan_catalog(family_id, jan_code);
 `;
 
 /** Run migrations (create tables) */

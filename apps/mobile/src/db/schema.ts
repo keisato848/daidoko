@@ -338,3 +338,22 @@ export const pantryItems = sqliteTable(
     familyNameIdx: index('idx_pantry_items_family_name').on(table.familyId, table.nameNormalized),
   }),
 );
+
+// ─── JanCatalog（JAN→商品名の記憶, P2b）─────────────────────────────────────
+// バーコード(JAN)→名前/単位 のローカル辞書。初回入力で記憶し、次回スキャンで自動補完。
+export const janCatalog = sqliteTable(
+  'jan_catalog',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    janCode: text('jan_code').notNull(),
+    name: text('name').notNull(),
+    unit: text('unit'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familyJanIdx: uniqueIndex('idx_jan_catalog_family_jan').on(table.familyId, table.janCode),
+  }),
+);
