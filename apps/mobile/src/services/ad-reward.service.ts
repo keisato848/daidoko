@@ -3,9 +3,15 @@
  * for one more" path. Defaults to a stub that disables all ad UI; wiring AdMob
  * activates real rewarded ads. See docs/フリーミアム設計.md.
  */
+import { Platform } from 'react-native';
+
+import { AdMobRewardProvider } from './ad-reward.admob';
+import { ADMOB_ENABLED } from '../config';
 import type { AdRewardProvider, RewardedAdResult } from './ad-reward.types';
 
-/** Fallback provider: no ads available (default until AdMob is wired). */
+const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
+
+/** Fallback provider: no ads available (used when AdMob is disabled). */
 export class StubAdRewardProvider implements AdRewardProvider {
   isAvailable(): boolean {
     return false;
@@ -17,12 +23,19 @@ export class StubAdRewardProvider implements AdRewardProvider {
 
 let cachedProvider: AdRewardProvider | null = null;
 
+/** Whether real AdMob rewarded ads are wired (env flag + native). */
+export function isAdRewardConfigured(): boolean {
+  return isNative && ADMOB_ENABLED;
+}
+
 export function getAdRewardProvider(): AdRewardProvider {
-  // To enable real ads: install react-native-google-mobile-ads, add the config
-  // plugin + your AdMob IDs, drop in the AdMobRewardProvider from
-  // docs/フリーミアム設計.md, and return it here (guarded by an env flag). Until
-  // then the stub keeps every ad affordance hidden and the app unchanged.
-  if (!cachedProvider) cachedProvider = new StubAdRewardProvider();
+  // AdMob is selected only when EXPO_PUBLIC_ADMOB_ENABLED=true on a native build;
+  // otherwise the stub keeps every ad affordance hidden and the app unchanged.
+  if (!cachedProvider) {
+    cachedProvider = isAdRewardConfigured()
+      ? new AdMobRewardProvider()
+      : new StubAdRewardProvider();
+  }
   return cachedProvider;
 }
 
