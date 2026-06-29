@@ -315,3 +315,26 @@ export const shoppingItems = sqliteTable(
     familyCheckedIdx: index('idx_shopping_items_family_checked').on(table.familyId, table.checked),
   }),
 );
+
+// ─── PantryItem（在庫, P2）──────────────────────────────────────────────────
+// 家の在庫。数量×単位は厳密管理（同一商品は合算）。包装品は jan_code で識別（P2b）。
+export const pantryItems = sqliteTable(
+  'pantry_items',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    name: text('name').notNull(),
+    nameNormalized: text('name_normalized').notNull(),
+    quantity: real('quantity'),
+    unit: text('unit'),
+    lowStockThreshold: real('low_stock_threshold'),
+    janCode: text('jan_code'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familyNameIdx: index('idx_pantry_items_family_name').on(table.familyId, table.nameNormalized),
+  }),
+);

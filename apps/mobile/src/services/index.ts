@@ -22,10 +22,19 @@ export {
   getShoppingItems,
   addShoppingItem,
   addRecipeIngredientsToList,
+  addMissingRecipeIngredientsToList,
   setShoppingItemChecked,
   removeShoppingItem,
   clearCheckedShoppingItems,
 } from './shopping-list.service';
+export {
+  getPantryItems,
+  addPantryItem,
+  updatePantryItem,
+  removePantryItem,
+  getInStockNormalizedNames,
+  moveCheckedShoppingItemsToPantry,
+} from './pantry.service';
 export {
   addFamilyMember,
   getCurrentFamily,
@@ -52,6 +61,7 @@ export type {
   TagItem,
   ShoppingItem,
   ShoppingItemSource,
+  PantryItem,
   CookingPhotoItem,
   SaveCookingLogInput,
   SaveCookingPhotoInput,

@@ -15,7 +15,7 @@ import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
 import { Colors } from '../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
-import { addRecipeIngredientsToList } from '../../../src/services/shopping-list.service';
+import { addMissingRecipeIngredientsToList } from '../../../src/services/shopping-list.service';
 import {
   deleteRecipe,
   getMemosForRecipe,
@@ -231,15 +231,17 @@ export default function RecipeDetailScreen() {
             <Pressable
               style={styles.addToListButton}
               onPress={async () => {
-                const added = await addRecipeIngredientsToList(recipe.id);
+                const added = await addMissingRecipeIngredientsToList(recipe.id);
                 Alert.alert(
                   '買い物リスト',
-                  added > 0 ? `${added}件を買い物リストに追加しました` : 'すべて追加済みです',
+                  added > 0
+                    ? `足りない${added}件を買い物リストに追加しました`
+                    : 'すべて在庫にあります',
                 );
               }}
             >
               <ShoppingCart size={16} color={Colors.gold} />
-              <Text style={styles.addToListText}>材料を買い物リストに追加</Text>
+              <Text style={styles.addToListText}>足りない材料を買い物リストに追加</Text>
             </Pressable>
           </View>
         )}

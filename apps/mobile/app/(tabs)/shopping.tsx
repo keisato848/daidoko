@@ -4,11 +4,12 @@
  * レシピ詳細の「材料を買い物リストに追加」から。docs/買い物リスト・在庫設計.md §5.1
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Check, Plus, Trash2, X } from 'lucide-react-native';
+import { Check, Package, Plus, Trash2, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
+import { moveCheckedShoppingItemsToPantry } from '../../src/services/pantry.service';
 import {
   addShoppingItem,
   clearCheckedShoppingItems,
@@ -64,6 +65,11 @@ export default function ShoppingListScreen() {
     refresh();
   }, [refresh]);
 
+  const handleMoveToPantry = useCallback(async () => {
+    await moveCheckedShoppingItemsToPantry().catch(() => undefined);
+    refresh();
+  }, [refresh]);
+
   const checkedCount = items.filter((it) => it.checked).length;
 
   return (
@@ -73,7 +79,13 @@ export default function ShoppingListScreen() {
           <X size={20} color={Colors.muted} />
         </Pressable>
         <Text style={styles.headerTitle}>買い物リスト</Text>
-        <View style={styles.headerSpacer} />
+        <Pressable
+          onPress={() => router.push('/(tabs)/pantry')}
+          hitSlop={10}
+          accessibilityLabel="在庫"
+        >
+          <Text style={styles.headerLink}>在庫</Text>
+        </Pressable>
       </View>
 
       <View style={styles.addRow}>
@@ -125,10 +137,20 @@ export default function ShoppingListScreen() {
       />
 
       {checkedCount > 0 && (
-        <Pressable style={styles.clearButton} onPress={handleClearChecked}>
-          <Trash2 size={16} color={Colors.muted} />
-          <Text style={styles.clearText}>チェック済みを削除（{checkedCount}）</Text>
-        </Pressable>
+        <View style={styles.footer}>
+          <Pressable style={styles.pantryButton} onPress={handleMoveToPantry}>
+            <Package size={16} color={Colors.gold} />
+            <Text style={styles.pantryButtonText}>在庫に入れる（{checkedCount}）</Text>
+          </Pressable>
+          <Pressable
+            style={styles.clearButton}
+            onPress={handleClearChecked}
+            accessibilityLabel="チェック済みを削除"
+          >
+            <Trash2 size={16} color={Colors.muted} />
+            <Text style={styles.clearText}>削除</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -147,7 +169,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
-  headerSpacer: { width: 20 },
+  headerLink: { fontSize: 13, color: Colors.gold },
   addRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -200,14 +222,35 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 15, color: Colors.paper },
   itemNameChecked: { color: Colors.muted, textDecorationLine: 'line-through' },
   itemAmount: { fontSize: 12, color: Colors.paperDim },
-  clearButton: {
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  pantryButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.gold,
+    backgroundColor: '#150F07',
+  },
+  pantryButtonText: { fontSize: 14, fontWeight: '600', color: Colors.gold },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   clearText: { fontSize: 13, color: Colors.muted },
 });

@@ -193,3 +193,12 @@ export interface ShoppingItem {
   source: ShoppingItemSource;
   recipeId: string | null;
 }
+
+export interface PantryItem {
+  id: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  lowStockThreshold: number | null;
+  janCode: string | null;
+}
