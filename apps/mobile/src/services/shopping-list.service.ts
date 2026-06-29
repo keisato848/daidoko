@@ -141,6 +141,30 @@ export async function addRecipeIngredientsToList(recipeId: string): Promise<numb
   return added;
 }
 
+/**
+ * Add only the recipe's ingredients NOT currently in the pantry (足りない材料).
+ * With an empty pantry this equals addRecipeIngredientsToList. Returns count added.
+ */
+export async function addMissingRecipeIngredientsToList(recipeId: string): Promise<number> {
+  if (!isNativePlatform) return 0;
+  const detail = await getRecipeDetail(recipeId);
+  if (!detail) return 0;
+
+  const { getInStockNormalizedNames } = await import('./pantry.service');
+  const inStock = await getInStockNormalizedNames();
+
+  let added = 0;
+  for (const ingredient of detail.ingredients) {
+    if (inStock.has(normalizeItemName(ingredient.name))) continue;
+    const result = await addShoppingItem(ingredient.name, ingredient.amount ?? undefined, {
+      source: 'recipe',
+      recipeId,
+    });
+    if (result) added += 1;
+  }
+  return added;
+}
+
 export async function setShoppingItemChecked(id: string, checked: boolean): Promise<void> {
   if (!isNativePlatform) return;
   const { eq } = await import('drizzle-orm');
