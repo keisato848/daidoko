@@ -1,5 +1,6 @@
 let mockStore: Record<string, string> = {};
 let mockPremium = false;
+let mockAdAvailable = false;
 
 jest.mock('../app-meta.service', () => ({
   getAppMeta: jest.fn(async (key: string) => mockStore[key] ?? null),
@@ -12,12 +13,19 @@ jest.mock('../entitlement.service', () => ({
   isPremium: jest.fn(async () => mockPremium),
 }));
 
+jest.mock('../ad-reward.service', () => ({
+  isAdRewardAvailable: jest.fn(() => mockAdAvailable),
+}));
+
 import {
+  AD_BONUS_DAILY_LIMIT,
   currentDayKey,
   deriveFreemiumStatus,
   FREE_DAILY_LIMIT,
+  getAdBonusGranted,
   getDailyUsage,
   getFreemiumStatus,
+  grantAdBonus,
   incrementDailyUsage,
   recordCloudInference,
   remainingFree,
@@ -27,6 +35,7 @@ describe('usage.service', () => {
   beforeEach(() => {
     mockStore = {};
     mockPremium = false;
+    mockAdAvailable = false;
   });
 
   describe('currentDayKey', () => {
@@ -103,6 +112,51 @@ describe('usage.service', () => {
       mockPremium = true;
       await recordCloudInference();
       expect(await getDailyUsage()).toBe(0);
+    });
+  });
+
+  describe('ad bonus', () => {
+    it('grants extra uses up to the daily cap', async () => {
+      const d = new Date(2026, 5, 10);
+      expect(await getAdBonusGranted(d)).toBe(0);
+      expect(await grantAdBonus(d)).toBe(1);
+      expect(await grantAdBonus(d)).toBe(2);
+      expect(await grantAdBonus(d)).toBe(AD_BONUS_DAILY_LIMIT);
+      // further grants are capped
+      expect(await grantAdBonus(d)).toBe(AD_BONUS_DAILY_LIMIT);
+    });
+
+    it('raises the effective allowance via deriveFreemiumStatus', () => {
+      // used 1 (base spent) but 1 ad bonus granted → 1 use left
+      expect(deriveFreemiumStatus(false, 1, 1, true)).toMatchObject({
+        remaining: 1,
+        canInfer: true,
+      });
+    });
+
+    it('offers an ad only when out of uses, ads available, cap not reached', () => {
+      expect(deriveFreemiumStatus(false, 1, 0, true).canWatchAdForMore).toBe(true);
+      // ads unavailable → no offer
+      expect(deriveFreemiumStatus(false, 1, 0, false).canWatchAdForMore).toBe(false);
+      // still has a use left → no offer yet
+      expect(deriveFreemiumStatus(false, 0, 0, true).canWatchAdForMore).toBe(false);
+      // bonus cap reached → no offer
+      expect(
+        deriveFreemiumStatus(false, 1 + AD_BONUS_DAILY_LIMIT, AD_BONUS_DAILY_LIMIT, true)
+          .canWatchAdForMore,
+      ).toBe(false);
+    });
+
+    it('never offers ads to premium users', () => {
+      expect(deriveFreemiumStatus(true, 0, 0, true).canWatchAdForMore).toBe(false);
+    });
+
+    it('getFreemiumStatus surfaces the ad option when available and exhausted', async () => {
+      mockAdAvailable = true;
+      await recordCloudInference(); // use the 1 free daily
+      const status = await getFreemiumStatus();
+      expect(status.canInfer).toBe(false);
+      expect(status.canWatchAdForMore).toBe(true);
     });
   });
 });

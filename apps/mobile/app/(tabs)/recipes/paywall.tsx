@@ -1,9 +1,10 @@
 /**
- * Paywall — upsell to premium (unlimited AI photo-recipes).
- * Reached when a free user has used their monthly quota, or from Settings.
+ * Paywall — get more AI photo-recipes: watch a rewarded ad for one more, or
+ * subscribe to premium (unlimited, ad-free). Reached when a free user has used
+ * their daily quota, or from Settings.
  */
 import { useRouter } from 'expo-router';
-import { Check, Crown, X } from 'lucide-react-native';
+import { Check, Crown, Gift, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,9 +17,14 @@ import {
 } from 'react-native';
 
 import { Colors } from '../../../src/constants/theme';
+import { getAdRewardProvider } from '../../../src/services/ad-reward.service';
 import { getEntitlementProvider } from '../../../src/services/entitlement.service';
 import { EntitlementUnavailableError } from '../../../src/services/entitlement.types';
-import { FREE_DAILY_LIMIT } from '../../../src/services/usage.service';
+import {
+  FREE_DAILY_LIMIT,
+  getFreemiumStatus,
+  grantAdBonus,
+} from '../../../src/services/usage.service';
 
 const BENEFITS = [
   '写真からのレシピづくりが使い放題',
@@ -31,6 +37,7 @@ export default function PaywallScreen() {
   const [price, setPrice] = useState<string | null>(null);
   const [loadingOffer, setLoadingOffer] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [canWatchAd, setCanWatchAd] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -45,10 +52,33 @@ export default function PaywallScreen() {
       .finally(() => {
         if (mounted) setLoadingOffer(false);
       });
+    getFreemiumStatus()
+      .then((status) => {
+        if (mounted) setCanWatchAd(status.canWatchAdForMore);
+      })
+      .catch(() => {
+        if (mounted) setCanWatchAd(false);
+      });
     return () => {
       mounted = false;
     };
   }, []);
+
+  const handleWatchAd = useCallback(async () => {
+    setBusy(true);
+    try {
+      const { rewarded } = await getAdRewardProvider().showRewardedAd();
+      if (rewarded) {
+        await grantAdBonus();
+        Alert.alert('ありがとうございます', '写真からのレシピづくりを 1 回ぶん追加しました。');
+        router.back();
+      }
+    } catch {
+      Alert.alert('お知らせ', '広告を読み込めませんでした。時間をおいてお試しください。');
+    } finally {
+      setBusy(false);
+    }
+  }, [router]);
 
   const handleSubscribe = useCallback(async () => {
     setBusy(true);
@@ -143,6 +173,21 @@ export default function PaywallScreen() {
             <Text style={styles.subscribeText}>プレミアムを始める</Text>
           )}
         </Pressable>
+
+        {canWatchAd && (
+          <>
+            <Text style={styles.orText}>または</Text>
+            <Pressable
+              accessibilityRole="button"
+              style={[styles.adButton, busy && styles.buttonDisabled]}
+              onPress={handleWatchAd}
+              disabled={busy}
+            >
+              <Gift size={18} color={Colors.gold} />
+              <Text style={styles.adButtonText}>広告を見て 1 回ぶん使う</Text>
+            </Pressable>
+          </>
+        )}
 
         <Pressable
           accessibilityRole="button"
@@ -253,6 +298,29 @@ const styles = StyleSheet.create({
     color: Colors.bg,
   },
   buttonDisabled: { opacity: 0.55 },
+  orText: {
+    fontSize: 12,
+    color: Colors.muted,
+    textAlign: 'center',
+  },
+  adButton: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.gold,
+    backgroundColor: '#150F07',
+    minHeight: 48,
+  },
+  adButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.gold,
+  },
   restoreButton: {
     paddingVertical: 8,
   },
