@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { generateId } from '../utils/id';
 import type { CapturedPhoto } from './photo-capture.service';

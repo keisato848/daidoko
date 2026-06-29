@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 import { getDb, getExpoDb, isNativePlatform } from '../db/client';
@@ -525,7 +525,7 @@ function createPayloadFromDatabase(): LocalBackupPayload {
 }
 
 async function fileSize(uri: string): Promise<number> {
-  const info = await FileSystem.getInfoAsync(uri, { size: true });
+  const info = await FileSystem.getInfoAsync(uri);
   return info.exists && typeof info.size === 'number' ? info.size : 0;
 }
 
@@ -540,7 +540,7 @@ export async function listLocalBackups(): Promise<BackupFileSummary[]> {
   const summaries = await Promise.all(
     backupFiles.map(async (fileName) => {
       const uri = `${directory}${fileName}`;
-      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      const info = await FileSystem.getInfoAsync(uri);
       return {
         uri,
         fileName,
@@ -566,7 +566,7 @@ export async function listMigrationBackupPackages(): Promise<BackupFileSummary[]
   const summaries = await Promise.all(
     backupFiles.map(async (fileName) => {
       const uri = `${directory}${fileName}`;
-      const info = await FileSystem.getInfoAsync(uri, { size: true });
+      const info = await FileSystem.getInfoAsync(uri);
       return {
         uri,
         fileName,

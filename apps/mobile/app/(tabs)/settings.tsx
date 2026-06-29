@@ -2,6 +2,7 @@
  * S15: Settings hub
  * Account, family, data management, and app info sections
  */
+import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
@@ -15,6 +16,7 @@ import {
   getCurrentUser,
   getCurrentUserProfile,
 } from '../../src/services/user.service';
+import { getFreemiumStatus, type FreemiumStatus } from '../../src/services/usage.service';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 
 interface SettingItem {
@@ -31,13 +33,14 @@ interface SettingSection {
   items: SettingItem[];
 }
 
-const APP_VERSION_LABEL = 'v1.0.0';
+const APP_VERSION_LABEL = `v${Constants.expoConfig?.version ?? '1.1.0'}`;
 const FUTURE_STATUS_LABEL = '今後追加予定';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const [user, setUser] = useState(getCurrentUser());
   const [family, setFamily] = useState(getCurrentFamily());
+  const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
   const userDisplayName = formatProfileDisplayName(user.displayName);
 
   useFocusEffect(
@@ -48,14 +51,58 @@ export default function SettingsScreen() {
           setFamily(nextFamily);
         },
       );
+      void getFreemiumStatus()
+        .then(setFreemium)
+        .catch(() => setFreemium(null));
     }, []),
   );
+
+  // Plan row content depends on premium state (avoid nested ternaries).
+  let planLabel = 'プレミアムにする';
+  let planSubtitle = '読み込み中…';
+  let planOnPress = () => router.push('/recipes/paywall');
+  if (freemium) {
+    if (freemium.isPremium) {
+      planLabel = 'プレミアム';
+      planSubtitle = 'プレミアム・使い放題';
+      planOnPress = () =>
+        Alert.alert(
+          'プレミアム',
+          'プレミアムをご利用中です。解約はストアの定期購入設定からいつでも行えます。',
+        );
+    } else if (freemium.isByok) {
+      planLabel = '自分のAIキー';
+      planSubtitle = '自分のキーで使い放題';
+      planOnPress = () => router.push('/(tabs)/ai-key');
+    } else {
+      planSubtitle = `無料・今日あと ${freemium.remaining} 回`;
+    }
+  }
 
   const showComingSoon = () => {
     Alert.alert('準備中', 'この機能は今後のバージョンで追加予定です。');
   };
 
   const sections: SettingSection[] = [
+    {
+      title: 'プラン',
+      items: [
+        {
+          id: 'plan',
+          label: planLabel,
+          subtitle: planSubtitle,
+          enabled: true,
+          onPress: planOnPress,
+        },
+        {
+          id: 'byok',
+          label: '自分のAIキーを使う',
+          subtitle: freemium?.isByok ? '設定済み（無制限）' : 'Gemini キーで無制限に',
+          enabled: true,
+          onPress: () => router.push('/(tabs)/ai-key'),
+        },
+      ],
+    },
     {
       title: 'アカウント',
       items: [

@@ -1,0 +1,25 @@
+{
+  "name": "daidoko-infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS CDK infra for the daidoko Vision inference server (Lambda + Function URL, with budget guardrails)",
+  "scripts": {
+    "cdk": "cdk",
+    "bootstrap": "cdk bootstrap",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "aws-cdk": "^2.150.0",
+    "esbuild": "^0.23.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

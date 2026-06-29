@@ -196,6 +196,7 @@ export function getMockRecipeList(): RecipeListItem[] {
         ingredientNames: ings,
         createdAt: recipe.createdAt,
         cookCount: recipeLogs.length,
+        heroPhotoUri: null,
       };
     });
 }
@@ -239,6 +240,7 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     tags,
     ingredients,
     steps,
+    heroPhotoUri: null,
   };
 }
 
@@ -454,7 +456,7 @@ export function createMockPhotoSource(input: {
     url: null,
     ocrRawText: input.labelSummary ?? null,
     siteName: null,
-    pageTitle: '料理写真から推測',
+    pageTitle: '写真からレシピ',
     thumbnailUrl: null,
     capturedAt: input.capturedAt ?? now,
     createdAt: now,

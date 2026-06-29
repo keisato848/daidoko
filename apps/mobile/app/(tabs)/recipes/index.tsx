@@ -9,6 +9,7 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -161,7 +162,15 @@ export default function RecipeListScreen() {
         }}
       >
         <View style={styles.cardImage}>
-          <Text style={styles.cardEmoji}>{getEmoji(item.title)}</Text>
+          {item.heroPhotoUri ? (
+            <Image
+              source={{ uri: item.heroPhotoUri }}
+              style={styles.cardImagePhoto}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text style={styles.cardEmoji}>{getEmoji(item.title)}</Text>
+          )}
           {selectMode && (
             <View style={[styles.checkBadge, isSelected && styles.checkBadgeSelected]}>
               {isSelected && <Text style={styles.checkMark}>✓</Text>}
@@ -463,6 +472,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   cardEmoji: { fontSize: 28 },
+  cardImagePhoto: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   cardBody: { padding: 10 },
   cardTitle: {
     fontSize: 15, // base: レシピカードタイトル

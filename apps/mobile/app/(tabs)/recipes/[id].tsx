@@ -5,7 +5,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
 import { EmptyState } from '../../../src/components/EmptyState';
@@ -15,8 +15,12 @@ import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
 import { Colors } from '../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
-import { deleteRecipe, getRecipeDetail } from '../../../src/services/recipe.service';
-import type { RecipeDetail, TimelineEntry } from '../../../src/services/types';
+import {
+  deleteRecipe,
+  getMemosForRecipe,
+  getRecipeDetail,
+} from '../../../src/services/recipe.service';
+import type { MemoItem, RecipeDetail, TimelineEntry } from '../../../src/services/types';
 import { formatProfileDisplayName } from '../../../src/utils/profile';
 
 type TabKey = 'ingredients' | 'steps' | 'memo' | 'history';
@@ -53,6 +57,7 @@ export default function RecipeDetailScreen() {
   const [tab, setTab] = useState<TabKey>('ingredients');
   const [showMenu, setShowMenu] = useState(false);
   const [cookingLogs, setCookingLogs] = useState<TimelineEntry[]>([]);
+  const [memos, setMemos] = useState<MemoItem[]>([]);
 
   const loadRecipe = useCallback(async () => {
     if (!id) {
@@ -70,13 +75,19 @@ export default function RecipeDetailScreen() {
     setCookingLogs(await getLogsForRecipe(id));
   }, [id]);
 
+  const loadMemos = useCallback(async () => {
+    if (!id) return;
+    setMemos(await getMemosForRecipe(id));
+  }, [id]);
+
   useEffect(() => {
     void loadRecipe();
   }, [loadRecipe]);
 
   useEffect(() => {
     if (tab === 'history') void loadLogs();
-  }, [tab, loadLogs]);
+    if (tab === 'memo') void loadMemos();
+  }, [tab, loadLogs, loadMemos]);
 
   const handleDelete = () => {
     if (!id) return;
@@ -122,7 +133,15 @@ export default function RecipeDetailScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
-        <Text style={styles.heroEmoji}>{getEmoji(recipe.title)}</Text>
+        {recipe.heroPhotoUri ? (
+          <Image
+            source={{ uri: recipe.heroPhotoUri }}
+            style={styles.heroPhoto}
+            resizeMode="cover"
+          />
+        ) : (
+          <Text style={styles.heroEmoji}>{getEmoji(recipe.title)}</Text>
+        )}
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={20} color={Colors.goldDim} />
           <Text style={styles.backText}>戻る</Text>
@@ -237,8 +256,16 @@ export default function RecipeDetailScreen() {
         )}
 
         {tab === 'memo' &&
-          (recipe.description ? (
-            <Text style={styles.memoBody}>{recipe.description}</Text>
+          (recipe.description || memos.length > 0 ? (
+            <View style={styles.memoList}>
+              {recipe.description && <Text style={styles.memoBody}>{recipe.description}</Text>}
+              {memos.map((memo) => (
+                <View key={memo.id} style={styles.memoCard}>
+                  <Text style={styles.memoBody}>{memo.body}</Text>
+                  <Text style={styles.memoDate}>{formatDate(memo.createdAt)}</Text>
+                </View>
+              ))}
+            </View>
           ) : (
             <View style={styles.memoContainer}>
               <Text style={styles.memoPlaceholder}>メモはまだありません</Text>
@@ -289,11 +316,14 @@ export default function RecipeDetailScreen() {
           <ShoppingCart size={18} color={Colors.gold} />
         </PressableScale>
         <PressableScale
+          containerStyle={styles.ctaButtonOuter}
           style={styles.ctaButton}
           scaleTo={0.97}
           onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
         >
-          <Text style={styles.ctaText}>調理開始</Text>
+          <Text style={styles.ctaText} numberOfLines={1}>
+            調理開始
+          </Text>
         </PressableScale>
       </View>
     </View>
@@ -311,6 +341,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   heroEmoji: { fontSize: 56 },
+  heroPhoto: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   backButton: {
     position: 'absolute',
     top: 50,
@@ -459,11 +490,25 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: Colors.paperDim,
   },
+  memoList: { gap: 14 },
   memoBody: {
     fontSize: 15,
     fontWeight: '400',
     color: Colors.paper,
     lineHeight: 24,
+  },
+  memoCard: {
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    padding: 12,
+    gap: 6,
+  },
+  memoDate: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: Colors.paperDim,
   },
   historyHint: {
     fontSize: 13,
@@ -527,17 +572,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaButton: {
+  ctaButtonOuter: {
     flex: 1,
+  },
+  ctaButton: {
     paddingVertical: 14,
+    paddingHorizontal: 16,
     backgroundColor: Colors.gold,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaText: {
     color: Colors.bg,
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    letterSpacing: 2,
+    letterSpacing: 1,
   },
 });

@@ -42,8 +42,8 @@ const METHODS: MethodOption[] = [
   {
     id: 'photo',
     icon: <Camera size={24} color={Colors.gold} />,
-    label: '料理写真から推測',
-    description: '写っている料理から下書き案を作成',
+    label: '写真からレシピ',
+    description: '料理の写真からレシピの下書きをつくる',
     enabled: true,
   },
   {

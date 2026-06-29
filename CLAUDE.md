@@ -22,6 +22,7 @@
 | `docs/画面設計.md`               | 全画面の UI 仕様・コンポーネント対応表                | 画面実装前                |
 | `docs/アーキテクチャ設計.md`     | 技術スタック・同期設計・API エンドポイント一覧        | 構成変更・新機能追加前    |
 | `docs/レシピ作成フロー.md`       | URL取り込み・OCR・手動入力のロジック詳細              | A1/A2/A4/A5 実装前        |
+| `docs/フリーミアム設計.md`       | AI写真レシピの無料枠・課金(RevenueCat)・ゲート設計    | 課金/写真レシピ変更前     |
 | `docs/マルチエージェント設計.md` | A1〜A8 エージェントの責務・インターフェース           | 各エージェント実装前      |
 | `docs/エージェントフック設計.md` | AgentBridge・Hook システム・ログファイル設計          | Bridge 実装前             |
 | `docs/品質基準.md`               | テストカバレッジ閾値・CI ゲート・パフォーマンス目標値 | PR 作成前に必ず確認       |
@@ -37,7 +38,7 @@
 ```
 daidoko/
 ├── apps/
-│   ├── mobile/          # Expo SDK 51 + Expo Router v3
+│   ├── mobile/          # Expo SDK 54 + Expo Router v6
 │   └── server/          # Hono + Node.js 20 + PostgreSQL 16
 └── packages/
     └── shared/          # 共通型・Zod スキーマ・定数
@@ -49,8 +50,8 @@ daidoko/
 
 | 役割             | ライブラリ                          |
 | ---------------- | ----------------------------------- |
-| フレームワーク   | Expo SDK 51                         |
-| ナビゲーション   | Expo Router v3（ファイルベース）    |
+| フレームワーク   | Expo SDK 54                         |
+| ナビゲーション   | Expo Router v6（ファイルベース）    |
 | ローカル DB      | expo-sqlite + Drizzle ORM           |
 | サーバー状態     | TanStack Query v5                   |
 | クライアント状態 | Zustand                             |

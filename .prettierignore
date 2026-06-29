@@ -1,0 +1,21 @@
+# Generated lockfiles — managed by their own tools, not Prettier
+pnpm-lock.yaml
+
+# Dependencies / build output
+node_modules
+**/node_modules
+apps/mobile/android
+apps/mobile/ios
+**/dist
+**/build
+**/.expo
+
+# Binary assets — not formattable by Prettier
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.webp
+**/*.ico
+**/*.aab
+**/*.apk

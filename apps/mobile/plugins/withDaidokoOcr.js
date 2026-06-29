@@ -3,64 +3,23 @@ const {
   withAndroidManifest,
   withAppBuildGradle,
   withDangerousMod,
-  withGradleProperties,
   withMainApplication,
 } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
+// Unbundled (Google Play Services) ML Kit. Unlike the bundled `com.google.mlkit:*`
+// artifacts, these wrappers ship NO native `.so` in the app — the inference code
+// lives in Google Play Services (kept 16 KB-aligned by Google and downloaded on
+// demand). This keeps the app's native libraries 16 KB page-size compliant.
 const ML_KIT_DEPENDENCIES = [
-  'implementation("com.google.mlkit:text-recognition-japanese:16.0.1")',
-  'implementation("com.google.mlkit:image-labeling:17.0.9")',
+  'implementation("com.google.android.gms:play-services-mlkit-text-recognition-japanese:16.0.1")',
+  'implementation("com.google.android.gms:play-services-mlkit-image-labeling:16.0.8")',
 ];
-const ANDROID_BUILD_PROPERTIES = {
-  'android.compileSdkVersion': '35',
-  'android.targetSdkVersion': '35',
-  'android.suppressUnsupportedCompileSdk': '35',
-};
-const PLAY_SIGNING_SETUP = `
-def keystoreProperties = new Properties()
-def keystorePropertiesFile = rootProject.file('keystore.properties')
-if (keystorePropertiesFile.exists()) {
-  keystorePropertiesFile.withInputStream { stream ->
-    keystoreProperties.load(stream)
-  }
-}
-
-def propOrEnv = { name ->
-  def value = findProperty(name) ?: keystoreProperties.getProperty(name) ?: System.getenv(name)
-  value == null ? null : value.toString().trim()
-}
-
-def uploadStoreFilePath = propOrEnv('DAIDOKO_UPLOAD_STORE_FILE')
-def uploadStorePassword = propOrEnv('DAIDOKO_UPLOAD_STORE_PASSWORD')
-def uploadKeyAlias = propOrEnv('DAIDOKO_UPLOAD_KEY_ALIAS')
-def uploadKeyPassword = propOrEnv('DAIDOKO_UPLOAD_KEY_PASSWORD')
-def hasUploadSigning = [uploadStoreFilePath, uploadStorePassword, uploadKeyAlias, uploadKeyPassword].every { it }
-
-gradle.taskGraph.whenReady { taskGraph ->
-  def bundlesRelease = taskGraph.allTasks.any { it.path == ':app:bundleRelease' || it.name == 'bundleRelease' }
-  // EAS Build injects its own managed release keystore into this file before
-  // running gradle and sets EAS_BUILD=true; AGP's android.injected.signing.*
-  // properties aren't populated at configuration time, so check the env var.
-  def hasInjectedSigning = project.hasProperty('android.injected.signing.store.file') ||
-    System.getenv('EAS_BUILD') == 'true'
-  if (bundlesRelease && !hasUploadSigning && !hasInjectedSigning) {
-    throw new RuntimeException('Google Play bundleRelease requires DAIDOKO_UPLOAD_STORE_FILE, DAIDOKO_UPLOAD_STORE_PASSWORD, DAIDOKO_UPLOAD_KEY_ALIAS, and DAIDOKO_UPLOAD_KEY_PASSWORD. Set them as environment variables or in apps/mobile/android/keystore.properties.')
-  }
-}
-`;
-const PLAY_RELEASE_SIGNING_CONFIG = `
-    if (hasUploadSigning) {
-      release {
-        storeFile rootProject.file(uploadStoreFilePath)
-        storePassword uploadStorePassword
-        keyAlias uploadKeyAlias
-        keyPassword uploadKeyPassword
-      }
-    }`;
 const OCR_IMPORT = 'import com.daidoko.app.ocr.DaidokoOcrPackage';
-const OCR_PACKAGE_REGISTRATION = '            packages.add(DaidokoOcrPackage())';
+// Inserted inside `PackageList(this).packages.apply { ... }` in the SDK 54
+// MainApplication template (indentation matches that block).
+const OCR_PACKAGE_REGISTRATION = '              add(DaidokoOcrPackage())';
 
 const OCR_PACKAGE_SOURCE = `package com.daidoko.app.ocr
 
@@ -276,24 +235,21 @@ function withDaidokoBlockedStoragePermissions(config) {
   ]);
 }
 
-function upsertGradleProperty(modResults, key, value) {
-  const existingProperty = modResults.find((item) => item.type === 'property' && item.key === key);
-  if (existingProperty) {
-    existingProperty.value = value;
-  } else {
-    modResults.push({ type: 'property', key, value });
-  }
-  return modResults;
-}
-
-function withDaidokoAndroidBuildProperties(config) {
-  return withGradleProperties(config, (configWithGradleProperties) => {
-    let { modResults } = configWithGradleProperties;
-    for (const [key, value] of Object.entries(ANDROID_BUILD_PROPERTIES)) {
-      modResults = upsertGradleProperty(modResults, key, value);
-    }
-    configWithGradleProperties.modResults = modResults;
-    return configWithGradleProperties;
+// Ask Google Play Services to download the ML Kit models at install time so the
+// first OCR / image-labeling call doesn't have to wait on (or fail without) a
+// model download. "ocr" = text recognition, "ica" = image-labeling. The
+// Japanese script model is fetched on demand by the recognizer when needed.
+function withDaidokoMlKitModelMetadata(config) {
+  return withAndroidManifest(config, (configWithManifest) => {
+    const application = AndroidConfig.Manifest.getMainApplicationOrThrow(
+      configWithManifest.modResults,
+    );
+    AndroidConfig.Manifest.addMetaDataItemToMainApplication(
+      application,
+      'com.google.mlkit.vision.DEPENDENCIES',
+      'ocr,ica',
+    );
+    return configWithManifest;
   });
 }
 
@@ -308,54 +264,27 @@ function withDaidokoOcrBuildGradle(config) {
         );
       }
     }
-    contents = withDaidokoPlaySigning(contents);
     configWithGradle.modResults.contents = contents;
     return configWithGradle;
   });
 }
 
-function withDaidokoPlaySigning(contents) {
-  if (!contents.includes("def uploadStoreFilePath = propOrEnv('DAIDOKO_UPLOAD_STORE_FILE')")) {
-    contents = contents.replace(
-      'def rnVersion = getRNVersion()\n',
-      `def rnVersion = getRNVersion()\n${PLAY_SIGNING_SETUP}\n`,
-    );
-  }
-  if (!contents.includes('storeFile rootProject.file(uploadStoreFilePath)')) {
-    contents = contents.replace(
-      `        debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
-        }`,
-      `        debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
-        }${PLAY_RELEASE_SIGNING_CONFIG}`,
-    );
-  }
-  return contents.replace(
-    'signingConfig signingConfigs.debug\n            shrinkResources',
-    'signingConfig hasUploadSigning ? signingConfigs.release : signingConfigs.debug\n            shrinkResources',
-  );
-}
-
 function withDaidokoOcrMainApplication(config) {
   return withMainApplication(config, (configWithMainApplication) => {
     let contents = configWithMainApplication.modResults.contents;
+    // Register the legacy ReactPackage. Anchors target the stock Expo SDK 54
+    // MainApplication.kt: the `ReactPackage` import and the
+    // `PackageList(this).packages.apply { ... }` block in getPackages().
     if (!contents.includes(OCR_IMPORT)) {
       contents = contents.replace(
-        'import com.daidoko.app.llm.DaidokoRecipeTextLlmPackage',
-        `import com.daidoko.app.llm.DaidokoRecipeTextLlmPackage\n${OCR_IMPORT}`,
+        'import com.facebook.react.ReactPackage',
+        `import com.facebook.react.ReactPackage\n${OCR_IMPORT}`,
       );
     }
     if (!contents.includes(OCR_PACKAGE_REGISTRATION)) {
       contents = contents.replace(
-        '            packages.add(DaidokoRecipeTextLlmPackage())',
-        `            packages.add(DaidokoRecipeTextLlmPackage())\n${OCR_PACKAGE_REGISTRATION}`,
+        'PackageList(this).packages.apply {',
+        `PackageList(this).packages.apply {\n${OCR_PACKAGE_REGISTRATION}`,
       );
     }
     configWithMainApplication.modResults.contents = contents;
@@ -382,7 +311,7 @@ function withDaidokoOcrSources(config) {
 module.exports = function withDaidokoOcr(config) {
   config = withDaidokoOcrManifest(config);
   config = withDaidokoBlockedStoragePermissions(config);
-  config = withDaidokoAndroidBuildProperties(config);
+  config = withDaidokoMlKitModelMetadata(config);
   config = withDaidokoOcrBuildGradle(config);
   config = withDaidokoOcrMainApplication(config);
   config = withDaidokoOcrSources(config);

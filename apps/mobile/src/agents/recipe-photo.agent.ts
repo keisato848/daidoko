@@ -11,10 +11,20 @@ import {
 import type { ClientImageLabel } from '../services/client-image-label.provider';
 import { hasEnoughOcrText, parseOcrText, type OcrRecognitionResult } from '../services/ocr.service';
 import type { ParseConfidence, ParsedRecipeText } from '../utils/recipeTextParser';
-import { recipeFormSchema } from '../validation/recipe.schema';
+import { recipeFormSchema, type RecipeFormData } from '../validation/recipe.schema';
 
 export interface RecipePhotoAgentInput {
   imageUri: string;
+  /** Optional free-text notes (taste, restaurant, etc.) for Vision inference. */
+  context?: string;
+  /** Whether cloud Vision inference is permitted (user opt-in). */
+  allowCloudInference?: boolean;
+}
+
+export interface VisionInferenceData {
+  draft: RecipeFormData;
+  confidence: PhotoRecipeConfidence;
+  warnings: string[];
 }
 
 export interface RecipePhotoPreprocessResult {
@@ -28,6 +38,8 @@ export interface RecipePhotoAgentOutput extends RecipePhotoInferenceResult {
   rawText?: string;
   normalizedText?: string;
   evidenceSummary?: string;
+  /** Which path produced the draft. 'cloud' is the paid/metered AI call. */
+  source?: 'cloud' | 'on-device';
 }
 
 export interface RecipePhotoAgentDependencies {
@@ -36,6 +48,11 @@ export interface RecipePhotoAgentDependencies {
   inferRecipe?: (labels: ClientImageLabel[]) => RecipePhotoInferenceResult;
   recognizeText?: (imageUri: string) => Promise<OcrRecognitionResult>;
   parseText?: (rawText: string) => Promise<ParsedRecipeText & { normalizedText: string }>;
+  /** Cloud Vision LLM inference (primary path when allowed). Throws on failure. */
+  inferRecipeFromVision?: (args: {
+    imageUri: string;
+    context?: string;
+  }) => Promise<VisionInferenceData>;
 }
 
 function errorResult(message: string): AgentResult<RecipePhotoAgentOutput> {
@@ -73,16 +90,71 @@ export async function runRecipePhotoAgent(
   dependencies: RecipePhotoAgentDependencies = {},
 ): Promise<AgentResult<RecipePhotoAgentOutput>> {
   if (!input.imageUri.trim()) return errorResult('画像が選択されていません');
-  if (!dependencies.labelImage) return errorResult('画像ラベル provider が設定されていません');
+
+  const preprocessImage = dependencies.preprocessImage ?? defaultPreprocessImage;
+  const visionWarnings: string[] = [];
+
+  // 1. Cloud Vision LLM inference (primary path, when the user has opted in).
+  //    On any failure we fall through to the on-device heuristic / OCR path.
+  if (input.allowCloudInference && dependencies.inferRecipeFromVision) {
+    let visionImageUri = input.imageUri;
+    try {
+      const processed = await preprocessImage(input.imageUri);
+      visionImageUri = processed.imageUri;
+    } catch {
+      // resize failed — send the original image instead
+    }
+    try {
+      const vision = await dependencies.inferRecipeFromVision({
+        imageUri: visionImageUri,
+        ...(input.context !== undefined && { context: input.context }),
+      });
+      return {
+        ok: true,
+        data: {
+          draft: vision.draft,
+          confidence: vision.confidence,
+          labels: [],
+          labelSummary: 'AIでレシピ作成',
+          warnings: vision.warnings,
+          imageUri: input.imageUri,
+          ...(visionImageUri !== input.imageUri && { processedImageUri: visionImageUri }),
+          evidenceSummary: 'AIで写真から作成',
+          source: 'cloud',
+        },
+      };
+    } catch (error) {
+      // When the model is confident the photo is not a dish, surface a clear
+      // error instead of falling back to a misleading on-device heuristic draft.
+      const kind = (error as { kind?: string } | null)?.kind;
+      if (kind === 'not_a_dish') {
+        return errorResult(
+          error instanceof Error
+            ? error.message
+            : '写真から料理を認識できませんでした。料理がはっきり写った写真でお試しください。',
+        );
+      }
+      // Transient / other failures: degrade gracefully to the on-device path.
+      visionWarnings.push(
+        error instanceof Error
+          ? `AIにつながらなかったので、端末内でかんたんに下書きしました: ${error.message}`
+          : 'AIにつながらなかったので、端末内でかんたんに下書きしました',
+      );
+    }
+  }
+
+  // 2/3. On-device fallback: image-label heuristic (+ OCR text if present).
+  if (!dependencies.labelImage) {
+    return errorResult(visionWarnings[0] ?? '画像ラベル provider が設定されていません');
+  }
 
   try {
-    const preprocessImage = dependencies.preprocessImage ?? defaultPreprocessImage;
     const processed = await preprocessImage(input.imageUri);
     const labels = await dependencies.labelImage(processed.imageUri);
     const labelInferred = dependencies.inferRecipe
       ? dependencies.inferRecipe(labels)
       : inferRecipeFromPhotoLabels(labels);
-    const warnings = [...(processed.warnings ?? [])];
+    const warnings = [...visionWarnings, ...(processed.warnings ?? [])];
 
     if (dependencies.recognizeText) {
       try {
@@ -110,6 +182,7 @@ export async function runRecipePhotoAgent(
                 rawText: recognized.rawText,
                 normalizedText: parsed.normalizedText,
                 evidenceSummary,
+                source: 'on-device',
                 warnings: [
                   ...warnings,
                   ...recognized.warnings,
@@ -140,11 +213,14 @@ export async function runRecipePhotoAgent(
         imageUri: input.imageUri,
         processedImageUri: processed.imageUri !== input.imageUri ? processed.imageUri : undefined,
         evidenceSummary: combineEvidenceSummary(labelInferred.labelSummary),
+        source: 'on-device',
         warnings: [...warnings, ...labelInferred.warnings],
       },
     };
   } catch (error) {
-    return errorResult(error instanceof Error ? error.message : '料理写真の推測に失敗しました');
+    return errorResult(
+      error instanceof Error ? error.message : '写真からレシピをつくれませんでした',
+    );
   }
 }
 

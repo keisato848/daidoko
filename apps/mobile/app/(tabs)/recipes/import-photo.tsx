@@ -2,17 +2,19 @@
  * S11: Food photo import screen
  * On native: camera capture → image labels → editable recipe draft
  */
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Camera, Image as ImageIcon, PenLine, RotateCcw, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -28,6 +30,7 @@ import {
   isClientImageLabelingAvailable,
 } from '../../../src/services/client-image-label.provider';
 import { createClientOcrRecognizer } from '../../../src/services/client-ocr.provider';
+import { inferRecipeFromVision } from '../../../src/services/vision-recipe.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import { preprocessImageForOcr } from '../../../src/services/image-preprocess.service';
@@ -37,7 +40,14 @@ import {
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
-import { createRecipe } from '../../../src/services/recipe.service';
+import { createRecipe, createRecipeMemo } from '../../../src/services/recipe.service';
+import {
+  getFreemiumStatus,
+  recordCloudInference,
+  type FreemiumStatus,
+} from '../../../src/services/usage.service';
+import { createCookingLog } from '../../../src/services/cooking-log.service';
+import { persistCookingLogPhotos } from '../../../src/services/photo-storage.service';
 import { createPhotoSource } from '../../../src/services/source.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
@@ -46,9 +56,9 @@ type Phase = 'select' | 'processing' | 'preview';
 const isAndroid = Platform.OS === 'android';
 
 const CONFIDENCE_LABEL: Record<RecipePhotoAgentOutput['confidence'], string> = {
-  high: '推測信頼度: 高',
-  medium: '推測信頼度: 中',
-  low: '推測信頼度: 低',
+  high: 'バッチリ読み取れました',
+  medium: 'だいたい読み取れました',
+  low: 'ざっくり読み取りました',
 };
 
 export default function ImportPhotoScreen() {
@@ -59,6 +69,18 @@ export default function ImportPhotoScreen() {
   const [photoResult, setPhotoResult] = useState<RecipePhotoAgentOutput | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [pendingPhoto, setPendingPhoto] = useState<CapturedPhoto | null>(null);
+  const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
+
+  // Refresh the freemium quota on focus (e.g. after returning from the paywall).
+  const refreshFreemium = useCallback(() => {
+    if (!isAndroid) return;
+    getFreemiumStatus()
+      .then(setFreemium)
+      .catch(() => setFreemium(null));
+  }, []);
+  useFocusEffect(refreshFreemium);
 
   useEffect(() => {
     let mounted = true;
@@ -95,51 +117,95 @@ export default function ImportPhotoScreen() {
   }, []);
 
   const inferPhoto = useCallback(
-    async (photo: CapturedPhoto, options: { preprocessImage?: boolean } = {}) => {
+    async (
+      photo: CapturedPhoto,
+      options: { preprocessImage?: boolean; allowCloudInference?: boolean } = {},
+    ) => {
       setCapturedPhoto(photo);
       const shouldPreprocess = options.preprocessImage ?? true;
 
       const result = await runRecipePhotoAgent(
-        { imageUri: photo.localPath },
+        {
+          imageUri: photo.localPath,
+          ...(notes.trim() && { context: notes.trim() }),
+          ...(options.allowCloudInference && { allowCloudInference: true }),
+        },
         {
           preprocessImage: shouldPreprocess ? preprocessForAgent : undefined,
           labelImage: createClientImageLabeler(),
           recognizeText: createClientOcrRecognizer(),
+          inferRecipeFromVision,
         },
       );
 
       if (!result.ok || !result.data) {
-        setErrorMsg(result.error?.message ?? '料理写真の推測に失敗しました');
+        setErrorMsg(result.error?.message ?? '写真からレシピをつくれませんでした');
         setPhase('select');
         return;
       }
 
       setPhotoResult(result.data);
       setPhase('preview');
+      // Count only successful cloud (paid) inferences against the free quota.
+      if (result.data.source === 'cloud') {
+        recordCloudInference()
+          .then(refreshFreemium)
+          .catch(() => undefined);
+      }
+      // Surface confidence + caveats as a dismissible toast rather than a
+      // cramped header banner over the form.
+      const toast = [CONFIDENCE_LABEL[result.data.confidence], ...result.data.warnings]
+        .filter(Boolean)
+        .join(' / ');
+      setToastMessage(toast);
     },
-    [preprocessForAgent],
+    [notes, preprocessForAgent, refreshFreemium],
   );
 
   const handleRead = useCallback(
     async (source: PhotoCaptureSource) => {
       setErrorMsg(null);
-      setPhase('processing');
-      setPhotoResult(null);
+
+      // Freemium gate: free users past the daily limit go to the paywall.
+      const status = freemium ?? (await getFreemiumStatus().catch(() => null));
+      if (status && !status.canInfer) {
+        router.push('/recipes/paywall');
+        return;
+      }
 
       try {
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-        await inferPhoto(photo);
+        // After picking the photo, ask for a short comment in a popup before
+        // running inference (the comment is optional but improves the result).
+        setNotes('');
+        setPendingPhoto(photo);
       } catch (error) {
-        if (error instanceof PhotoCaptureCancelledError) {
-          setPhase('select');
-          return;
-        }
-        setErrorMsg(error instanceof Error ? error.message : '料理写真の推測に失敗しました');
-        setPhase('select');
+        if (error instanceof PhotoCaptureCancelledError) return;
+        setErrorMsg(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
       }
     },
-    [inferPhoto],
+    [freemium, router],
   );
+
+  // Confirm the popup comment and start inference on the pending photo.
+  const handleConfirmComment = useCallback(async () => {
+    const photo = pendingPhoto;
+    if (!photo) return;
+    setPendingPhoto(null);
+    setPhase('processing');
+    setPhotoResult(null);
+    try {
+      await inferPhoto(photo, { allowCloudInference: true });
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
+      setPhase('select');
+    }
+  }, [pendingPhoto, inferPhoto]);
+
+  const handleCancelComment = useCallback(() => {
+    setPendingPhoto(null);
+    setNotes('');
+  }, []);
 
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
@@ -148,41 +214,59 @@ export default function ImportPhotoScreen() {
         labelSummary: photoResult.evidenceSummary ?? photoResult.labelSummary,
         capturedAt: capturedPhoto?.takenAt,
       });
-      await createRecipe({ ...data, sourceId });
+      const recipeId = await createRecipe({ ...data, sourceId });
+
+      // Preserve the user's impression as a recipe memo (best-effort).
+      if (notes.trim()) {
+        try {
+          await createRecipeMemo(recipeId, notes.trim());
+        } catch {
+          // non-fatal — the recipe itself is already saved
+        }
+      }
+
+      // Persist the dish photo and attach it as a cooking record so it appears
+      // on the home timeline and as the recipe's hero image (best-effort).
+      if (capturedPhoto) {
+        try {
+          const persisted = await persistCookingLogPhotos([capturedPhoto]);
+          await createCookingLog({
+            recipeId,
+            cookedAt: new Date().toISOString(),
+            photos: persisted,
+          });
+        } catch {
+          // non-fatal — recipe is saved even if the photo could not be stored
+        }
+      }
+
       setToastMessage('レシピを保存しました');
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
-    [capturedPhoto?.takenAt, photoResult, router],
+    [capturedPhoto, notes, photoResult, router],
   );
 
   if (phase === 'preview') {
     return (
       <View style={styles.container}>
-        {photoResult && (
-          <View style={styles.sourceBanner}>
-            <Sparkles size={12} color={Colors.goldDim} />
-            <Text style={styles.sourceName}>
-              {[CONFIDENCE_LABEL[photoResult.confidence], ...photoResult.warnings]
-                .filter(Boolean)
-                .join(' / ')}
-            </Text>
-          </View>
-        )}
         <RecipeForm
           initialValues={photoResult?.draft}
           onSubmit={handleSave}
           onCancel={() => setPhase('select')}
-          title="推測結果を確認・編集"
+          title="できたレシピを確認・編集"
           submitLabel="保存"
         />
         <Toast
           message={toastMessage ?? ''}
           visible={toastMessage != null}
+          duration={4000}
           onDismiss={() => setToastMessage(null)}
         />
       </View>
     );
   }
+
+  const unlimitedLabel = freemium?.isByok ? '自分のAIキー・使い放題' : 'プレミアム・使い放題';
 
   return (
     <View style={styles.container}>
@@ -190,7 +274,7 @@ export default function ImportPhotoScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>料理写真から推測</Text>
+        <Text style={styles.headerTitle}>写真からレシピ</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -201,35 +285,49 @@ export default function ImportPhotoScreen() {
 
         {isAndroid ? (
           <>
-            <Text style={styles.title}>写真から下書き</Text>
+            <Text style={styles.title}>写真からレシピをつくろう</Text>
             <Text style={styles.description}>
-              写っている料理・食材から、確認前提のレシピ案を作成します。
+              料理の写真をえらぶだけで、材料・分量・手順をAIが考えてレシピの下書きをつくります。
+              お店の名前や味の感想をひとこと添えると、より近い仕上がりになります。
             </Text>
+
+            {freemium &&
+              (freemium.isPremium || freemium.isByok ? (
+                <Text style={styles.quotaPremium}>{unlimitedLabel}</Text>
+              ) : (
+                <Pressable onPress={() => router.push('/recipes/paywall')} hitSlop={8}>
+                  <Text style={styles.quotaText}>
+                    今日の無料作成：あと {freemium.remaining} 回 ・ 使い放題にする
+                  </Text>
+                </Pressable>
+              ))}
 
             {capturedPhoto && (
               <Image source={{ uri: capturedPhoto.localPath }} style={styles.previewImage} />
             )}
 
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+            <Text style={styles.disclosureText}>
+              写真は解析のためサーバー（AI 提供元）に送信されます。保存はされません。
+            </Text>
             {!providerReady && (
               <Text style={styles.noticeText}>
-                このビルドでは Android 画像推測 provider を初期化できませんでした
+                インターネットにつながっていると、写真からレシピをつくれます
               </Text>
             )}
 
             {phase === 'processing' ? (
               <View style={styles.processingBox}>
                 <ActivityIndicator size="large" color={Colors.gold} />
-                <Text style={styles.processingText}>端末内で推測しています...</Text>
+                <Text style={styles.processingText}>写真からレシピをつくっています...</Text>
               </View>
             ) : (
               <View style={styles.actionGrid}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="カメラで撮影"
-                  style={[styles.primaryButton, !providerReady && styles.buttonDisabled]}
+                  style={styles.primaryButton}
                   onPress={() => handleRead('camera')}
-                  disabled={!providerReady}
                 >
                   <Camera size={18} color={Colors.bg} />
                   <Text style={styles.primaryButtonText}>カメラで撮影</Text>
@@ -237,9 +335,8 @@ export default function ImportPhotoScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="ギャラリーから選ぶ"
-                  style={[styles.secondaryButton, !providerReady && styles.buttonDisabled]}
+                  style={styles.secondaryButton}
                   onPress={() => handleRead('gallery')}
-                  disabled={!providerReady}
                 >
                   <ImageIcon size={18} color={Colors.gold} />
                   <Text style={styles.secondaryButtonText}>ギャラリーから選ぶ</Text>
@@ -249,7 +346,7 @@ export default function ImportPhotoScreen() {
           </>
         ) : (
           <>
-            <Text style={styles.title}>料理写真の推測はネイティブアプリ専用です</Text>
+            <Text style={styles.title}>写真からのレシピづくりはアプリでつかえます</Text>
             <Text style={styles.description}>
               写真からの下書き作成は Android アプリで先行対応中です。
               {'\n\n'}
@@ -272,6 +369,43 @@ export default function ImportPhotoScreen() {
           </Pressable>
         )}
       </ScrollView>
+
+      <Modal
+        visible={pendingPhoto != null}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelComment}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {pendingPhoto && (
+              <Image source={{ uri: pendingPhoto.localPath }} style={styles.modalImage} />
+            )}
+            <Text style={styles.modalTitle}>ひとことコメント（任意）</Text>
+            <Text style={styles.modalHint}>
+              お店の名前や味の感想を書くと、より近いレシピになります。
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="例: ○○屋の麻婆豆腐。しびれ強め"
+              placeholderTextColor={Colors.muted}
+              maxLength={1000}
+              multiline
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <Pressable style={styles.modalCancelButton} onPress={handleCancelComment}>
+                <Text style={styles.modalCancelText}>やめる</Text>
+              </Pressable>
+              <Pressable style={styles.modalConfirmButton} onPress={handleConfirmComment}>
+                <Text style={styles.modalConfirmText}>レシピをつくる</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -339,6 +473,82 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     backgroundColor: '#130E08',
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+    padding: 20,
+  },
+  modalImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: Colors.paper,
+    marginBottom: 4,
+  },
+  modalHint: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: Colors.paperDim,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  modalInput: {
+    width: '100%',
+    minHeight: 64,
+    maxHeight: 160,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: '#130E08',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: Colors.paper,
+    textAlignVertical: 'top',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.paperDim,
+  },
+  modalConfirmButton: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.bg,
+  },
   errorText: {
     fontSize: 13,
     color: '#F2A07B',
@@ -349,6 +559,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.muted,
     textAlign: 'center',
+    lineHeight: 18,
+  },
+  disclosureText: {
+    fontSize: 11,
+    color: Colors.muted,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  quotaText: {
+    fontSize: 12,
+    color: Colors.gold,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  quotaPremium: {
+    fontSize: 12,
+    color: Colors.gold,
+    textAlign: 'center',
+    fontWeight: '600',
     lineHeight: 18,
   },
   processingBox: {
@@ -433,20 +662,5 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontSize: 12,
     color: Colors.muted,
-  },
-  sourceBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: '#130E08',
-  },
-  sourceName: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.goldDim,
   },
 });

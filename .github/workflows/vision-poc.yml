@@ -1,0 +1,69 @@
+name: Vision Recipe PoC
+
+# Manual proof-of-concept: run the dish-photo → recipe inference against a real
+# Gemini Flash call, using the GEMINI_API_KEY repository secret. The secret is
+# injected only at runtime and masked in logs — its value is never exposed.
+#
+# Trigger from the Actions tab ("Run workflow"). Optionally override the image
+# path (relative to the repo root) and the free-text context/notes.
+
+on:
+  # workflow_dispatch only works once this file is on the default branch.
+  workflow_dispatch:
+    inputs:
+      imagePath:
+        description: 'Image path (relative to repo root)'
+        required: false
+        default: 'apps/mobile/assets/e2e/food-photo-ja.png'
+      context:
+        description: 'Optional notes (taste, restaurant, etc.)'
+        required: false
+        default: ''
+      model:
+        description: 'Gemini model id'
+        required: false
+        default: 'gemini-2.5-flash'
+  # Path-scoped push trigger so the PoC can be run from the feature branch
+  # (before it reaches the default branch). Only fires when the PoC files change.
+  push:
+    branches: [feat/photo-recipe-vision]
+    paths:
+      - '.github/workflows/vision-poc.yml'
+      - 'apps/server/scripts/vision-poc.ts'
+      - 'apps/server/src/lib/vision-recipe.ts'
+      - 'apps/server/src/agents/photo-infer.agent.ts'
+
+jobs:
+  poc:
+    name: Run Vision inference PoC
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Vision PoC
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ inputs.model || 'gemini-2.5-flash' }}
+          INPUT_IMAGE_PATH: ${{ inputs.imagePath }}
+          INPUT_CONTEXT: ${{ inputs.context }}
+        run: |
+          if [ -z "${GEMINI_API_KEY}" ]; then
+            echo "::error::GEMINI_API_KEY secret is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          IMAGE_PATH="${INPUT_IMAGE_PATH:-apps/mobile/assets/e2e/food-photo-ja.png}"
+          pnpm --filter server exec tsx scripts/vision-poc.ts \
+            "${{ github.workspace }}/${IMAGE_PATH}" \
+            "${INPUT_CONTEXT}"
