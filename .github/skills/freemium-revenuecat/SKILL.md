@@ -30,7 +30,11 @@ Design of record: `docs/フリーミアム設計.md`.
   Jest mock at `apps/mobile/__mocks__/react-native-google-mobile-ads.js`. See docs §7.
 - `app/(tabs)/recipes/paywall.tsx` — subscribe + restore + "watch ad for +1" (when `canWatchAdForMore`).
 - `app/(tabs)/recipes/import-photo.tsx` — the gate (blocks at `canInfer === false`, shows remaining).
-- `app/(tabs)/settings.tsx` — プラン section.
+- `app/(tabs)/settings.tsx` — プラン section + 自分のAIキー row.
+- **BYOK** (`byok.service.ts` via `expo-secure-store`): user pastes their own Gemini key →
+  `vision-recipe.provider.ts` `inferRecipeFromVision` routes to `inferViaByok` (direct Gemini,
+  `normalizeGeminiRaw`) instead of the server; `usage.service` sets `isByok` ⇒ unlimited,
+  `recordCloudInference` no-ops. Key entry UI: `app/(tabs)/ai-key.tsx`. See docs §9.
 
 ## Rules
 
