@@ -70,6 +70,10 @@ export default function SettingsScreen() {
           'プレミアム',
           'プレミアムをご利用中です。解約はストアの定期購入設定からいつでも行えます。',
         );
+    } else if (freemium.isByok) {
+      planLabel = '自分のAIキー';
+      planSubtitle = '自分のキーで使い放題';
+      planOnPress = () => router.push('/(tabs)/ai-key');
     } else {
       planSubtitle = `無料・今日あと ${freemium.remaining} 回`;
     }
@@ -89,6 +93,13 @@ export default function SettingsScreen() {
           subtitle: planSubtitle,
           enabled: true,
           onPress: planOnPress,
+        },
+        {
+          id: 'byok',
+          label: '自分のAIキーを使う',
+          subtitle: freemium?.isByok ? '設定済み（無制限）' : 'Gemini キーで無制限に',
+          enabled: true,
+          onPress: () => router.push('/(tabs)/ai-key'),
         },
       ],
     },

@@ -9,6 +9,7 @@
  */
 import { isAdRewardAvailable } from './ad-reward.service';
 import { getAppMeta, setAppMeta } from './app-meta.service';
+import { hasUserApiKey } from './byok.service';
 import { isPremium } from './entitlement.service';
 
 /** Free AI photo-recipes allowed per calendar day. */
@@ -21,6 +22,8 @@ const AD_BONUS_KEY_PREFIX = 'ai_photo_recipe_ad_bonus:';
 
 export interface FreemiumStatus {
   isPremium: boolean;
+  /** Unlimited via the user's own Gemini key (BYOK). */
+  isByok: boolean;
   /** Successful cloud inferences used today (0 for premium display). */
   used: number;
   /** Effective allowance today (base + ad bonus); Infinity for premium. */
@@ -53,12 +56,14 @@ export function deriveFreemiumStatus(
   used: number,
   adBonusGranted = 0,
   adAvailable = false,
+  byok = false,
   baseLimit: number = FREE_DAILY_LIMIT,
   bonusLimit: number = AD_BONUS_DAILY_LIMIT,
 ): FreemiumStatus {
-  if (premium) {
+  if (premium || byok) {
     return {
-      isPremium: true,
+      isPremium: premium,
+      isByok: byok && !premium,
       used: 0,
       limit: Number.POSITIVE_INFINITY,
       remaining: Number.POSITIVE_INFINITY,
@@ -73,6 +78,7 @@ export function deriveFreemiumStatus(
   const remaining = Math.max(0, limit - used);
   return {
     isPremium: false,
+    isByok: false,
     used,
     limit,
     remaining,
@@ -114,19 +120,22 @@ export async function grantAdBonus(date: Date = new Date()): Promise<number> {
 
 /** Combined premium + quota + ad status for the gate / UI. */
 export async function getFreemiumStatus(): Promise<FreemiumStatus> {
-  const [premium, used, adBonusGranted] = await Promise.all([
+  const [premium, used, adBonusGranted, byok] = await Promise.all([
     isPremium(),
     getDailyUsage(),
     getAdBonusGranted(),
+    hasUserApiKey(),
   ]);
-  return deriveFreemiumStatus(premium, used, adBonusGranted, isAdRewardAvailable());
+  return deriveFreemiumStatus(premium, used, adBonusGranted, isAdRewardAvailable(), byok);
 }
 
 /**
- * Count one successful cloud (paid) inference against the quota.
- * No-op for premium users. Call only when the AI actually returned a draft.
+ * Count one successful cloud inference against the quota.
+ * No-op for premium and BYOK users (BYOK uses the user's own key/quota).
+ * Call only when the AI (our managed server) actually returned a draft.
  */
 export async function recordCloudInference(): Promise<void> {
   if (await isPremium()) return;
+  if (await hasUserApiKey()) return;
   await incrementDailyUsage();
 }

@@ -25,3 +25,6 @@ export const REVENUECAT_API_KEY = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] 
 export const ADMOB_ENABLED = process.env['EXPO_PUBLIC_ADMOB_ENABLED'] === 'true';
 // リワード広告ユニット ID。未設定なら SDK の公式テスト ID（TestIds.REWARDED）を使う。
 export const ADMOB_REWARDED_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID'] ?? '';
+
+// BYOK（持ち込みキー）で端末から直接呼ぶ Gemini モデル。サーバー側の既定と揃える。
+export const GEMINI_MODEL = process.env['EXPO_PUBLIC_GEMINI_MODEL'] ?? 'gemini-2.5-flash';

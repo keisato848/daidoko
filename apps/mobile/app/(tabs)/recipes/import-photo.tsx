@@ -266,6 +266,8 @@ export default function ImportPhotoScreen() {
     );
   }
 
+  const unlimitedLabel = freemium?.isByok ? '自分のAIキー・使い放題' : 'プレミアム・使い放題';
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -290,8 +292,8 @@ export default function ImportPhotoScreen() {
             </Text>
 
             {freemium &&
-              (freemium.isPremium ? (
-                <Text style={styles.quotaPremium}>プレミアム・使い放題</Text>
+              (freemium.isPremium || freemium.isByok ? (
+                <Text style={styles.quotaPremium}>{unlimitedLabel}</Text>
               ) : (
                 <Pressable onPress={() => router.push('/recipes/paywall')} hitSlop={8}>
                   <Text style={styles.quotaText}>

@@ -1,6 +1,7 @@
 let mockStore: Record<string, string> = {};
 let mockPremium = false;
 let mockAdAvailable = false;
+let mockByok = false;
 
 jest.mock('../app-meta.service', () => ({
   getAppMeta: jest.fn(async (key: string) => mockStore[key] ?? null),
@@ -15,6 +16,10 @@ jest.mock('../entitlement.service', () => ({
 
 jest.mock('../ad-reward.service', () => ({
   isAdRewardAvailable: jest.fn(() => mockAdAvailable),
+}));
+
+jest.mock('../byok.service', () => ({
+  hasUserApiKey: jest.fn(async () => mockByok),
 }));
 
 import {
@@ -36,6 +41,7 @@ describe('usage.service', () => {
     mockStore = {};
     mockPremium = false;
     mockAdAvailable = false;
+    mockByok = false;
   });
 
   describe('currentDayKey', () => {
@@ -100,6 +106,13 @@ describe('usage.service', () => {
       expect(status.isPremium).toBe(true);
       expect(status.canInfer).toBe(true);
     });
+
+    it('reports unlimited (BYOK) when a user key is set', async () => {
+      mockByok = true;
+      const status = await getFreemiumStatus();
+      expect(status.isByok).toBe(true);
+      expect(status.canInfer).toBe(true);
+    });
   });
 
   describe('recordCloudInference', () => {
@@ -110,6 +123,12 @@ describe('usage.service', () => {
 
     it('does not count for premium users', async () => {
       mockPremium = true;
+      await recordCloudInference();
+      expect(await getDailyUsage()).toBe(0);
+    });
+
+    it('does not count for BYOK users', async () => {
+      mockByok = true;
       await recordCloudInference();
       expect(await getDailyUsage()).toBe(0);
     });
@@ -149,6 +168,17 @@ describe('usage.service', () => {
 
     it('never offers ads to premium users', () => {
       expect(deriveFreemiumStatus(true, 0, 0, true).canWatchAdForMore).toBe(false);
+    });
+
+    it('treats BYOK as unlimited (no ads, no quota)', () => {
+      const status = deriveFreemiumStatus(false, 5, 0, true, true);
+      expect(status).toMatchObject({
+        isByok: true,
+        isPremium: false,
+        canInfer: true,
+        canWatchAdForMore: false,
+        remaining: Number.POSITIVE_INFINITY,
+      });
     });
 
     it('getFreemiumStatus surfaces the ad option when available and exhausted', async () => {
