@@ -197,14 +197,17 @@ function buildValidationPlan(files) {
     addWorkspaceTask('mobile-lint', 'mobile lint', ['--filter', 'mobile', 'lint'], taskMap);
     addWorkspaceTask('mobile-typecheck', 'mobile typecheck', ['--filter', 'mobile', 'typecheck'], taskMap);
     if (shouldRunMobileTests(files)) {
-      const pattern = mobileTestPattern(files);
-      if (pattern) {
+      const patterns = mobileTestPattern(files);
+      if (patterns) {
+        // Pass each dir as a separate positional jest pattern (jest ORs them).
+        // Avoids a single `src/(a|b)/__tests__` regex whose ()/| break cmd.exe.
+        const label = patterns.join(' ');
         addTask(
           'mobile-test',
-          `mobile test (${pattern})`,
+          `mobile test (${label})`,
           pnpmBinary(),
-          ['--filter', 'mobile', 'exec', 'jest', '--passWithNoTests', '--testPathPattern', pattern],
-          `Targeted mobile tests matching: ${pattern}`,
+          ['--filter', 'mobile', 'exec', 'jest', '--passWithNoTests', ...patterns],
+          `Targeted mobile tests matching: ${label}`,
           taskMap,
         );
       } else {
@@ -260,9 +263,9 @@ function shouldRunMobileTests(files) {
 }
 
 /**
- * Derive a Jest --testPathPattern from the changed mobile files.
- * Groups by the first directory under src/ (e.g. "services", "hooks")
- * and returns a regex matching their __tests__ directories.
+ * Derive Jest test path patterns from the changed mobile files.
+ * Groups by the first directory under src/ (e.g. "services", "hooks") and
+ * returns one pattern per dir (passed positionally to jest, which ORs them).
  * Returns null if the change spans app/ or too many dirs to target.
  */
 function mobileTestPattern(files) {
@@ -290,11 +293,11 @@ function mobileTestPattern(files) {
     return null;
   }
 
-  // Produce pattern like "src/(services|hooks)/__tests__"
+  // One jest pattern per dir (jest ORs multiple positional patterns). Keeping
+  // them separate avoids a `src/(a|b)/__tests__` regex whose parens/pipe are
+  // mangled by cmd.exe on Windows when spawned through a shell.
   const dirList = [...dirs].sort();
-  return dirList.length === 1
-    ? `src/${dirList[0]}/__tests__`
-    : `src/(${dirList.join('|')})/__tests__`;
+  return dirList.map((dir) => `src/${dir}/__tests__`);
 }
 
 // ── Server test targeting ──────────────────────────────────────

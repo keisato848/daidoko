@@ -1,10 +1,14 @@
 /**
  * Visual countdown timer with circular progress and controls
  */
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
+import {
+  cancelTimerNotification,
+  scheduleTimerNotification,
+} from '../services/notification.service';
 import { useTimerStore } from '../stores/timer.store';
 
 interface TimerWidgetProps {
@@ -29,12 +33,37 @@ export function TimerWidget({ timerSec, onFinish }: TimerWidgetProps) {
     };
   }, [timerSec, setup]);
 
-  // Notify on finish
+  // Notify on finish (in-app)
   useEffect(() => {
     if (status === 'finished') {
       onFinish?.();
     }
   }, [status, onFinish]);
+
+  // Schedule an OS-level local notification for the timer's end so it alerts
+  // even when the app is backgrounded (the JS countdown is suspended there).
+  // Cancel it whenever the timer is not actively running.
+  const notifIdRef = useRef<string | null>(null);
+  const cancelScheduledNotif = useCallback(async () => {
+    const id = notifIdRef.current;
+    notifIdRef.current = null;
+    await cancelTimerNotification(id);
+  }, []);
+
+  useEffect(() => {
+    if (status === 'running') {
+      const remaining = useTimerStore.getState().remainingSec;
+      void (async () => {
+        await cancelScheduledNotif();
+        notifIdRef.current = await scheduleTimerNotification(remaining);
+      })();
+    } else {
+      void cancelScheduledNotif();
+    }
+  }, [status, cancelScheduledNotif]);
+
+  // Cancel any pending notification when the timer screen unmounts.
+  useEffect(() => () => void cancelScheduledNotif(), [cancelScheduledNotif]);
 
   const progress = totalSec > 0 ? (totalSec - remainingSec) / totalSec : 0;
 

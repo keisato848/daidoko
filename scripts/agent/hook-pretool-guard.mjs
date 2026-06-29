@@ -23,6 +23,11 @@ if (!commandText) {
   respond('ask', 'Use adb install -r for in-place updates when preserving local data.');
 } else if (/git\s+push\s+--force/i.test(commandText)) {
   respond('ask', 'Force push should be explicitly confirmed.');
+} else if (/\bgh\s+pr\s+merge\b/i.test(commandText) || /\bgit\s+merge\b/i.test(commandText)) {
+  respond(
+    'ask',
+    'マージ前にエミュレーター/実機での動作確認が必要です（リポジトリ規約）。確認が完了していれば続行してください。',
+  );
 } else {
   respond('allow', 'Command passed repo guardrails.');
 }

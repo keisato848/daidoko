@@ -36,6 +36,15 @@
     "plugins": [
       "expo-router",
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.2.20"
+          }
+        }
+      ],
+      "./plugins/withKotlinMetadataSkip",
+      [
         "expo-image-picker",
         {
           "photosPermission": "レシピ写真を選択するために写真ライブラリへのアクセスを使用します。",

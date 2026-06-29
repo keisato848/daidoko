@@ -123,6 +123,7 @@ daidoko/
 - ブランチ: `develop` ベース。機能ブランチは `feat/xxx`、修正は `fix/xxx`。
 - コミットメッセージ: Conventional Commits（`feat:`, `fix:`, `test:`, `docs:`, `chore:`）。
 - `main` への直接 push 禁止。PR 経由のみ。
+- **マージ前に必ずエミュレーター/実機で動作確認する**（PreToolUse フック `hook-pretool-guard.mjs` が `gh pr merge` / `git merge` を検知して確認を促す）。
 
 ---
 
