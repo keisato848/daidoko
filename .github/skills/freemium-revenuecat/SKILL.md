@@ -17,12 +17,16 @@ Design of record: `docs/フリーミアム設計.md`.
 ## Where Things Live (apps/mobile)
 
 - `src/services/usage.service.ts` — device-local daily quota (`FREE_DAILY_LIMIT = 1`,
-  `app_meta` key `ai_photo_recipe_usage:YYYY-MM-DD`, auto-resets daily). `getFreemiumStatus()`,
-  `recordCloudInference()`.
+  `app_meta` key `ai_photo_recipe_usage:YYYY-MM-DD`, auto-resets daily) plus the rewarded-ad
+  bonus (`AD_BONUS_DAILY_LIMIT = 3`, key `ai_photo_recipe_ad_bonus:YYYY-MM-DD`, `grantAdBonus()`).
+  `getFreemiumStatus()` returns `canInfer` + `canWatchAdForMore`; `recordCloudInference()`.
 - `src/services/entitlement.service.ts` — provider factory (RevenueCat when
   `EXPO_PUBLIC_REVENUECAT_API_KEY` set + native, else `StubEntitlementProvider`).
 - `src/services/entitlement.revenuecat.ts` — the ONLY file importing `react-native-purchases`.
-- `app/(tabs)/recipes/paywall.tsx` — subscribe + restore UI.
+- `src/services/ad-reward.service.ts` / `ad-reward.types.ts` — rewarded-ad provider; defaults to
+  `StubAdRewardProvider` (`isAvailable()=false`, no ad UI). AdMob provider snippet + wiring steps
+  live in `docs/フリーミアム設計.md` §7 (not installed by default — avoids the AdMob no-App-ID crash).
+- `app/(tabs)/recipes/paywall.tsx` — subscribe + restore + "watch ad for +1" (when `canWatchAdForMore`).
 - `app/(tabs)/recipes/import-photo.tsx` — the gate (blocks at `canInfer === false`, shows remaining).
 - `app/(tabs)/settings.tsx` — プラン section.
 
@@ -42,6 +46,9 @@ Design of record: `docs/フリーミアム設計.md`.
 3. Play Console / App Store Connect monthly subscription product, linked in RevenueCat.
 4. Verify the real purchase in a dev/release build with a sandbox/test account (native link is
    unverified by JS gates).
+5. (Optional) Rewarded ads: install `react-native-google-mobile-ads`, add the config plugin +
+   **AdMob app ID** (required or the app crashes at launch), set `EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID`,
+   add `AdMobRewardProvider` (docs §7) + UMP/ATT consent. Returns `AdRewardProvider` from the factory.
 
 ## Constraints
 
