@@ -114,7 +114,14 @@ export async function addShoppingItem(
     checkedAt: null,
   });
 
-  return { id, name: trimmed, amount: amountValue, checked: false, source, recipeId: options?.recipeId ?? null };
+  return {
+    id,
+    name: trimmed,
+    amount: amountValue,
+    checked: false,
+    source,
+    recipeId: options?.recipeId ?? null,
+  };
 }
 
 /** Add all of a recipe's ingredients to the list. Returns how many were added. */

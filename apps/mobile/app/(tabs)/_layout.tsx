@@ -51,6 +51,8 @@ export default function TabLayout() {
       <Tabs.Screen name="family" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />
+      <Tabs.Screen name="ai-key" options={{ href: null }} />
+      <Tabs.Screen name="shopping" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-photo" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-ocr" options={{ href: null }} />
     </Tabs>
