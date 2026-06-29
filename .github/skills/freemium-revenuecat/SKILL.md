@@ -23,9 +23,11 @@ Design of record: `docs/フリーミアム設計.md`.
 - `src/services/entitlement.service.ts` — provider factory (RevenueCat when
   `EXPO_PUBLIC_REVENUECAT_API_KEY` set + native, else `StubEntitlementProvider`).
 - `src/services/entitlement.revenuecat.ts` — the ONLY file importing `react-native-purchases`.
-- `src/services/ad-reward.service.ts` / `ad-reward.types.ts` — rewarded-ad provider; defaults to
-  `StubAdRewardProvider` (`isAvailable()=false`, no ad UI). AdMob provider snippet + wiring steps
-  live in `docs/フリーミアム設計.md` §7 (not installed by default — avoids the AdMob no-App-ID crash).
+- `src/services/ad-reward.service.ts` / `ad-reward.types.ts` — rewarded-ad provider factory.
+  Returns `AdMobRewardProvider` (`ad-reward.admob.ts`; `.web` stub keeps the SDK off web) when
+  `EXPO_PUBLIC_ADMOB_ENABLED=true` + native, else `StubAdRewardProvider` (no ad UI). AdMob is
+  **installed + wired** with Google **test** app IDs in `app.json`; flip the flag to see test ads.
+  Jest mock at `apps/mobile/__mocks__/react-native-google-mobile-ads.js`. See docs §7.
 - `app/(tabs)/recipes/paywall.tsx` — subscribe + restore + "watch ad for +1" (when `canWatchAdForMore`).
 - `app/(tabs)/recipes/import-photo.tsx` — the gate (blocks at `canInfer === false`, shows remaining).
 - `app/(tabs)/settings.tsx` — プラン section.
@@ -46,9 +48,10 @@ Design of record: `docs/フリーミアム設計.md`.
 3. Play Console / App Store Connect monthly subscription product, linked in RevenueCat.
 4. Verify the real purchase in a dev/release build with a sandbox/test account (native link is
    unverified by JS gates).
-5. (Optional) Rewarded ads: install `react-native-google-mobile-ads`, add the config plugin +
-   **AdMob app ID** (required or the app crashes at launch), set `EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID`,
-   add `AdMobRewardProvider` (docs §7) + UMP/ATT consent. Returns `AdRewardProvider` from the factory.
+5. Rewarded ads are **wired** (test IDs). For production: create the AdMob app + rewarded unit,
+   swap the real app IDs into `app.json`, set `EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID` +
+   `EXPO_PUBLIC_ADMOB_ENABLED=true`, add UMP/ATT consent + Play Data safety. (Native link is
+   first verified on that build; JS gates are green.)
 
 ## Constraints
 
