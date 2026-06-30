@@ -5,7 +5,7 @@
  * See docs/買い物リスト・在庫設計.md §5.4.
  */
 import { isNativePlatform } from '../db/client';
-import { normalizeItemName } from '../utils/itemName';
+import { isInStock } from '../utils/itemMatch';
 import type { RecipeListItem } from './types';
 
 export interface CookableRecipe {
@@ -23,16 +23,13 @@ export interface CookableRecipe {
  * Pure ranking: for each recipe, count how many of its ingredient names are in
  * the in-stock set (normalized), then sort by coverage desc, fewer-missing, title.
  */
-export function rankByCoverage(
-  recipes: RecipeListItem[],
-  inStockNormalized: Set<string>,
-): CookableRecipe[] {
+export function rankByCoverage(recipes: RecipeListItem[], pantryNames: string[]): CookableRecipe[] {
   const ranked = recipes.map((recipe) => {
     const ingredients = recipe.ingredientNames;
     const missing: string[] = [];
     let inStock = 0;
     for (const name of ingredients) {
-      if (inStockNormalized.has(normalizeItemName(name))) {
+      if (isInStock(name, pantryNames)) {
         inStock += 1;
       } else {
         missing.push(name);
