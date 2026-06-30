@@ -4,7 +4,7 @@
  * docs/買い物リスト・在庫設計.md §5.2
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Minus, Plus, Receipt, ScanLine, X } from 'lucide-react-native';
+import { ChefHat, Minus, Plus, Receipt, ScanLine, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -132,6 +132,13 @@ export default function PantryScreen() {
         </Pressable>
       </View>
 
+      {items.length > 0 && (
+        <Pressable style={styles.cookableButton} onPress={() => router.push('/(tabs)/cookable')}>
+          <ChefHat size={16} color={Colors.gold} />
+          <Text style={styles.cookableText}>この在庫で作れるレシピ</Text>
+        </Pressable>
+      )}
+
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
@@ -242,6 +249,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addButtonDisabled: { opacity: 0.45 },
+  cookableButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingVertical: 11,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: '#150F07',
+  },
+  cookableText: { fontSize: 14, color: Colors.gold, fontWeight: '500' },
   listContent: { paddingHorizontal: 20, paddingBottom: 24 },
   empty: { color: Colors.muted, textAlign: 'center', marginTop: 48, lineHeight: 22, fontSize: 14 },
   row: {
