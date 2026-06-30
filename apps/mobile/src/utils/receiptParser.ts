@@ -56,6 +56,8 @@ const EXCLUDE_KEYWORDS = [
   'レジ',
   '小銭',
   '釣り',
+  'クーポン', // アプリクーポン等
+  'クーボン', // OCR 誤読（ポ→ボ）
 ];
 
 /** A quantity×unit-price fragment like "2コX単", "3×@98", "2点 x". */
