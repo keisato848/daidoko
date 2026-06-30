@@ -25,8 +25,8 @@ describe('pantry.service (web / non-native)', () => {
     expect(await addPantryItem('   ')).toBeNull();
   });
 
-  it('reports an empty in-stock set', async () => {
-    expect(await getInStockNormalizedNames()).toEqual(new Set());
+  it('reports an empty in-stock list', async () => {
+    expect(await getInStockNormalizedNames()).toEqual([]);
   });
 
   it('moves nothing when not native', async () => {

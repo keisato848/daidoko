@@ -17,7 +17,7 @@ function recipe(id: string, title: string, ingredientNames: string[]): RecipeLis
 }
 
 describe('rankByCoverage', () => {
-  const inStock = new Set(['玉ねぎ', 'にんじん', 'じゃがいも'].map(normalizeItemName));
+  const inStock = ['玉ねぎ', 'にんじん', 'じゃがいも'].map(normalizeItemName);
   const recipes = [
     recipe('curry', 'カレー', ['玉ねぎ', 'にんじん', 'じゃがいも', '牛肉']), // 3/4
     recipe('salad', 'サラダ', ['にんじん', 'レタス']), // 1/2
@@ -42,7 +42,7 @@ describe('rankByCoverage', () => {
   });
 
   it('handles an empty pantry (all coverage 0)', () => {
-    const ranked = rankByCoverage(recipes, new Set());
+    const ranked = rankByCoverage(recipes, []);
     expect(ranked.every((r) => r.coverage === 0)).toBe(true);
   });
 

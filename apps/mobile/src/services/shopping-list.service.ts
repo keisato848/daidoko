@@ -8,6 +8,7 @@
  */
 import { isNativePlatform } from '../db/client';
 import { generateId } from '../utils/id';
+import { isInStock } from '../utils/itemMatch';
 import { normalizeItemName } from '../utils/itemName';
 import { getRecipeDetail } from './recipe.service';
 import type { ShoppingItem, ShoppingItemSource } from './types';
@@ -151,11 +152,11 @@ export async function addMissingRecipeIngredientsToList(recipeId: string): Promi
   if (!detail) return 0;
 
   const { getInStockNormalizedNames } = await import('./pantry.service');
-  const inStock = await getInStockNormalizedNames();
+  const pantryNames = await getInStockNormalizedNames();
 
   let added = 0;
   for (const ingredient of detail.ingredients) {
-    if (inStock.has(normalizeItemName(ingredient.name))) continue;
+    if (isInStock(ingredient.name, pantryNames)) continue;
     const result = await addShoppingItem(ingredient.name, ingredient.amount ?? undefined, {
       source: 'recipe',
       recipeId,

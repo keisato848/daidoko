@@ -202,8 +202,8 @@ export async function removePantryItem(id: string): Promise<void> {
 }
 
 /** Normalized names currently in stock (quantity null = unmanaged-but-present, or > 0). */
-export async function getInStockNormalizedNames(): Promise<Set<string>> {
-  if (!isNativePlatform) return new Set();
+export async function getInStockNormalizedNames(): Promise<string[]> {
+  if (!isNativePlatform) return [];
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
@@ -216,9 +216,7 @@ export async function getInStockNormalizedNames(): Promise<Set<string>> {
     .from(schema.pantryItems)
     .where(eq(schema.pantryItems.familyId, await currentFamilyId()));
 
-  return new Set(
-    rows.filter((r) => r.quantity == null || r.quantity > 0).map((r) => r.nameNormalized),
-  );
+  return rows.filter((r) => r.quantity == null || r.quantity > 0).map((r) => r.nameNormalized);
 }
 
 /**
