@@ -49,7 +49,17 @@ const EXCLUDE_KEYWORDS = [
   'おつり',
   'お釣',
   '釣銭',
+  '番号', // 事業者番号 / 登録番号 / 電話番号
+  '責', // 責任者 / レジ責
+  'セルフ', // セルフレジ
+  '単価',
+  'レジ',
+  '小銭',
+  '釣り',
 ];
+
+/** A quantity×unit-price fragment like "2コX単", "3×@98", "2点 x". */
+const QTY_FRAGMENT = /^\d+\s*[コ個点]?\s*[×xX]/;
 
 // A character that makes a token look like a real product name (kana/kanji/latin).
 const NAME_CHAR = /[぀-ヿ一-鿿ｦ-ﾟA-Za-zＡ-Ｚａ-ｚ]/;
@@ -86,6 +96,8 @@ export function parseReceipt(rawText: string): ReceiptItem[] {
 
     // Remove reduced-tax-rate marks (＊ * ※) left anywhere in the name.
     name = name.replace(/[*※＊]/g, '').trim();
+
+    if (QTY_FRAGMENT.test(name)) continue; // quantity×unit-price fragment
 
     const compact = name.replace(/\s/g, '');
     if (compact.length < 2) continue; // too short

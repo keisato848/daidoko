@@ -47,4 +47,16 @@ describe('parseReceipt', () => {
     expect(parseReceipt('')).toEqual([]);
     expect(parseReceipt('   \n  ')).toEqual([]);
   });
+
+  it('drops receipt metadata noise (invoice number, register, qty fragments)', () => {
+    const noise = parseReceipt(
+      '事業者番号 T1234567890123\n責1512セルフ\n2コX単 98\n単価 100\nレタス 158',
+    );
+    const n = noise.map((i) => i.name);
+    expect(n).toContain('レタス');
+    expect(n.some((x) => x.includes('事業者番号'))).toBe(false);
+    expect(n.some((x) => x.includes('責'))).toBe(false);
+    expect(n.some((x) => x.includes('単価'))).toBe(false);
+    expect(n.some((x) => x.startsWith('2コX'))).toBe(false);
+  });
 });
