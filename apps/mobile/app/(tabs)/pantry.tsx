@@ -4,7 +4,7 @@
  * docs/買い物リスト・在庫設計.md §5.2
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Minus, Plus, ScanLine, X } from 'lucide-react-native';
+import { Minus, Plus, Receipt, ScanLine, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -74,15 +74,26 @@ export default function PantryScreen() {
           <X size={20} color={Colors.muted} />
         </Pressable>
         <Text style={styles.headerTitle}>在庫</Text>
-        <Pressable
-          onPress={() => router.push('/(tabs)/scan-barcode')}
-          hitSlop={10}
-          accessibilityLabel="バーコードでスキャン"
-          style={styles.headerScan}
-        >
-          <ScanLine size={18} color={Colors.gold} />
-          <Text style={styles.headerScanText}>スキャン</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push('/(tabs)/receipt')}
+            hitSlop={8}
+            accessibilityLabel="レシートから追加"
+            style={styles.headerScan}
+          >
+            <Receipt size={18} color={Colors.gold} />
+            <Text style={styles.headerScanText}>レシート</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/(tabs)/scan-barcode')}
+            hitSlop={8}
+            accessibilityLabel="バーコードでスキャン"
+            style={styles.headerScan}
+          >
+            <ScanLine size={18} color={Colors.gold} />
+            <Text style={styles.headerScanText}>スキャン</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.addRow}>
@@ -177,6 +188,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   headerScan: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerScanText: { fontSize: 13, color: Colors.gold },
   addRow: {
