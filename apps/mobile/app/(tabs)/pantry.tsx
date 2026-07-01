@@ -4,7 +4,7 @@
  * docs/買い物リスト・在庫設計.md §5.2
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChefHat, Minus, Plus, Receipt, ScanLine, X } from 'lucide-react-native';
+import { ChefHat, Minus, Plus, Receipt, ScanLine, Utensils, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -75,6 +75,15 @@ export default function PantryScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>在庫</Text>
         <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push('/(tabs)/consume-meal')}
+            hitSlop={8}
+            accessibilityLabel="食べた分を在庫から減らす"
+            style={styles.headerScan}
+          >
+            <Utensils size={18} color={Colors.gold} />
+            <Text style={styles.headerScanText}>食べた</Text>
+          </Pressable>
           <Pressable
             onPress={() => router.push('/(tabs)/receipt')}
             hitSlop={8}
