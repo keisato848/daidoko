@@ -73,5 +73,9 @@ export async function applyConsumption(pantryItemIds: string[]): Promise<number>
     }
     applied += 1;
   }
+  if (applied > 0) {
+    const { checkAndNotifyLowStock } = await import('./low-stock.service');
+    void checkAndNotifyLowStock().catch(() => undefined);
+  }
   return applied;
 }

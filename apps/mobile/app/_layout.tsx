@@ -1,11 +1,18 @@
 import { Stack } from 'expo-router';
+import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
+import { checkAndNotifyLowStock } from '../src/services/low-stock.service';
 
 export default function RootLayout() {
   const { isReady, error } = useDatabase();
+
+  // 起動時に在庫の残量しきい値をチェック（1日1回まとめて通知; P3）
+  useEffect(() => {
+    if (isReady) checkAndNotifyLowStock().catch(() => undefined);
+  }, [isReady]);
 
   if (error) {
     return (
