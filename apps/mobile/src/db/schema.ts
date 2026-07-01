@@ -357,3 +357,25 @@ export const janCatalog = sqliteTable(
     familyJanIdx: uniqueIndex('idx_jan_catalog_family_jan').on(table.familyId, table.janCode),
   }),
 );
+
+// ─── NameAlias（AI名寄せキャッシュ, name-matching）─────────────────────────────
+// 正規化名 → 正規食材名（canonical）のキャッシュ。AI で一度解決して記憶し、以降の
+// 在庫⇄レシピ突合に使う。辞書はソースに持たず、ここ（データ）に蓄積する。
+export const nameAliases = sqliteTable(
+  'name_aliases',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    sourceNormalized: text('source_normalized').notNull(),
+    canonical: text('canonical').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familySourceIdx: uniqueIndex('idx_name_aliases_family_source').on(
+      table.familyId,
+      table.sourceNormalized,
+    ),
+  }),
+);

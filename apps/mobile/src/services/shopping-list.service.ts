@@ -152,11 +152,12 @@ export async function addMissingRecipeIngredientsToList(recipeId: string): Promi
   if (!detail) return 0;
 
   const { getInStockNormalizedNames } = await import('./pantry.service');
-  const pantryNames = await getInStockNormalizedNames();
+  const { getAliasMap } = await import('./name-alias.service');
+  const [pantryNames, aliases] = await Promise.all([getInStockNormalizedNames(), getAliasMap()]);
 
   let added = 0;
   for (const ingredient of detail.ingredients) {
-    if (isInStock(ingredient.name, pantryNames)) continue;
+    if (isInStock(ingredient.name, pantryNames, aliases)) continue;
     const result = await addShoppingItem(ingredient.name, ingredient.amount ?? undefined, {
       source: 'recipe',
       recipeId,

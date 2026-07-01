@@ -23,13 +23,17 @@ export interface CookableRecipe {
  * Pure ranking: for each recipe, count how many of its ingredient names are in
  * the in-stock set (normalized), then sort by coverage desc, fewer-missing, title.
  */
-export function rankByCoverage(recipes: RecipeListItem[], pantryNames: string[]): CookableRecipe[] {
+export function rankByCoverage(
+  recipes: RecipeListItem[],
+  pantryNames: string[],
+  aliases: Record<string, string> = {},
+): CookableRecipe[] {
   const ranked = recipes.map((recipe) => {
     const ingredients = recipe.ingredientNames;
     const missing: string[] = [];
     let inStock = 0;
     for (const name of ingredients) {
-      if (isInStock(name, pantryNames)) {
+      if (isInStock(name, pantryNames, aliases)) {
         inStock += 1;
       } else {
         missing.push(name);
@@ -61,6 +65,11 @@ export async function getCookableRecipes(): Promise<CookableRecipe[]> {
   if (!isNativePlatform) return [];
   const { getRecipeList } = await import('./recipe.service');
   const { getInStockNormalizedNames } = await import('./pantry.service');
-  const [recipes, inStock] = await Promise.all([getRecipeList(), getInStockNormalizedNames()]);
-  return rankByCoverage(recipes, inStock);
+  const { getAliasMap } = await import('./name-alias.service');
+  const [recipes, inStock, aliases] = await Promise.all([
+    getRecipeList(),
+    getInStockNormalizedNames(),
+    getAliasMap(),
+  ]);
+  return rankByCoverage(recipes, inStock, aliases);
 }
