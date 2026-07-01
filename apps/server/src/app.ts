@@ -11,6 +11,7 @@ import { logger } from 'hono/logger';
 
 import importRouter from './routes/import.js';
 import inferRouter from './routes/infer.js';
+import resolveRouter from './routes/resolve.js';
 
 export const app = new Hono();
 
@@ -33,6 +34,7 @@ app.get('/health', (c) => c.json({ status: 'ok', ts: new Date().toISOString() })
 
 app.route('/api/v1/import', importRouter);
 app.route('/api/v1/infer', inferRouter);
+app.route('/api/v1/resolve', resolveRouter);
 
 // ─── 404 / Error ─────────────────────────────────────────────────────────────
 
