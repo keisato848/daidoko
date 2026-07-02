@@ -32,10 +32,13 @@ function measureStep(def: CoachMarkStepDef): Promise<CoachMarkStep> {
       resolve({ key: def.key, title: def.title, text: def.text, rect: null });
       return;
     }
-    node.measureInWindow((x, y, width, height) => {
+    // measure() の pageX/pageY はスクリーン絶対座標（ステータスバー込み）なので、
+    // statusBarTranslucent なフルスクリーン Modal の座標系と一致する
+    // （measureInWindow はウィンドウ相対で、ステータスバー分ずれる端末がある）。
+    node.measure((_x, _y, width, height, pageX, pageY) => {
       const rect =
-        Number.isFinite(x) && Number.isFinite(y) && width > 0 && height > 0
-          ? { x, y, width, height }
+        Number.isFinite(pageX) && Number.isFinite(pageY) && width > 0 && height > 0
+          ? { x: pageX, y: pageY, width, height }
           : null;
       resolve({ key: def.key, title: def.title, text: def.text, rect });
     });
