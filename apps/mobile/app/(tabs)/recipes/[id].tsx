@@ -2,7 +2,7 @@
  * S05: Recipe Detail screen
  * Hero image, meta info, tabs (ingredients/steps/memo/history), cooking start CTA
  */
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -66,7 +66,7 @@ export default function RecipeDetailScreen() {
       setIsLoading(false);
       return;
     }
-    setIsLoading(true);
+    // 初回のみローディング表示（編集から戻ったときは静かに再取得）
     setRecipe(await getRecipeDetail(id));
     setIsLoading(false);
   }, [id]);
@@ -81,9 +81,12 @@ export default function RecipeDetailScreen() {
     setMemos(await getMemosForRecipe(id));
   }, [id]);
 
-  useEffect(() => {
-    void loadRecipe();
-  }, [loadRecipe]);
+  // 編集モーダルから戻ったときも最新を表示するためフォーカス毎に再取得
+  useFocusEffect(
+    useCallback(() => {
+      void loadRecipe();
+    }, [loadRecipe]),
+  );
 
   useEffect(() => {
     if (tab === 'history') void loadLogs();
