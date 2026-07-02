@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 import {
   cancelTimerNotification,
   ensureNotificationPermission,
+  presentLowStockNotification,
   scheduleTimerNotification,
 } from '../notification.service';
 
@@ -34,5 +35,16 @@ describe('notification.service', () => {
 
   it('reports permission granted', async () => {
     expect(await ensureNotificationPermission()).toBe(true);
+  });
+
+  it('presents an immediate low-stock notification', async () => {
+    const id = await presentLowStockNotification('卵 の残りが少なくなっています。');
+    expect(id).toBe('mock-notification-id');
+    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not present an empty low-stock body', async () => {
+    expect(await presentLowStockNotification('')).toBeNull();
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
   });
 });

@@ -1,14 +1,17 @@
 /**
  * 在庫（パントリー, P2）— 買い物リスト画面のヘッダから開く。
- * 家の在庫を数量×単位で管理。追加・数量増減・削除。残量しきい値での通知は P3。
- * docs/買い物リスト・在庫設計.md §5.2
+ * 家の在庫を数量×単位で管理。追加・数量増減・削除。
+ * 行のベルからしきい値を設定すると、残量低下でローカル通知（P3）。
+ * docs/買い物リスト・在庫設計.md §5.2 / §5.5
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChefHat, Minus, Plus, Receipt, ScanLine, Utensils, X } from 'lucide-react-native';
+import { Bell, ChefHat, Minus, Plus, Receipt, ScanLine, Utensils, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
+import { checkAndNotifyLowStock } from '../../src/services/low-stock.service';
+import { ensureNotificationPermission } from '../../src/services/notification.service';
 import {
   addPantryItem,
   getPantryItems,
@@ -23,6 +26,8 @@ export default function PantryScreen() {
   const [name, setName] = useState('');
   const [qty, setQty] = useState('');
   const [unit, setUnit] = useState('');
+  const [thresholdEditId, setThresholdEditId] = useState<string | null>(null);
+  const [thresholdInput, setThresholdInput] = useState('');
 
   const refresh = useCallback(() => {
     getPantryItems()
@@ -51,8 +56,27 @@ export default function PantryScreen() {
       setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, quantity: next } : it)));
       await updatePantryItem(item.id, { quantity: next }).catch(() => undefined);
       refresh();
+      if (delta < 0) checkAndNotifyLowStock().catch(() => undefined);
     },
     [refresh],
+  );
+
+  const handleToggleThresholdEdit = useCallback((item: PantryItem) => {
+    setThresholdEditId((prev) => (prev === item.id ? null : item.id));
+    setThresholdInput(item.lowStockThreshold != null ? String(item.lowStockThreshold) : '');
+  }, []);
+
+  const handleSaveThreshold = useCallback(
+    async (item: PantryItem) => {
+      const parsed = thresholdInput.trim() ? Number(thresholdInput.trim()) : null;
+      const value = parsed != null && Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+      setThresholdEditId(null);
+      if (value != null) ensureNotificationPermission().catch(() => undefined);
+      await updatePantryItem(item.id, { lowStockThreshold: value }).catch(() => undefined);
+      refresh();
+      checkAndNotifyLowStock().catch(() => undefined);
+    },
+    [thresholdInput, refresh],
   );
 
   const handleRemove = useCallback(
@@ -156,34 +180,79 @@ export default function PantryScreen() {
           <Text style={styles.empty}>在庫は空です。{'\n'}食材を追加してください。</Text>
         }
         renderItem={({ item }) => (
-          <View style={styles.row}>
-            <View style={styles.rowText}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              {isLow(item) && <Text style={styles.lowBadge}>残りわずか</Text>}
-            </View>
-            <View style={styles.stepper}>
+          <View style={styles.rowWrap}>
+            <View style={styles.row}>
+              <View style={styles.rowText}>
+                <Text style={styles.itemName}>{item.name}</Text>
+                <View style={styles.badgeRow}>
+                  {isLow(item) && <Text style={styles.lowBadge}>残りわずか</Text>}
+                  {item.lowStockThreshold != null && (
+                    <Text style={styles.thresholdBadge}>通知 ≤{item.lowStockThreshold}</Text>
+                  )}
+                </View>
+              </View>
+              <View style={styles.stepper}>
+                <Pressable
+                  onPress={() => handleAdjust(item, -1)}
+                  hitSlop={8}
+                  accessibilityLabel="減らす"
+                >
+                  <Minus size={16} color={Colors.goldDim} />
+                </Pressable>
+                <Text style={styles.qtyText}>
+                  {item.quantity ?? '—'}
+                  {item.unit ? ` ${item.unit}` : ''}
+                </Text>
+                <Pressable
+                  onPress={() => handleAdjust(item, 1)}
+                  hitSlop={8}
+                  accessibilityLabel="増やす"
+                >
+                  <Plus size={16} color={Colors.goldDim} />
+                </Pressable>
+              </View>
               <Pressable
-                onPress={() => handleAdjust(item, -1)}
+                onPress={() => handleToggleThresholdEdit(item)}
                 hitSlop={8}
-                accessibilityLabel="減らす"
+                accessibilityLabel="残量通知のしきい値を設定"
               >
-                <Minus size={16} color={Colors.goldDim} />
+                <Bell
+                  size={16}
+                  color={item.lowStockThreshold != null ? Colors.gold : Colors.muted}
+                />
               </Pressable>
-              <Text style={styles.qtyText}>
-                {item.quantity ?? '—'}
-                {item.unit ? ` ${item.unit}` : ''}
-              </Text>
               <Pressable
-                onPress={() => handleAdjust(item, 1)}
-                hitSlop={8}
-                accessibilityLabel="増やす"
+                onPress={() => handleRemove(item.id)}
+                hitSlop={10}
+                accessibilityLabel="削除"
               >
-                <Plus size={16} color={Colors.goldDim} />
+                <X size={16} color={Colors.muted} />
               </Pressable>
             </View>
-            <Pressable onPress={() => handleRemove(item.id)} hitSlop={10} accessibilityLabel="削除">
-              <X size={16} color={Colors.muted} />
-            </Pressable>
+            {thresholdEditId === item.id && (
+              <View style={styles.thresholdEditor}>
+                <Text style={styles.thresholdLabel}>残りいくつ以下で通知する？</Text>
+                <TextInput
+                  style={styles.thresholdInput}
+                  value={thresholdInput}
+                  onChangeText={setThresholdInput}
+                  placeholder="例: 1"
+                  placeholderTextColor={Colors.muted}
+                  keyboardType="numeric"
+                  maxLength={6}
+                  autoFocus
+                />
+                <Pressable
+                  style={styles.thresholdSave}
+                  onPress={() => handleSaveThreshold(item)}
+                  accessibilityLabel="しきい値を保存"
+                >
+                  <Text style={styles.thresholdSaveText}>
+                    {thresholdInput.trim() ? '保存' : 'クリア'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
       />
@@ -274,17 +343,48 @@ const styles = StyleSheet.create({
   cookableText: { fontSize: 14, color: Colors.gold, fontWeight: '500' },
   listContent: { paddingHorizontal: 20, paddingBottom: 24 },
   empty: { color: Colors.muted, textAlign: 'center', marginTop: 48, lineHeight: 22, fontSize: 14 },
+  rowWrap: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
     gap: 12,
   },
   rowText: { flex: 1, gap: 2 },
+  badgeRow: { flexDirection: 'row', gap: 8 },
   itemName: { fontSize: 15, color: Colors.paper },
   lowBadge: { fontSize: 11, color: '#C97A4A' },
+  thresholdBadge: { fontSize: 11, color: Colors.goldDim },
+  thresholdEditor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingBottom: 12,
+    paddingLeft: 4,
+  },
+  thresholdLabel: { flex: 1, fontSize: 12, color: Colors.muted },
+  thresholdInput: {
+    width: 64,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: '#130E08',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: Colors.paper,
+    textAlign: 'center',
+  },
+  thresholdSave: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: Colors.gold,
+  },
+  thresholdSaveText: { fontSize: 13, color: Colors.bg, fontWeight: '600' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   qtyText: { fontSize: 14, color: Colors.paperDim, minWidth: 48, textAlign: 'center' },
 });
