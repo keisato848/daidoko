@@ -291,3 +291,91 @@ export const ingredientNutrition = sqliteTable('ingredient_nutrition', {
   dataSource: text('data_source').notNull().default('manual'), // 'manual' | 'api' | 'estimated'
   updatedAt: text('updated_at').notNull(),
 });
+
+// ─── ShoppingItem（買い物リスト, P1）────────────────────────────────────────
+// 集約買い物リスト。家族グループ単位。名前正規化キーで突合（docs/買い物リスト・在庫設計.md）。
+export const shoppingItems = sqliteTable(
+  'shopping_items',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    name: text('name').notNull(),
+    nameNormalized: text('name_normalized').notNull(),
+    amount: text('amount'),
+    checked: integer('checked').notNull().default(0),
+    source: text('source').notNull().default('manual'), // 'manual' | 'recipe' | 'low_stock' | 'receipt'
+    recipeId: text('recipe_id').references(() => recipes.id),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: text('created_at').notNull(),
+    checkedAt: text('checked_at'),
+  },
+  (table) => ({
+    familyCheckedIdx: index('idx_shopping_items_family_checked').on(table.familyId, table.checked),
+  }),
+);
+
+// ─── PantryItem（在庫, P2）──────────────────────────────────────────────────
+// 家の在庫。数量×単位は厳密管理（同一商品は合算）。包装品は jan_code で識別（P2b）。
+export const pantryItems = sqliteTable(
+  'pantry_items',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    name: text('name').notNull(),
+    nameNormalized: text('name_normalized').notNull(),
+    quantity: real('quantity'),
+    unit: text('unit'),
+    lowStockThreshold: real('low_stock_threshold'),
+    janCode: text('jan_code'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familyNameIdx: index('idx_pantry_items_family_name').on(table.familyId, table.nameNormalized),
+  }),
+);
+
+// ─── JanCatalog（JAN→商品名の記憶, P2b）─────────────────────────────────────
+// バーコード(JAN)→名前/単位 のローカル辞書。初回入力で記憶し、次回スキャンで自動補完。
+export const janCatalog = sqliteTable(
+  'jan_catalog',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    janCode: text('jan_code').notNull(),
+    name: text('name').notNull(),
+    unit: text('unit'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familyJanIdx: uniqueIndex('idx_jan_catalog_family_jan').on(table.familyId, table.janCode),
+  }),
+);
+
+// ─── NameAlias（AI名寄せキャッシュ, name-matching）─────────────────────────────
+// 正規化名 → 正規食材名（canonical）のキャッシュ。AI で一度解決して記憶し、以降の
+// 在庫⇄レシピ突合に使う。辞書はソースに持たず、ここ（データ）に蓄積する。
+export const nameAliases = sqliteTable(
+  'name_aliases',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    sourceNormalized: text('source_normalized').notNull(),
+    canonical: text('canonical').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familySourceIdx: uniqueIndex('idx_name_aliases_family_source').on(
+      table.familyId,
+      table.sourceNormalized,
+    ),
+  }),
+);

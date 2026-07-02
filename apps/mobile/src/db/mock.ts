@@ -180,7 +180,8 @@ export function getMockRecipeList(): RecipeListItem[] {
         ? mockIngredients.filter((i) => i.revisionId === recipe.currentRevId).map((i) => i.name)
         : [];
 
-      const logs = seedCookingLogs.filter((l) => l.recipeId === recipe.id && l.rating != null);
+      const recipeLogs = seedCookingLogs.filter((l) => l.recipeId === recipe.id);
+      const logs = recipeLogs.filter((l) => l.rating != null);
       const avgRating =
         logs.length > 0
           ? Math.round(logs.reduce((sum, l) => sum + (l.rating ?? 0), 0) / logs.length)
@@ -193,6 +194,9 @@ export function getMockRecipeList(): RecipeListItem[] {
         rating: avgRating,
         tags,
         ingredientNames: ings,
+        createdAt: recipe.createdAt,
+        cookCount: recipeLogs.length,
+        heroPhotoUri: null,
       };
     });
 }
@@ -236,6 +240,7 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     tags,
     ingredients,
     steps,
+    heroPhotoUri: null,
   };
 }
 
@@ -451,7 +456,7 @@ export function createMockPhotoSource(input: {
     url: null,
     ocrRawText: input.labelSummary ?? null,
     siteName: null,
-    pageTitle: '料理写真から推測',
+    pageTitle: '写真からレシピ',
     thumbnailUrl: null,
     capturedAt: input.capturedAt ?? now,
     createdAt: now,

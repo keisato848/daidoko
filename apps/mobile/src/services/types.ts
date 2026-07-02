@@ -10,6 +10,12 @@ export interface RecipeListItem {
   rating: number | null;
   tags: string[];
   ingredientNames: string[];
+  /** ISO timestamp the recipe was created (for "newest" sort) */
+  createdAt: string;
+  /** Number of cooking logs recorded for this recipe (for "most cooked" sort) */
+  cookCount: number;
+  /** Latest cooking photo (cloud or local) shown as the card image, if any */
+  heroPhotoUri: string | null;
 }
 
 export interface RecipeDetail {
@@ -22,6 +28,15 @@ export interface RecipeDetail {
   tags: string[];
   ingredients: IngredientItem[];
   steps: StepItem[];
+  /** Latest cooking photo (cloud or local) shown as the detail header, if any */
+  heroPhotoUri: string | null;
+}
+
+export interface MemoItem {
+  id: string;
+  body: string;
+  authorId: string;
+  createdAt: string;
 }
 
 export interface RecipeRevisionSummary {
@@ -166,4 +181,24 @@ export interface CookingLogEntry {
   rating: number | null;
   memo: string | null;
   photos: CookingPhotoItem[];
+}
+
+export type ShoppingItemSource = 'manual' | 'recipe' | 'low_stock' | 'receipt';
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  amount: string | null;
+  checked: boolean;
+  source: ShoppingItemSource;
+  recipeId: string | null;
+}
+
+export interface PantryItem {
+  id: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  lowStockThreshold: number | null;
+  janCode: string | null;
 }

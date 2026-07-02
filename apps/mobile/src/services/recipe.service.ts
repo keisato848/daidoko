@@ -3,6 +3,8 @@
  * Handles both native (SQLite) and web (mock) data paths
  */
 import { isNativePlatform } from '../db/client';
+import type { getDb } from '../db/client';
+import type * as DbSchema from '../db/schema';
 import { shouldHideSeedRecipe } from '../db/sampleData';
 import {
   getMockRecipeDetail,
@@ -14,6 +16,7 @@ import {
 } from '../db/mock';
 import { generateId } from '../utils/id';
 import type {
+  MemoItem,
   RecipeDetail,
   RecipeListItem,
   RecipeRevisionSummary,
@@ -43,6 +46,7 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       id: schema.recipes.id,
       title: schema.recipes.title,
       currentRevId: schema.recipes.currentRevId,
+      createdAt: schema.recipes.createdAt,
     })
     .from(schema.recipes)
     .where(eq(schema.recipes.status, 'active'));
@@ -87,6 +91,8 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       ingredientNames = ings.map((i) => i.name);
     }
 
+    const heroPhotoUri = await getLatestCookingPhotoUri(db, schema, recipe.id);
+
     result.push({
       id: recipe.id,
       title: recipe.title,
@@ -94,10 +100,34 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       rating: avgRating,
       tags: tagRows.map((t) => t.name ?? '').filter(Boolean),
       ingredientNames,
+      createdAt: recipe.createdAt,
+      cookCount: ratingRows.length,
+      heroPhotoUri,
     });
   }
 
   return result;
+}
+
+// Latest cooking photo (cloud preferred, else local) for a recipe, or null.
+async function getLatestCookingPhotoUri(
+  db: Awaited<ReturnType<typeof getDb>>,
+  schema: typeof DbSchema,
+  recipeId: string,
+): Promise<string | null> {
+  const { eq, desc } = await import('drizzle-orm');
+  const rows = await db
+    .select({
+      localPath: schema.cookingPhotos.localPath,
+      cloudUrl: schema.cookingPhotos.cloudUrl,
+    })
+    .from(schema.cookingPhotos)
+    .innerJoin(schema.cookingLogs, eq(schema.cookingPhotos.logId, schema.cookingLogs.id))
+    .where(eq(schema.cookingLogs.recipeId, recipeId))
+    .orderBy(desc(schema.cookingPhotos.createdAt))
+    .limit(1);
+  if (rows.length === 0) return null;
+  return rows[0].cloudUrl ?? rows[0].localPath;
 }
 
 export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | null> {
@@ -172,6 +202,8 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
       .orderBy(schema.steps.sortOrder);
   }
 
+  const heroPhotoUri = await getLatestCookingPhotoUri(db, schema, recipeId);
+
   return {
     id: r.id,
     title: r.title,
@@ -182,6 +214,7 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
     tags: tagRows.map((t) => t.name ?? '').filter(Boolean),
     ingredients: ingredientsList,
     steps: stepsList,
+    heroPhotoUri,
   };
 }
 
@@ -339,6 +372,54 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
   await updateFtsForRecipe(recipeId, input);
 
   return recipeId;
+}
+
+/** Save a free-text memo (e.g. the user's impression) on a recipe. */
+export async function createRecipeMemo(recipeId: string, body: string): Promise<string | null> {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  if (!isNativePlatform) return null;
+
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const { getCurrentUser } = await import('./user.service');
+  const db = getDb();
+  const id = generateId();
+  const now = nowIso();
+
+  await db.insert(schema.memos).values({
+    id,
+    recipeId,
+    authorId: getCurrentUser().id,
+    body: trimmed,
+    isPrivate: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return id;
+}
+
+/** Free-text memos (newest first) recorded on a recipe. */
+export async function getMemosForRecipe(recipeId: string): Promise<MemoItem[]> {
+  if (!isNativePlatform) return [];
+
+  const { eq, desc } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const rows = await db
+    .select({
+      id: schema.memos.id,
+      body: schema.memos.body,
+      authorId: schema.memos.authorId,
+      createdAt: schema.memos.createdAt,
+    })
+    .from(schema.memos)
+    .where(eq(schema.memos.recipeId, recipeId))
+    .orderBy(desc(schema.memos.createdAt));
+
+  return rows;
 }
 
 export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): Promise<string> {

@@ -1,6 +1,7 @@
 /**
  * Labeled text input with error display
  */
+import { useState } from 'react';
 import { StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
@@ -11,7 +12,17 @@ interface FormFieldProps extends TextInputProps {
   required?: boolean;
 }
 
-export function FormField({ label, error, required, style, ...props }: FormFieldProps) {
+export function FormField({
+  label,
+  error,
+  required,
+  style,
+  multiline,
+  onContentSizeChange,
+  ...props
+}: FormFieldProps) {
+  // Grow multiline fields to fit their content (minHeight in `style` floors it).
+  const [contentHeight, setContentHeight] = useState(0);
   return (
     <View style={styles.container}>
       <Text style={styles.label}>
@@ -19,7 +30,17 @@ export function FormField({ label, error, required, style, ...props }: FormField
         {required && <Text style={styles.required}> *</Text>}
       </Text>
       <TextInput
-        style={[styles.input, error ? styles.inputError : undefined, style]}
+        style={[
+          styles.input,
+          error ? styles.inputError : undefined,
+          style,
+          multiline && contentHeight > 0 ? { height: contentHeight } : undefined,
+        ]}
+        multiline={multiline}
+        onContentSizeChange={(e) => {
+          if (multiline) setContentHeight(e.nativeEvent.contentSize.height);
+          onContentSizeChange?.(e);
+        }}
         placeholderTextColor={Colors.muted}
         {...props}
       />

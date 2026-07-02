@@ -22,7 +22,7 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -251,6 +251,58 @@ const CREATE_TABLES_SQL = `
     ingredient_names,
     tokenize='unicode61'
   );
+
+  CREATE TABLE IF NOT EXISTS shopping_items (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    name TEXT NOT NULL,
+    name_normalized TEXT NOT NULL,
+    amount TEXT,
+    checked INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'manual',
+    recipe_id TEXT REFERENCES recipes(id),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    checked_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_shopping_items_family_checked ON shopping_items(family_id, checked);
+
+  CREATE TABLE IF NOT EXISTS pantry_items (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    name TEXT NOT NULL,
+    name_normalized TEXT NOT NULL,
+    quantity REAL,
+    unit TEXT,
+    low_stock_threshold REAL,
+    jan_code TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pantry_items_family_name ON pantry_items(family_id, name_normalized);
+
+  CREATE TABLE IF NOT EXISTS jan_catalog (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    jan_code TEXT NOT NULL,
+    name TEXT NOT NULL,
+    unit TEXT,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_jan_catalog_family_jan ON jan_catalog(family_id, jan_code);
+
+  CREATE TABLE IF NOT EXISTS name_aliases (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    source_normalized TEXT NOT NULL,
+    canonical TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_name_aliases_family_source ON name_aliases(family_id, source_normalized);
 `;
 
 /** Run migrations (create tables) */

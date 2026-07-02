@@ -6,6 +6,8 @@ export {
   getRecipeDetail,
   searchRecipes,
   createRecipe,
+  createRecipeMemo,
+  getMemosForRecipe,
   updateRecipe,
   deleteRecipe,
 } from './recipe.service';
@@ -16,6 +18,25 @@ export { capturePhoto, cleanupTemporaryPhotos } from './photo-capture.service';
 export { preprocessImageForOcr } from './image-preprocess.service';
 export { createClientOcrRecognizer, isClientOcrAvailable } from './client-ocr.provider';
 export { getTagsForFamily, upsertTags } from './tag.service';
+export {
+  getShoppingItems,
+  addShoppingItem,
+  addRecipeIngredientsToList,
+  addMissingRecipeIngredientsToList,
+  setShoppingItemChecked,
+  removeShoppingItem,
+  clearCheckedShoppingItems,
+} from './shopping-list.service';
+export {
+  getPantryItems,
+  addPantryItem,
+  updatePantryItem,
+  removePantryItem,
+  getInStockNormalizedNames,
+  moveCheckedShoppingItemsToPantry,
+} from './pantry.service';
+export { lookupJan, rememberJan } from './jan.service';
+export { getCookableRecipes, rankByCoverage, type CookableRecipe } from './cookable.service';
 export {
   addFamilyMember,
   getCurrentFamily,
@@ -33,12 +54,16 @@ export { searchByFts, updateFtsIndex, removeFtsEntry } from './fts.service';
 export type {
   RecipeListItem,
   RecipeDetail,
+  MemoItem,
   IngredientItem,
   StepItem,
   TimelineEntry,
   SaveRecipeInput,
   UpdateRecipeInput,
   TagItem,
+  ShoppingItem,
+  ShoppingItemSource,
+  PantryItem,
   CookingPhotoItem,
   SaveCookingLogInput,
   SaveCookingPhotoInput,

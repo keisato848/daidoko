@@ -4,8 +4,9 @@
  */
 import { useRouter } from 'expo-router';
 import { Camera, FileText, Globe, Image as ImageIcon, PenLine } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { PressableScale } from '../../src/components/PressableScale';
 import { Colors } from '../../src/constants/theme';
 
 interface MethodOption {
@@ -41,8 +42,8 @@ const METHODS: MethodOption[] = [
   {
     id: 'photo',
     icon: <Camera size={24} color={Colors.gold} />,
-    label: '料理写真から推測',
-    description: '写っている料理から下書き案を作成',
+    label: '写真からレシピ',
+    description: '料理の写真からレシピの下書きをつくる',
     enabled: true,
   },
   {
@@ -79,7 +80,7 @@ export default function AddScreen() {
 
       <View style={styles.methods}>
         {METHODS.map((method) => (
-          <Pressable
+          <PressableScale
             key={method.id}
             style={[styles.methodCard, !method.enabled && styles.methodCardDisabled]}
             onPress={() => handleSelect(method)}
@@ -92,7 +93,7 @@ export default function AddScreen() {
               <Text style={styles.methodDescription}>{method.description}</Text>
               {!method.enabled && <Text style={styles.comingSoon}>今後追加予定</Text>}
             </View>
-          </Pressable>
+          </PressableScale>
         ))}
       </View>
     </View>

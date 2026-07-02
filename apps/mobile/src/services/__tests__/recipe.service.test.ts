@@ -10,7 +10,9 @@ jest.mock('../../db/client', () => ({
 
 import {
   createRecipe,
+  createRecipeMemo,
   deleteRecipe,
+  getMemosForRecipe,
   getRecipeDetail,
   getRecipeList,
   getRecipeRevisions,
@@ -43,6 +45,15 @@ describe('recipe.service (mock/web)', () => {
       expect(item).toHaveProperty('ingredientNames');
     });
 
+    it('each item exposes heroPhotoUri', async () => {
+      const list = await getRecipeList();
+      for (const item of list) {
+        expect(item).toHaveProperty('heroPhotoUri');
+        // web/mock path has no persisted cooking photos
+        expect(item.heroPhotoUri).toBeNull();
+      }
+    });
+
     it('only includes active recipes', async () => {
       const list = await getRecipeList();
       expect(list.length).toBeGreaterThanOrEqual(6);
@@ -61,6 +72,13 @@ describe('recipe.service (mock/web)', () => {
     it('returns null for invalid id', async () => {
       const detail = await getRecipeDetail('nonexistent');
       expect(detail).toBeNull();
+    });
+
+    it('exposes heroPhotoUri (null on web/mock path)', async () => {
+      const detail = await getRecipeDetail('recipe-1');
+      assertDefined(detail);
+      expect(detail).toHaveProperty('heroPhotoUri');
+      expect(detail.heroPhotoUri).toBeNull();
     });
 
     it('includes tags', async () => {
@@ -193,7 +211,7 @@ describe('recipe.service (mock/web)', () => {
         sourceId,
         ingredients: [{ name: '主食材（写真を見て確認）' }],
         steps: [{ body: '写真を確認して調理する' }],
-        tags: ['推測'],
+        tags: ['写真から'],
       });
 
       const revisions = await getRecipeRevisions(id);
@@ -246,6 +264,18 @@ describe('recipe.service (mock/web)', () => {
         ingredientCount: 1,
         stepCount: 1,
       });
+    });
+  });
+
+  describe('recipe memos', () => {
+    it('getMemosForRecipe returns an array (empty on web/mock path)', async () => {
+      const memos = await getMemosForRecipe('recipe-1');
+      expect(Array.isArray(memos)).toBe(true);
+      expect(memos).toHaveLength(0);
+    });
+
+    it('createRecipeMemo ignores blank input', async () => {
+      expect(await createRecipeMemo('recipe-1', '   ')).toBeNull();
     });
   });
 

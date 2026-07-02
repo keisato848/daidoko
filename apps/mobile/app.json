@@ -2,7 +2,7 @@
   "expo": {
     "name": "だいどこ",
     "slug": "daidoko",
-    "version": "1.0.1",
+    "version": "1.2.0",
     "orientation": "portrait",
     "scheme": "daidoko",
     "userInterfaceStyle": "dark",
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.daidoko.app",
-      "versionCode": 10003,
+      "versionCode": 10009,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"
@@ -36,13 +36,35 @@
     "plugins": [
       "expo-router",
       [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.2.20"
+          }
+        }
+      ],
+      "./plugins/withKotlinMetadataSkip",
+      [
         "expo-image-picker",
         {
           "photosPermission": "レシピ写真を選択するために写真ライブラリへのアクセスを使用します。",
           "cameraPermission": "レシピ写真を撮影するためにカメラを使用します。"
         }
       ],
-      "./plugins/withDaidokoOcr"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "バーコード（JAN）を読み取るためにカメラを使用します。"
+        }
+      ],
+      "./plugins/withDaidokoOcr",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
