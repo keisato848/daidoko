@@ -100,3 +100,40 @@ export async function cleanupStoredCookingPhotos(
     photos.map((photo) => adapter.deleteAsync(photo.localPath, { idempotent: true })),
   );
 }
+
+// ─── Recipe photos (表紙・手順写真) ──────────────────────────────────────────
+
+function getRecipePhotoDirectory(adapter: FileStorageAdapter): string {
+  if (!adapter.documentDirectory) {
+    throw new Error('写真の保存先を取得できませんでした');
+  }
+  return `${adapter.documentDirectory}recipe-photos/`;
+}
+
+export function createRecipePhotoFileName(
+  takenAt: string,
+  extension: string,
+  id = generateId(),
+): string {
+  const timestamp = takenAt.replace(/[^0-9]/g, '').slice(0, 14) || String(Date.now());
+  return `recipe-photo-${timestamp}-${id}.${extension}`;
+}
+
+/**
+ * Copy a captured photo into the app's recipe-photos directory (used for the
+ * recipe cover and per-step photos). Returns the persisted local path.
+ */
+export async function persistRecipePhoto(
+  photo: CapturedPhoto,
+  adapter: FileStorageAdapter = expoFileStorageAdapter,
+): Promise<string> {
+  const directory = getRecipePhotoDirectory(adapter);
+  const info = await adapter.getInfoAsync(directory);
+  if (!info.exists) {
+    await adapter.makeDirectoryAsync(directory, { intermediates: true });
+  }
+  const extension = extensionForPhoto(photo.localPath, photo.mimeType);
+  const destination = `${directory}${createRecipePhotoFileName(photo.takenAt, extension)}`;
+  await adapter.copyAsync({ from: photo.localPath, to: destination });
+  return destination;
+}

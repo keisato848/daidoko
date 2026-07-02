@@ -5,13 +5,16 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
+import { PhotoPickerField } from './PhotoPickerField';
 
 interface StepRowProps {
   index: number;
   body: string;
   timerSec: number | undefined;
+  photoPath: string | undefined;
   onChangeBody: (value: string) => void;
   onChangeTimer: (value: number | undefined) => void;
+  onChangePhoto: (value: string | undefined) => void;
   onRemove: () => void;
 }
 
@@ -19,8 +22,10 @@ export function StepRow({
   index,
   body,
   timerSec,
+  photoPath,
   onChangeBody,
   onChangeTimer,
+  onChangePhoto,
   onRemove,
 }: StepRowProps) {
   const timerMin = timerSec != null ? Math.floor(timerSec / 60) : undefined;
@@ -68,6 +73,7 @@ export function StepRow({
         />
         <Text style={styles.timerSuffix}>分</Text>
       </View>
+      <PhotoPickerField variant="thumb" value={photoPath} onChange={onChangePhoto} />
     </View>
   );
 }

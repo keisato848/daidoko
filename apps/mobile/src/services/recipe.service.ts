@@ -47,6 +47,7 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       title: schema.recipes.title,
       currentRevId: schema.recipes.currentRevId,
       createdAt: schema.recipes.createdAt,
+      coverPhotoPath: schema.recipes.coverPhotoPath,
     })
     .from(schema.recipes)
     .where(eq(schema.recipes.status, 'active'));
@@ -91,7 +92,8 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       ingredientNames = ings.map((i) => i.name);
     }
 
-    const heroPhotoUri = await getLatestCookingPhotoUri(db, schema, recipe.id);
+    const heroPhotoUri =
+      recipe.coverPhotoPath ?? (await getLatestCookingPhotoUri(db, schema, recipe.id));
 
     result.push({
       id: recipe.id,
@@ -202,7 +204,7 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
       .orderBy(schema.steps.sortOrder);
   }
 
-  const heroPhotoUri = await getLatestCookingPhotoUri(db, schema, recipeId);
+  const heroPhotoUri = r.coverPhotoPath ?? (await getLatestCookingPhotoUri(db, schema, recipeId));
 
   return {
     id: r.id,
@@ -215,6 +217,7 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
     ingredients: ingredientsList,
     steps: stepsList,
     heroPhotoUri,
+    coverPhotoPath: r.coverPhotoPath,
   };
 }
 
@@ -315,6 +318,7 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
     titleReading: input.titleReading ?? null,
     currentRevId: revId,
     status: 'active',
+    coverPhotoPath: input.coverPhotoPath ?? null,
     createdBy: USER_ID,
     createdAt: now,
     updatedAt: now,
@@ -360,6 +364,7 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
       body: step.body,
       timerSec: step.timerSec ?? null,
       photoId: null,
+      photoPath: step.photoPath ?? null,
     });
   }
 
@@ -477,6 +482,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
       title: input.title,
       titleReading: input.titleReading ?? null,
       currentRevId: revId,
+      coverPhotoPath: input.coverPhotoPath ?? null,
       updatedAt: now,
     })
     .where(eq(schema.recipes.id, recipeId));
@@ -505,6 +511,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
       body: step.body,
       timerSec: step.timerSec ?? null,
       photoId: null,
+      photoPath: step.photoPath ?? null,
     });
   }
 

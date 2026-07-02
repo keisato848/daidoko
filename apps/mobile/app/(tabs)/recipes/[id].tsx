@@ -255,6 +255,13 @@ export default function RecipeDetailScreen() {
                 </View>
                 <View style={styles.stepContent}>
                   <Text style={styles.stepBody}>{step.body}</Text>
+                  {step.photoPath && (
+                    <Image
+                      source={{ uri: step.photoPath }}
+                      style={styles.stepPhoto}
+                      resizeMode="cover"
+                    />
+                  )}
                   {step.timerSec != null && (
                     <View style={styles.timerBadge}>
                       <Text style={styles.timerText}>
@@ -497,6 +504,13 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: Colors.paper,
     lineHeight: 24,
+  },
+  stepPhoto: {
+    width: '100%',
+    height: 140,
+    borderRadius: 8,
+    marginTop: 8,
+    backgroundColor: '#130E08',
   },
   timerBadge: {
     marginTop: 6,

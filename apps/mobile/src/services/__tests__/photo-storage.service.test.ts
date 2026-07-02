@@ -1,8 +1,10 @@
 import {
   createCookingPhotoFileName,
+  createRecipePhotoFileName,
   extensionForPhoto,
   MAX_COOKING_LOG_PHOTOS,
   persistCookingLogPhotos,
+  persistRecipePhoto,
 } from '../photo-storage.service';
 import type { CapturedPhoto } from '../photo-capture.service';
 
@@ -56,5 +58,39 @@ describe('photo-storage.service', () => {
     }));
 
     await expect(persistCookingLogPhotos(photos)).rejects.toThrow('写真は6枚まで追加できます');
+  });
+
+  it('creates stable recipe photo file names', () => {
+    expect(createRecipePhotoFileName('2026-07-02T01:02:03.000Z', 'jpg', 'abc123')).toBe(
+      'recipe-photo-20260702010203-abc123.jpg',
+    );
+  });
+
+  it('copies a recipe photo into the recipe-photos directory', async () => {
+    const copied: { from: string; to: string }[] = [];
+    const adapter = {
+      documentDirectory: 'file:///documents/',
+      getInfoAsync: jest.fn(async () => ({ exists: false })),
+      makeDirectoryAsync: jest.fn(async () => undefined),
+      copyAsync: jest.fn(async (options: { from: string; to: string }) => {
+        copied.push(options);
+      }),
+      deleteAsync: jest.fn(async () => undefined),
+    };
+    const photo: CapturedPhoto = {
+      localPath: 'file:///cache/cover.jpg',
+      source: 'camera',
+      mimeType: 'image/jpeg',
+      takenAt: '2026-07-02T01:02:03.000Z',
+      temporary: true,
+    };
+
+    const path = await persistRecipePhoto(photo, adapter);
+
+    expect(adapter.makeDirectoryAsync).toHaveBeenCalledWith('file:///documents/recipe-photos/', {
+      intermediates: true,
+    });
+    expect(copied[0].from).toBe('file:///cache/cover.jpg');
+    expect(path).toContain('file:///documents/recipe-photos/recipe-photo-');
   });
 });

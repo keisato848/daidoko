@@ -34,6 +34,25 @@ describe('database migrations', () => {
     expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS family_members');
     expect(statements).toContain(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   });
+
+  it('adds v7 photo columns and survives duplicate-column errors on re-run', () => {
+    const statements: string[] = [];
+
+    const result = runMigrations({
+      execSync: (statement) => {
+        statements.push(statement);
+        // Simulate an already-migrated DB: every ALTER fails as duplicate.
+        if (statement.startsWith('ALTER TABLE')) {
+          throw new Error('duplicate column name');
+        }
+      },
+    });
+
+    expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(statements).toContain('ALTER TABLE recipes ADD COLUMN cover_photo_path TEXT');
+    expect(statements).toContain('ALTER TABLE steps ADD COLUMN photo_path TEXT');
+    expect(statements).toContain(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
+  });
 });
 
 describe('sample data seed guard', () => {

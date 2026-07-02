@@ -21,6 +21,7 @@ import { recipeFormSchema, type RecipeFormData } from '../validation/recipe.sche
 import { FormField } from './FormField';
 import { IngredientRow } from './IngredientRow';
 import { NumberStepper } from './NumberStepper';
+import { PhotoPickerField } from './PhotoPickerField';
 import { StepRow } from './StepRow';
 import { TagSelector } from './TagSelector';
 
@@ -40,8 +41,9 @@ const DEFAULT_VALUES: RecipeFormData = {
   servings: undefined,
   cookTimeMin: undefined,
   prepTimeMin: undefined,
+  coverPhotoPath: undefined,
   ingredients: [{ name: '', amount: '', groupLabel: '', note: '' }],
-  steps: [{ body: '', timerSec: undefined }],
+  steps: [{ body: '', timerSec: undefined, photoPath: undefined }],
   tags: [],
 };
 
@@ -168,6 +170,16 @@ export function RecipeForm({
           </View>
         </View>
 
+        {/* Cover Photo */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>写真</Text>
+          <PhotoPickerField
+            variant="cover"
+            value={watchedValues.coverPhotoPath || undefined}
+            onChange={(path) => setValue('coverPhotoPath', path)}
+          />
+        </View>
+
         {/* Ingredients */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>材料</Text>
@@ -209,14 +221,16 @@ export function RecipeForm({
               index={index}
               body={watchedValues.steps?.[index]?.body ?? ''}
               timerSec={watchedValues.steps?.[index]?.timerSec}
+              photoPath={watchedValues.steps?.[index]?.photoPath || undefined}
               onChangeBody={(v) => setValue(`steps.${index}.body`, v)}
               onChangeTimer={(v) => setValue(`steps.${index}.timerSec`, v)}
+              onChangePhoto={(v) => setValue(`steps.${index}.photoPath`, v)}
               onRemove={() => removeStep(index)}
             />
           ))}
           <Pressable
             style={styles.addRowButton}
-            onPress={() => appendStep({ body: '', timerSec: undefined })}
+            onPress={() => appendStep({ body: '', timerSec: undefined, photoPath: undefined })}
           >
             <Text style={styles.addRowButtonText}>＋ 手順を追加</Text>
           </Pressable>
