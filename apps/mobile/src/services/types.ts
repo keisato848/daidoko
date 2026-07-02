@@ -14,7 +14,7 @@ export interface RecipeListItem {
   createdAt: string;
   /** Number of cooking logs recorded for this recipe (for "most cooked" sort) */
   cookCount: number;
-  /** Latest cooking photo (cloud or local) shown as the card image, if any */
+  /** Card image: the cover photo, else the latest cooking photo, if any */
   heroPhotoUri: string | null;
 }
 
@@ -28,8 +28,10 @@ export interface RecipeDetail {
   tags: string[];
   ingredients: IngredientItem[];
   steps: StepItem[];
-  /** Latest cooking photo (cloud or local) shown as the detail header, if any */
+  /** Detail header image: the cover photo, else the latest cooking photo, if any */
   heroPhotoUri: string | null;
+  /** The recipe's own cover photo (端末内パス) — null if none set */
+  coverPhotoPath: string | null;
 }
 
 export interface MemoItem {
@@ -71,6 +73,8 @@ export interface StepItem {
   body: string;
   timerSec: number | null;
   sortOrder: number;
+  /** 手順写真（端末内パス） */
+  photoPath: string | null;
 }
 
 export interface TimelineEntry {
@@ -112,8 +116,12 @@ export interface SaveRecipeInput {
   steps: {
     body: string;
     timerSec?: number;
+    /** 手順写真（端末内パス） */
+    photoPath?: string | null;
   }[];
   tags: string[];
+  /** 表紙写真（端末内パス）。null/undefined = なし */
+  coverPhotoPath?: string | null;
 }
 
 export interface UpdateRecipeInput extends SaveRecipeInput {

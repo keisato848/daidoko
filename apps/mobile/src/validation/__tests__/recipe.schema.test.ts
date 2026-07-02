@@ -123,5 +123,28 @@ describe('recipe.schema', () => {
       const result = stepSchema.safeParse({ body: 'テスト', timerSec: 300 });
       expect(result.success).toBe(true);
     });
+
+    it('accepts an optional step photo path', () => {
+      const result = stepSchema.safeParse({
+        body: 'テスト',
+        photoPath: 'file:///documents/recipe-photos/recipe-photo-1.jpg',
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('photo fields', () => {
+    it('accepts a cover photo path on the form', () => {
+      const result = recipeFormSchema.safeParse({
+        title: 'テスト',
+        titleReading: '',
+        description: '',
+        coverPhotoPath: 'file:///documents/recipe-photos/recipe-photo-2.jpg',
+        ingredients: [validIngredient],
+        steps: [validStep],
+        tags: [],
+      });
+      expect(result.success).toBe(true);
+    });
   });
 });

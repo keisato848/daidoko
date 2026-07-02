@@ -22,7 +22,7 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 7;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -111,6 +111,7 @@ const CREATE_TABLES_SQL = `
     title_reading TEXT,
     current_rev_id TEXT,
     status TEXT NOT NULL DEFAULT 'active',
+    cover_photo_path TEXT,
     created_by TEXT NOT NULL REFERENCES users(id),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -154,7 +155,8 @@ const CREATE_TABLES_SQL = `
     sort_order INTEGER NOT NULL,
     body TEXT NOT NULL,
     timer_sec INTEGER,
-    photo_id TEXT
+    photo_id TEXT,
+    photo_path TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_steps_revision ON steps(revision_id);
@@ -305,9 +307,23 @@ const CREATE_TABLES_SQL = `
   CREATE UNIQUE INDEX IF NOT EXISTS idx_name_aliases_family_source ON name_aliases(family_id, source_normalized);
 `;
 
-/** Run migrations (create tables) */
+// Columns added after a table first shipped (SQLite has no ADD COLUMN IF NOT
+// EXISTS — the duplicate-column error on re-run is expected and swallowed).
+const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
+  { table: 'recipes', columnDdl: 'cover_photo_path TEXT' }, // v7
+  { table: 'steps', columnDdl: 'photo_path TEXT' }, // v7
+];
+
+/** Run migrations (create tables + additive column changes) */
 export function runMigrations(expoDb: { execSync: (sql: string) => void }): MigrationResult {
   expoDb.execSync(CREATE_TABLES_SQL);
+  for (const { table, columnDdl } of ADD_COLUMN_MIGRATIONS) {
+    try {
+      expoDb.execSync(`ALTER TABLE ${table} ADD COLUMN ${columnDdl}`);
+    } catch {
+      // column already exists (fresh install or already migrated)
+    }
+  }
   expoDb.execSync(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   return { schemaVersion: CURRENT_SCHEMA_VERSION };
 }

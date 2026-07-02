@@ -74,6 +74,7 @@ export const recipes = sqliteTable(
     titleReading: text('title_reading'),
     currentRevId: text('current_rev_id'),
     status: text('status').notNull().default('active'), // 'active' | 'archived'
+    coverPhotoPath: text('cover_photo_path'), // 表紙写真（端末内パス, v7）
     createdBy: text('created_by')
       .notNull()
       .references(() => users.id),
@@ -142,7 +143,8 @@ export const steps = sqliteTable(
     sortOrder: integer('sort_order').notNull(),
     body: text('body').notNull(),
     timerSec: integer('timer_sec'),
-    photoId: text('photo_id'),
+    photoId: text('photo_id'), // 将来のクラウド写真エンティティ用（未使用）
+    photoPath: text('photo_path'), // 手順写真（端末内パス, v7）
   },
   (table) => ({
     revisionIdx: index('idx_steps_revision').on(table.revisionId),
