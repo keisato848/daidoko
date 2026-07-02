@@ -21,7 +21,7 @@ describe('photo-storage.service', () => {
     );
   });
 
-  it('copies selected photos into the app document area', async () => {
+  it('compresses and copies selected photos into the app document area', async () => {
     const copied: { from: string; to: string }[] = [];
     const adapter = {
       documentDirectory: 'file:///documents/',
@@ -45,8 +45,40 @@ describe('photo-storage.service', () => {
     expect(adapter.makeDirectoryAsync).toHaveBeenCalledWith('file:///documents/cooking-photos/', {
       intermediates: true,
     });
-    expect(copied[0].from).toBe('file:///cache/dinner.jpg');
+    // 保存時圧縮: コピー元は圧縮後の一時ファイル、保存名は .jpg
+    expect(copied[0].from).toBe('file:///cache/dinner-compressed.jpg');
     expect(result[0].localPath).toContain('file:///documents/cooking-photos/cooking-photo-');
+    expect(result[0].localPath).toMatch(/\.jpg$/);
+  });
+
+  it('stores the original file when compression fails', async () => {
+    const copied: { from: string; to: string }[] = [];
+    const adapter = {
+      documentDirectory: 'file:///documents/',
+      getInfoAsync: jest.fn(async () => ({ exists: true })),
+      makeDirectoryAsync: jest.fn(async () => undefined),
+      copyAsync: jest.fn(async (options: { from: string; to: string }) => {
+        copied.push(options);
+      }),
+      deleteAsync: jest.fn(async () => undefined),
+    };
+    const failingCompress = {
+      compress: jest.fn(async () => {
+        throw new Error('unsupported');
+      }),
+    };
+    const photo: CapturedPhoto = {
+      localPath: 'file:///cache/dinner.png',
+      source: 'gallery',
+      mimeType: 'image/png',
+      takenAt: '2026-05-30T01:02:03.000Z',
+      temporary: true,
+    };
+
+    const result = await persistCookingLogPhotos([photo], adapter, failingCompress);
+
+    expect(copied[0].from).toBe('file:///cache/dinner.png');
+    expect(result[0].localPath).toMatch(/\.png$/);
   });
 
   it('rejects more than the maximum supported photos', async () => {
@@ -66,7 +98,7 @@ describe('photo-storage.service', () => {
     );
   });
 
-  it('copies a recipe photo into the recipe-photos directory', async () => {
+  it('compresses and copies a recipe photo into the recipe-photos directory', async () => {
     const copied: { from: string; to: string }[] = [];
     const adapter = {
       documentDirectory: 'file:///documents/',
@@ -90,7 +122,8 @@ describe('photo-storage.service', () => {
     expect(adapter.makeDirectoryAsync).toHaveBeenCalledWith('file:///documents/recipe-photos/', {
       intermediates: true,
     });
-    expect(copied[0].from).toBe('file:///cache/cover.jpg');
+    expect(copied[0].from).toBe('file:///cache/cover-compressed.jpg');
     expect(path).toContain('file:///documents/recipe-photos/recipe-photo-');
+    expect(path).toMatch(/\.jpg$/);
   });
 });
