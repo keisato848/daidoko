@@ -10,6 +10,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { Avatar } from '../../src/components/Avatar';
 import { Colors } from '../../src/constants/theme';
+import { resetCoachMarks } from '../../src/services/coach-marks.service';
 import {
   getCurrentFamily,
   getCurrentFamilyProfile,
@@ -156,6 +157,17 @@ export default function SettingsScreen() {
     {
       title: 'アプリ',
       items: [
+        {
+          id: 'coach-marks',
+          label: '使い方ガイドを再表示',
+          subtitle: '各画面の操作案内をもう一度表示します',
+          enabled: true,
+          onPress: () => {
+            void resetCoachMarks().then(() => {
+              Alert.alert('使い方ガイド', '各画面を開くと操作案内が再表示されます。');
+            });
+          },
+        },
         {
           id: 'version',
           label: 'バージョン',
