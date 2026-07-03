@@ -26,7 +26,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"
-      }
+      },
+      "blockedPermissions": ["com.google.android.gms.permission.AD_ID"]
     },
     "web": {
       "bundler": "metro",
