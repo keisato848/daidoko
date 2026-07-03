@@ -103,11 +103,7 @@ export default function CookingModeScreen() {
         <Text style={styles.stepBody}>{current.body}</Text>
 
         {current.photoPath && (
-          <Image
-            source={{ uri: current.photoPath }}
-            style={styles.stepPhoto}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: current.photoPath }} style={styles.stepPhoto} resizeMode="cover" />
         )}
 
         {current.timerSec != null && !showTimer && (
