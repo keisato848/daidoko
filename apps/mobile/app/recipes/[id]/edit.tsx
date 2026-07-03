@@ -38,8 +38,10 @@ export default function EditRecipeScreen() {
         steps: detail.steps.map((s) => ({
           body: s.body,
           timerSec: s.timerSec ?? undefined,
+          photoPath: s.photoPath ?? undefined,
         })),
         tags: detail.tags,
+        coverPhotoPath: detail.coverPhotoPath ?? undefined,
       });
     });
   }, [id]);
@@ -65,8 +67,10 @@ export default function EditRecipeScreen() {
         steps: data.steps.map((s) => ({
           body: s.body,
           timerSec: s.timerSec,
+          photoPath: s.photoPath || undefined,
         })),
         tags: data.tags,
+        coverPhotoPath: data.coverPhotoPath || undefined,
       };
 
       await updateRecipe(id, input);

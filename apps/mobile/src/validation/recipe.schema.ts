@@ -13,6 +13,8 @@ export const ingredientSchema = z.object({
 export const stepSchema = z.object({
   body: z.string().min(1, '手順は必須です').max(500, '500文字以内で入力してください'),
   timerSec: z.number().int().min(0).optional(),
+  /** 手順写真（端末内パス） */
+  photoPath: z.string().optional(),
 });
 
 export const recipeFormSchema = z.object({
@@ -22,6 +24,8 @@ export const recipeFormSchema = z.object({
   servings: z.number().int().min(1).max(99).optional(),
   cookTimeMin: z.number().int().min(1).max(999).optional(),
   prepTimeMin: z.number().int().min(1).max(999).optional(),
+  /** 表紙写真（端末内パス） */
+  coverPhotoPath: z.string().optional(),
   ingredients: z.array(ingredientSchema).min(1, '材料を1つ以上追加してください'),
   steps: z.array(stepSchema).min(1, '手順を1つ以上追加してください'),
   tags: z.array(z.string()),

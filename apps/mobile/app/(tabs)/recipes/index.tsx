@@ -5,7 +5,7 @@
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ArrowUpDown, Check, Search, Trash2, X } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -19,11 +19,14 @@ import {
 } from 'react-native';
 
 import { BottomSheet } from '../../../src/components/BottomSheet';
+import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../../src/components/HelpButton';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
+import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { deleteRecipe, getRecipeList } from '../../../src/services/recipe.service';
 import type { RecipeListItem } from '../../../src/services/types';
 import {
@@ -63,6 +66,26 @@ export default function RecipeListScreen() {
     setRecipes(await getRecipeList());
     setLoading(false);
   }, []);
+
+  // 初回利用ガイド（コーチマーク）
+  const searchRef = useRef<View>(null);
+  const coach = useCoachMarks(
+    'recipes',
+    [
+      {
+        key: 'search',
+        title: 'レシピを探す',
+        text: 'レシピ名だけでなく、タグや食材名（例: 卵）でも検索できます。',
+        ref: searchRef,
+      },
+      {
+        key: 'add',
+        title: 'レシピを増やすには',
+        text: '下の「追加」タブから、手入力・URL取り込み・写真からのAI作成でレシピを登録できます。',
+      },
+    ],
+    !loading && !selectMode,
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -211,7 +234,7 @@ export default function RecipeListScreen() {
         /* ── 通常ヘッダー（検索 + フィルター） ── */
         <>
           <View style={styles.searchContainer}>
-            <View style={styles.searchBar}>
+            <View ref={searchRef} collapsable={false} style={styles.searchBar}>
               <Search size={15} color={Colors.muted} />
               <TextInput
                 style={styles.searchInput}
@@ -229,6 +252,7 @@ export default function RecipeListScreen() {
               <ArrowUpDown size={14} color={Colors.gold} />
               <Text style={styles.sortButtonText}>{recipeSortLabel(sortKey)}</Text>
             </Pressable>
+            <HelpButton onPress={coach.show} />
           </View>
 
           <View style={styles.filterContainer}>
@@ -346,6 +370,15 @@ export default function RecipeListScreen() {
           );
         })}
       </BottomSheet>
+
+      <CoachMarkOverlay
+        visible={coach.visible}
+        step={coach.step}
+        index={coach.index}
+        total={coach.total}
+        onNext={coach.next}
+        onSkip={coach.skip}
+      />
     </View>
   );
 }

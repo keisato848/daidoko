@@ -2,18 +2,21 @@
  * S05: Recipe Detail screen
  * Hero image, meta info, tabs (ingredients/steps/memo/history), cooking start CTA
  */
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
+import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../../src/components/HelpButton';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
 import { Colors } from '../../../src/constants/theme';
+import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
 import { addMissingRecipeIngredientsToList } from '../../../src/services/shopping-list.service';
 import {
@@ -66,7 +69,7 @@ export default function RecipeDetailScreen() {
       setIsLoading(false);
       return;
     }
-    setIsLoading(true);
+    // 初回のみローディング表示（編集から戻ったときは静かに再取得）
     setRecipe(await getRecipeDetail(id));
     setIsLoading(false);
   }, [id]);
@@ -81,9 +84,41 @@ export default function RecipeDetailScreen() {
     setMemos(await getMemosForRecipe(id));
   }, [id]);
 
-  useEffect(() => {
-    void loadRecipe();
-  }, [loadRecipe]);
+  // 編集モーダルから戻ったときも最新を表示するためフォーカス毎に再取得
+  useFocusEffect(
+    useCallback(() => {
+      void loadRecipe();
+    }, [loadRecipe]),
+  );
+
+  // 初回利用ガイド（コーチマーク）
+  const cookRef = useRef<View>(null);
+  const missingRef = useRef<View>(null);
+  const menuRef = useRef<View>(null);
+  const coach = useCoachMarks(
+    'recipe-detail',
+    [
+      {
+        key: 'cook',
+        title: '調理開始',
+        text: '全画面で手順を1つずつ表示します。タイマー・画面スリープ防止つきで料理に集中できます。',
+        ref: cookRef,
+      },
+      {
+        key: 'missing',
+        title: '足りない材料だけ買い物へ',
+        text: '家の在庫と照合して、足りない材料だけを買い物リストに追加します。',
+        ref: missingRef,
+      },
+      {
+        key: 'menu',
+        title: '編集・写真・履歴',
+        text: 'レシピの編集、表紙や手順写真の追加・変更、版履歴の確認はここから。',
+        ref: menuRef,
+      },
+    ],
+    recipe != null && tab === 'ingredients' && !showMenu,
+  );
 
   useEffect(() => {
     if (tab === 'history') void loadLogs();
@@ -147,9 +182,18 @@ export default function RecipeDetailScreen() {
           <ChevronLeft size={20} color={Colors.goldDim} />
           <Text style={styles.backText}>戻る</Text>
         </Pressable>
-        <Pressable style={styles.menuButton} onPress={() => setShowMenu(!showMenu)} hitSlop={12}>
+        <Pressable
+          ref={menuRef}
+          collapsable={false}
+          style={styles.menuButton}
+          onPress={() => setShowMenu(!showMenu)}
+          hitSlop={12}
+        >
           <MoreVertical size={20} color={Colors.goldDim} />
         </Pressable>
+        <View style={styles.helpButton}>
+          <HelpButton onPress={coach.show} />
+        </View>
       </View>
 
       {showMenu && (
@@ -229,6 +273,8 @@ export default function RecipeDetailScreen() {
               );
             })}
             <Pressable
+              ref={missingRef}
+              collapsable={false}
               style={styles.addToListButton}
               onPress={async () => {
                 const added = await addMissingRecipeIngredientsToList(recipe.id);
@@ -255,6 +301,13 @@ export default function RecipeDetailScreen() {
                 </View>
                 <View style={styles.stepContent}>
                   <Text style={styles.stepBody}>{step.body}</Text>
+                  {step.photoPath && (
+                    <Image
+                      source={{ uri: step.photoPath }}
+                      style={styles.stepPhoto}
+                      resizeMode="cover"
+                    />
+                  )}
                   {step.timerSec != null && (
                     <View style={styles.timerBadge}>
                       <Text style={styles.timerText}>
@@ -331,17 +384,27 @@ export default function RecipeDetailScreen() {
         >
           <ShoppingCart size={18} color={Colors.gold} />
         </PressableScale>
-        <PressableScale
-          containerStyle={styles.ctaButtonOuter}
-          style={styles.ctaButton}
-          scaleTo={0.97}
-          onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
-        >
-          <Text style={styles.ctaText} numberOfLines={1}>
-            調理開始
-          </Text>
-        </PressableScale>
+        <View ref={cookRef} collapsable={false} style={styles.ctaButtonOuter}>
+          <PressableScale
+            style={styles.ctaButton}
+            scaleTo={0.97}
+            onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
+          >
+            <Text style={styles.ctaText} numberOfLines={1}>
+              調理開始
+            </Text>
+          </PressableScale>
+        </View>
       </View>
+
+      <CoachMarkOverlay
+        visible={coach.visible}
+        step={coach.step}
+        index={coach.index}
+        total={coach.total}
+        onNext={coach.next}
+        onSkip={coach.skip}
+      />
     </View>
   );
 }
@@ -375,6 +438,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     right: 16,
+  },
+  helpButton: {
+    position: 'absolute',
+    top: 51,
+    right: 52,
   },
   menuDropdown: {
     position: 'absolute',
@@ -497,6 +565,13 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: Colors.paper,
     lineHeight: 24,
+  },
+  stepPhoto: {
+    width: '100%',
+    height: 140,
+    borderRadius: 8,
+    marginTop: 8,
+    backgroundColor: '#130E08',
   },
   timerBadge: {
     marginTop: 6,

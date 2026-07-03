@@ -37,8 +37,10 @@ export default function NewRecipeScreen() {
         steps: data.steps.map((s) => ({
           body: s.body,
           timerSec: s.timerSec,
+          photoPath: s.photoPath || undefined,
         })),
         tags: data.tags,
+        coverPhotoPath: data.coverPhotoPath || undefined,
       };
 
       await createRecipe(input);

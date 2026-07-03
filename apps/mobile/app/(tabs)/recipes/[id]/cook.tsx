@@ -5,7 +5,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TimerWidget } from '../../../../src/components/TimerWidget';
 import { Colors } from '../../../../src/constants/theme';
@@ -17,6 +17,7 @@ interface StepData {
   sortOrder: number;
   body: string;
   timerSec: number | null;
+  photoPath: string | null;
 }
 
 interface IngredientData {
@@ -100,6 +101,10 @@ export default function CookingModeScreen() {
         </View>
 
         <Text style={styles.stepBody}>{current.body}</Text>
+
+        {current.photoPath && (
+          <Image source={{ uri: current.photoPath }} style={styles.stepPhoto} resizeMode="cover" />
+        )}
 
         {current.timerSec != null && !showTimer && (
           <Pressable style={styles.timerButton} onPress={() => setShowTimer(true)}>
@@ -239,6 +244,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 34,
     letterSpacing: 0.3,
+  },
+  stepPhoto: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    marginTop: 20,
+    backgroundColor: '#130E08',
   },
   timerButton: {
     marginTop: 24,

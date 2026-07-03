@@ -4,16 +4,19 @@
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { CalendarDays, LayoutGrid, ShoppingCart, Trash2, X } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
+import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../src/components/HelpButton';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Loading } from '../../src/components/Loading';
 import { MonthlyStats } from '../../src/components/MonthlyStats';
 import { PressableScale } from '../../src/components/PressableScale';
 import { Stars } from '../../src/components/Stars';
 import { Colors } from '../../src/constants/theme';
+import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
 import { getTimeline } from '../../src/services/timeline.service';
 import type { TimelineEntry } from '../../src/services/types';
@@ -55,6 +58,28 @@ export default function HomeScreen() {
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // 初回利用ガイド（コーチマーク）
+  const cartRef = useRef<View>(null);
+  const fabRef = useRef<View>(null);
+  const coach = useCoachMarks(
+    'home',
+    [
+      {
+        key: 'fab',
+        title: '記録もレシピもここから',
+        text: '作った料理の記録や、レシピの追加（手入力・URL取り込み・写真からAI作成）は「＋」から始めます。',
+        ref: fabRef,
+      },
+      {
+        key: 'cart',
+        title: '買い物リストと在庫',
+        text: '買い物リスト・家の在庫・レシート読み取り・「この在庫で作れるレシピ」はこのカートから。',
+        ref: cartRef,
+      },
+    ],
+    !loading && !selectMode,
+  );
 
   const loadTimeline = useCallback(async () => {
     setAllEntries(await getTimeline());
@@ -218,13 +243,15 @@ export default function HomeScreen() {
               <LayoutGrid size={19} color={Colors.goldDim} />
             </Pressable>
             <Pressable
+              ref={cartRef}
+              collapsable={false}
               onPress={() => router.push('/(tabs)/shopping')}
               hitSlop={10}
               accessibilityLabel="買い物リスト"
             >
               <ShoppingCart size={19} color={Colors.goldDim} />
             </Pressable>
-            <Text style={styles.wordmark}>DAIDOKO</Text>
+            <HelpButton onPress={coach.show} size={19} />
           </View>
         </View>
       )}
@@ -287,15 +314,25 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       ) : (
-        <PressableScale
-          style={styles.fab}
-          containerStyle={styles.fabContainer}
-          scaleTo={0.9}
-          onPress={() => router.push('/(tabs)/add')}
-        >
-          <Text style={styles.fabText}>＋</Text>
-        </PressableScale>
+        <View ref={fabRef} collapsable={false} style={styles.fabContainer}>
+          <PressableScale
+            style={styles.fab}
+            scaleTo={0.9}
+            onPress={() => router.push('/(tabs)/add')}
+          >
+            <Text style={styles.fabText}>＋</Text>
+          </PressableScale>
+        </View>
       )}
+
+      <CoachMarkOverlay
+        visible={coach.visible}
+        step={coach.step}
+        index={coach.index}
+        total={coach.total}
+        onNext={coach.next}
+        onSkip={coach.skip}
+      />
     </View>
   );
 }
@@ -340,13 +377,6 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: Colors.gold,
     marginTop: -1,
-  },
-  wordmark: {
-    fontStyle: 'italic',
-    fontSize: 9, // wordmark: 意図的な最小表示
-    color: Colors.muted,
-    letterSpacing: 4,
-    paddingBottom: 8,
   },
   list: {
     paddingVertical: 8,

@@ -35,6 +35,7 @@ interface MutableRecipe {
   titleReading: string | null;
   currentRevId: string | null;
   status: string;
+  coverPhotoPath?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -72,6 +73,7 @@ interface MutableStep {
   body: string;
   timerSec: number | null;
   photoId: string | null;
+  photoPath?: string | null;
 }
 
 interface MutableTag {
@@ -196,7 +198,7 @@ export function getMockRecipeList(): RecipeListItem[] {
         ingredientNames: ings,
         createdAt: recipe.createdAt,
         cookCount: recipeLogs.length,
-        heroPhotoUri: null,
+        heroPhotoUri: recipe.coverPhotoPath ?? null,
       };
     });
 }
@@ -222,6 +224,7 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     ? [...mockSteps]
         .filter((s) => s.revisionId === recipe.currentRevId)
         .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((s) => ({ ...s, photoPath: s.photoPath ?? null }))
     : [];
 
   const logs = seedCookingLogs.filter((l) => l.recipeId === recipe.id && l.rating != null);
@@ -240,7 +243,8 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     tags,
     ingredients,
     steps,
-    heroPhotoUri: null,
+    heroPhotoUri: recipe.coverPhotoPath ?? null,
+    coverPhotoPath: recipe.coverPhotoPath ?? null,
   };
 }
 
@@ -289,6 +293,7 @@ export function createMockRecipe(input: SaveRecipeInput): string {
     titleReading: input.titleReading ?? null,
     currentRevId: revId,
     status: 'active',
+    coverPhotoPath: input.coverPhotoPath ?? null,
     createdBy: 'user-kei',
     createdAt: now,
     updatedAt: now,
@@ -329,6 +334,7 @@ export function createMockRecipe(input: SaveRecipeInput): string {
       body: step.body,
       timerSec: step.timerSec ?? null,
       photoId: null,
+      photoPath: step.photoPath ?? null,
     });
   });
 
@@ -362,6 +368,7 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
   recipe.title = input.title;
   recipe.titleReading = input.titleReading ?? null;
   recipe.currentRevId = revId;
+  recipe.coverPhotoPath = input.coverPhotoPath ?? null;
   recipe.updatedAt = now;
 
   // Add new revision
@@ -402,6 +409,7 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
       body: step.body,
       timerSec: step.timerSec ?? null,
       photoId: null,
+      photoPath: step.photoPath ?? null,
     });
   });
 
