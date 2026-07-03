@@ -51,11 +51,7 @@ function measureStep(def: CoachMarkStepDef): Promise<CoachMarkStep> {
   });
 }
 
-export function useCoachMarks(
-  screen: CoachMarkScreen,
-  defs: CoachMarkStepDef[],
-  enabled = true,
-) {
+export function useCoachMarks(screen: CoachMarkScreen, defs: CoachMarkStepDef[], enabled = true) {
   const [steps, setSteps] = useState<CoachMarkStep[] | null>(null);
   const [index, setIndex] = useState(0);
 
