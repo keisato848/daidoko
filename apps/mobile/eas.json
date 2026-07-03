@@ -18,5 +18,13 @@
     "production": {
       "autoIncrement": false
     }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "C:/secure/play-service-account.json",
+        "track": "production"
+      }
+    }
   }
 }
