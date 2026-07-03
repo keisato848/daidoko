@@ -4,16 +4,18 @@
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
+import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
 import { Colors } from '../../../src/constants/theme';
+import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
 import { addMissingRecipeIngredientsToList } from '../../../src/services/shopping-list.service';
 import {
@@ -88,6 +90,35 @@ export default function RecipeDetailScreen() {
     }, [loadRecipe]),
   );
 
+  // 初回利用ガイド（コーチマーク）
+  const cookRef = useRef<View>(null);
+  const missingRef = useRef<View>(null);
+  const menuRef = useRef<View>(null);
+  const coach = useCoachMarks(
+    'recipe-detail',
+    [
+      {
+        key: 'cook',
+        title: '調理開始',
+        text: '全画面で手順を1つずつ表示します。タイマー・画面スリープ防止つきで料理に集中できます。',
+        ref: cookRef,
+      },
+      {
+        key: 'missing',
+        title: '足りない材料だけ買い物へ',
+        text: '家の在庫と照合して、足りない材料だけを買い物リストに追加します。',
+        ref: missingRef,
+      },
+      {
+        key: 'menu',
+        title: '編集・写真・履歴',
+        text: 'レシピの編集、表紙や手順写真の追加・変更、版履歴の確認はここから。',
+        ref: menuRef,
+      },
+    ],
+    recipe != null && tab === 'ingredients' && !showMenu,
+  );
+
   useEffect(() => {
     if (tab === 'history') void loadLogs();
     if (tab === 'memo') void loadMemos();
@@ -150,7 +181,13 @@ export default function RecipeDetailScreen() {
           <ChevronLeft size={20} color={Colors.goldDim} />
           <Text style={styles.backText}>戻る</Text>
         </Pressable>
-        <Pressable style={styles.menuButton} onPress={() => setShowMenu(!showMenu)} hitSlop={12}>
+        <Pressable
+          ref={menuRef}
+          collapsable={false}
+          style={styles.menuButton}
+          onPress={() => setShowMenu(!showMenu)}
+          hitSlop={12}
+        >
           <MoreVertical size={20} color={Colors.goldDim} />
         </Pressable>
       </View>
@@ -232,6 +269,8 @@ export default function RecipeDetailScreen() {
               );
             })}
             <Pressable
+              ref={missingRef}
+              collapsable={false}
               style={styles.addToListButton}
               onPress={async () => {
                 const added = await addMissingRecipeIngredientsToList(recipe.id);
@@ -341,17 +380,27 @@ export default function RecipeDetailScreen() {
         >
           <ShoppingCart size={18} color={Colors.gold} />
         </PressableScale>
-        <PressableScale
-          containerStyle={styles.ctaButtonOuter}
-          style={styles.ctaButton}
-          scaleTo={0.97}
-          onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
-        >
-          <Text style={styles.ctaText} numberOfLines={1}>
-            調理開始
-          </Text>
-        </PressableScale>
+        <View ref={cookRef} collapsable={false} style={styles.ctaButtonOuter}>
+          <PressableScale
+            style={styles.ctaButton}
+            scaleTo={0.97}
+            onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
+          >
+            <Text style={styles.ctaText} numberOfLines={1}>
+              調理開始
+            </Text>
+          </PressableScale>
+        </View>
       </View>
+
+      <CoachMarkOverlay
+        visible={coach.visible}
+        step={coach.step}
+        index={coach.index}
+        total={coach.total}
+        onNext={coach.next}
+        onSkip={coach.skip}
+      />
     </View>
   );
 }

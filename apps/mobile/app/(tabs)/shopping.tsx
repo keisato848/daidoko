@@ -5,10 +5,12 @@
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Check, Package, Plus, Trash2, X } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { Colors } from '../../src/constants/theme';
+import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { moveCheckedShoppingItemsToPantry } from '../../src/services/pantry.service';
 import {
   addShoppingItem,
@@ -72,6 +74,22 @@ export default function ShoppingListScreen() {
 
   const checkedCount = items.filter((it) => it.checked).length;
 
+  // 初回利用ガイド（コーチマーク）
+  const pantryLinkRef = useRef<View>(null);
+  const coach = useCoachMarks('shopping', [
+    {
+      key: 'pantry',
+      title: '在庫とつながっています',
+      text: '家にある食材は「在庫」で管理。レシピの足りない材料だけをこのリストに追加することもできます。',
+      ref: pantryLinkRef,
+    },
+    {
+      key: 'move',
+      title: '買った→在庫へ',
+      text: '買ったものにチェックを付けると「在庫に入れる」で一括で在庫へ移せます（分量も自動で読み取り）。',
+    },
+  ]);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -80,6 +98,8 @@ export default function ShoppingListScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>買い物リスト</Text>
         <Pressable
+          ref={pantryLinkRef}
+          collapsable={false}
           onPress={() => router.push('/(tabs)/pantry')}
           hitSlop={10}
           accessibilityLabel="在庫"
@@ -152,6 +172,15 @@ export default function ShoppingListScreen() {
           </Pressable>
         </View>
       )}
+
+      <CoachMarkOverlay
+        visible={coach.visible}
+        step={coach.step}
+        index={coach.index}
+        total={coach.total}
+        onNext={coach.next}
+        onSkip={coach.skip}
+      />
     </View>
   );
 }

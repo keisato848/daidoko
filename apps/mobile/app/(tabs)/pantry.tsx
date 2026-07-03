@@ -6,10 +6,12 @@
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Bell, ChefHat, Minus, Plus, Receipt, ScanLine, Utensils, X } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { Colors } from '../../src/constants/theme';
+import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { checkAndNotifyLowStock } from '../../src/services/low-stock.service';
 import { ensureNotificationPermission } from '../../src/services/notification.service';
 import {
@@ -91,6 +93,27 @@ export default function PantryScreen() {
   const isLow = (it: PantryItem) =>
     it.quantity != null && it.lowStockThreshold != null && it.quantity <= it.lowStockThreshold;
 
+  // 初回利用ガイド（コーチマーク）
+  const actionsRef = useRef<View>(null);
+  const coach = useCoachMarks('pantry', [
+    {
+      key: 'inputs',
+      title: '在庫のいれ方いろいろ',
+      text: 'バーコードの「スキャン」、「レシート」の読み取りで素早く登録。「食べた」は食事の写真から使った分を減らします。',
+      ref: actionsRef,
+    },
+    {
+      key: 'bell',
+      title: '残量通知',
+      text: '品目のベルから「残りいくつ以下で通知するか」を設定すると、少なくなったときにお知らせします。',
+    },
+    {
+      key: 'cookable',
+      title: 'この在庫で作れるレシピ',
+      text: '在庫と各レシピの材料を照合して、いま作れるレシピを充足率順に表示します。',
+    },
+  ]);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -98,7 +121,7 @@ export default function PantryScreen() {
           <X size={20} color={Colors.muted} />
         </Pressable>
         <Text style={styles.headerTitle}>在庫</Text>
-        <View style={styles.headerActions}>
+        <View ref={actionsRef} collapsable={false} style={styles.headerActions}>
           <Pressable
             onPress={() => router.push('/(tabs)/consume-meal')}
             hitSlop={8}
@@ -255,6 +278,15 @@ export default function PantryScreen() {
             )}
           </View>
         )}
+      />
+
+      <CoachMarkOverlay
+        visible={coach.visible}
+        step={coach.step}
+        index={coach.index}
+        total={coach.total}
+        onNext={coach.next}
+        onSkip={coach.skip}
       />
     </View>
   );
