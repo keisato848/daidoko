@@ -9,6 +9,7 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 
 import { Avatar } from '../../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../../src/components/HelpButton';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
@@ -190,6 +191,9 @@ export default function RecipeDetailScreen() {
         >
           <MoreVertical size={20} color={Colors.goldDim} />
         </Pressable>
+        <View style={styles.helpButton}>
+          <HelpButton onPress={coach.show} />
+        </View>
       </View>
 
       {showMenu && (
@@ -434,6 +438,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50,
     right: 16,
+  },
+  helpButton: {
+    position: 'absolute',
+    top: 51,
+    right: 52,
   },
   menuDropdown: {
     position: 'absolute',

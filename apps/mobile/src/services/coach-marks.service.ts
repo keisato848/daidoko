@@ -16,6 +16,8 @@ export const COACH_MARK_SCREENS = [
   'recipe-detail',
   'shopping',
   'pantry',
+  'add',
+  'settings',
 ] as const;
 
 export type CoachMarkScreen = (typeof COACH_MARK_SCREENS)[number];

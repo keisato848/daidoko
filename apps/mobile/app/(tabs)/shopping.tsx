@@ -9,6 +9,7 @@ import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../src/components/HelpButton';
 import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { moveCheckedShoppingItemsToPantry } from '../../src/services/pantry.service';
@@ -97,15 +98,18 @@ export default function ShoppingListScreen() {
           <X size={20} color={Colors.muted} />
         </Pressable>
         <Text style={styles.headerTitle}>買い物リスト</Text>
-        <Pressable
-          ref={pantryLinkRef}
-          collapsable={false}
-          onPress={() => router.push('/(tabs)/pantry')}
-          hitSlop={10}
-          accessibilityLabel="在庫"
-        >
-          <Text style={styles.headerLink}>在庫</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <HelpButton onPress={coach.show} />
+          <Pressable
+            ref={pantryLinkRef}
+            collapsable={false}
+            onPress={() => router.push('/(tabs)/pantry')}
+            hitSlop={10}
+            accessibilityLabel="在庫"
+          >
+            <Text style={styles.headerLink}>在庫</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.addRow}>
@@ -199,6 +203,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
   headerLink: { fontSize: 13, color: Colors.gold },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   addRow: {
     flexDirection: 'row',
     alignItems: 'center',

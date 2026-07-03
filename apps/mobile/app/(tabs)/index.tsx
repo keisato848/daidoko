@@ -9,6 +9,7 @@ import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react
 
 import { Avatar } from '../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../src/components/HelpButton';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Loading } from '../../src/components/Loading';
 import { MonthlyStats } from '../../src/components/MonthlyStats';
@@ -250,7 +251,7 @@ export default function HomeScreen() {
             >
               <ShoppingCart size={19} color={Colors.goldDim} />
             </Pressable>
-            <Text style={styles.wordmark}>DAIDOKO</Text>
+            <HelpButton onPress={coach.show} size={19} />
           </View>
         </View>
       )}
@@ -376,13 +377,6 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: Colors.gold,
     marginTop: -1,
-  },
-  wordmark: {
-    fontStyle: 'italic',
-    fontSize: 9, // wordmark: 意図的な最小表示
-    color: Colors.muted,
-    letterSpacing: 4,
-    paddingBottom: 8,
   },
   list: {
     paddingVertical: 8,

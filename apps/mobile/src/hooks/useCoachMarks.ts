@@ -6,7 +6,7 @@
  */
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState, type RefObject } from 'react';
-import type { View } from 'react-native';
+import { Dimensions, type View } from 'react-native';
 
 import type { CoachMarkStep } from '../components/CoachMarkOverlay';
 import {
@@ -36,10 +36,16 @@ function measureStep(def: CoachMarkStepDef): Promise<CoachMarkStep> {
     // statusBarTranslucent なフルスクリーン Modal の座標系と一致する
     // （measureInWindow はウィンドウ相対で、ステータスバー分ずれる端末がある）。
     node.measure((_x, _y, width, height, pageX, pageY) => {
-      const rect =
-        Number.isFinite(pageX) && Number.isFinite(pageY) && width > 0 && height > 0
-          ? { x: pageX, y: pageY, width, height }
-          : null;
+      const screen = Dimensions.get('screen');
+      const inViewport =
+        Number.isFinite(pageX) &&
+        Number.isFinite(pageY) &&
+        width > 0 &&
+        height > 0 &&
+        pageY >= 0 &&
+        pageY + height <= screen.height;
+      // スクロールで画面外の対象は中央吹き出しにフォールバック
+      const rect = inViewport ? { x: pageX, y: pageY, width, height } : null;
       resolve({ key: def.key, title: def.title, text: def.text, rect });
     });
   });
@@ -94,6 +100,16 @@ export function useCoachMarks(
     });
   }, [steps, dismiss]);
 
+  // ヘルプボタン（?）からの手動再生 — 表示済みフラグに関係なく即時に測定して表示
+  const show = useCallback(() => {
+    void Promise.all(defs.map(measureStep)).then((measured) => {
+      setIndex(0);
+      setSteps(measured);
+    });
+    // defs は画面ごとに静的（リテラル配列）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return {
     visible: steps != null,
     step: steps?.[index] ?? null,
@@ -101,5 +117,6 @@ export function useCoachMarks(
     total: steps?.length ?? 0,
     next,
     skip: dismiss,
+    show,
   };
 }
