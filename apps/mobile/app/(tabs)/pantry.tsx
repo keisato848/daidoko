@@ -10,6 +10,7 @@ import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../src/components/HelpButton';
 import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { checkAndNotifyLowStock } from '../../src/services/low-stock.service';
@@ -149,6 +150,7 @@ export default function PantryScreen() {
             <ScanLine size={18} color={Colors.gold} />
             <Text style={styles.headerScanText}>スキャン</Text>
           </Pressable>
+          <HelpButton onPress={coach.show} size={16} />
         </View>
       </View>
 

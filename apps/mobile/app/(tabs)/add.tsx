@@ -4,10 +4,14 @@
  */
 import { useRouter } from 'expo-router';
 import { Camera, FileText, Globe, Image as ImageIcon, PenLine } from 'lucide-react-native';
+import { useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../src/components/HelpButton';
 import { PressableScale } from '../../src/components/PressableScale';
 import { Colors } from '../../src/constants/theme';
+import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 
 interface MethodOption {
   id: string;
@@ -58,6 +62,24 @@ const METHODS: MethodOption[] = [
 export default function AddScreen() {
   const router = useRouter();
 
+  // 初回利用ガイド（コーチマーク）
+  const photoRef = useRef<View>(null);
+  const manualRef = useRef<View>(null);
+  const coach = useCoachMarks('add', [
+    {
+      key: 'photo',
+      title: '写真からAIでレシピ',
+      text: '料理の写真を選ぶだけでAIが下書きを作成します。URL取り込み・文字入り画像の読み取りもここから（AI解析には1日の無料枠があります）。',
+      ref: photoRef,
+    },
+    {
+      key: 'manual',
+      title: 'じっくり書くなら手動で',
+      text: '一から入力。表紙写真・手順ごとの写真・タイマーも設定できます。',
+      ref: manualRef,
+    },
+  ]);
+
   const handleSelect = (method: MethodOption) => {
     if (!method.enabled) return;
     if (method.id === 'manual') {
@@ -75,27 +97,44 @@ export default function AddScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>レシピを追加</Text>
+      <View style={styles.headingRow}>
+        <Text style={styles.heading}>レシピを追加</Text>
+        <HelpButton onPress={coach.show} />
+      </View>
       <Text style={styles.subheading}>追加方法を選んでください</Text>
 
       <View style={styles.methods}>
         {METHODS.map((method) => (
-          <PressableScale
+          <View
             key={method.id}
-            style={[styles.methodCard, !method.enabled && styles.methodCardDisabled]}
-            onPress={() => handleSelect(method)}
+            ref={method.id === 'photo' ? photoRef : method.id === 'manual' ? manualRef : undefined}
+            collapsable={false}
           >
-            <View style={styles.methodIcon}>{method.icon}</View>
-            <View style={styles.methodText}>
-              <Text style={[styles.methodLabel, !method.enabled && styles.methodLabelDisabled]}>
-                {method.label}
-              </Text>
-              <Text style={styles.methodDescription}>{method.description}</Text>
-              {!method.enabled && <Text style={styles.comingSoon}>今後追加予定</Text>}
-            </View>
-          </PressableScale>
+            <PressableScale
+              style={[styles.methodCard, !method.enabled && styles.methodCardDisabled]}
+              onPress={() => handleSelect(method)}
+            >
+              <View style={styles.methodIcon}>{method.icon}</View>
+              <View style={styles.methodText}>
+                <Text style={[styles.methodLabel, !method.enabled && styles.methodLabelDisabled]}>
+                  {method.label}
+                </Text>
+                <Text style={styles.methodDescription}>{method.description}</Text>
+                {!method.enabled && <Text style={styles.comingSoon}>今後追加予定</Text>}
+              </View>
+            </PressableScale>
+          </View>
         ))}
       </View>
+
+      <CoachMarkOverlay
+        visible={coach.visible}
+        step={coach.step}
+        index={coach.index}
+        total={coach.total}
+        onNext={coach.next}
+        onSkip={coach.skip}
+      />
     </View>
   );
 }
@@ -107,12 +146,17 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     paddingHorizontal: 20,
   },
+  headingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   heading: {
     fontSize: 20, // lg: 画面タイトル
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 1,
-    marginBottom: 4,
   },
   subheading: {
     fontSize: 13, // sm: 補足テキスト

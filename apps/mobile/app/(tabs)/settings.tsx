@@ -5,11 +5,14 @@
 import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
+import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../src/components/HelpButton';
 import { Colors } from '../../src/constants/theme';
+import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { resetCoachMarks } from '../../src/services/coach-marks.service';
 import {
   getCurrentFamily,
@@ -83,6 +86,29 @@ export default function SettingsScreen() {
   const showComingSoon = () => {
     Alert.alert('準備中', 'この機能は今後のバージョンで追加予定です。');
   };
+
+  // 初回利用ガイド（コーチマーク）
+  const planRef = useRef<View>(null);
+  const backupRef = useRef<View>(null);
+  const coach = useCoachMarks('settings', [
+    {
+      key: 'plan',
+      title: 'AI機能とプラン',
+      text: 'AI機能（写真レシピ・食材の名寄せ・食事写真）には1日の無料枠があります。「自分のAIキーを使う」にGeminiキーを設定すると無制限になります。',
+      ref: planRef,
+    },
+    {
+      key: 'backup',
+      title: 'データを守る',
+      text: 'データは端末内に保存されます。「バックアップ・復元」でファイルに書き出し・復元ができます。',
+      ref: backupRef,
+    },
+    {
+      key: 'guide',
+      title: '使い方ガイド',
+      text: '各画面の「?」でその画面の案内を再生できます。「使い方ガイドを再表示」を押すと全画面の案内をもう一度見られます。',
+    },
+  ]);
 
   const sections: SettingSection[] = [
     {
@@ -189,6 +215,7 @@ export default function SettingsScreen() {
     <View style={styles.container}>
       <View style={styles.headerBar}>
         <Text style={styles.headerTitle}>設定</Text>
+        <HelpButton onPress={coach.show} />
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
@@ -208,6 +235,8 @@ export default function SettingsScreen() {
             {section.items.map((item) => (
               <Pressable
                 key={item.id}
+                ref={item.id === 'plan' ? planRef : item.id === 'backup' ? backupRef : undefined}
+                collapsable={false}
                 style={[styles.settingRow, !item.enabled && styles.settingRowDisabled]}
                 onPress={item.onPress}
                 disabled={!item.onPress}
@@ -227,6 +256,15 @@ export default function SettingsScreen() {
           </View>
         ))}
       </ScrollView>
+
+      <CoachMarkOverlay
+        visible={coach.visible}
+        step={coach.step}
+        index={coach.index}
+        total={coach.total}
+        onNext={coach.next}
+        onSkip={coach.skip}
+      />
     </View>
   );
 }
@@ -237,6 +275,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
   },
   headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 14,

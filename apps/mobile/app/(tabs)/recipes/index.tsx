@@ -20,6 +20,7 @@ import {
 
 import { BottomSheet } from '../../../src/components/BottomSheet';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
+import { HelpButton } from '../../../src/components/HelpButton';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
@@ -251,6 +252,7 @@ export default function RecipeListScreen() {
               <ArrowUpDown size={14} color={Colors.gold} />
               <Text style={styles.sortButtonText}>{recipeSortLabel(sortKey)}</Text>
             </Pressable>
+            <HelpButton onPress={coach.show} />
           </View>
 
           <View style={styles.filterContainer}>
