@@ -72,5 +72,7 @@ Temp/
 # Claude Code
 .claude/*
 !.claude/skills/
+!.claude/agents/
+!.claude/settings.json
 chat.json
 nul
