@@ -1,5 +1,12 @@
 #!/bin/sh
 
+# 1) シークレットスキャン（秘密鍵・API キーの混入を遮断）
+node scripts/agent/scan-staged-secrets.mjs || exit 1
+
+# 2) ステージ済みファイルを Prettier で自動整形して再ステージ
+node scripts/agent/format-staged.mjs || exit 1
+
+# 3) 変更スライス検証（prettier check / lint / typecheck）
 node scripts/agent/validate-changed-slice.mjs --staged
 status=$?
 if [ "$status" -ne 0 ]; then
