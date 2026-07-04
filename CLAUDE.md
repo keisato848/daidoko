@@ -27,6 +27,7 @@
 | `docs/マルチエージェント設計.md` | A1〜A8 エージェントの責務・インターフェース              | 各エージェント実装前      |
 | `docs/エージェントフック設計.md` | AgentBridge・Hook システム・ログファイル設計             | Bridge 実装前             |
 | `docs/品質基準.md`               | テストカバレッジ閾値・CI ゲート・パフォーマンス目標値    | PR 作成前に必ず確認       |
+| `docs/リリース手順.md`           | Railway デプロイ・EAS ビルド・Play CLI 提出・掲載更新    | リリース作業前            |
 | `docs/brand/ロゴ仕様.md`         | カラー・フォント・ロゴ使用ルール                         | UI 実装時                 |
 | `mockup/app-mockup.jsx`          | インタラクティブモックアップ（React JSX）                | 画面実装の参考            |
 
