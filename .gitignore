@@ -70,6 +70,7 @@ temp/
 Temp/
 
 # Claude Code
-.claude/
+.claude/*
+!.claude/skills/
 chat.json
 nul
