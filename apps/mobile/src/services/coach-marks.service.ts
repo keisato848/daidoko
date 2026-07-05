@@ -22,8 +22,17 @@ export const COACH_MARK_SCREENS = [
 
 export type CoachMarkScreen = (typeof COACH_MARK_SCREENS)[number];
 
+/**
+ * ストア用スクリーンショット取得ビルド（EXPO_PUBLIC_DISABLE_COACH_MARKS=1）では
+ * コーチマークを一切表示しない（scripts/release/capture-store-screenshots.mjs 用）。
+ */
+export function areCoachMarksDisabled(): boolean {
+  const flag = process.env.EXPO_PUBLIC_DISABLE_COACH_MARKS;
+  return flag === '1' || flag === 'true';
+}
+
 export async function shouldShowCoachMarks(screen: CoachMarkScreen): Promise<boolean> {
-  if (!isNativePlatform) return false;
+  if (!isNativePlatform || areCoachMarksDisabled()) return false;
   return (await getAppMeta(KEY_PREFIX + screen)) !== SEEN;
 }
 
