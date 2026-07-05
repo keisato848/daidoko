@@ -11,4 +11,10 @@ export class AdMobRewardProvider implements AdRewardProvider {
   async showRewardedAd(): Promise<RewardedAdResult> {
     return { rewarded: false };
   }
+  async isPrivacyOptionsRequired(): Promise<boolean> {
+    return false;
+  }
+  async showPrivacyOptionsForm(): Promise<void> {
+    // no-op — web has no ads and therefore no consent UI
+  }
 }

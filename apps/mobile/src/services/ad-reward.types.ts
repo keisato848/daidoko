@@ -18,6 +18,13 @@ export interface AdRewardProvider {
   isAvailable(): boolean;
   /** Show a rewarded ad; resolves rewarded:true only on full completion. */
   showRewardedAd(): Promise<RewardedAdResult>;
+  /**
+   * Whether the UMP privacy-options form must be offered to this user
+   * (GDPR 対象地域のみ true — 設定画面に「広告のプライバシー設定」を出す判定)。
+   */
+  isPrivacyOptionsRequired(): Promise<boolean>;
+  /** Show the UMP privacy-options form so the user can change ad consent. */
+  showPrivacyOptionsForm(): Promise<void>;
 }
 
 /** Thrown when a rewarded ad cannot be loaded/shown. */

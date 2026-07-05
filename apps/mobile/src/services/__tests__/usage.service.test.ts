@@ -74,6 +74,14 @@ describe('usage.service', () => {
       expect(deriveFreemiumStatus(false, 1)).toMatchObject({ remaining: 0, canInfer: false });
       expect(deriveFreemiumStatus(false, 2)).toMatchObject({ remaining: 0, canInfer: false });
     });
+
+    it('supports a zero base limit (ads become the only free path)', () => {
+      // EXPO_PUBLIC_FREE_DAILY_LIMIT=0 のビルド（広告フロー検証にも使う）
+      const status = deriveFreemiumStatus(false, 0, 0, true, false, 0);
+      expect(status).toMatchObject({ remaining: 0, canInfer: false, canWatchAdForMore: true });
+      const afterBonus = deriveFreemiumStatus(false, 0, 1, true, false, 0);
+      expect(afterBonus).toMatchObject({ remaining: 1, canInfer: true });
+    });
   });
 
   describe('daily counter', () => {

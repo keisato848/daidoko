@@ -7,13 +7,14 @@
  * per day (also device-local, capped). Premium (RevenueCat) bypasses the quota.
  * The server's global cap remains the real cost ceiling. See docs/フリーミアム設計.md.
  */
+import { FREE_DAILY_LIMIT_CONFIG } from '../config';
 import { isAdRewardAvailable } from './ad-reward.service';
 import { getAppMeta, setAppMeta } from './app-meta.service';
 import { hasUserApiKey } from './byok.service';
 import { isPremium } from './entitlement.service';
 
-/** Free AI photo-recipes allowed per calendar day. */
-export const FREE_DAILY_LIMIT = 1;
+/** Free AI photo-recipes allowed per calendar day (build-time configurable, default 1). */
+export const FREE_DAILY_LIMIT = FREE_DAILY_LIMIT_CONFIG;
 /** Extra AI photo-recipes a free user can unlock per day by watching ads. */
 export const AD_BONUS_DAILY_LIMIT = 3;
 
