@@ -10,13 +10,12 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+
+import { createEditsClient, getAccessToken } from './lib/play-api.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const LISTING_MD = path.join(ROOT, 'docs/store/google-play/listing-ja.md');
-const KEY_PATH = process.env.PLAY_SERVICE_ACCOUNT_KEY ?? 'C:/secure/play-service-account.json';
-const PACKAGE = 'com.daidoko.app';
 const DRY_RUN = process.argv.includes('--dry-run');
 
 // ─── listing-ja.md からセクション抽出 ───────────────────────────────────────
@@ -45,56 +44,20 @@ if (DRY_RUN) {
   process.exit(0);
 }
 
-// ─── サービスアカウントで androidpublisher トークン取得 ─────────────────────
-const key = JSON.parse(fs.readFileSync(KEY_PATH, 'utf8'));
-const now = Math.floor(Date.now() / 1000);
-const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
-const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({
-  iss: key.client_email,
-  scope: 'https://www.googleapis.com/auth/androidpublisher',
-  aud: 'https://oauth2.googleapis.com/token',
-  iat: now,
-  exp: now + 3600,
-})}`;
-const sig = crypto.sign('RSA-SHA256', Buffer.from(unsigned), key.private_key).toString('base64url');
-
-const tokRes = await fetch('https://oauth2.googleapis.com/token', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${unsigned}.${sig}`,
-});
-const tok = await tokRes.json();
-if (!tok.access_token)
-  throw new Error(`token failed: ${tokRes.status} ${JSON.stringify(tok).slice(0, 200)}`);
-
 // ─── edits フロー: insert → listings.get → listings.update → commit ─────────
-const base = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PACKAGE}`;
-const h = { Authorization: `Bearer ${tok.access_token}`, 'Content-Type': 'application/json' };
+const client = createEditsClient(await getAccessToken());
+const edit = await client.insert();
 
-const edit = await (
-  await fetch(`${base}/edits`, { method: 'POST', headers: h, body: '{}' })
-).json();
-if (!edit.id) throw new Error(`edit insert failed: ${JSON.stringify(edit).slice(0, 300)}`);
-
-const cur = await (await fetch(`${base}/edits/${edit.id}/listings/ja-JP`, { headers: h })).json();
+const cur = await client.getListing(edit.id, 'ja-JP');
 console.log('current title:', cur.title);
 
-const body = {
+await client.updateListing(edit.id, 'ja-JP', {
   language: 'ja-JP',
   title: cur.title,
   shortDescription: SHORT,
   fullDescription: FULL,
   ...(cur.video ? { video: cur.video } : {}),
-};
-const updRes = await fetch(`${base}/edits/${edit.id}/listings/ja-JP`, {
-  method: 'PUT',
-  headers: h,
-  body: JSON.stringify(body),
 });
-if (!updRes.ok)
-  throw new Error(`update failed: ${JSON.stringify(await updRes.json()).slice(0, 400)}`);
 
-const commitRes = await fetch(`${base}/edits/${edit.id}:commit`, { method: 'POST', headers: h });
-const commit = await commitRes.json();
-if (!commitRes.ok) throw new Error(`commit failed: ${JSON.stringify(commit).slice(0, 400)}`);
+const commit = await client.commit(edit.id);
 console.log('COMMITTED edit:', commit.id);
