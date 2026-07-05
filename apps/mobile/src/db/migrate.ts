@@ -472,6 +472,12 @@ export async function seedDatabase(database: DB): Promise<void> {
     .insert(schema.users)
     .values([...seedUsers])
     .onConflictDoNothing();
+  // migrate() が既定ユーザー（表示名空）を先に作るため、onConflictDoNothing では
+  // サンプルの表示名が反映されない。未設定のままの場合だけ見本の名前を補う。
+  await database
+    .update(schema.users)
+    .set({ displayName: seedUsers[0].displayName })
+    .where(and(eq(schema.users.id, seedUsers[0].id), eq(schema.users.displayName, '')));
   await database
     .insert(schema.families)
     .values([...seedFamilies])
@@ -504,10 +510,12 @@ export async function seedDatabase(database: DB): Promise<void> {
     .insert(schema.cookingLogs)
     .values([...seedCookingLogs])
     .onConflictDoNothing();
-  await database
-    .insert(schema.cookingPhotos)
-    .values([...seedCookingPhotos])
-    .onConflictDoNothing();
+  if (seedCookingPhotos.length > 0) {
+    await database
+      .insert(schema.cookingPhotos)
+      .values([...seedCookingPhotos])
+      .onConflictDoNothing();
+  }
 
   // Populate FTS index
   await rebuildFts(database);
