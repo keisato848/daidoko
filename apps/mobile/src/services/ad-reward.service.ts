@@ -19,6 +19,12 @@ export class StubAdRewardProvider implements AdRewardProvider {
   async showRewardedAd(): Promise<RewardedAdResult> {
     return { rewarded: false };
   }
+  async isPrivacyOptionsRequired(): Promise<boolean> {
+    return false;
+  }
+  async showPrivacyOptionsForm(): Promise<void> {
+    // no-op — no ads means no consent UI
+  }
 }
 
 let cachedProvider: AdRewardProvider | null = null;
