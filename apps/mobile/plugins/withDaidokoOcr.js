@@ -119,19 +119,53 @@ class DaidokoOcrModule(
       ?: decodeDrawableBitmap(assetPath)
       ?: throw IllegalArgumentException("Could not decode bundled OCR asset: $assetPath")
 
+  // OCR 品質を保てる上限。フル解像度デコードによるメモリ過剰使用を避ける
+  // （Play Console の「ビットマップのダウンサンプリング」推奨への対応）。
+  private val maxBitmapDimension = 2048
+
+  private fun sampleSizeFor(width: Int, height: Int): Int {
+    var sampleSize = 1
+    var w = width
+    var h = height
+    while (w / 2 >= maxBitmapDimension || h / 2 >= maxBitmapDimension) {
+      sampleSize *= 2
+      w /= 2
+      h /= 2
+    }
+    return sampleSize
+  }
+
   private fun decodeAssetBitmap(assetPath: String) = buildList {
     add(assetPath)
     if (!assetPath.endsWith(".png")) add("$assetPath.png")
   }.firstNotNullOfOrNull { candidate ->
     runCatching {
-      reactContext.assets.open(candidate).use { stream -> BitmapFactory.decodeStream(stream) }
+      val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      reactContext.assets.open(candidate).use { stream ->
+        BitmapFactory.decodeStream(stream, null, bounds)
+      }
+      val options = BitmapFactory.Options().apply {
+        inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
+      }
+      reactContext.assets.open(candidate).use { stream ->
+        BitmapFactory.decodeStream(stream, null, options)
+      }
     }.getOrNull()
   }
 
   private fun decodeDrawableBitmap(assetPath: String) =
     assetPath.substringAfterLast('/').substringBeforeLast('.').takeIf { it.isNotBlank() }?.let { name ->
       val resourceId = reactContext.resources.getIdentifier(name, "drawable", reactContext.packageName)
-      if (resourceId == 0) null else BitmapFactory.decodeResource(reactContext.resources, resourceId)
+      if (resourceId == 0) {
+        null
+      } else {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeResource(reactContext.resources, resourceId, bounds)
+        val options = BitmapFactory.Options().apply {
+          inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight)
+        }
+        BitmapFactory.decodeResource(reactContext.resources, resourceId, options)
+      }
     }
 
   private fun toWritableMap(text: Text): WritableMap {
