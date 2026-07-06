@@ -36,6 +36,31 @@ export const DOC_RULES = [
     pattern: /^apps\/mobile\/src\/db\/(schema|migrate)\.ts$/,
     target: 'docs/データ設計.md（エンティティ・マイグレーション）',
   },
+  {
+    // version/versionCode（§2-1）と AdMob ID・AD_ID blockedPermissions（§6）の単一ソース
+    pattern: /^apps\/mobile\/app\.json$/,
+    target: 'docs/リリース手順.md §2-1（バージョン）/ §6（AdMob・AD_ID）',
+  },
+  {
+    // config plugin の変更は prebuild しないと反映されない（サイレント no-op の実績あり）
+    pattern: /^apps\/mobile\/plugins\//,
+    target: 'docs/リリース手順.md（--prebuild 必須の注意）と docs/開発ハーネス.md',
+  },
+  {
+    // ポリシー原本の変更は gist（Play 登録済み公開 URL）への同期が必要
+    pattern: /^docs\/privacy-policy\.md$/,
+    target: 'gist 同期（docs/リリース手順.md §4 のコマンド）と Play データセーフティの整合確認',
+  },
+  {
+    // Copilot 用資産も開発ハーネスの地図に含める（.claude 側との乖離防止）
+    pattern: /^\.github\/(skills|agents|hooks|prompts)\//,
+    target: 'docs/開発ハーネス.md §1 構成マップ',
+  },
+  {
+    // フリーミアムのゲート実装は設計書と対で保守する
+    pattern: /^apps\/mobile\/src\/services\/(usage|entitlement|ad-reward|byok)/,
+    target: 'docs/フリーミアム設計.md',
+  },
 ];
 
 /** ドキュメント側とみなすパス（これが同時に変更されていれば督促しない） */

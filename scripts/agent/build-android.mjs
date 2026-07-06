@@ -1,3 +1,4 @@
+import { readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,18 @@ import { runCommand } from './lib/runtime.mjs';
 const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const androidDir = join(rootDir, 'apps', 'mobile', 'android');
 const options = parseArgs(process.argv.slice(2));
+
+// config plugin / app.json の変更は prebuild しないと android/ に反映されない
+// （注入がサイレント no-op になり EAS ビルド全滅の実績あり）。陳腐化を検知して警告する。
+if (!options.prebuild) {
+  const staleSources = detectPrebuildStaleness();
+  if (staleSources.length > 0) {
+    console.warn(
+      `[WARN] android/ より新しいネイティブ設定ソースがあります: ${staleSources.join(', ')}\n` +
+        '       app.json / config plugin の変更を反映するには --prebuild を付けてください（docs/リリース手順.md）。',
+    );
+  }
+}
 const wrapperPath = join(androidDir, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
 const gradleCache = process.env.GRADLE_CACHE || join(tmpdir(), 'daidoko-gradle-project-cache');
 
@@ -37,7 +50,14 @@ const args = [
 ];
 
 if (!options.bundle) {
-  args.push('-x', 'lintVitalAnalyzeRelease', '-x', 'lintVitalReportRelease', '-x', 'lintVitalRelease');
+  args.push(
+    '-x',
+    'lintVitalAnalyzeRelease',
+    '-x',
+    'lintVitalReportRelease',
+    '-x',
+    'lintVitalRelease',
+  );
   args.push(`-PreactNativeArchitectures=${options.arch}`);
 }
 
@@ -70,7 +90,10 @@ const summary = {
 if (!summary.ok) {
   const output = summary.output || '';
   if (output.includes('.cxx') && output.includes('lock')) {
-    summary.signal = createSignal(SIGNAL_CODES.GRADLE_CXX_LOCK, 'Gradle CXX lock detected in build output.');
+    summary.signal = createSignal(
+      SIGNAL_CODES.GRADLE_CXX_LOCK,
+      'Gradle CXX lock detected in build output.',
+    );
   }
 }
 
@@ -85,6 +108,35 @@ if (!summary.ok) {
 }
 
 console.log(`Android build OK: ${summary.artifact}`);
+
+/**
+ * app.json / plugins/ の最終更新が android/ の生成物より新しければ、その一覧を返す。
+ * android/ が未生成（初回）の場合は prebuild が必須なので全ソースを返す。
+ */
+function detectPrebuildStaleness() {
+  const sources = [join(rootDir, 'apps', 'mobile', 'app.json')];
+  const pluginsDir = join(rootDir, 'apps', 'mobile', 'plugins');
+  try {
+    for (const name of readdirSync(pluginsDir)) sources.push(join(pluginsDir, name));
+  } catch {
+    // plugins ディレクトリが無ければ app.json のみ検査
+  }
+  let androidMtime = 0;
+  try {
+    androidMtime = statSync(join(androidDir, 'app', 'build.gradle')).mtimeMs;
+  } catch {
+    return sources.map((p) => p.slice(rootDir.length + 1));
+  }
+  const stale = [];
+  for (const src of sources) {
+    try {
+      if (statSync(src).mtimeMs > androidMtime) stale.push(src.slice(rootDir.length + 1));
+    } catch {
+      // 消えたソースは無視
+    }
+  }
+  return stale;
+}
 
 function parseArgs(argv) {
   const parsed = {

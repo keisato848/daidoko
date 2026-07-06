@@ -9,6 +9,15 @@
             "command": "node scripts/agent/hook-pretool-guard.mjs"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/agent/hook-pretool-edit-guard.mjs"
+          }
+        ]
       }
     ],
     "PostToolUse": [

@@ -58,6 +58,28 @@ if (!commandText) {
   respond('ask', 'Use adb install -r for in-place updates when preserving local data.');
 } else if (/git\s+push\s+--force(?!-with-lease)/i.test(commandText)) {
   respond('ask', 'Force push should be explicitly confirmed.');
+} else if (/git\s+push\b[^;&|]*[\s:]main(\s|$)/i.test(commandText)) {
+  // main への直接 push は禁止（CLAUDE.md: PR 経由のみ）
+  respond(
+    'deny',
+    'main への直接 push は禁止です（リポジトリ規約: PR 経由のみ）。develop からリリース PR を作成してください。',
+  );
+} else if (
+  /cd\s+(\.\/)?apps[/\\]mobile\b[^;&|]*(&&|;)\s*pnpm\s+(install|add|update|remove)\b/i.test(
+    commandText,
+  )
+) {
+  // apps/mobile 内での pnpm install はルートの hoisted ワークスペースをハイジャックして壊す
+  respond(
+    'ask',
+    'pnpm install/add は必ずリポジトリルートで実行してください（.npmrc node-linker=hoisted。apps/mobile 内で実行するとワークスペースが壊れます）。依存追加は root から `pnpm --filter mobile add <pkg>`。',
+  );
+} else if (/\beas\s+build\b[^;&|]*--profile\s+production\b/i.test(commandText)) {
+  // EAS はローカル作業ディレクトリをアップロードする — 本番ビルドは main checkout が規約
+  respond(
+    'ask',
+    'EAS production ビルドはローカル作業ディレクトリをアップロードします。main を checkout 済みか確認してください（docs/リリース手順.md §2-3）。',
+  );
 } else if (/\bgh\s+pr\s+merge\b/i.test(commandText) || /\bgit\s+merge\b/i.test(commandText)) {
   respond(
     'ask',
