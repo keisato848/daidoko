@@ -73,6 +73,7 @@ Temp/
 .claude/*
 !.claude/skills/
 !.claude/agents/
+!.claude/workflows/
 !.claude/settings.json
 chat.json
 nul
