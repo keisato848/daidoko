@@ -7,7 +7,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Bell, ChefHat, Minus, Plus, Receipt, ScanLine, Utensils, X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
@@ -132,15 +132,18 @@ export default function PantryScreen() {
             <Utensils size={18} color={Colors.gold} />
             <Text style={styles.headerScanText}>食べた</Text>
           </Pressable>
-          <Pressable
-            onPress={() => router.push('/(tabs)/receipt')}
-            hitSlop={8}
-            accessibilityLabel="レシートから追加"
-            style={styles.headerScan}
-          >
-            <Receipt size={18} color={Colors.gold} />
-            <Text style={styles.headerScanText}>レシート</Text>
-          </Pressable>
+          {/* レシート読み取りは端末内 ML Kit（Android 専用）のため iOS では隠す。 */}
+          {Platform.OS === 'android' && (
+            <Pressable
+              onPress={() => router.push('/(tabs)/receipt')}
+              hitSlop={8}
+              accessibilityLabel="レシートから追加"
+              style={styles.headerScan}
+            >
+              <Receipt size={18} color={Colors.gold} />
+              <Text style={styles.headerScanText}>レシート</Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={() => router.push('/(tabs)/scan-barcode')}
             hitSlop={8}

@@ -53,7 +53,10 @@ import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
 type Phase = 'select' | 'processing' | 'preview';
 
-const isAndroid = Platform.OS === 'android';
+// AI 写真レシピはサーバー/BYOK 経由（Gemini）なのでネイティブ両 OS で動く。
+// 端末内ラベリング（ML Kit）は Android のみだが iOS では自動的に無効化され
+// サーバー推論にフォールバックする。web だけは手動入力へ誘導する。
+const isNative = Platform.OS !== 'web';
 
 const CONFIDENCE_LABEL: Record<RecipePhotoAgentOutput['confidence'], string> = {
   high: 'バッチリ読み取れました',
@@ -75,7 +78,7 @@ export default function ImportPhotoScreen() {
 
   // Refresh the freemium quota on focus (e.g. after returning from the paywall).
   const refreshFreemium = useCallback(() => {
-    if (!isAndroid) return;
+    if (!isNative) return;
     getFreemiumStatus()
       .then(setFreemium)
       .catch(() => setFreemium(null));
@@ -84,13 +87,15 @@ export default function ImportPhotoScreen() {
 
   useEffect(() => {
     let mounted = true;
-    if (!isAndroid) {
+    if (!isNative) {
       setProviderReady(false);
       return () => {
         mounted = false;
       };
     }
 
+    // On-device labeling は Android のみ利用可。iOS では false になり、
+    // サーバー推論だけで写真レシピが動作する。
     isClientImageLabelingAvailable()
       .then((available) => {
         if (mounted) setProviderReady(available);
@@ -280,10 +285,10 @@ export default function ImportPhotoScreen() {
 
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.iconWrapper}>
-          <Sparkles size={46} color={isAndroid ? Colors.gold : Colors.muted} />
+          <Sparkles size={46} color={isNative ? Colors.gold : Colors.muted} />
         </View>
 
-        {isAndroid ? (
+        {isNative ? (
           <>
             <Text style={styles.title}>写真からレシピをつくろう</Text>
             <Text style={styles.description}>
@@ -348,7 +353,7 @@ export default function ImportPhotoScreen() {
           <>
             <Text style={styles.title}>写真からのレシピづくりはアプリでつかえます</Text>
             <Text style={styles.description}>
-              写真からの下書き作成は Android アプリで先行対応中です。
+              写真からの下書き作成はスマホアプリ（iOS / Android）でお使いいただけます。
               {'\n\n'}
               Web ブラウザからお使いの場合は、手動入力をご利用ください。
             </Text>
