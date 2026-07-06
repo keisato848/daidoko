@@ -5,7 +5,7 @@
 import { useRouter } from 'expo-router';
 import { Camera, FileText, Globe, Image as ImageIcon, PenLine } from 'lucide-react-native';
 import { useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
@@ -19,6 +19,8 @@ interface MethodOption {
   label: string;
   description: string;
   enabled: boolean;
+  /** 端末内 ML Kit を使う機能は Android のみ（iOS 版がないため入口を隠す）。 */
+  androidOnly?: boolean;
 }
 
 const METHODS: MethodOption[] = [
@@ -56,8 +58,13 @@ const METHODS: MethodOption[] = [
     label: '文字入り画像から作成',
     description: 'レシピ本や手書きメモの文字を読み取り',
     enabled: true,
+    androidOnly: true,
   },
 ];
+
+const VISIBLE_METHODS = METHODS.filter(
+  (method) => !method.androidOnly || Platform.OS === 'android',
+);
 
 export default function AddScreen() {
   const router = useRouter();
@@ -104,7 +111,7 @@ export default function AddScreen() {
       <Text style={styles.subheading}>追加方法を選んでください</Text>
 
       <View style={styles.methods}>
-        {METHODS.map((method) => (
+        {VISIBLE_METHODS.map((method) => (
           <View
             key={method.id}
             ref={method.id === 'photo' ? photoRef : method.id === 'manual' ? manualRef : undefined}
