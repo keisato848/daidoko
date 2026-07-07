@@ -13,8 +13,11 @@ import {
   createMockRecipe,
   updateMockRecipe,
   deleteMockRecipe,
+  setMockRecipePinned,
 } from '../db/mock';
 import { generateId } from '../utils/id';
+import { recipeMatchesQuery } from '../utils/recipeSearch';
+import { getAliasMap } from './name-alias.service';
 import type {
   MemoItem,
   RecipeDetail,
@@ -45,9 +48,11 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
     .select({
       id: schema.recipes.id,
       title: schema.recipes.title,
+      titleReading: schema.recipes.titleReading,
       currentRevId: schema.recipes.currentRevId,
       createdAt: schema.recipes.createdAt,
       coverPhotoPath: schema.recipes.coverPhotoPath,
+      pinnedAt: schema.recipes.pinnedAt,
     })
     .from(schema.recipes)
     .where(eq(schema.recipes.status, 'active'));
@@ -98,6 +103,7 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
     result.push({
       id: recipe.id,
       title: recipe.title,
+      titleReading: recipe.titleReading,
       cookTimeMin,
       rating: avgRating,
       tags: tagRows.map((t) => t.name ?? '').filter(Boolean),
@@ -105,6 +111,7 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       createdAt: recipe.createdAt,
       cookCount: ratingRows.length,
       heroPhotoUri,
+      pinnedAt: recipe.pinnedAt,
     });
   }
 
@@ -218,20 +225,42 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
     steps: stepsList,
     heroPhotoUri,
     coverPhotoPath: r.coverPhotoPath,
+    pinnedAt: r.pinnedAt,
   };
+}
+
+/** 作りたいリスト: ピン留めのオン/オフ（pinned_at = 日時 or null） */
+export async function setRecipePinned(recipeId: string, pinned: boolean): Promise<void> {
+  if (!isNativePlatform) {
+    setMockRecipePinned(recipeId, pinned);
+    return;
+  }
+
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  await db
+    .update(schema.recipes)
+    .set({ pinnedAt: pinned ? nowIso() : null })
+    .where(eq(schema.recipes.id, recipeId));
+}
+
+/** 作りたいリスト: ピン留め済みレシピ（新しくピンした順） */
+export async function getWantToCookRecipes(): Promise<RecipeListItem[]> {
+  const all = await getRecipeList();
+  return all
+    .filter((r) => r.pinnedAt != null)
+    .sort((a, b) => (b.pinnedAt ?? '').localeCompare(a.pinnedAt ?? ''));
 }
 
 export async function searchRecipes(query: string): Promise<RecipeListItem[]> {
   const all = await getRecipeList();
   if (!query.trim()) return all;
 
-  const q = query.trim().toLowerCase();
-  return all.filter(
-    (r) =>
-      r.title.toLowerCase().includes(q) ||
-      r.tags.some((t) => t.includes(q)) ||
-      r.ingredientNames.some((name) => name.includes(q)),
-  );
+  const aliases = await getAliasMap();
+  return all.filter((r) => recipeMatchesQuery(r, query, aliases));
 }
 
 export async function getRecipeRevisions(recipeId: string): Promise<RecipeRevisionSummary[]> {

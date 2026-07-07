@@ -3,15 +3,16 @@
  * Hero image, meta info, tabs (ingredients/steps/memo/history), cooking start CTA
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
+import { Bookmark, ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../../src/components/HelpButton';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
+import { NumberStepper } from '../../../src/components/NumberStepper';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
@@ -23,9 +24,12 @@ import {
   deleteRecipe,
   getMemosForRecipe,
   getRecipeDetail,
+  setRecipePinned,
 } from '../../../src/services/recipe.service';
 import type { MemoItem, RecipeDetail, TimelineEntry } from '../../../src/services/types';
 import { formatProfileDisplayName } from '../../../src/utils/profile';
+import { formatRecipeShareText } from '../../../src/utils/recipeShareText';
+import { scaleAmount, servingRatio } from '../../../src/utils/shoppingScale';
 
 type TabKey = 'ingredients' | 'steps' | 'memo' | 'history';
 
@@ -62,6 +66,8 @@ export default function RecipeDetailScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const [cookingLogs, setCookingLogs] = useState<TimelineEntry[]>([]);
   const [memos, setMemos] = useState<MemoItem[]>([]);
+  // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
+  const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
 
   const loadRecipe = useCallback(async () => {
     if (!id) {
@@ -125,6 +131,23 @@ export default function RecipeDetailScreen() {
     if (tab === 'memo') void loadMemos();
   }, [tab, loadLogs, loadMemos]);
 
+  // 作りたいリスト（ホームに表示）へのピン留めトグル
+  const handleTogglePin = async () => {
+    if (!recipe) return;
+    await setRecipePinned(recipe.id, recipe.pinnedAt == null);
+    await loadRecipe();
+  };
+
+  // テキスト共有（取り込みパーサと往復できる書式 — 相手はテキスト取り込みで登録可能）
+  const handleShare = async () => {
+    if (!recipe) return;
+    try {
+      await Share.share({ message: formatRecipeShareText(recipe) });
+    } catch {
+      // 共有シートのキャンセルは無視
+    }
+  };
+
   const handleDelete = () => {
     if (!id) return;
     Alert.alert('レシピを削除', 'このレシピを削除しますか？', [
@@ -166,6 +189,9 @@ export default function RecipeDetailScreen() {
     );
   }
 
+  // 分量換算（基準人数が未登録なら常に等倍）
+  const ingredientRatio = servingRatio(recipe.servings, targetServings ?? recipe.servings ?? 1);
+
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
@@ -194,6 +220,18 @@ export default function RecipeDetailScreen() {
         <View style={styles.helpButton}>
           <HelpButton onPress={coach.show} />
         </View>
+        <Pressable
+          style={styles.pinButton}
+          onPress={() => void handleTogglePin()}
+          hitSlop={12}
+          accessibilityLabel={recipe.pinnedAt != null ? '作りたいから外す' : '作りたいに追加'}
+        >
+          <Bookmark
+            size={20}
+            color={Colors.gold}
+            fill={recipe.pinnedAt != null ? Colors.gold : 'transparent'}
+          />
+        </Pressable>
       </View>
 
       {showMenu && (
@@ -206,6 +244,15 @@ export default function RecipeDetailScreen() {
             }}
           >
             <Text style={styles.menuItemText}>編集</Text>
+          </Pressable>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
+              void handleShare();
+            }}
+          >
+            <Text style={styles.menuItemText}>共有</Text>
           </Pressable>
           <Pressable
             style={styles.menuItem}
@@ -258,6 +305,17 @@ export default function RecipeDetailScreen() {
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {tab === 'ingredients' && (
           <View>
+            {recipe.servings != null && (
+              <View style={styles.servingsRow}>
+                <NumberStepper
+                  label="人数"
+                  value={targetServings ?? recipe.servings}
+                  onChange={setTargetServings}
+                  suffix="人前"
+                  min={1}
+                />
+              </View>
+            )}
             {recipe.ingredients.map((ing, i) => {
               const showGroup =
                 ing.groupLabel &&
@@ -267,7 +325,9 @@ export default function RecipeDetailScreen() {
                   {showGroup && <Text style={styles.groupLabel}>{ing.groupLabel}</Text>}
                   <View style={styles.ingredientRow}>
                     <Text style={styles.ingredientName}>{ing.name}</Text>
-                    <Text style={styles.ingredientAmount}>{ing.amount}</Text>
+                    <Text style={styles.ingredientAmount}>
+                      {scaleAmount(ing.amount, ingredientRatio)}
+                    </Text>
                   </View>
                 </View>
               );
@@ -444,6 +504,11 @@ const styles = StyleSheet.create({
     top: 51,
     right: 52,
   },
+  pinButton: {
+    position: 'absolute',
+    top: 50,
+    right: 88,
+  },
   menuDropdown: {
     position: 'absolute',
     top: 76,
@@ -504,6 +569,9 @@ const styles = StyleSheet.create({
   tabUnderline: { height: 2, backgroundColor: Colors.gold, width: '100%', marginTop: 8 },
   content: { flex: 1 },
   contentInner: { padding: 20, paddingBottom: 20 },
+  servingsRow: {
+    marginBottom: 10,
+  },
   groupLabel: {
     fontSize: 12,
     fontWeight: '500',

@@ -1,16 +1,27 @@
 /**
  * S06: Cooking Mode screen
- * Full-screen step display with working timer, keep-awake, completion flow
+ * Full-screen step display with working timer, keep-awake, completion flow.
+ * The timer lives in timer.store and survives step navigation — a chip under
+ * the progress bar shows a timer running on another step and jumps back to it.
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { NumberStepper } from '../../../../src/components/NumberStepper';
 import { TimerWidget } from '../../../../src/components/TimerWidget';
 import { Colors } from '../../../../src/constants/theme';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { getRecipeDetail } from '../../../../src/services/recipe.service';
+import { useTimerStore } from '../../../../src/stores/timer.store';
+import { scaleAmount, servingRatio } from '../../../../src/utils/shoppingScale';
+
+function formatMmSs(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
 
 interface StepData {
   id: string;
@@ -35,10 +46,18 @@ export default function CookingModeScreen() {
   const [ingredients, setIngredients] = useState<IngredientData[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
-  const [showTimer, setShowTimer] = useState(false);
+  // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
+  const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
+  const timer = useTimerStore();
 
   // Keep screen awake during cooking
   useKeepAwake();
+
+  // 別レシピのタイマーが残っていたら破棄（同じレシピなら継続表示する）
+  useEffect(() => {
+    const t = useTimerStore.getState();
+    if (t.context && t.context.recipeId !== id) t.clear();
+  }, [id]);
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -55,11 +74,6 @@ export default function CookingModeScreen() {
     void loadData();
   }, [loadData]);
 
-  // Reset timer view when step changes
-  useEffect(() => {
-    setShowTimer(false);
-  }, [currentStep]);
-
   if (steps.length === 0) {
     return (
       <View style={styles.container}>
@@ -72,7 +86,49 @@ export default function CookingModeScreen() {
   const progress = (currentStep + 1) / steps.length;
   const isLastStep = currentStep === steps.length - 1;
 
+  // このステップのタイマーがセット済みか（idle でも reset 直後は表示を維持する）
+  const timerOnCurrentStep = timer.context?.stepId === current.id && timer.status !== 'idle';
+  // 別ステップで動いているタイマー（チップ表示 → タップで戻る）
+  const timerOnOtherStep =
+    timer.context != null && timer.context.stepId !== current.id && timer.status !== 'idle'
+      ? timer.context
+      : null;
+
+  const startTimerForStep = (step: StepData) => {
+    if (step.timerSec == null) return;
+    const begin = () => {
+      const store = useTimerStore.getState();
+      store.setup(step.timerSec ?? 0, {
+        recipeId: id ?? '',
+        stepId: step.id,
+        stepNumber: step.sortOrder,
+      });
+      store.start();
+    };
+    const t = useTimerStore.getState();
+    if ((t.status === 'running' || t.status === 'paused') && t.context?.stepId !== step.id) {
+      Alert.alert(
+        'タイマーを切り替え',
+        `手順${t.context?.stepNumber ?? '?'}のタイマーが動いています。停止してこの手順のタイマーを開始しますか？`,
+        [
+          { text: 'キャンセル', style: 'cancel' },
+          { text: '切り替える', onPress: begin },
+        ],
+      );
+      return;
+    }
+    begin();
+  };
+
+  const jumpToTimerStep = () => {
+    const stepId = useTimerStore.getState().context?.stepId;
+    if (!stepId) return;
+    const index = steps.findIndex((s) => s.id === stepId);
+    if (index >= 0) setCurrentStep(index);
+  };
+
   const handleComplete = () => {
+    useTimerStore.getState().clear();
     router.push(`/(tabs)/recipes/${id}/log`);
   };
 
@@ -94,6 +150,20 @@ export default function CookingModeScreen() {
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
 
+      {/* 別ステップで動いているタイマーのチップ（タップでそのステップへ戻る） */}
+      {timerOnOtherStep && (
+        <Pressable style={styles.timerChip} onPress={jumpToTimerStep} hitSlop={8}>
+          <Text style={styles.timerChipText}>
+            ⏱ 手順{timerOnOtherStep.stepNumber}{' '}
+            {timer.status === 'finished'
+              ? '完了！'
+              : timer.status === 'paused'
+                ? `${formatMmSs(timer.remainingSec)}（一時停止中）`
+                : formatMmSs(timer.remainingSec)}
+          </Text>
+        </Pressable>
+      )}
+
       {/* Step content */}
       <Pressable style={styles.stepArea} onPress={() => setShowIngredients(true)}>
         <View style={styles.stepNumberCircle}>
@@ -106,8 +176,8 @@ export default function CookingModeScreen() {
           <Image source={{ uri: current.photoPath }} style={styles.stepPhoto} resizeMode="cover" />
         )}
 
-        {current.timerSec != null && !showTimer && (
-          <Pressable style={styles.timerButton} onPress={() => setShowTimer(true)}>
+        {current.timerSec != null && !timerOnCurrentStep && (
+          <Pressable style={styles.timerButton} onPress={() => startTimerForStep(current)}>
             <Text style={styles.timerIcon}>⏱</Text>
             <Text style={styles.timerButtonText}>
               {current.timerSec >= 60
@@ -117,7 +187,7 @@ export default function CookingModeScreen() {
           </Pressable>
         )}
 
-        {current.timerSec != null && showTimer && <TimerWidget timerSec={current.timerSec} />}
+        {timerOnCurrentStep && <TimerWidget />}
 
         <Text style={styles.tapHint}>画面をタップで材料を表示</Text>
       </Pressable>
@@ -155,14 +225,28 @@ export default function CookingModeScreen() {
         <Pressable style={styles.overlayBackdrop} onPress={() => setShowIngredients(false)}>
           <Pressable style={styles.overlaySheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.overlayHandle} />
-            <Text style={styles.overlayTitle}>
-              材料{servings != null ? `（${servings}人前）` : ''}
-            </Text>
+            <Text style={styles.overlayTitle}>材料</Text>
+            {servings != null && (
+              <View style={styles.overlayStepper}>
+                <NumberStepper
+                  label="人数"
+                  value={targetServings ?? servings}
+                  onChange={setTargetServings}
+                  suffix="人前"
+                  min={1}
+                />
+              </View>
+            )}
             <ScrollView style={styles.overlayScroll}>
               {ingredients.map((ing, i) => (
                 <View key={i} style={styles.overlayRow}>
                   <Text style={styles.overlayIngName}>{ing.name}</Text>
-                  <Text style={styles.overlayIngAmount}>{ing.amount}</Text>
+                  <Text style={styles.overlayIngAmount}>
+                    {scaleAmount(
+                      ing.amount,
+                      servingRatio(servings, targetServings ?? servings ?? 1),
+                    )}
+                  </Text>
                 </View>
               ))}
             </ScrollView>
@@ -213,6 +297,24 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     backgroundColor: Colors.gold,
+  },
+  timerChip: {
+    position: 'absolute',
+    top: 104,
+    right: 16,
+    zIndex: 5,
+    backgroundColor: '#1A1108',
+    borderWidth: 1,
+    borderColor: Colors.gold,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  timerChipText: {
+    fontSize: 13, // sm: タイマーチップ
+    fontWeight: '500',
+    color: Colors.gold,
+    fontVariant: ['tabular-nums'],
   },
   stepArea: {
     flex: 1,
@@ -360,6 +462,9 @@ const styles = StyleSheet.create({
     color: Colors.goldDim,
     letterSpacing: 1,
     marginBottom: 12,
+  },
+  overlayStepper: {
+    marginBottom: 10,
   },
   overlayScroll: {
     flexGrow: 0,

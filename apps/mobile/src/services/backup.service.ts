@@ -57,6 +57,7 @@ const BACKUP_TABLES = [
       'title_reading',
       'current_rev_id',
       'status',
+      'pinned_at',
       'created_by',
       'created_at',
       'updated_at',

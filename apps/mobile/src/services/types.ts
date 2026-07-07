@@ -6,6 +6,8 @@
 export interface RecipeListItem {
   id: string;
   title: string;
+  /** かな読み（検索用） — null if not registered */
+  titleReading: string | null;
   cookTimeMin: number | null;
   rating: number | null;
   tags: string[];
@@ -16,6 +18,8 @@ export interface RecipeListItem {
   cookCount: number;
   /** Card image: the cover photo, else the latest cooking photo, if any */
   heroPhotoUri: string | null;
+  /** 作りたいリスト: ピン留め日時（ISO） — null = 未ピン */
+  pinnedAt: string | null;
 }
 
 export interface RecipeDetail {
@@ -32,6 +36,8 @@ export interface RecipeDetail {
   heroPhotoUri: string | null;
   /** The recipe's own cover photo (端末内パス) — null if none set */
   coverPhotoPath: string | null;
+  /** 作りたいリスト: ピン留め日時（ISO） — null = 未ピン */
+  pinnedAt: string | null;
 }
 
 export interface MemoItem {

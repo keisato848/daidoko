@@ -1,11 +1,21 @@
 /**
  * S01: Home / Timeline screen
- * Shows recent cooking logs with filter tabs
+ * Shows the want-to-cook shelf (pinned recipes), monthly stats, and recent
+ * cooking logs with filter tabs
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { CalendarDays, LayoutGrid, ShoppingCart, Trash2, X } from 'lucide-react-native';
+import { Bookmark, CalendarDays, LayoutGrid, ShoppingCart, Trash2, X } from 'lucide-react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
@@ -18,8 +28,9 @@ import { Stars } from '../../src/components/Stars';
 import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
+import { getWantToCookRecipes } from '../../src/services/recipe.service';
 import { getTimeline } from '../../src/services/timeline.service';
-import type { TimelineEntry } from '../../src/services/types';
+import type { RecipeListItem, TimelineEntry } from '../../src/services/types';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 import { computeMonthlyStats } from '../../src/utils/timelineStats';
 
@@ -81,8 +92,12 @@ export default function HomeScreen() {
     !loading && !selectMode,
   );
 
+  const [wantList, setWantList] = useState<RecipeListItem[]>([]);
+
   const loadTimeline = useCallback(async () => {
-    setAllEntries(await getTimeline());
+    const [entries, want] = await Promise.all([getTimeline(), getWantToCookRecipes()]);
+    setAllEntries(entries);
+    setWantList(want);
     setLoading(false);
   }, []);
 
@@ -270,8 +285,44 @@ export default function HomeScreen() {
           ]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            !selectMode && monthlyStats.count > 0 ? (
-              <MonthlyStats stats={monthlyStats} monthLabel={monthLabel} />
+            !selectMode && (wantList.length > 0 || monthlyStats.count > 0) ? (
+              <View>
+                {wantList.length > 0 && (
+                  <View style={styles.wantSection}>
+                    <View style={styles.wantHeader}>
+                      <Bookmark size={13} color={Colors.goldDim} fill={Colors.goldDim} />
+                      <Text style={styles.wantTitle}>つくりたい</Text>
+                    </View>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.wantRow}
+                    >
+                      {wantList.map((recipe) => (
+                        <PressableScale
+                          key={recipe.id}
+                          style={styles.wantCard}
+                          onPress={() => router.push(`/(tabs)/recipes/${recipe.id}`)}
+                        >
+                          {recipe.heroPhotoUri ? (
+                            <Image source={{ uri: recipe.heroPhotoUri }} style={styles.wantThumb} />
+                          ) : (
+                            <View style={[styles.wantThumb, styles.wantThumbPlaceholder]}>
+                              <Text style={styles.wantEmoji}>🍽️</Text>
+                            </View>
+                          )}
+                          <Text style={styles.wantCardTitle} numberOfLines={2}>
+                            {recipe.title}
+                          </Text>
+                        </PressableScale>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+                {monthlyStats.count > 0 && (
+                  <MonthlyStats stats={monthlyStats} monthLabel={monthLabel} />
+                )}
+              </View>
             ) : null
           }
           ListEmptyComponent={
@@ -395,6 +446,54 @@ const styles = StyleSheet.create({
     fontSize: 12, // xs: タイムスタンプ・日付ヘッダー
     color: Colors.paperDim,
     letterSpacing: 2,
+  },
+  wantSection: {
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  wantHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  wantTitle: {
+    fontSize: 12, // xs: セクション見出し
+    color: Colors.goldDim,
+    letterSpacing: 2,
+  },
+  wantRow: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  wantCard: {
+    width: 108,
+    backgroundColor: Colors.bgCard,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 8,
+    gap: 6,
+  },
+  wantThumb: {
+    width: '100%',
+    height: 64,
+    borderRadius: 6,
+    backgroundColor: '#1A1108',
+  },
+  wantThumbPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wantEmoji: {
+    fontSize: 26,
+  },
+  wantCardTitle: {
+    fontSize: 12, // xs: カードタイトル（コンパクト）
+    fontWeight: '400',
+    color: Colors.paper,
+    lineHeight: 16,
   },
   card: {
     marginHorizontal: 16,
