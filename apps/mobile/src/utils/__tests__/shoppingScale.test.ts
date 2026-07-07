@@ -46,8 +46,15 @@ describe('scaleAmount', () => {
     expect(scaleAmount('200g', 1)).toBe('200g');
   });
 
-  it('最初の数値のみスケールする', () => {
-    expect(scaleAmount('2〜3本', 2)).toBe('4〜3本');
+  it('範囲（2〜3本）は両端をスケールする', () => {
+    expect(scaleAmount('2〜3本', 2)).toBe('4〜6本');
+  });
+
+  it('分数は1つの値としてスケールする', () => {
+    expect(scaleAmount('1/2個', 2)).toBe('1個');
+    expect(scaleAmount('1/2個', 3)).toBe('1.5個');
+    expect(scaleAmount('１／２カップ', 2)).toBe('1カップ');
+    expect(scaleAmount('1/3本', 2)).toBe('0.7本');
   });
 
   it('全角数字をスケールする（日本語IME入力対応）', () => {

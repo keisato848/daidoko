@@ -1,8 +1,10 @@
 /**
- * Ingredient amount scaling for 買い物モード / 料理中モード (US-08, R07).
+ * Ingredient amount scaling for 買い物モード / レシピ詳細 / 料理中モード (US-08, R07).
  *
- * Scales the first numeric token in a free-text amount by the serving ratio.
- * Non-numeric amounts ("適量", "少々" など) are returned unchanged.
+ * Scales every numeric token in a free-text amount by the serving ratio.
+ * Fractions ("1/2個") are treated as one token (so ×2 → "1個", not "2/2個"),
+ * and ranges ("2〜3本") scale both ends. Non-numeric amounts ("適量", "少々"
+ * など) are returned unchanged.
  */
 
 /** Serving ratio from a base to a target count. Falls back to 1 when unknown/invalid. */
@@ -24,17 +26,24 @@ function toAsciiNumber(s: string): string {
     .replace(/．/g, '.');
 }
 
-// Matches the first numeric token, ASCII or full-width (e.g. "200", "２００", "1.5", "１．５").
-const NUMBER_TOKEN = /[0-9０-９]+(?:[.．][0-9０-９]+)?/;
+// Matches a fraction ("1/2", "１／２" — captured as num/den) or a plain numeric
+// token, ASCII or full-width (e.g. "200", "２００", "1.5", "１．５"). The
+// fraction alternative comes first so "1/2" scales as one value.
+const NUMBER_OR_FRACTION_TOKEN =
+  /([0-9０-９]+)\s*[/／]\s*([0-9０-９]+)|[0-9０-９]+(?:[.．][0-9０-９]+)?/g;
 
 /**
- * Scale the first number found in `amount` by `ratio`.
+ * Scale every number found in `amount` by `ratio`.
  * Handles both ASCII and full-width digits (Japanese IME input).
  * Returns the input unchanged when it is null, has no number, or ratio is 1.
  */
 export function scaleAmount(amount: string | null, ratio: number): string | null {
   if (amount == null || ratio === 1) return amount;
-  return amount.replace(NUMBER_TOKEN, (match) =>
-    formatScaled(parseFloat(toAsciiNumber(match)) * ratio),
-  );
+  return amount.replace(NUMBER_OR_FRACTION_TOKEN, (match, numerator, denominator) => {
+    const value =
+      numerator != null && denominator != null
+        ? parseFloat(toAsciiNumber(numerator)) / parseFloat(toAsciiNumber(denominator))
+        : parseFloat(toAsciiNumber(match));
+    return formatScaled(value * ratio);
+  });
 }

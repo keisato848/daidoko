@@ -9,11 +9,13 @@ import { X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { NumberStepper } from '../../../../src/components/NumberStepper';
 import { TimerWidget } from '../../../../src/components/TimerWidget';
 import { Colors } from '../../../../src/constants/theme';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { getRecipeDetail } from '../../../../src/services/recipe.service';
 import { useTimerStore } from '../../../../src/stores/timer.store';
+import { scaleAmount, servingRatio } from '../../../../src/utils/shoppingScale';
 
 function formatMmSs(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -44,6 +46,8 @@ export default function CookingModeScreen() {
   const [ingredients, setIngredients] = useState<IngredientData[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
+  // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
+  const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
   const timer = useTimerStore();
 
   // Keep screen awake during cooking
@@ -221,14 +225,28 @@ export default function CookingModeScreen() {
         <Pressable style={styles.overlayBackdrop} onPress={() => setShowIngredients(false)}>
           <Pressable style={styles.overlaySheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.overlayHandle} />
-            <Text style={styles.overlayTitle}>
-              材料{servings != null ? `（${servings}人前）` : ''}
-            </Text>
+            <Text style={styles.overlayTitle}>材料</Text>
+            {servings != null && (
+              <View style={styles.overlayStepper}>
+                <NumberStepper
+                  label="人数"
+                  value={targetServings ?? servings}
+                  onChange={setTargetServings}
+                  suffix="人前"
+                  min={1}
+                />
+              </View>
+            )}
             <ScrollView style={styles.overlayScroll}>
               {ingredients.map((ing, i) => (
                 <View key={i} style={styles.overlayRow}>
                   <Text style={styles.overlayIngName}>{ing.name}</Text>
-                  <Text style={styles.overlayIngAmount}>{ing.amount}</Text>
+                  <Text style={styles.overlayIngAmount}>
+                    {scaleAmount(
+                      ing.amount,
+                      servingRatio(servings, targetServings ?? servings ?? 1),
+                    )}
+                  </Text>
                 </View>
               ))}
             </ScrollView>
@@ -444,6 +462,9 @@ const styles = StyleSheet.create({
     color: Colors.goldDim,
     letterSpacing: 1,
     marginBottom: 12,
+  },
+  overlayStepper: {
+    marginBottom: 10,
   },
   overlayScroll: {
     flexGrow: 0,

@@ -12,6 +12,7 @@ import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../../src/components/HelpButton';
 import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
+import { NumberStepper } from '../../../src/components/NumberStepper';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
@@ -28,6 +29,7 @@ import {
 import type { MemoItem, RecipeDetail, TimelineEntry } from '../../../src/services/types';
 import { formatProfileDisplayName } from '../../../src/utils/profile';
 import { formatRecipeShareText } from '../../../src/utils/recipeShareText';
+import { scaleAmount, servingRatio } from '../../../src/utils/shoppingScale';
 
 type TabKey = 'ingredients' | 'steps' | 'memo' | 'history';
 
@@ -64,6 +66,8 @@ export default function RecipeDetailScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const [cookingLogs, setCookingLogs] = useState<TimelineEntry[]>([]);
   const [memos, setMemos] = useState<MemoItem[]>([]);
+  // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
+  const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
 
   const loadRecipe = useCallback(async () => {
     if (!id) {
@@ -185,6 +189,9 @@ export default function RecipeDetailScreen() {
     );
   }
 
+  // 分量換算（基準人数が未登録なら常に等倍）
+  const ingredientRatio = servingRatio(recipe.servings, targetServings ?? recipe.servings ?? 1);
+
   return (
     <View style={styles.container}>
       <View style={styles.hero}>
@@ -298,6 +305,17 @@ export default function RecipeDetailScreen() {
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {tab === 'ingredients' && (
           <View>
+            {recipe.servings != null && (
+              <View style={styles.servingsRow}>
+                <NumberStepper
+                  label="人数"
+                  value={targetServings ?? recipe.servings}
+                  onChange={setTargetServings}
+                  suffix="人前"
+                  min={1}
+                />
+              </View>
+            )}
             {recipe.ingredients.map((ing, i) => {
               const showGroup =
                 ing.groupLabel &&
@@ -307,7 +325,9 @@ export default function RecipeDetailScreen() {
                   {showGroup && <Text style={styles.groupLabel}>{ing.groupLabel}</Text>}
                   <View style={styles.ingredientRow}>
                     <Text style={styles.ingredientName}>{ing.name}</Text>
-                    <Text style={styles.ingredientAmount}>{ing.amount}</Text>
+                    <Text style={styles.ingredientAmount}>
+                      {scaleAmount(ing.amount, ingredientRatio)}
+                    </Text>
                   </View>
                 </View>
               );
@@ -549,6 +569,9 @@ const styles = StyleSheet.create({
   tabUnderline: { height: 2, backgroundColor: Colors.gold, width: '100%', marginTop: 8 },
   content: { flex: 1 },
   contentInner: { padding: 20, paddingBottom: 20 },
+  servingsRow: {
+    marginBottom: 10,
+  },
   groupLabel: {
     fontSize: 12,
     fontWeight: '500',
