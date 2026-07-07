@@ -45,6 +45,7 @@
         }
       ],
       "./plugins/withKotlinMetadataSkip",
+      "./plugins/withDaidokoBackupRules",
       [
         "expo-image-picker",
         {
