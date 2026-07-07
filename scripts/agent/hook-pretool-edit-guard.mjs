@@ -13,7 +13,16 @@
  *    — SDK51 時代の残骸。SDK54 では不要と確定済みで、再導入は 16KB 対応を壊すリスク
  *      （memory: expo-sdk-54-upgrade「Do not reintroduce」）。
  */
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { readStdinJson } from './lib/runtime.mjs';
+
+// リポジトリルートはこのファイルの位置（scripts/agent/）から導出する。
+// フォルダ名 'daidoko' のハードコードは別名 clone でガードが無効化されるため禁止。
+const REPO_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)))
+  .replace(/\\/g, '/')
+  .toLowerCase();
 
 const payload = await readStdinJson();
 const filePath = extractFilePath(payload);
@@ -95,13 +104,11 @@ function extractWrittenContent(value) {
   return parts.join('\n');
 }
 
-/** シークレットを書いてよい先: gitignore 済み設定・env ファイル・リポジトリ外（C:\secure 等） */
+/** シークレットを書いてよい先: gitignore 済み設定・env ファイル・リポジトリ外への絶対パス（C:\secure 等） */
 function isSecretSafeDestination(path) {
   if (/(^|\/)(\.env[^/]*|settings\.local\.json)$/i.test(path)) return true;
-  if (/^[A-Za-z]:\/(secure|Users\/[^/]+\/\.claude)\//i.test(path)) return true;
-  if (!/[/\\]daidoko[/\\]/i.test(path) && !path.startsWith('.')) {
-    // リポジトリ外への絶対パス書き込みは対象外（相対パスはリポジトリ内とみなす）
-    return /^[A-Za-z]:\//.test(path) === true && !/daidoko/i.test(path);
-  }
-  return false;
+  const normalized = path.toLowerCase();
+  // 相対パス・UNC パスはリポジトリ内とみなして検査対象（fail-closed）
+  if (!/^[a-z]:\//.test(normalized)) return false;
+  return normalized !== REPO_ROOT && !normalized.startsWith(`${REPO_ROOT}/`);
 }

@@ -64,6 +64,9 @@ apps/mobile/android/app/src/main/assets/models/*.bin
 apps/mobile/android/app/src/main/assets/models/*.task
 !apps/mobile/android/app/src/main/assets/models/README.md
 
+# Python
+__pycache__/
+
 # Temporary
 tmp/
 temp/
