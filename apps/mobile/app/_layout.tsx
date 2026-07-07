@@ -4,14 +4,19 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
+import { maybeCreateAutoSnapshot } from '../src/services/backup.service';
 import { checkAndNotifyLowStock } from '../src/services/low-stock.service';
 
 export default function RootLayout() {
   const { isReady, error } = useDatabase();
 
   // 起動時に在庫の残量しきい値をチェック（1日1回まとめて通知; P3）
+  // + 週次の自動バックアップスナップショット（#79。失敗しても起動は止めない）
   useEffect(() => {
-    if (isReady) checkAndNotifyLowStock().catch(() => undefined);
+    if (isReady) {
+      checkAndNotifyLowStock().catch(() => undefined);
+      maybeCreateAutoSnapshot().catch(() => undefined);
+    }
   }, [isReady]);
 
   if (error) {

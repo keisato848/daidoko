@@ -8,20 +8,28 @@ import {
   ChevronLeft,
   DatabaseBackup,
   Download,
+  FolderOutput,
   RotateCcw,
   Share2,
   Upload,
 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
 import {
+  AUTO_SNAPSHOT_KEEP,
+  chooseSafBackupDirectory,
+  clearSafBackupDirectory,
   createMigrationBackupPackage,
   createLocalBackup,
+  exportFileToSafDirectory,
+  getLastBackupExportAt,
+  getSafBackupDirectory,
   listMigrationBackupPackages,
   listLocalBackups,
+  markBackupExported,
   pickLatestBackup,
   restoreMigrationBackupPackage,
   restoreLatestLocalBackup,
@@ -41,22 +49,37 @@ function formatDate(value: string | null): string {
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+/** 最後の外部退避の表示（未実施 / N日前）。30日超は警告扱い。 */
+function describeLastExport(iso: string | null): { text: string; warn: boolean } {
+  if (!iso) return { text: '外部への退避はまだ実施されていません', warn: true };
+  const elapsedDays = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (elapsedDays <= 0) return { text: '最後の外部退避: 今日', warn: false };
+  return { text: `最後の外部退避: ${elapsedDays}日前`, warn: elapsedDays > 30 };
+}
+
 export default function BackupScreen() {
   const router = useRouter();
   const [backups, setBackups] = useState<BackupFileSummary[]>([]);
   const [migrationBackups, setMigrationBackups] = useState<BackupFileSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [safDirectory, setSafDirectory] = useState<string | null>(null);
+  const [lastExportAt, setLastExportAt] = useState<string | null>(null);
   const latest = pickLatestBackup(backups);
   const latestMigration = pickLatestBackup(migrationBackups);
+  const lastExport = describeLastExport(lastExportAt);
 
   const refresh = useCallback(async () => {
-    const [localBackups, migrationPackages] = await Promise.all([
+    const [localBackups, migrationPackages, safDir, exportedAt] = await Promise.all([
       listLocalBackups(),
       listMigrationBackupPackages(),
+      getSafBackupDirectory(),
+      getLastBackupExportAt(),
     ]);
     setBackups(localBackups);
     setMigrationBackups(migrationPackages);
+    setSafDirectory(safDir);
+    setLastExportAt(exportedAt);
   }, []);
 
   useFocusEffect(
@@ -119,9 +142,18 @@ export default function BackupScreen() {
     setBusy(true);
     try {
       const result = await createMigrationBackupPackage();
+      // 外部退避先が設定済みなら自動でコピーする
+      let exportedNote = '';
+      try {
+        if (await exportFileToSafDirectory(result.uri, result.fileName, 'application/zip')) {
+          exportedNote = ' / 保存先フォルダへ書き出し済み';
+        }
+      } catch {
+        exportedNote = ' / 保存先フォルダへの書き出しに失敗（保存先を再選択してください）';
+      }
       await refresh();
       setToastMessage(
-        `移行ファイルを作成しました (${formatSize(result.sizeBytes)} / 写真${result.photoCount}枚)`,
+        `移行ファイルを作成しました (${formatSize(result.sizeBytes)} / 写真${result.photoCount}枚)${exportedNote}`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : '移行ファイル作成に失敗しました';
@@ -149,11 +181,33 @@ export default function BackupScreen() {
         mimeType: 'application/zip',
         UTI: 'public.zip',
       });
+      // 共有シートを開いて戻ってきたら退避扱い（送信の成否までは OS から取得できない）
+      await markBackupExported();
+      await refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : '移行ファイル共有に失敗しました';
       Alert.alert('共有できませんでした', message);
     }
-  }, [latestMigration]);
+  }, [latestMigration, refresh]);
+
+  const handleChooseSafDirectory = useCallback(async () => {
+    try {
+      const directoryUri = await chooseSafBackupDirectory();
+      if (directoryUri) {
+        await refresh();
+        setToastMessage('保存先フォルダを設定しました（以後の自動スナップショットも書き出します）');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '保存先を選択できませんでした';
+      Alert.alert('保存先を選択できませんでした', message);
+    }
+  }, [refresh]);
+
+  const handleClearSafDirectory = useCallback(async () => {
+    await clearSafBackupDirectory();
+    await refresh();
+    setToastMessage('保存先フォルダを解除しました');
+  }, [refresh]);
 
   const handleImportMigration = useCallback(async () => {
     try {
@@ -221,7 +275,11 @@ export default function BackupScreen() {
           <Text style={styles.summaryMeta}>
             {latest
               ? `${latest.fileName} / ${formatSize(latest.sizeBytes)}`
-              : 'この端末内に保存します'}
+              : `週1回自動で作成し、最新${AUTO_SNAPSHOT_KEEP}件を保持します`}
+          </Text>
+          <Text style={styles.summaryNote}>
+            端末内（アプリ領域）に保存します — アンインストールで消えるため、大切なデータは下の
+            移行ファイルの共有か保存先フォルダへの書き出しで外部にも退避してください
           </Text>
         </View>
 
@@ -254,7 +312,10 @@ export default function BackupScreen() {
           <Text style={styles.summaryMeta}>
             {latestMigration
               ? `${latestMigration.fileName} / ${formatSize(latestMigration.sizeBytes)}`
-              : '写真を含む移行ファイルを作成します'}
+              : 'すべての写真（調理記録・表紙・手順）を含む移行ファイルを作成します'}
+          </Text>
+          <Text style={[styles.summaryNote, lastExport.warn && styles.summaryNoteWarn]}>
+            {lastExport.text}
           </Text>
         </View>
 
@@ -284,6 +345,45 @@ export default function BackupScreen() {
             <Text style={styles.secondaryButtonText}>移行ファイルから復元</Text>
           </Pressable>
         </View>
+
+        {Platform.OS === 'android' ? (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>外部の保存先フォルダ</Text>
+            <Text style={styles.summaryTitle}>{safDirectory ? '設定済み' : '未設定'}</Text>
+            <Text style={styles.summaryMeta}>
+              Google ドライブ等のフォルダを選ぶと、移行ファイルと週次の自動スナップショットを
+              自動で書き出します（アンインストールしても残ります）
+            </Text>
+            <View style={styles.safButtonRow}>
+              <Pressable
+                style={[styles.secondaryButton, styles.safButton, busy && styles.buttonDisabled]}
+                onPress={handleChooseSafDirectory}
+                disabled={busy}
+              >
+                <FolderOutput size={18} color={Colors.gold} />
+                <Text style={styles.secondaryButtonText}>
+                  {safDirectory ? '保存先を変更' : '保存先フォルダを選ぶ'}
+                </Text>
+              </Pressable>
+              {safDirectory != null && (
+                <Pressable
+                  style={[styles.secondaryButton, styles.safButton, busy && styles.buttonDisabled]}
+                  onPress={handleClearSafDirectory}
+                  disabled={busy}
+                >
+                  <Text style={styles.secondaryButtonText}>解除</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        ) : (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>iCloud バックアップ</Text>
+            <Text style={styles.summaryMeta}>
+              iOS では端末の iCloud バックアップにアプリのデータ（レシピ・写真）が自動で含まれます
+            </Text>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>保存済みバックアップ</Text>
@@ -370,6 +470,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     color: Colors.paperDim,
+  },
+  summaryNote: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: Colors.muted,
+    lineHeight: 17,
+  },
+  summaryNoteWarn: {
+    color: '#D9A05B',
+  },
+  safButtonRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  safButton: {
+    flex: 1,
+    minHeight: 44,
   },
   actionGroup: {
     gap: 12,
