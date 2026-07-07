@@ -5,7 +5,7 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Bookmark, ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
@@ -27,6 +27,7 @@ import {
 } from '../../../src/services/recipe.service';
 import type { MemoItem, RecipeDetail, TimelineEntry } from '../../../src/services/types';
 import { formatProfileDisplayName } from '../../../src/utils/profile';
+import { formatRecipeShareText } from '../../../src/utils/recipeShareText';
 
 type TabKey = 'ingredients' | 'steps' | 'memo' | 'history';
 
@@ -133,6 +134,16 @@ export default function RecipeDetailScreen() {
     await loadRecipe();
   };
 
+  // テキスト共有（取り込みパーサと往復できる書式 — 相手はテキスト取り込みで登録可能）
+  const handleShare = async () => {
+    if (!recipe) return;
+    try {
+      await Share.share({ message: formatRecipeShareText(recipe) });
+    } catch {
+      // 共有シートのキャンセルは無視
+    }
+  };
+
   const handleDelete = () => {
     if (!id) return;
     Alert.alert('レシピを削除', 'このレシピを削除しますか？', [
@@ -226,6 +237,15 @@ export default function RecipeDetailScreen() {
             }}
           >
             <Text style={styles.menuItemText}>編集</Text>
+          </Pressable>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
+              void handleShare();
+            }}
+          >
+            <Text style={styles.menuItemText}>共有</Text>
           </Pressable>
           <Pressable
             style={styles.menuItem}
