@@ -49,6 +49,7 @@ import {
 import { createCookingLog } from '../../../src/services/cooking-log.service';
 import { persistCookingLogPhotos } from '../../../src/services/photo-storage.service';
 import { createPhotoSource } from '../../../src/services/source.service';
+import { applyAutoStepTimers } from '../../../src/utils/stepTimer';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
 type Phase = 'select' | 'processing' | 'preview';
@@ -255,7 +256,12 @@ export default function ImportPhotoScreen() {
     return (
       <View style={styles.container}>
         <RecipeForm
-          initialValues={photoResult?.draft}
+          initialValues={
+            photoResult?.draft
+              ? // 「10分煮る」等の時間表現からタイマーを自動セット（フォームで修正可能）
+                { ...photoResult.draft, steps: applyAutoStepTimers(photoResult.draft.steps) }
+              : undefined
+          }
           onSubmit={handleSave}
           onCancel={() => setPhase('select')}
           title="できたレシピを確認・編集"

@@ -12,6 +12,7 @@ import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
 import { type RecipeDraft, runImportAgent } from '../../../src/agents/import.agent';
 import { createRecipe } from '../../../src/services/recipe.service';
+import { applyAutoStepTimers } from '../../../src/utils/stepTimer';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
 type Phase = 'input' | 'fetching' | 'preview';
@@ -30,7 +31,8 @@ function draftToFormData(draft: RecipeDraft): RecipeFormData {
       groupLabel: '',
       note: '',
     })),
-    steps: draft.steps.map((s) => ({ body: s.body, timerSec: undefined })),
+    // 「10分煮る」等の時間表現からタイマーを自動セット（フォームで修正可能）
+    steps: applyAutoStepTimers(draft.steps.map((s) => ({ body: s.body, timerSec: undefined }))),
     tags: [],
   };
 }

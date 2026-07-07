@@ -16,6 +16,7 @@ import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { getRecipeDetail } from '../../../../src/services/recipe.service';
 import { useTimerStore } from '../../../../src/stores/timer.store';
 import { scaleAmount, servingRatio } from '../../../../src/utils/shoppingScale';
+import { extractPrimaryStepTimer, formatStepTimerLabel } from '../../../../src/utils/stepTimer';
 
 function formatMmSs(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -94,11 +95,16 @@ export default function CookingModeScreen() {
       ? timer.context
       : null;
 
-  const startTimerForStep = (step: StepData) => {
-    if (step.timerSec == null) return;
+  // 手順にタイマー未設定でも、本文の時間表現（「10分煮る」）から検出して提案する。
+  // ここからの開始は表示時のみで DB には保存しない（#77）。
+  const detectedTimer = current.timerSec == null ? extractPrimaryStepTimer(current.body) : null;
+  const effectiveTimerSec = current.timerSec ?? detectedTimer?.seconds ?? null;
+
+  const startTimerForStep = (step: StepData, timerSec: number | null) => {
+    if (timerSec == null) return;
     const begin = () => {
       const store = useTimerStore.getState();
-      store.setup(step.timerSec ?? 0, {
+      store.setup(timerSec, {
         recipeId: id ?? '',
         stepId: step.id,
         stepNumber: step.sortOrder,
@@ -176,13 +182,15 @@ export default function CookingModeScreen() {
           <Image source={{ uri: current.photoPath }} style={styles.stepPhoto} resizeMode="cover" />
         )}
 
-        {current.timerSec != null && !timerOnCurrentStep && (
-          <Pressable style={styles.timerButton} onPress={() => startTimerForStep(current)}>
+        {effectiveTimerSec != null && !timerOnCurrentStep && (
+          <Pressable
+            style={styles.timerButton}
+            onPress={() => startTimerForStep(current, effectiveTimerSec)}
+          >
             <Text style={styles.timerIcon}>⏱</Text>
             <Text style={styles.timerButtonText}>
-              {current.timerSec >= 60
-                ? `${Math.floor(current.timerSec / 60)}分 タイマーを開始`
-                : `${current.timerSec}秒 タイマーを開始`}
+              {formatStepTimerLabel(effectiveTimerSec)} タイマーを開始
+              {detectedTimer != null ? '（本文から検出）' : ''}
             </Text>
           </Pressable>
         )}

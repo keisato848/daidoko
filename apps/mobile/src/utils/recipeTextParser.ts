@@ -1,5 +1,7 @@
 import type { RecipeFormData } from '../validation/recipe.schema';
 
+import { extractPrimaryStepTimer } from './stepTimer';
+
 export type ParseConfidence = 'high' | 'medium' | 'low';
 export type RecipeTextParseSource = 'parser' | 'gemma-native' | 'local-heuristic';
 type ParseMode = 'unknown' | 'ingredients' | 'steps' | 'description';
@@ -126,9 +128,11 @@ function parseIngredient(line: string): RecipeFormData['ingredients'][number] {
 function parseStep(line: string): RecipeFormData['steps'][number] {
   const cleaned = stripBullet(line);
   const numbered = cleaned.match(STEP_PATTERN);
+  const body = cleanLine(numbered?.[1] ?? cleaned);
   return {
-    body: cleanLine(numbered?.[1] ?? cleaned),
-    timerSec: undefined,
+    body,
+    // 「10分煮る」等の時間表現からタイマーを自動セット（確認フォームで修正可能）
+    timerSec: extractPrimaryStepTimer(body)?.seconds,
   };
 }
 
