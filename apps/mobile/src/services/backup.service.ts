@@ -1,17 +1,30 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { Platform } from 'react-native';
 
 import { getDb, getExpoDb, isNativePlatform } from '../db/client';
 import { rebuildFts } from '../db/migrate';
+import { getAppMeta, setAppMeta } from './app-meta.service';
 
 const BACKUP_FORMAT = 'daidoko.local-backup';
 const BACKUP_SCHEMA_VERSION = 1;
 const BACKUP_DIRECTORY_NAME = 'backups';
 const MIGRATION_BACKUP_FORMAT = 'daidoko.migration-backup';
+// v1 のまま recipePhotos を「省略可のフィールド」として拡張している（旧アプリは
+// 未知フィールドを無視して DB＋調理写真だけ復元できる後方/前方互換のため、bump しない）
 const MIGRATION_BACKUP_SCHEMA_VERSION = 1;
 const MIGRATION_MANIFEST_FILE_NAME = 'manifest.json';
 const MIGRATION_PHOTO_DIRECTORY_NAME = 'cooking-photos';
+const MIGRATION_RECIPE_PHOTO_DIRECTORY_NAME = 'recipe-photos';
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+// 外部退避（共有 / SAF 書き出し）を最後に実行した日時と、SAF 保存先の永続化キー
+const LAST_EXTERNAL_EXPORT_KEY = 'backup_last_external_export_at';
+const SAF_DIRECTORY_KEY = 'backup_saf_directory_uri';
+
+/** 自動スナップショットの間隔と保持世代数（起動時に maybeCreateAutoSnapshot が使用） */
+export const AUTO_SNAPSHOT_INTERVAL_DAYS = 7;
+export const AUTO_SNAPSHOT_KEEP = 5;
 
 type SqlValue = string | number | null;
 type BackupRow = Record<string, SqlValue>;
@@ -57,6 +70,7 @@ const BACKUP_TABLES = [
       'title_reading',
       'current_rev_id',
       'status',
+      'cover_photo_path',
       'pinned_at',
       'created_by',
       'created_at',
@@ -86,7 +100,7 @@ const BACKUP_TABLES = [
   },
   {
     name: 'steps',
-    columns: ['id', 'revision_id', 'sort_order', 'body', 'timer_sec', 'photo_id'],
+    columns: ['id', 'revision_id', 'sort_order', 'body', 'timer_sec', 'photo_id', 'photo_path'],
   },
   {
     name: 'tags',
@@ -161,12 +175,26 @@ export interface MigrationPhotoManifestEntry {
   originalLocalPath: string;
 }
 
+export type MigrationRecipePhotoOwner = 'recipe-cover' | 'step';
+
+/** レシピの表紙・手順写真の同梱エントリ（v1 拡張・旧アプリは無視できる） */
+export interface MigrationRecipePhotoManifestEntry {
+  ownerType: MigrationRecipePhotoOwner;
+  /** recipes.id（recipe-cover）または steps.id（step） */
+  ownerId: string;
+  archivePath: string;
+  fileName: string;
+  originalLocalPath: string;
+}
+
 export interface MigrationBackupManifest {
   format: typeof MIGRATION_BACKUP_FORMAT;
   schemaVersion: typeof MIGRATION_BACKUP_SCHEMA_VERSION;
   exportedAt: string;
   backup: LocalBackupPayload;
   photos: MigrationPhotoManifestEntry[];
+  /** 省略可（旧形式 ZIP には無い）: レシピ表紙・手順写真 */
+  recipePhotos?: MigrationRecipePhotoManifestEntry[];
 }
 
 export interface MigrationBackupOperationResult extends BackupOperationResult {
@@ -353,6 +381,36 @@ function parseMigrationPhotoEntry(value: unknown): MigrationPhotoManifestEntry {
   };
 }
 
+function parseMigrationRecipePhotoEntry(value: unknown): MigrationRecipePhotoManifestEntry {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('レシピ写真バックアップ情報が不正です');
+  }
+  const entry = value as Record<string, unknown>;
+  const ownerType = entry.ownerType;
+  if (ownerType !== 'recipe-cover' && ownerType !== 'step') {
+    throw new Error('レシピ写真バックアップの種別が不正です');
+  }
+  const archivePath = assertString(entry.archivePath, 'レシピ写真バックアップのパスが不正です');
+  if (
+    !archivePath.startsWith(`${MIGRATION_RECIPE_PHOTO_DIRECTORY_NAME}/`) ||
+    archivePath.includes('..') ||
+    archivePath.includes('\\')
+  ) {
+    throw new Error('レシピ写真バックアップのパスが不正です');
+  }
+
+  return {
+    ownerType,
+    ownerId: assertString(entry.ownerId, 'レシピ写真バックアップのIDが不正です'),
+    archivePath,
+    fileName: assertString(entry.fileName, 'レシピ写真バックアップのファイル名が不正です'),
+    originalLocalPath: assertString(
+      entry.originalLocalPath,
+      'レシピ写真バックアップの元パスが不正です',
+    ),
+  };
+}
+
 export function parseMigrationBackupManifest(text: string): MigrationBackupManifest {
   const parsed = parseJsonObject(text);
   if (
@@ -370,6 +428,11 @@ export function parseMigrationBackupManifest(text: string): MigrationBackupManif
   if (!Array.isArray(rawPhotos)) {
     throw new Error('写真バックアップ一覧が不正です');
   }
+  // recipePhotos は省略可（旧形式 ZIP との互換）
+  const rawRecipePhotos = parsed.recipePhotos;
+  if (rawRecipePhotos != null && !Array.isArray(rawRecipePhotos)) {
+    throw new Error('レシピ写真バックアップ一覧が不正です');
+  }
 
   return {
     format: MIGRATION_BACKUP_FORMAT,
@@ -377,6 +440,7 @@ export function parseMigrationBackupManifest(text: string): MigrationBackupManif
     exportedAt,
     backup: parseLocalBackupPayloadObject(rawBackup as Record<string, unknown>),
     photos: rawPhotos.map(parseMigrationPhotoEntry),
+    recipePhotos: (rawRecipePhotos ?? []).map(parseMigrationRecipePhotoEntry),
   };
 }
 
@@ -465,6 +529,17 @@ export function createMigrationPhotoArchivePath(photoId: string, localPath: stri
   return `${MIGRATION_PHOTO_DIRECTORY_NAME}/${safeId}-${fileName}`;
 }
 
+export function createMigrationRecipePhotoArchivePath(
+  ownerType: MigrationRecipePhotoOwner,
+  ownerId: string,
+  localPath: string,
+): string {
+  const prefix = ownerType === 'recipe-cover' ? 'cover' : 'step';
+  const safeId = sanitizeArchiveFileName(ownerId) || 'photo';
+  const fileName = fileNameFromUri(localPath, `${safeId}.jpg`);
+  return `${MIGRATION_RECIPE_PHOTO_DIRECTORY_NAME}/${prefix}-${safeId}-${fileName}`;
+}
+
 function getRequiredDocumentDirectory(): string {
   if (!FileSystem.documentDirectory) {
     throw new Error('ファイル保存領域を取得できませんでした');
@@ -474,6 +549,15 @@ function getRequiredDocumentDirectory(): string {
 
 async function ensureCookingPhotoDirectory(): Promise<string> {
   const directory = `${getRequiredDocumentDirectory()}${MIGRATION_PHOTO_DIRECTORY_NAME}/`;
+  const info = await FileSystem.getInfoAsync(directory);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+  }
+  return directory;
+}
+
+async function ensureRecipePhotoDirectory(): Promise<string> {
+  const directory = `${getRequiredDocumentDirectory()}${MIGRATION_RECIPE_PHOTO_DIRECTORY_NAME}/`;
   const info = await FileSystem.getInfoAsync(directory);
   if (!info.exists) {
     await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
@@ -500,6 +584,31 @@ function updatePhotoLocalPath(
 function clearPhotoLocalPaths(payload: LocalBackupPayload): void {
   for (const row of payload.tables.cooking_photos) {
     row.local_path = null;
+  }
+}
+
+/** 復元先端末に存在しないパスを持ち込まないよう、表紙・手順写真のパスも一旦クリアする
+ *（ZIP に同梱されている分だけ updateRecipePhotoPath で復元される。旧形式 ZIP では
+ *  同梱が無いため null のまま = ダングリングパス残留バグの修正でもある） */
+function clearRecipePhotoPaths(payload: LocalBackupPayload): void {
+  for (const row of payload.tables.recipes) {
+    row.cover_photo_path = null;
+  }
+  for (const row of payload.tables.steps) {
+    row.photo_path = null;
+  }
+}
+
+function updateRecipePhotoPath(
+  payload: LocalBackupPayload,
+  entry: MigrationRecipePhotoManifestEntry,
+  localPath: string | null,
+): void {
+  const rows = entry.ownerType === 'recipe-cover' ? payload.tables.recipes : payload.tables.steps;
+  const column = entry.ownerType === 'recipe-cover' ? 'cover_photo_path' : 'photo_path';
+  const row = rows.find((candidate) => candidate.id === entry.ownerId);
+  if (row) {
+    row[column] = localPath;
   }
 }
 
@@ -607,6 +716,7 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
   const payload = createPayloadFromDatabase();
   const zipEntries: Record<string, Uint8Array> = {};
   const photos: MigrationPhotoManifestEntry[] = [];
+  const recipePhotos: MigrationRecipePhotoManifestEntry[] = [];
 
   for (const row of payload.tables.cooking_photos) {
     const photoId = rowString(row, 'id');
@@ -628,12 +738,44 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
     photos.push({ id: photoId, archivePath, fileName, originalLocalPath: localPath });
   }
 
+  // レシピの表紙写真・手順写真も同梱する（欠損ファイルはパスをクリアして持ち込まない）
+  const bundleRecipePhoto = async (
+    ownerType: MigrationRecipePhotoOwner,
+    row: BackupRow,
+    column: 'cover_photo_path' | 'photo_path',
+  ): Promise<void> => {
+    const ownerId = rowString(row, 'id');
+    const localPath = rowString(row, column);
+    if (!ownerId || !localPath) return;
+
+    const info = await FileSystem.getInfoAsync(localPath);
+    if (!info.exists) {
+      row[column] = null;
+      return;
+    }
+
+    const archivePath = createMigrationRecipePhotoArchivePath(ownerType, ownerId, localPath);
+    const fileName = archivePath.split('/').pop() ?? `${ownerId}.jpg`;
+    const photoBase64 = await FileSystem.readAsStringAsync(localPath, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    zipEntries[archivePath] = base64ToUint8Array(photoBase64);
+    recipePhotos.push({ ownerType, ownerId, archivePath, fileName, originalLocalPath: localPath });
+  };
+  for (const row of payload.tables.recipes) {
+    await bundleRecipePhoto('recipe-cover', row, 'cover_photo_path');
+  }
+  for (const row of payload.tables.steps) {
+    await bundleRecipePhoto('step', row, 'photo_path');
+  }
+
   const manifest: MigrationBackupManifest = {
     format: MIGRATION_BACKUP_FORMAT,
     schemaVersion: MIGRATION_BACKUP_SCHEMA_VERSION,
     exportedAt: payload.exportedAt,
     backup: payload,
     photos,
+    recipePhotos,
   };
   zipEntries[MIGRATION_MANIFEST_FILE_NAME] = strToU8(JSON.stringify(manifest, null, 2));
 
@@ -649,7 +791,7 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
     fileName,
     exportedAt: payload.exportedAt,
     sizeBytes: await fileSize(uri),
-    photoCount: photos.length,
+    photoCount: photos.length + recipePhotos.length,
   };
 }
 
@@ -712,7 +854,10 @@ export async function restoreMigrationBackupPackage(
   const manifest = parseMigrationBackupManifest(strFromU8(manifestEntry));
   const payload = cloneBackupPayload(manifest.backup);
   clearPhotoLocalPaths(payload);
+  clearRecipePhotoPaths(payload);
   const photoDirectory = await ensureCookingPhotoDirectory();
+  const recipePhotoDirectory = await ensureRecipePhotoDirectory();
+  const recipePhotos = manifest.recipePhotos ?? [];
   const copiedPhotoUris: string[] = [];
   let restoredPhotoCount = 0;
 
@@ -734,6 +879,23 @@ export async function restoreMigrationBackupPackage(
       restoredPhotoCount += 1;
     }
 
+    for (const photo of recipePhotos) {
+      const photoEntry = entries[photo.archivePath];
+      if (!photoEntry) continue; // clearRecipePhotoPaths 済みなので null のまま
+
+      const destinationFileName = fileNameFromUri(
+        photo.archivePath.split('/').pop() ?? photo.fileName,
+        `${photo.ownerId}.jpg`,
+      );
+      const destination = `${recipePhotoDirectory}${destinationFileName}`;
+      await FileSystem.writeAsStringAsync(destination, uint8ArrayToBase64(photoEntry), {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      copiedPhotoUris.push(destination);
+      updateRecipePhotoPath(payload, photo, destination);
+      restoredPhotoCount += 1;
+    }
+
     replaceDatabase(payload);
     await rebuildFts(getDb());
   } catch (error) {
@@ -750,7 +912,7 @@ export async function restoreMigrationBackupPackage(
     exportedAt: manifest.exportedAt,
     sizeBytes: await fileSize(uri),
     restoredPhotoCount,
-    missingPhotoCount: manifest.photos.length - restoredPhotoCount,
+    missingPhotoCount: manifest.photos.length + recipePhotos.length - restoredPhotoCount,
   };
 }
 
@@ -760,4 +922,119 @@ export async function restoreLatestLocalBackup(): Promise<BackupOperationResult>
     throw new Error('復元できるバックアップがありません');
   }
   return restoreLocalBackup(latest.uri);
+}
+
+// ─── 自動スナップショット（起動時） ─────────────────────────────────────────────
+
+/** 自動スナップショットを作るべきか（最新が interval 日より古い or 1件も無い）。
+ *  modifiedAt は expo-file-system の modificationTime（エポック秒）。 */
+export function shouldCreateAutoSnapshot(
+  backups: BackupFileSummary[],
+  nowMs: number,
+  intervalDays: number = AUTO_SNAPSHOT_INTERVAL_DAYS,
+): boolean {
+  const latest = pickLatestBackup(backups);
+  if (!latest) return true;
+  return nowMs / 1000 - latest.modifiedAt >= intervalDays * 86400;
+}
+
+/** 保持世代数を超えた古いバックアップ（末尾 = 古い順）を返す。 */
+export function selectBackupsToPrune(
+  backups: BackupFileSummary[],
+  keep: number = AUTO_SNAPSHOT_KEEP,
+): BackupFileSummary[] {
+  return [...backups]
+    .sort((a, b) => b.modifiedAt - a.modifiedAt || b.fileName.localeCompare(a.fileName))
+    .slice(keep);
+}
+
+/**
+ * 起動時に呼ぶ: 最新スナップショットが古ければサイレントに作成し、世代を間引く。
+ * SAF の保存先（Google ドライブ等）が設定済みなら外部へも書き出す。
+ * 何か失敗しても起動をブロックしない（呼び出し側で catch）。
+ */
+export async function maybeCreateAutoSnapshot(
+  now = new Date(),
+): Promise<BackupOperationResult | null> {
+  if (!isNativePlatform) return null;
+  const backups = await listLocalBackups();
+  if (!shouldCreateAutoSnapshot(backups, now.getTime())) return null;
+
+  const result = await createLocalBackup();
+
+  for (const stale of selectBackupsToPrune(await listLocalBackups())) {
+    await FileSystem.deleteAsync(stale.uri, { idempotent: true });
+  }
+
+  // 外部退避先が設定済みなら自動でコピー（失敗しても致命ではない — 次回の督促表示で気づける）
+  try {
+    await exportFileToSafDirectory(result.uri, result.fileName, 'application/json');
+  } catch {
+    // 権限失効など — バックアップ画面で再選択してもらう
+  }
+
+  return result;
+}
+
+// ─── 外部退避（共有 / SAF）────────────────────────────────────────────────────
+
+/** 最後に外部退避（共有 or SAF 書き出し）した日時を記録する。 */
+export async function markBackupExported(now = new Date()): Promise<void> {
+  await setAppMeta(LAST_EXTERNAL_EXPORT_KEY, now.toISOString());
+}
+
+/** 最後の外部退避日時（ISO）。未実施なら null。 */
+export async function getLastBackupExportAt(): Promise<string | null> {
+  const value = await getAppMeta(LAST_EXTERNAL_EXPORT_KEY);
+  return value && value.length > 0 ? value : null;
+}
+
+/** SAF の保存先ディレクトリ URI（Android のみ・未設定なら null）。 */
+export async function getSafBackupDirectory(): Promise<string | null> {
+  if (Platform.OS !== 'android') return null;
+  const value = await getAppMeta(SAF_DIRECTORY_KEY);
+  return value && value.length > 0 ? value : null;
+}
+
+/**
+ * システムのフォルダピッカーで保存先を選ぶ（Google ドライブもプロバイダとして選べる）。
+ * 権限は永続化され、以後の自動書き出しに使う。キャンセル時は null。
+ */
+export async function chooseSafBackupDirectory(): Promise<string | null> {
+  if (!isNativePlatform || Platform.OS !== 'android') return null;
+  const result = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+  if (!result.granted) return null;
+  await setAppMeta(SAF_DIRECTORY_KEY, result.directoryUri);
+  return result.directoryUri;
+}
+
+export async function clearSafBackupDirectory(): Promise<void> {
+  await setAppMeta(SAF_DIRECTORY_KEY, '');
+}
+
+/**
+ * 設定済みの SAF 保存先へファイルをコピーする。書き出せたら外部退避日時も更新。
+ * 保存先未設定なら false。権限失効などの失敗は例外を投げる（呼び出し側で案内）。
+ */
+export async function exportFileToSafDirectory(
+  sourceUri: string,
+  fileName: string,
+  mimeType: string,
+): Promise<boolean> {
+  const directoryUri = await getSafBackupDirectory();
+  if (!directoryUri) return false;
+
+  const destination = await FileSystem.StorageAccessFramework.createFileAsync(
+    directoryUri,
+    fileName,
+    mimeType,
+  );
+  const content = await FileSystem.readAsStringAsync(sourceUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  await FileSystem.writeAsStringAsync(destination, content, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  await markBackupExported();
+  return true;
 }
