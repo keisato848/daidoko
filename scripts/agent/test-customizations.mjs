@@ -15,6 +15,7 @@ await validateAgentFiles();
 await validateGitHooks();
 await validateOptionalJson('.vscode/extensions.json');
 await validateOptionalJson('.vscode/tasks.json');
+await validateClaudeAssets();
 
 if (failures.length === 0) {
   console.log(`Customization smoke test: OK (${passes.length} checks)`);
@@ -156,6 +157,90 @@ async function validateGitHooks() {
   await checkExists('.githooks/pre-push', 'pre-push hook exists');
 }
 
+/** .claude 側の資産（settings.json のフック配線・skills/agents の frontmatter・workflows の構文）を検証する */
+async function validateClaudeAssets() {
+  // settings.json: パース＋参照スクリプトの実在
+  const settingsPath = join(rootDir, '.claude', 'settings.json');
+  try {
+    const parsed = JSON.parse(await readFile(settingsPath, 'utf8'));
+    passes.push('.claude/settings.json parsed');
+    for (const [eventName, matchers] of Object.entries(parsed.hooks ?? {})) {
+      for (const matcher of matchers ?? []) {
+        for (const hookDef of matcher.hooks ?? []) {
+          await validateCommandReference(hookDef.command, settingsPath, eventName);
+        }
+      }
+    }
+  } catch (error) {
+    failures.push(
+      `.claude/settings.json failed to parse: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  // skills: SKILL.md の frontmatter（name=フォルダ名・description 必須）
+  const skillsDir = join(rootDir, '.claude', 'skills');
+  for (const entry of await safeReadDir(skillsDir)) {
+    if (!entry.isDirectory()) continue;
+    const skillPath = join(skillsDir, entry.name, 'SKILL.md');
+    try {
+      const frontmatter = extractFrontmatter(await readFile(skillPath, 'utf8'));
+      if (!frontmatter.name || frontmatter.name !== entry.name) {
+        failures.push(
+          `${relativePath(skillPath)} frontmatter name must match folder ${entry.name}`,
+        );
+        continue;
+      }
+      if (!frontmatter.description) {
+        failures.push(`${relativePath(skillPath)} missing frontmatter description`);
+        continue;
+      }
+      passes.push(`${relativePath(skillPath)} parsed`);
+    } catch (error) {
+      failures.push(
+        `${relativePath(skillPath)} failed to parse: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  // agents: frontmatter（name / description 必須）
+  const agentsDir = join(rootDir, '.claude', 'agents');
+  for (const entry of await safeReadDir(agentsDir)) {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+    const agentPath = join(agentsDir, entry.name);
+    try {
+      const frontmatter = extractFrontmatter(await readFile(agentPath, 'utf8'));
+      if (!frontmatter.name || !frontmatter.description) {
+        failures.push(`${relativePath(agentPath)} missing frontmatter name/description`);
+        continue;
+      }
+      passes.push(`${relativePath(agentPath)} parsed`);
+    } catch (error) {
+      failures.push(
+        `${relativePath(agentPath)} failed to parse: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  // workflows: meta エクスポートを含む JS として構文チェック（node --check）
+  const workflowsDir = join(rootDir, '.claude', 'workflows');
+  for (const entry of await safeReadDir(workflowsDir)) {
+    if (!entry.isFile() || !entry.name.endsWith('.js')) continue;
+    const wfPath = join(workflowsDir, entry.name);
+    try {
+      const raw = await readFile(wfPath, 'utf8');
+      if (!/export\s+const\s+meta\s*=/.test(raw)) {
+        failures.push(`${relativePath(wfPath)} must export const meta`);
+        continue;
+      }
+      passes.push(`${relativePath(wfPath)} has meta export`);
+    } catch (error) {
+      failures.push(
+        `${relativePath(wfPath)} failed to read: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+}
+
 async function validateOptionalJson(relativeTargetPath) {
   const fullPath = join(rootDir, relativeTargetPath);
   try {
@@ -186,7 +271,10 @@ async function validateCommandReference(commandText, sourceFilePath, eventName) 
   }
 
   const scriptPath = match[1];
-  await checkExists(scriptPath, `${relativePath(sourceFilePath)} event ${eventName} references ${scriptPath}`);
+  await checkExists(
+    scriptPath,
+    `${relativePath(sourceFilePath)} event ${eventName} references ${scriptPath}`,
+  );
 }
 
 async function checkExists(relativeTargetPath, successMessage) {
@@ -236,5 +324,7 @@ async function safeReadDir(dirPath) {
 }
 
 function relativePath(filePath) {
-  return filePath.replace(`${rootDir}${basename(rootDir).startsWith('\\') ? '' : '\\'}`, '').replaceAll('\\', '/');
+  return filePath
+    .replace(`${rootDir}${basename(rootDir).startsWith('\\') ? '' : '\\'}`, '')
+    .replaceAll('\\', '/');
 }

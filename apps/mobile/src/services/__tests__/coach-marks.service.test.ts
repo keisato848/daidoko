@@ -40,4 +40,15 @@ describe('coach-marks.service', () => {
     mockGetAppMeta.mockResolvedValue('0');
     expect(await shouldShowCoachMarks('recipes')).toBe(true);
   });
+
+  it('never shows marks when the store-screenshot build flag is set', async () => {
+    process.env.EXPO_PUBLIC_DISABLE_COACH_MARKS = '1';
+    try {
+      mockGetAppMeta.mockResolvedValue(null);
+      expect(await shouldShowCoachMarks('home')).toBe(false);
+      expect(mockGetAppMeta).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.EXPO_PUBLIC_DISABLE_COACH_MARKS;
+    }
+  });
 });

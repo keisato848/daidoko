@@ -20,6 +20,7 @@ import {
   getCurrentUser,
   getCurrentUserProfile,
 } from '../../src/services/user.service';
+import { getAdRewardProvider } from '../../src/services/ad-reward.service';
 import { getFreemiumStatus, type FreemiumStatus } from '../../src/services/usage.service';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 
@@ -45,6 +46,7 @@ export default function SettingsScreen() {
   const [user, setUser] = useState(getCurrentUser());
   const [family, setFamily] = useState(getCurrentFamily());
   const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
+  const [adPrivacyRequired, setAdPrivacyRequired] = useState(false);
   const userDisplayName = formatProfileDisplayName(user.displayName);
 
   useFocusEffect(
@@ -58,6 +60,11 @@ export default function SettingsScreen() {
       void getFreemiumStatus()
         .then(setFreemium)
         .catch(() => setFreemium(null));
+      // GDPR 対象地域の広告ユーザーだけに UMP 同意の再変更導線を出す（それ以外は false）
+      void getAdRewardProvider()
+        .isPrivacyOptionsRequired()
+        .then(setAdPrivacyRequired)
+        .catch(() => setAdPrivacyRequired(false));
     }, []),
   );
 
@@ -128,6 +135,26 @@ export default function SettingsScreen() {
           enabled: true,
           onPress: () => router.push('/(tabs)/ai-key'),
         },
+        ...(adPrivacyRequired
+          ? [
+              {
+                id: 'ad-privacy',
+                label: '広告のプライバシー設定',
+                subtitle: '広告表示に関する同意を変更',
+                enabled: true,
+                onPress: () => {
+                  void getAdRewardProvider()
+                    .showPrivacyOptionsForm()
+                    .catch(() => {
+                      Alert.alert(
+                        'お知らせ',
+                        '設定画面を表示できませんでした。時間をおいてお試しください。',
+                      );
+                    });
+                },
+              },
+            ]
+          : []),
       ],
     },
     {

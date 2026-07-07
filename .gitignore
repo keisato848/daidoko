@@ -64,12 +64,19 @@ apps/mobile/android/app/src/main/assets/models/*.bin
 apps/mobile/android/app/src/main/assets/models/*.task
 !apps/mobile/android/app/src/main/assets/models/README.md
 
+# Python
+__pycache__/
+
 # Temporary
 tmp/
 temp/
 Temp/
 
 # Claude Code
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/agents/
+!.claude/workflows/
+!.claude/settings.json
 chat.json
 nul

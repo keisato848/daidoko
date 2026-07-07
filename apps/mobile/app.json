@@ -3,7 +3,7 @@
     "name": "だいどこ",
     "slug": "daidoko",
     "version": "1.3.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "scheme": "daidoko",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0A0805",
@@ -62,8 +62,10 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+          "androidAppId": "ca-app-pub-2633806931583277~2829239666",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "delayAppMeasurementInit": true,
+          "userTrackingUsageDescription": "広告の表示回数の制御と不正防止のために利用します。"
         }
       ]
     ],

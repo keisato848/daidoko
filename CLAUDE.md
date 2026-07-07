@@ -27,6 +27,8 @@
 | `docs/マルチエージェント設計.md` | A1〜A8 エージェントの責務・インターフェース              | 各エージェント実装前      |
 | `docs/エージェントフック設計.md` | AgentBridge・Hook システム・ログファイル設計             | Bridge 実装前             |
 | `docs/品質基準.md`               | テストカバレッジ閾値・CI ゲート・パフォーマンス目標値    | PR 作成前に必ず確認       |
+| `docs/リリース手順.md`           | Railway デプロイ・EAS ビルド・Play CLI 提出・掲載更新    | リリース作業前            |
+| `docs/開発ハーネス.md`           | Skill・エージェント・フック・実機検証規約の全体マップ    | ハーネス変更・実機検証前  |
 | `docs/brand/ロゴ仕様.md`         | カラー・フォント・ロゴ使用ルール                         | UI 実装時                 |
 | `mockup/app-mockup.jsx`          | インタラクティブモックアップ（React JSX）                | 画面実装の参考            |
 
@@ -124,7 +126,8 @@ daidoko/
 - ブランチ: `develop` ベース。機能ブランチは `feat/xxx`、修正は `fix/xxx`。
 - コミットメッセージ: Conventional Commits（`feat:`, `fix:`, `test:`, `docs:`, `chore:`）。
 - `main` への直接 push 禁止。PR 経由のみ。
-- **マージ前に必ずエミュレーター/実機で動作確認する**（PreToolUse フック `hook-pretool-guard.mjs` が `gh pr merge` / `git merge` を検知して確認を促す）。
+- **マージ前に必ずエミュレーター/実機で動作確認する**（`.claude/settings.json` で配線された PreToolUse フック `scripts/agent/hook-pretool-guard.mjs` が `gh pr merge` / `git merge` を検知して確認を促す。全ルールは `docs/開発ハーネス.md` §2）。
+- pre-commit はシークレットスキャン→Prettier 自動整形→スライス検証の順で走る（`docs/開発ハーネス.md` §3）。
 
 ---
 
