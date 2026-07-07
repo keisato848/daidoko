@@ -75,6 +75,7 @@ export const recipes = sqliteTable(
     currentRevId: text('current_rev_id'),
     status: text('status').notNull().default('active'), // 'active' | 'archived'
     coverPhotoPath: text('cover_photo_path'), // 表紙写真（端末内パス, v7）
+    pinnedAt: text('pinned_at'), // 作りたいリスト（ピン留め日時, v8）— null = 未ピン
     createdBy: text('created_by')
       .notNull()
       .references(() => users.id),

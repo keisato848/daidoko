@@ -3,7 +3,7 @@
  * Hero image, meta info, tabs (ingredients/steps/memo/history), cooking start CTA
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
+import { Bookmark, ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -23,6 +23,7 @@ import {
   deleteRecipe,
   getMemosForRecipe,
   getRecipeDetail,
+  setRecipePinned,
 } from '../../../src/services/recipe.service';
 import type { MemoItem, RecipeDetail, TimelineEntry } from '../../../src/services/types';
 import { formatProfileDisplayName } from '../../../src/utils/profile';
@@ -125,6 +126,13 @@ export default function RecipeDetailScreen() {
     if (tab === 'memo') void loadMemos();
   }, [tab, loadLogs, loadMemos]);
 
+  // 作りたいリスト（ホームに表示）へのピン留めトグル
+  const handleTogglePin = async () => {
+    if (!recipe) return;
+    await setRecipePinned(recipe.id, recipe.pinnedAt == null);
+    await loadRecipe();
+  };
+
   const handleDelete = () => {
     if (!id) return;
     Alert.alert('レシピを削除', 'このレシピを削除しますか？', [
@@ -194,6 +202,18 @@ export default function RecipeDetailScreen() {
         <View style={styles.helpButton}>
           <HelpButton onPress={coach.show} />
         </View>
+        <Pressable
+          style={styles.pinButton}
+          onPress={() => void handleTogglePin()}
+          hitSlop={12}
+          accessibilityLabel={recipe.pinnedAt != null ? '作りたいから外す' : '作りたいに追加'}
+        >
+          <Bookmark
+            size={20}
+            color={Colors.gold}
+            fill={recipe.pinnedAt != null ? Colors.gold : 'transparent'}
+          />
+        </Pressable>
       </View>
 
       {showMenu && (
@@ -443,6 +463,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 51,
     right: 52,
+  },
+  pinButton: {
+    position: 'absolute',
+    top: 50,
+    right: 88,
   },
   menuDropdown: {
     position: 'absolute',

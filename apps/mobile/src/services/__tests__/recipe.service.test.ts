@@ -16,7 +16,9 @@ import {
   getRecipeDetail,
   getRecipeList,
   getRecipeRevisions,
+  getWantToCookRecipes,
   searchRecipes,
+  setRecipePinned,
   updateRecipe,
 } from '../recipe.service';
 import { createOcrSource, createPhotoSource } from '../source.service';
@@ -276,6 +278,41 @@ describe('recipe.service (mock/web)', () => {
 
     it('createRecipeMemo ignores blank input', async () => {
       expect(await createRecipeMemo('recipe-1', '   ')).toBeNull();
+    });
+  });
+
+  describe('want-to-cook list (pin)', () => {
+    afterEach(async () => {
+      // 他のテストに影響しないよう全ピンを解除
+      const pinned = await getWantToCookRecipes();
+      await Promise.all(pinned.map((recipe) => setRecipePinned(recipe.id, false)));
+      jest.useRealTimers();
+    });
+
+    it('pins and unpins a recipe', async () => {
+      await setRecipePinned('recipe-1', true);
+      const detail = await getRecipeDetail('recipe-1');
+      assertDefined(detail);
+      expect(detail.pinnedAt).not.toBeNull();
+      expect((await getWantToCookRecipes()).some((r) => r.id === 'recipe-1')).toBe(true);
+
+      await setRecipePinned('recipe-1', false);
+      expect((await getWantToCookRecipes()).some((r) => r.id === 'recipe-1')).toBe(false);
+    });
+
+    it('orders by most recently pinned first', async () => {
+      jest.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') });
+      await setRecipePinned('recipe-1', true);
+      jest.setSystemTime(new Date('2026-01-01T00:01:00Z'));
+      await setRecipePinned('recipe-2', true);
+
+      const want = await getWantToCookRecipes();
+      expect(want.map((r) => r.id)).toEqual(['recipe-2', 'recipe-1']);
+    });
+
+    it('unpinned recipes are excluded', async () => {
+      const want = await getWantToCookRecipes();
+      expect(want).toHaveLength(0);
     });
   });
 

@@ -22,7 +22,7 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -312,6 +312,7 @@ const CREATE_TABLES_SQL = `
 const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   { table: 'recipes', columnDdl: 'cover_photo_path TEXT' }, // v7
   { table: 'steps', columnDdl: 'photo_path TEXT' }, // v7
+  { table: 'recipes', columnDdl: 'pinned_at TEXT' }, // v8: 作りたいリスト
 ];
 
 /** Run migrations (create tables + additive column changes) */

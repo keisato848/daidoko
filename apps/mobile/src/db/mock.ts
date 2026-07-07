@@ -36,6 +36,7 @@ interface MutableRecipe {
   currentRevId: string | null;
   status: string;
   coverPhotoPath?: string | null;
+  pinnedAt?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -200,6 +201,7 @@ export function getMockRecipeList(): RecipeListItem[] {
         createdAt: recipe.createdAt,
         cookCount: recipeLogs.length,
         heroPhotoUri: recipe.coverPhotoPath ?? null,
+        pinnedAt: recipe.pinnedAt ?? null,
       };
     });
 }
@@ -246,7 +248,16 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     steps,
     heroPhotoUri: recipe.coverPhotoPath ?? null,
     coverPhotoPath: recipe.coverPhotoPath ?? null,
+    pinnedAt: recipe.pinnedAt ?? null,
   };
+}
+
+/** 作りたいリスト: ピン留めのオン/オフ（web/mock 用） */
+export function setMockRecipePinned(recipeId: string, pinned: boolean): void {
+  const recipe = mockRecipes.find((r) => r.id === recipeId);
+  if (recipe) {
+    recipe.pinnedAt = pinned ? new Date().toISOString() : null;
+  }
 }
 
 export function getMockRecipeRevisions(recipeId: string): RecipeRevisionSummary[] {
