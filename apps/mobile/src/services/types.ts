@@ -6,6 +6,8 @@
 export interface RecipeListItem {
   id: string;
   title: string;
+  /** かな読み（検索用） — null if not registered */
+  titleReading: string | null;
   cookTimeMin: number | null;
   rating: number | null;
   tags: string[];

@@ -27,8 +27,10 @@ import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
+import { getAliasMap } from '../../../src/services/name-alias.service';
 import { deleteRecipe, getRecipeList } from '../../../src/services/recipe.service';
 import type { RecipeListItem } from '../../../src/services/types';
+import { recipeMatchesQuery } from '../../../src/utils/recipeSearch';
 import {
   DEFAULT_RECIPE_SORT,
   RECIPE_SORT_OPTIONS,
@@ -61,9 +63,13 @@ export default function RecipeListScreen() {
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // AI 名寄せキャッシュ（卵⇄たまご級の表記ゆれを検索でも吸収。空でも劣化のみ）
+  const [aliases, setAliases] = useState<Record<string, string>>({});
 
   const loadRecipes = useCallback(async () => {
-    setRecipes(await getRecipeList());
+    const [list, aliasMap] = await Promise.all([getRecipeList(), getAliasMap()]);
+    setRecipes(list);
+    setAliases(aliasMap);
     setLoading(false);
   }, []);
 
@@ -118,17 +124,11 @@ export default function RecipeListScreen() {
     }
 
     if (query.trim()) {
-      const q = query.trim().toLowerCase();
-      result = result.filter(
-        (r) =>
-          r.title.toLowerCase().includes(q) ||
-          r.tags.some((t) => t.includes(q)) ||
-          r.ingredientNames.some((name) => name.includes(q)),
-      );
+      result = result.filter((r) => recipeMatchesQuery(r, query, aliases));
     }
 
     return sortRecipes(result, sortKey);
-  }, [recipes, query, activeTagFilter, sortKey]);
+  }, [recipes, query, activeTagFilter, sortKey, aliases]);
 
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;

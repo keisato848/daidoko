@@ -192,6 +192,7 @@ export function getMockRecipeList(): RecipeListItem[] {
       return {
         id: recipe.id,
         title: recipe.title,
+        titleReading: recipe.titleReading ?? null,
         cookTimeMin: rev?.cookTimeMin ?? null,
         rating: avgRating,
         tags,

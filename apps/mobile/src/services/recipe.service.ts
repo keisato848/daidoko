@@ -15,6 +15,8 @@ import {
   deleteMockRecipe,
 } from '../db/mock';
 import { generateId } from '../utils/id';
+import { recipeMatchesQuery } from '../utils/recipeSearch';
+import { getAliasMap } from './name-alias.service';
 import type {
   MemoItem,
   RecipeDetail,
@@ -45,6 +47,7 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
     .select({
       id: schema.recipes.id,
       title: schema.recipes.title,
+      titleReading: schema.recipes.titleReading,
       currentRevId: schema.recipes.currentRevId,
       createdAt: schema.recipes.createdAt,
       coverPhotoPath: schema.recipes.coverPhotoPath,
@@ -98,6 +101,7 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
     result.push({
       id: recipe.id,
       title: recipe.title,
+      titleReading: recipe.titleReading,
       cookTimeMin,
       rating: avgRating,
       tags: tagRows.map((t) => t.name ?? '').filter(Boolean),
@@ -225,13 +229,8 @@ export async function searchRecipes(query: string): Promise<RecipeListItem[]> {
   const all = await getRecipeList();
   if (!query.trim()) return all;
 
-  const q = query.trim().toLowerCase();
-  return all.filter(
-    (r) =>
-      r.title.toLowerCase().includes(q) ||
-      r.tags.some((t) => t.includes(q)) ||
-      r.ingredientNames.some((name) => name.includes(q)),
-  );
+  const aliases = await getAliasMap();
+  return all.filter((r) => recipeMatchesQuery(r, query, aliases));
 }
 
 export async function getRecipeRevisions(recipeId: string): Promise<RecipeRevisionSummary[]> {
