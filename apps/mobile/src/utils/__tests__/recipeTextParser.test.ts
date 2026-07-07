@@ -93,6 +93,16 @@ describe('parseRecipeText', () => {
     expect(result.formData.steps).toEqual([{ body: '', timerSec: undefined }]);
   });
 
+  it('手順本文の時間表現からタイマーを自動セットする (#77)', () => {
+    const result = parseRecipeText(
+      ['タイマーテスト', '', '材料', '豚肉 200g', '', '作り方', '1. 10分煮る', '2. 皿に盛る'].join(
+        '\n',
+      ),
+    );
+    expect(result.formData.steps[0].timerSec).toBe(600);
+    expect(result.formData.steps[1].timerSec).toBeUndefined();
+  });
+
   it('provides an AI prompt that asks for parser-friendly recipe text', () => {
     expect(RECIPE_TEXT_AI_PROMPT).toContain('料理名');
     expect(RECIPE_TEXT_AI_PROMPT).toContain('材料');

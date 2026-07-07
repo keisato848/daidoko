@@ -1,10 +1,11 @@
 /**
  * Editable step row for recipe form
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
+import { extractPrimaryStepTimer, formatStepTimerLabel } from '../utils/stepTimer';
 import { PhotoPickerField } from './PhotoPickerField';
 
 interface StepRowProps {
@@ -31,6 +32,11 @@ export function StepRow({
   const timerMin = timerSec != null ? Math.floor(timerSec / 60) : undefined;
   // Grow the step field to fit its content (minHeight in styles.bodyInput floors it).
   const [bodyHeight, setBodyHeight] = useState(0);
+  // 本文の時間表現（「10分煮る」）からのタイマー提案。未設定のときだけチップを出す
+  const suggestedTimer = useMemo(
+    () => (timerSec == null ? extractPrimaryStepTimer(body) : null),
+    [body, timerSec],
+  );
 
   const handleTimerChange = (text: string) => {
     const num = parseInt(text, 10);
@@ -72,6 +78,18 @@ export function StepRow({
           keyboardType="numeric"
         />
         <Text style={styles.timerSuffix}>分</Text>
+        {suggestedTimer != null && (
+          <Pressable
+            style={styles.suggestChip}
+            onPress={() => onChangeTimer(suggestedTimer.seconds)}
+            hitSlop={6}
+            accessibilityLabel={`${formatStepTimerLabel(suggestedTimer.seconds)}のタイマーを設定`}
+          >
+            <Text style={styles.suggestChipText}>
+              {formatStepTimerLabel(suggestedTimer.seconds)}を設定
+            </Text>
+          </Pressable>
+        )}
       </View>
       <PhotoPickerField variant="thumb" value={photoPath} onChange={onChangePhoto} />
     </View>
@@ -164,5 +182,19 @@ const styles = StyleSheet.create({
     fontSize: 13, // sm: 単位ラベル
     fontWeight: '400',
     color: Colors.paperDim,
+  },
+  suggestChip: {
+    marginLeft: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.goldDim,
+    backgroundColor: '#1A1108',
+  },
+  suggestChipText: {
+    fontSize: 12, // xs: 提案チップ
+    fontWeight: '500',
+    color: Colors.gold,
   },
 });
