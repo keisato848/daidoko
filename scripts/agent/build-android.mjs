@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +23,12 @@ if (!options.prebuild) {
 }
 const wrapperPath = join(androidDir, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
 const gradleCache = process.env.GRADLE_CACHE || join(tmpdir(), 'daidoko-gradle-project-cache');
+
+// EXPO_PUBLIC_* は JS バンドルに焼き込まれるが、Gradle のバンドルタスクは JS ソースが
+// 不変だとキャッシュを再利用し、フラグ変更がサイレントに反映されない（Pixel 広告テストで
+// 被弾: ADMOB_ENABLED=true が前回のフラグなしバンドルに負けた）。フィンガープリントを
+// 記録し、変化していたらバンドル生成物を破棄して再生成させる。
+invalidateJsBundleIfPublicEnvChanged();
 
 if (options.prebuild) {
   const prebuild = runCommand(
@@ -136,6 +142,44 @@ function detectPrebuildStaleness() {
     }
   }
   return stale;
+}
+
+/** EXPO_PUBLIC_* の組が前回ビルドと異なれば JS バンドルのキャッシュ生成物を破棄する */
+function invalidateJsBundleIfPublicEnvChanged() {
+  const fingerprint = JSON.stringify(
+    Object.entries(process.env)
+      .filter(([key]) => key.startsWith('EXPO_PUBLIC_'))
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+  const buildDir = join(androidDir, 'app', 'build');
+  const fingerprintPath = join(buildDir, 'expo-public-env.fingerprint');
+
+  let previous = null;
+  try {
+    previous = readFileSync(fingerprintPath, 'utf8');
+  } catch {
+    // 初回ビルド or クリーン後
+  }
+  if (previous === fingerprint) return;
+
+  if (previous != null) {
+    console.warn(
+      '[INFO] EXPO_PUBLIC_* が前回ビルドから変化しました — JS バンドルキャッシュを破棄して再生成します。',
+    );
+  }
+  for (const dir of [
+    join(buildDir, 'generated', 'assets', 'createBundleReleaseJsAndAssets'),
+    join(buildDir, 'generated', 'res', 'createBundleReleaseJsAndAssets'),
+    join(buildDir, 'intermediates', 'assets'),
+  ]) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  try {
+    mkdirSync(buildDir, { recursive: true });
+    writeFileSync(fingerprintPath, fingerprint);
+  } catch {
+    // build ディレクトリを作れなくても致命ではない（次回また破棄されるだけ）
+  }
 }
 
 function parseArgs(argv) {
