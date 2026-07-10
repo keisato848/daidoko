@@ -18,6 +18,7 @@
     "production": {
       "autoIncrement": false,
       "env": {
+        "EXPO_PUBLIC_ADMOB_ENABLED": "true",
         "EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID": "ca-app-pub-2633806931583277/2276751496"
       }
     }
