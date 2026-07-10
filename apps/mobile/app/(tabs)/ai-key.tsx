@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 
+import { InfoTooltip } from '../../src/components/InfoTooltip';
 import { Colors } from '../../src/constants/theme';
 import {
   clearUserApiKey,
@@ -143,6 +144,29 @@ export default function AiKeyScreen() {
         >
           <Text style={styles.link}>キーの取得方法（Google AI Studio）</Text>
         </Pressable>
+
+        <View style={styles.detailsSection}>
+          <InfoTooltip
+            label="保存場所"
+            detail="端末のセキュアな保管領域（Android は Keystore、iPhone は Keychain）に暗号化して保存します。だいどこのサーバーには一切送信されません。"
+          />
+          <InfoTooltip
+            label="送信先"
+            detail="キーを保存すると、写真からのレシピづくりは端末から Google の Gemini に直接送信されます（だいどこのサーバーは経由しません）。料金はキーを発行した Google アカウントに直接課金されます。"
+          />
+          <InfoTooltip
+            label="削除方法"
+            detail="上の「保存したキーを削除」でいつでも削除できます。アプリをアンインストールした場合も、端末の保管領域ごと自動的に削除されます。"
+          />
+          <InfoTooltip
+            label="機種変更・バックアップについて"
+            detail="このキーはバックアップ・機種変更用の移行ファイルには含まれません（意図的な設計です）。新しい端末では、この画面でキーを貼り付け直してください。"
+          />
+          <InfoTooltip
+            label="対応しているキー"
+            detail="現在は Google の Gemini API キーのみに対応しています。他社（OpenAI・Claude など）のキーは使用できません。"
+          />
+        </View>
       </ScrollView>
     </View>
   );
@@ -201,4 +225,5 @@ const styles = StyleSheet.create({
   clearButton: { paddingVertical: 10, alignItems: 'center' },
   clearText: { fontSize: 13, color: '#F2A07B' },
   link: { fontSize: 13, color: Colors.gold, textDecorationLine: 'underline', marginTop: 8 },
+  detailsSection: { marginTop: 10 },
 });
