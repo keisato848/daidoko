@@ -24,6 +24,8 @@
  * the deployment scales horizontally.
  */
 
+import { notifyGlobalUsage } from './usage-alert.js';
+
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const GLOBAL_KEY = '__global__';
 
@@ -74,6 +76,7 @@ export function checkRateLimit(clientId: string, now = Date.now()): RateLimitRes
 
   globalBucket.count += 1;
   clientBucket.count += 1;
+  notifyGlobalUsage(globalBucket.count, globalLimit, globalBucket.resetAt);
   return { allowed: true };
 }
 
