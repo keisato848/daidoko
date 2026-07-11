@@ -2,7 +2,7 @@
   "expo": {
     "name": "だいどこ",
     "slug": "daidoko",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "orientation": "default",
     "scheme": "daidoko",
     "userInterfaceStyle": "dark",
@@ -22,12 +22,11 @@
     },
     "android": {
       "package": "com.daidoko.app",
-      "versionCode": 10010,
+      "versionCode": 10011,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"
-      },
-      "blockedPermissions": ["com.google.android.gms.permission.AD_ID"]
+      }
     },
     "web": {
       "bundler": "metro",
