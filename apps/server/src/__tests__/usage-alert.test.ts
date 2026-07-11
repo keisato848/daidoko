@@ -115,6 +115,72 @@ describe('notifyGlobalUsage', () => {
   });
 });
 
+describe('GAS Webhook トランスポート', () => {
+  function stubWebhookEnv(): void {
+    vi.unstubAllEnvs();
+    vi.stubEnv('USAGE_ALERT_WEBHOOK_URL', 'https://script.google.com/macros/s/XYZ/exec');
+    vi.stubEnv('USAGE_ALERT_WEBHOOK_TOKEN', 'secret-token');
+  }
+
+  it('Webhook URL 設定時は GAS へ token 付き JSON を POST する', async () => {
+    stubWebhookEnv();
+    const calls: { url: string; body: { token: string; subject: string; text: string } }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+        calls.push({
+          url: String(url),
+          body: JSON.parse(String(init?.body)) as (typeof calls)[number]['body'],
+        });
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    notifyGlobalUsage(10, 100, RESET_AT);
+    await flushAsync();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('https://script.google.com/macros/s/XYZ/exec');
+    expect(calls[0]?.body.token).toBe('secret-token');
+    expect(calls[0]?.body.subject).toContain('10%');
+    expect(calls[0]?.body.text).toContain('10 回');
+  });
+
+  it('Webhook と Resend の両方が設定されていれば Webhook を優先する', async () => {
+    stubWebhookEnv();
+    vi.stubEnv('RESEND_API_KEY', 'test-key');
+    vi.stubEnv('USAGE_ALERT_EMAIL_TO', 'op@example.com');
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL | Request) => {
+        urls.push(String(url));
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }),
+    );
+
+    notifyGlobalUsage(10, 100, RESET_AT);
+    await flushAsync();
+    expect(urls).toEqual(['https://script.google.com/macros/s/XYZ/exec']);
+  });
+
+  it('GAS が ok:false を返してもスローしない（stderr ログのみ）', async () => {
+    stubWebhookEnv();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), { status: 200 }),
+      ),
+    );
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+
+    expect(() => notifyGlobalUsage(10, 100, RESET_AT)).not.toThrow();
+    await flushAsync();
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('usage-alert'));
+    stderrSpy.mockRestore();
+  });
+});
+
 describe('checkRateLimit との配線', () => {
   it('許可されたリクエストの積算で 10% 通知が飛ぶ', async () => {
     vi.stubEnv('INFER_DAILY_LIMIT', '0');
