@@ -1,11 +1,13 @@
 /**
  * レシート登録（P5）— 在庫画面の「レシート」から開く。
- * レシート写真 → 端末内OCR(無料) → 品目パース → 確認(編集/取捨) → 在庫へ一括追加。
- * docs/買い物リスト・在庫設計.md §5.6
+ * レシート写真 → 読み取り → 品目確認(編集/取捨) → 在庫へ一括追加。
+ * 読み取りは端末内OCR(利用可能な端末のみ・無料)を優先し、無い端末では
+ * クラウドAI（Vision）で解析する（BYOKキーがあれば端末から直接 Gemini）。
+ * docs/買い物リスト・在庫設計.md §5.6 / Issue #68
  */
 import { useRouter } from 'expo-router';
 import { Camera, Check, ImageIcon, X } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Loading } from '../../src/components/Loading';
@@ -20,7 +22,15 @@ import {
   PhotoCaptureCancelledError,
   type PhotoCaptureSource,
 } from '../../src/services/photo-capture.service';
+import { inferReceiptFromVision } from '../../src/services/receipt-vision.provider';
 import { parseReceipt } from '../../src/utils/receiptParser';
+
+function mimeTypeFor(uri: string): 'image/jpeg' | 'image/png' | 'image/webp' {
+  const lower = uri.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
 
 type Phase = 'select' | 'processing' | 'review' | 'error';
 
@@ -36,45 +46,65 @@ export default function ReceiptScreen() {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handlePick = useCallback(async (source: PhotoCaptureSource) => {
-    setErrorMsg(null);
-    setPhase('processing');
-    try {
-      const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-      const recognize = createClientOcrRecognizer();
-      if (!recognize) {
-        setErrorMsg('この端末では OCR を利用できません。');
-        setPhase('error');
-        return;
-      }
-      let imageUri = photo.localPath;
+  // 端末内OCRの有無は起動中に変わらないので初回判定を保持
+  const nativeRecognize = useMemo(() => createClientOcrRecognizer(), []);
+
+  const handlePick = useCallback(
+    async (source: PhotoCaptureSource) => {
+      setErrorMsg(null);
+      setPhase('processing');
       try {
-        const pre = await preprocessImageForOcr(
-          photo.localPath,
-          expoImageManipulatorPreprocessAdapter,
-        );
-        imageUri = pre.imageUri;
-      } catch {
-        // fall back to the original image
-      }
-      const result = await recognize(imageUri);
-      const parsed = parseReceipt(result.rawText);
-      if (parsed.length === 0) {
-        setErrorMsg('レシートから品目を読み取れませんでした。明るく正面から撮り直してください。');
+        const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
+
+        let names: string[];
+        if (nativeRecognize) {
+          // 端末内OCR（無料・オフライン）→ テキストから品目パース
+          let imageUri = photo.localPath;
+          try {
+            const pre = await preprocessImageForOcr(
+              photo.localPath,
+              expoImageManipulatorPreprocessAdapter,
+            );
+            imageUri = pre.imageUri;
+          } catch {
+            // fall back to the original image
+          }
+          const result = await nativeRecognize(imageUri);
+          names = parseReceipt(result.rawText).map((p) => p.name);
+        } else {
+          // クラウドAI（Vision）— BYOKキーがあれば端末から直接 Gemini
+          const inference = await inferReceiptFromVision({
+            localPath: photo.localPath,
+            mimeType: mimeTypeFor(photo.localPath),
+          });
+          if (!inference.isReceipt) {
+            setErrorMsg(
+              'レシートを認識できませんでした。レシート全体が写るように撮り直してください。',
+            );
+            setPhase('error');
+            return;
+          }
+          names = inference.items;
+        }
+
+        if (names.length === 0) {
+          setErrorMsg('レシートから品目を読み取れませんでした。明るく正面から撮り直してください。');
+          setPhase('error');
+          return;
+        }
+        setItems(names.map((name, i) => ({ id: String(i), name, include: true })));
+        setPhase('review');
+      } catch (error) {
+        if (error instanceof PhotoCaptureCancelledError) {
+          setPhase('select');
+          return;
+        }
+        setErrorMsg(error instanceof Error ? error.message : '読み取りに失敗しました');
         setPhase('error');
-        return;
       }
-      setItems(parsed.map((p, i) => ({ id: String(i), name: p.name, include: true })));
-      setPhase('review');
-    } catch (error) {
-      if (error instanceof PhotoCaptureCancelledError) {
-        setPhase('select');
-        return;
-      }
-      setErrorMsg(error instanceof Error ? error.message : '読み取りに失敗しました');
-      setPhase('error');
-    }
-  }, []);
+    },
+    [nativeRecognize],
+  );
 
   const handleAdd = useCallback(async () => {
     const chosen = items.filter((it) => it.include && it.name.trim());
@@ -115,6 +145,11 @@ export default function ReceiptScreen() {
             <ImageIcon size={20} color={Colors.gold} />
             <Text style={styles.bigButtonOutlineText}>ギャラリーから選ぶ</Text>
           </Pressable>
+          {!nativeRecognize && (
+            <Text style={styles.cloudNote}>
+              読み取りにはクラウド AI を使用します。写真は解析のためだけに送信され、保存されません。
+            </Text>
+          )}
         </View>
       )}
 
@@ -196,6 +231,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   hint: { color: Colors.muted, textAlign: 'center', lineHeight: 22, fontSize: 14, marginBottom: 8 },
+  cloudNote: {
+    color: Colors.muted,
+    textAlign: 'center',
+    fontSize: 12,
+    lineHeight: 18,
+    opacity: 0.8,
+    marginTop: 4,
+  },
   errorText: {
     color: '#C97A4A',
     textAlign: 'center',

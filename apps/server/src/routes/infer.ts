@@ -17,6 +17,12 @@ import {
   MealVisionRequestError,
   type MealVisionProvider,
 } from '../lib/meal-vision.js';
+import {
+  GeminiReceiptVisionProvider,
+  ReceiptVisionConfigError,
+  ReceiptVisionRequestError,
+  type ReceiptVisionProvider,
+} from '../lib/receipt-vision.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
 
 const inferRouter = new Hono();
@@ -138,6 +144,66 @@ inferRouter.post('/meal', zValidator('json', inferMealSchema), async (c) => {
       error: {
         code: 'AI_INFER_FAILED',
         message: '推定に失敗しました。時間をおいてお試しください。',
+        retryable,
+      },
+    });
+  }
+});
+
+// ─── POST /receipt — receipt photo → grocery item names (Vision) ─────────────
+
+const inferReceiptSchema = z.object({
+  imageBase64: z.string().min(1, '画像が空です').max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+});
+
+let receiptProviderOverride: ReceiptVisionProvider | null = null;
+
+export function setReceiptProviderForTesting(provider: ReceiptVisionProvider | null): void {
+  receiptProviderOverride = provider;
+}
+
+function resolveReceiptProvider(): ReceiptVisionProvider {
+  return receiptProviderOverride ?? new GeminiReceiptVisionProvider();
+}
+
+inferRouter.post('/receipt', zValidator('json', inferReceiptSchema), async (c) => {
+  const clientId =
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous';
+  if (!checkRateLimit(clientId).allowed) {
+    return c.json({
+      ok: false,
+      error: { code: 'RATE_LIMITED', message: '本日の利用上限に達しました。', retryable: false },
+    });
+  }
+
+  const { imageBase64, mimeType } = c.req.valid('json');
+
+  let provider: ReceiptVisionProvider;
+  try {
+    provider = resolveReceiptProvider();
+  } catch (err) {
+    if (err instanceof ReceiptVisionConfigError) {
+      return c.json({
+        ok: false,
+        error: { code: 'AI_API_UNAVAILABLE', message: 'AI 推論が利用できません', retryable: false },
+      });
+    }
+    throw err;
+  }
+
+  try {
+    const data = await provider.infer({ imageBase64, mimeType });
+    return c.json({ ok: true, data });
+  } catch (err) {
+    const retryable = err instanceof ReceiptVisionRequestError;
+    return c.json({
+      ok: false,
+      error: {
+        code: 'AI_INFER_FAILED',
+        message: '読み取りに失敗しました。時間をおいてお試しください。',
         retryable,
       },
     });
