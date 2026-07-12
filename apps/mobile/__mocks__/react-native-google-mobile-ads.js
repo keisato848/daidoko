@@ -34,13 +34,25 @@ const AdsConsent = {
   reset: jest.fn(),
 };
 
+const AppOpenAd = {
+  createForAdRequest: jest.fn(() => ({
+    addAdEventListener: jest.fn(() => jest.fn()),
+    load: jest.fn(),
+    show: jest.fn(async () => undefined),
+  })),
+};
+
 module.exports = {
   __esModule: true,
   default: mobileAds,
-  AdEventType: { CLOSED: 'closed', ERROR: 'error' },
+  AdEventType: { LOADED: 'loaded', CLOSED: 'closed', ERROR: 'error' },
   RewardedAdEventType: { LOADED: 'rewarded_loaded', EARNED_REWARD: 'rewarded_earned_reward' },
-  TestIds: { REWARDED: 'ca-app-pub-3940256099942544/5224354917' },
+  TestIds: {
+    REWARDED: 'ca-app-pub-3940256099942544/5224354917',
+    APP_OPEN: 'ca-app-pub-3940256099942544/9257395921',
+  },
   RewardedAd,
+  AppOpenAd,
   AdsConsent,
   AdsConsentPrivacyOptionsRequirementStatus: {
     NOT_REQUIRED: 'NOT_REQUIRED',

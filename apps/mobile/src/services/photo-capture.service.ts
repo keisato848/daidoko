@@ -1,6 +1,8 @@
 /**
  * PhotoCapture service — adapter boundary for camera/gallery image acquisition.
  */
+import { markPhotoCaptureEnd, markPhotoCaptureStart } from './app-open-ad.service';
+
 export type PhotoCaptureSource = 'camera' | 'gallery';
 
 export interface CapturedPhoto {
@@ -45,8 +47,16 @@ export async function capturePhoto(
   adapter: PhotoCaptureAdapter,
 ): Promise<CapturedPhoto> {
   const now = adapter.now ?? (() => new Date().toISOString());
-  const photo =
-    source === 'camera' ? await adapter.captureFromCamera() : await adapter.pickFromGallery();
+  // カメラ/ギャラリー往復はアプリが一度 background になるため、復帰時の
+  // アプリ起動広告を抑止するフラグを立てる（app-open-ad.service）。
+  markPhotoCaptureStart();
+  let photo: Omit<CapturedPhoto, 'source' | 'takenAt' | 'temporary'> | null;
+  try {
+    photo =
+      source === 'camera' ? await adapter.captureFromCamera() : await adapter.pickFromGallery();
+  } finally {
+    markPhotoCaptureEnd();
+  }
   if (!photo) throw new PhotoCaptureCancelledError();
   return stampPhoto(photo, source, now);
 }
