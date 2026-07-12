@@ -14,6 +14,34 @@ export const UPLOAD_BASE = `https://androidpublisher.googleapis.com/upload/andro
 
 const KEY_PATH = process.env.PLAY_SERVICE_ACCOUNT_KEY ?? 'C:/secure/play-service-account.json';
 
+// 稀に UND_ERR_CONNECT_TIMEOUT や一時的な 5xx で落ちる（単純リトライで通る実績あり — #63）。
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const RETRY_DELAYS_MS = [1_000, 3_000, 8_000];
+
+/** ネットワークエラー・リトライ可能ステータスに指数バックオフで再試行する fetch */
+async function fetchWithRetry(url, init, label) {
+  let lastErr;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) {
+      process.stderr.write(
+        `[play-api] retry ${attempt}/${RETRY_DELAYS_MS.length} (${label}): ${String(lastErr).slice(0, 150)}\n`,
+      );
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt - 1]));
+    }
+    try {
+      const res = await fetch(url, init);
+      if (RETRYABLE_STATUS.has(res.status)) {
+        lastErr = new Error(`HTTP ${res.status}`);
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
 /** サービスアカウント JWT で androidpublisher スコープのアクセストークンを得る */
 export async function getAccessToken() {
   const key = JSON.parse(fs.readFileSync(KEY_PATH, 'utf8'));
@@ -30,11 +58,15 @@ export async function getAccessToken() {
     .sign('RSA-SHA256', Buffer.from(unsigned), key.private_key)
     .toString('base64url');
 
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${unsigned}.${sig}`,
-  });
+  const res = await fetchWithRetry(
+    'https://oauth2.googleapis.com/token',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${unsigned}.${sig}`,
+    },
+    'token',
+  );
   const tok = await res.json();
   if (!tok.access_token)
     throw new Error(`token failed: ${res.status} ${JSON.stringify(tok).slice(0, 200)}`);
@@ -49,7 +81,11 @@ export function createEditsClient(accessToken) {
   };
 
   async function request(url, init = {}) {
-    const res = await fetch(url, { ...init, headers: { ...jsonHeaders, ...(init.headers ?? {}) } });
+    const res = await fetchWithRetry(
+      url,
+      { ...init, headers: { ...jsonHeaders, ...(init.headers ?? {}) } },
+      `${init.method ?? 'GET'} ${url.slice(API_BASE.length)}`,
+    );
     const body = await res.json().catch(() => ({}));
     if (!res.ok)
       throw new Error(
@@ -73,13 +109,14 @@ export function createEditsClient(accessToken) {
       request(`${API_BASE}/edits/${editId}/listings/${lang}/${imageType}`),
     uploadImage: async (editId, lang, imageType, filePath) => {
       const data = fs.readFileSync(filePath);
-      const res = await fetch(
+      const res = await fetchWithRetry(
         `${UPLOAD_BASE}/edits/${editId}/listings/${lang}/${imageType}?uploadType=media`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'image/png' },
           body: data,
         },
+        `upload ${imageType}`,
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok)
