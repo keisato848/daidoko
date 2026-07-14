@@ -1,22 +1,36 @@
 ---
 name: update-store-listing
-description: Google Play ストア掲載（ja-JP の説明文・スマホ用スクリーンショット）を CLI で更新する。listing-ja.md / phone-screenshots/ を単一ソースとして androidpublisher API で反映。スクショはエミュレータから機械的に再取得できる。
+description: Google Play ストア掲載（ja-JP のアプリ名・説明文・スマホ用スクリーンショット・アイコン）を CLI で更新する。listing-ja.md / phone-screenshots/ / generate-icons.mjs を単一ソースとして androidpublisher API で反映。スクショはエミュレータから機械的に再取得できる。
 ---
 
 # Play ストア掲載の CLI 更新
 
 詳細は `docs/リリース手順.md` §3。プライバシーポリシーの公開反映は §4（公開 URL は gist — 更新時は同期コマンドを実行）。
 
-## 説明文（短い説明・詳しい説明）
+## アプリ名・説明文（短い説明・詳しい説明）
 
-1. `docs/store/google-play/listing-ja.md` の「## 短い説明」（80字以内）「## 詳しい説明」（4000字以内・プレーンテキスト、■/・で整形）を編集
+1. `docs/store/google-play/listing-ja.md` の「## アプリ名」（30字以内・ASO のためキーワードを含める）
+   「## 短い説明」（80字以内）「## 詳しい説明」（4000字以内・プレーンテキスト、■/・で整形）を編集
 2. **公開文面なので必ずユーザーに文面を提示して承認を得る**
 3. ドライラン: `node scripts/release/update-play-listing.mjs --dry-run`（文字数チェック＋内容表示）
 4. 反映: `node scripts/release/update-play-listing.mjs`
-   - タイトル・動画は Play 側の現行値を自動維持
+   - 動画は Play 側の現行値を自動維持
    - 認証キー: `C:\secure\play-service-account.json`（`PLAY_SERVICE_ACCOUNT_KEY` で上書き可・値は出力しない）
    - `COMMITTED edit: <id>` が出れば完了
+   - **API の commit は即時成功するが公開ページへの伝播は数分〜数時間かかる**（Console 管理画面は即時反映）
 5. listing-ja.md の変更を PR で develop にマージ（リポジトリ記録と Play の同期を保つ）
+
+## アプリのアイコン（ストア掲載用・アプリ本体とは独立）
+
+1. 意匠は `scripts/generate-icons.mjs`（SVG をコードで生成 — `apps/mobile/assets/icon.png` 等 4 種を出力）
+2. **公開のブランド資産なのでユーザーに画像を提示して承認を得る**（小サイズ 48-96px での視認性も検証すること —
+   細い線画の付け足しは縮小で消える。既存要素と同等の太さ・面積で置き換える方が安全）
+3. 生成: `node scripts/generate-icons.mjs`
+4. Play ストア掲載アイコンへ反映（512x512 に自動リサイズ）:
+   `node scripts/release/update-play-icon.mjs --dry-run` → `node scripts/release/update-play-icon.mjs`
+   - **アイコン変更は Play の審査を経てから公開される**（説明文より慎重な扱い — Console に「審査中の変更」表示）
+   - アプリ本体（起動アイコン）は次回ビルドで自動的に同じ意匠になる（1024px 版を bundle）
+5. `apps/mobile/assets/*.png` と `scripts/generate-icons.mjs` の変更を PR でマージ
 
 ## スクリーンショット（スマホ用・機械的に再取得）
 

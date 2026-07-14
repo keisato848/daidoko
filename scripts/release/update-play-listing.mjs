@@ -1,8 +1,8 @@
 /**
  * Google Play 掲載情報（ja-JP）を docs/store/google-play/listing-ja.md の内容で更新する。
  *
- * - 単一ソース: listing-ja.md の「## 短い説明」「## 詳しい説明」を反映する
- * - タイトルと動画は Play 側の現行値を維持する
+ * - 単一ソース: listing-ja.md の「## アプリ名」「## 短い説明」「## 詳しい説明」を反映する
+ * - 動画は Play 側の現行値を維持する
  * - 認証: サービスアカウント JSON（既定 C:/secure/play-service-account.json、
  *   環境変数 PLAY_SERVICE_ACCOUNT_KEY で上書き可）。キーの値は一切出力しない。
  *
@@ -31,15 +31,18 @@ function extractSection(md, heading) {
 }
 
 const md = fs.readFileSync(LISTING_MD, 'utf8');
+const TITLE = extractSection(md, 'アプリ名').replace(/^-\s*/, '').trim();
 const SHORT = extractSection(md, '短い説明');
 const FULL = extractSection(md, '詳しい説明');
 
+if (TITLE.length > 30) throw new Error(`アプリ名が30字超: ${TITLE.length}`);
 if (SHORT.length > 80) throw new Error(`短い説明が80字超: ${SHORT.length}`);
 if (FULL.length > 4000) throw new Error(`詳しい説明が4000字超: ${FULL.length}`);
-console.log(`short: ${SHORT.length}字 / full: ${FULL.length}字`);
+console.log(`title: ${TITLE.length}字 / short: ${SHORT.length}字 / full: ${FULL.length}字`);
 
 if (DRY_RUN) {
   console.log('--- dry-run: 送信せず終了 ---');
+  console.log(TITLE);
   console.log(SHORT);
   process.exit(0);
 }
@@ -49,11 +52,11 @@ const client = createEditsClient(await getAccessToken());
 const edit = await client.insert();
 
 const cur = await client.getListing(edit.id, 'ja-JP');
-console.log('current title:', cur.title);
+console.log('current title:', cur.title, '-> new:', TITLE);
 
 await client.updateListing(edit.id, 'ja-JP', {
   language: 'ja-JP',
-  title: cur.title,
+  title: TITLE,
   shortDescription: SHORT,
   fullDescription: FULL,
   ...(cur.video ? { video: cur.video } : {}),
