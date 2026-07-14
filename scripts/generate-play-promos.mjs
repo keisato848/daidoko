@@ -5,7 +5,9 @@ import sharp from 'sharp';
 const WIDTH = 1080;
 const HEIGHT = 2400;
 const OUTPUT_DIR = 'docs/store/google-play/promotional-screenshots';
-const ICON_PATH = 'docs/store/google-play/icons/icon-play-512.png';
+// アプリ本体と同じ意匠（scripts/generate-icons.mjs）から都度リサイズして使う
+// — 手動コピーだと更新漏れが起きるため単一ソースを直接参照する
+const ICON_PATH = 'apps/mobile/assets/icon.png';
 const GRAPHICS_DIR = 'docs/store/google-play/graphics';
 const FEATURE_GRAPHIC_PATH = `${GRAPHICS_DIR}/feature-graphic.png`;
 const FEATURE_GRAPHIC_WIDTH = 1024;
@@ -41,7 +43,7 @@ const slides = [
     subtitle: '大きな手順表示で、台所でも流れを見失わない。',
   },
   {
-    input: 'docs/store/google-play/phone-screenshots/05-ocr-import.png',
+    input: 'docs/store/google-play/phone-screenshots/extras/05-ocr-import.png',
     output: '05-ocr-import-promo.png',
     eyebrow: 'IMPORT',
     title: '紙のレシピも取り込める',
@@ -85,16 +87,10 @@ function buildTextSvg({ eyebrow, title, subtitle }) {
   const titleLines = wrapText(title, 12);
   const subtitleLines = wrapText(subtitle, 21);
   const titleTspans = titleLines
-    .map(
-      (line, index) =>
-        `<tspan x="112" dy="${index === 0 ? 0 : 84}">${escapeXml(line)}</tspan>`,
-    )
+    .map((line, index) => `<tspan x="112" dy="${index === 0 ? 0 : 84}">${escapeXml(line)}</tspan>`)
     .join('');
   const subtitleTspans = subtitleLines
-    .map(
-      (line, index) =>
-        `<tspan x="112" dy="${index === 0 ? 0 : 42}">${escapeXml(line)}</tspan>`,
-    )
+    .map((line, index) => `<tspan x="112" dy="${index === 0 ? 0 : 42}">${escapeXml(line)}</tspan>`)
     .join('');
 
   return Buffer.from(`
@@ -177,13 +173,13 @@ function buildFeatureGraphicSvg() {
       <circle cx="920" cy="96" r="96" fill="#C9A16A" fill-opacity="0.05"/>
       <circle cx="868" cy="420" r="138" fill="#C9A16A" fill-opacity="0.04"/>
       <path d="M176 186 H454" stroke="#C9A16A" stroke-opacity="0.34" stroke-width="2"/>
-      <text x="176" y="86" fill="#DCC9A8" font-size="22" font-weight="700" letter-spacing="6" font-family="Yu Gothic UI, Yu Gothic, sans-serif">FAMILY RECIPE NOTEBOOK</text>
+      <text x="176" y="86" fill="#DCC9A8" font-size="22" font-weight="700" letter-spacing="6" font-family="Yu Gothic UI, Yu Gothic, sans-serif">AI RECIPE FROM A PHOTO</text>
       <text x="176" y="148" fill="#F0E6D2" font-size="54" font-weight="700" letter-spacing="10" font-family="Yu Mincho, YuMincho, serif">臺所</text>
       <text x="178" y="178" fill="#A07A44" font-size="18" font-style="italic" letter-spacing="5" font-family="Georgia, Times New Roman, serif">D A I D O K O</text>
-      <text x="88" y="258" fill="#DCC9A8" font-size="42" font-weight="700" letter-spacing="1.5" font-family="Yu Mincho, YuMincho, serif">家族の台所を、</text>
-      <text x="88" y="312" fill="#DCC9A8" font-size="42" font-weight="700" letter-spacing="1.5" font-family="Yu Mincho, YuMincho, serif">一冊の手帳に。</text>
-      <text x="88" y="370" fill="#DCC9A8" fill-opacity="0.88" font-size="23" font-weight="500" letter-spacing="0.8" font-family="Yu Gothic UI, Yu Gothic, sans-serif">レシピ、手順、調理記録をローカル中心で静かに積み重ねる。</text>
-      <text x="88" y="407" fill="#DCC9A8" fill-opacity="0.76" font-size="21" font-weight="500" letter-spacing="0.6" font-family="Yu Gothic UI, Yu Gothic, sans-serif">検索、料理中モード、OCR 取り込みまで、毎日の家庭料理をひとつに整理。</text>
+      <text x="88" y="258" fill="#DCC9A8" font-size="42" font-weight="700" letter-spacing="1.5" font-family="Yu Mincho, YuMincho, serif">写真を撮るだけで、</text>
+      <text x="88" y="312" fill="#DCC9A8" font-size="42" font-weight="700" letter-spacing="1.5" font-family="Yu Mincho, YuMincho, serif">レシピが完成。</text>
+      <text x="88" y="370" fill="#DCC9A8" fill-opacity="0.88" font-size="23" font-weight="500" letter-spacing="0.8" font-family="Yu Gothic UI, Yu Gothic, sans-serif">料理の写真をAIが解析し、材料・分量・手順を下書き。</text>
+      <text x="88" y="407" fill="#DCC9A8" fill-opacity="0.76" font-size="21" font-weight="500" letter-spacing="0.6" font-family="Yu Gothic UI, Yu Gothic, sans-serif">買い物リスト・在庫管理まで、毎日の家庭料理をひとつに整理。</text>
       <rect x="88" y="431" width="188" height="1.5" fill="#C9A16A" fill-opacity="0.42"/>
     </svg>
   `);
@@ -231,10 +227,14 @@ async function renderSlide(slide) {
 }
 
 async function renderFeatureGraphic() {
+  // 推し機能（AI写真レシピ）のヒーロー画像を使う（2026-07 ASO監査でスクショ1枚目と
+  // 揃えた方針 — 実写真つきの方が汎用画面より小サムネイルで目を引く）
+  const FEATURE_GRAPHIC_SOURCE =
+    'docs/store/google-play/phone-screenshots/10-recipe-detail-photo.png';
   const screenshotWidth = 214;
   const screenshotHeight = 476;
   const screenshotRadius = 24;
-  const screenshot = await sharp(slides[0].input)
+  const screenshot = await sharp(FEATURE_GRAPHIC_SOURCE)
     .resize(screenshotWidth, screenshotHeight, { fit: 'cover', position: 'top' })
     .png()
     .toBuffer();
@@ -275,4 +275,6 @@ await mkdir(OUTPUT_DIR, { recursive: true });
 await mkdir(GRAPHICS_DIR, { recursive: true });
 await Promise.all([Promise.all(slides.map(renderSlide)), renderFeatureGraphic()]);
 
-console.log(`Generated ${slides.length} promotional screenshots in ${OUTPUT_DIR} and feature graphic at ${FEATURE_GRAPHIC_PATH}`);
+console.log(
+  `Generated ${slides.length} promotional screenshots in ${OUTPUT_DIR} and feature graphic at ${FEATURE_GRAPHIC_PATH}`,
+);
