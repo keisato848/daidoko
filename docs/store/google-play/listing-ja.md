@@ -4,9 +4,9 @@
 対象ビルド: Android 1.3.0 / versionCode 10010
 反映方法: androidpublisher API（edits.listings）で CLI 更新済み
 
-## アプリ名（現行）
+## アプリ名
 
-- だいどこ
+- だいどこ - レシピ管理・買い物リスト・食材管理
 
 ## 短い説明
 

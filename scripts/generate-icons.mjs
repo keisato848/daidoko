@@ -22,6 +22,11 @@ const OUT = 'apps/mobile/assets';
 // SVG factory: cx/cy are center, r is the seal radius.
 // For app icon: padding + seal that fills most of canvas.
 // For adaptive foreground: seal in the inner ~66% safe area (transparent bg).
+//
+// 2026-07-14 ASO監査（B1）: 旧版は「臺所」＋「DAIDOKO」欧文副題のみで、検索結果の
+// 小サイズ表示（48-96px）で料理アプリだと伝わらなかった。副題は縮小時にどのみち
+// 判読不能だったため、同じ場所に大きく太い「湯気の立つ椀」の意匠と入れ替えた
+// （小さな付け足しでは縮小に耐えないため、既存要素と同等の面積・太さで設計）。
 function buildSealSvg({ size, padding = 0, transparent = false, scale = 1.0 }) {
   const cx = size / 2;
   const cy = size / 2;
@@ -33,16 +38,29 @@ function buildSealSvg({ size, padding = 0, transparent = false, scale = 1.0 }) {
   const innerStroke = r * 0.008;
   // Font sizes scale relative to r
   const seal = r * 0.64; // 臺所
-  const sub = r * 0.13; // DAIDOKO
   // Y coordinates relative to center
   const sealY = cy + seal * 0.32; // text baseline tweak
-  const lineY = cy + r * 0.45;
-  const subY = cy + r * 0.66;
   const dotR = r * 0.04;
 
-  const bgRect = transparent
-    ? ''
-    : `<rect width="${size}" height="${size}" fill="${BG}"/>`;
+  const bgRect = transparent ? '' : `<rect width="${size}" height="${size}" fill="${BG}"/>`;
+
+  // 湯気の立つ椀（推し機能=写真からレシピ／料理を示す意匠。臺所の下、旧副題と
+  // ほぼ同じ面積・線幅で描く — 小さな装飾ではなく主要要素として縮小に耐える）
+  const bowlY = cy + r * 0.7;
+  const bowlW = r * 0.42;
+  const bowlH = r * 0.13;
+  const bowlStroke = r * 0.032;
+  const steamTopY = bowlY - bowlH * 0.35 - r * 0.2;
+  const steamBaseY = bowlY - bowlH * 0.35;
+  const steamStroke = r * 0.026;
+  const wisp = (dx) => {
+    const x0 = cx + dx;
+    const midX1 = x0 - r * 0.05;
+    const midY1 = steamBaseY - (steamBaseY - steamTopY) * 0.35;
+    const midX2 = x0 + r * 0.05;
+    const midY2 = steamBaseY - (steamBaseY - steamTopY) * 0.7;
+    return `<path d="M ${x0} ${steamBaseY} C ${midX1} ${midY1}, ${midX2} ${midY2}, ${x0} ${steamTopY}" fill="none" stroke="${GOLD_DIM}" stroke-width="${steamStroke}" stroke-linecap="round"/>`;
+  };
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
   ${bgRect}
@@ -54,15 +72,13 @@ function buildSealSvg({ size, padding = 0, transparent = false, scale = 1.0 }) {
   <text x="${cx}" y="${sealY}" text-anchor="middle"
         font-family="'Yu Mincho','Hiragino Mincho ProN','Noto Serif JP','Source Han Serif','Liberation Serif',serif"
         font-size="${seal}" fill="${PAPER}">臺所</text>
-  <!-- 区切り線 -->
-  <line x1="${cx - r * 0.55}" y1="${lineY}" x2="${cx + r * 0.55}" y2="${lineY}" stroke="${BORDER}" stroke-width="${innerStroke}"/>
-  <!-- DAIDOKO -->
-  <text x="${cx}" y="${subY}" text-anchor="middle"
-        font-family="'Cormorant Garamond','Georgia',serif"
-        font-size="${sub}" font-style="italic" fill="${GOLD_DIM}" letter-spacing="${sub * 0.5}">D A I D O K O</text>
-  <!-- 四方の点 -->
+  <!-- 湯気の立つ椀 -->
+  <path d="M ${cx - bowlW} ${bowlY} Q ${cx} ${bowlY + bowlH * 1.7}, ${cx + bowlW} ${bowlY} Z" fill="none" stroke="${GOLD_DIM}" stroke-width="${bowlStroke}" stroke-linecap="round"/>
+  <line x1="${cx - bowlW * 1.1}" y1="${bowlY}" x2="${cx + bowlW * 1.1}" y2="${bowlY}" stroke="${GOLD_DIM}" stroke-width="${bowlStroke}" stroke-linecap="round"/>
+  ${wisp(-bowlW * 0.38)}
+  ${wisp(bowlW * 0.38)}
+  <!-- 三方の点（下は椀の意匠のため省略） -->
   <circle cx="${cx}" cy="${cy - r}" r="${dotR}" fill="${GOLD}"/>
-  <circle cx="${cx}" cy="${cy + r}" r="${dotR}" fill="${GOLD}"/>
   <circle cx="${cx - r}" cy="${cy}" r="${dotR}" fill="${GOLD}"/>
   <circle cx="${cx + r}" cy="${cy}" r="${dotR}" fill="${GOLD}"/>
 </svg>`;
@@ -91,11 +107,7 @@ async function main() {
   );
 
   // 3. Splash icon — dark bg, seal at 50%
-  await render(
-    buildSealSvg({ size: 1024, scale: 0.5 }),
-    `${OUT}/splash-icon.png`,
-    1024,
-  );
+  await render(buildSealSvg({ size: 1024, scale: 0.5 }), `${OUT}/splash-icon.png`, 1024);
 
   // 4. Favicon — 48x48 web
   await render(buildSealSvg({ size: 1024 }), `${OUT}/favicon.png`, 48);
