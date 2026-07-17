@@ -35,7 +35,7 @@ const CUTS = [
   { file: '03-recipe-detail-photo.mp4', seconds: 1.7, caption: 'AIがレシピを下書き' },
   { file: '04-cooking-mode.mp4', seconds: 3.0, caption: '料理中は次の一手だけ' },
   { file: '05-recipe-library.mp4', seconds: 2.4, caption: 'いつでもすぐ検索' },
-  { file: '06-shopping-pantry.mp4', seconds: 1.75, caption: '買い物・在庫までひとつに' },
+  { file: '06-shopping-pantry.mp4', seconds: 0.65, caption: '買い物・在庫までひとつに' },
 ];
 
 const ffmpeg = resolveFfmpeg();

@@ -85,10 +85,13 @@ const SCENES = [
   {
     file: '06-shopping-pantry.mp4',
     route: 'shopping',
-    settleMs: 1500,
+    settleMs: 3000, // 8件のDBクエリ描画がロードスピナーを挟むため長めに待つ
     durationMs: 3200,
     label: '買い物リスト',
-    actions: [{ swipeNorm: [0.5, 0.7, 0.5, 0.35], atMs: 900 }],
+    actions: [
+      { swipeNorm: [0.5, 0.75, 0.5, 0.3], atMs: 700 },
+      { swipeNorm: [0.5, 0.3, 0.5, 0.75], atMs: 1900 },
+    ],
   },
 ];
 
