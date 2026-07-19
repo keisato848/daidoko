@@ -29,13 +29,17 @@ const FADE_MS = 350;
 // seconds は record-promo-video.mjs の実収録尺（screenrecord は画面更新時のみ
 // フレームを出すため、静定後の実尺は演出アクションの動きで決まる。要再収録時は
 // ffprobe -show_entries stream=duration で実測してから合わせること）。
+// image 指定は静止画からズーム演出（Ken Burns）でクリップを生成する。
+// フォトピッカー表示中は screenrecord がフレームを出力しないため、ピッカー〜
+// 確認ダイアログは screencap した静止画で表現する。
 const CUTS = [
-  { file: '01-home.mp4', seconds: 1.25, caption: '家族の台所を、ひとつの手帳に' },
-  { file: '02-photo-to-recipe-intro.mp4', seconds: 1.85, caption: '写真を撮るだけで' },
-  { file: '03-recipe-detail-photo.mp4', seconds: 1.7, caption: 'AIがレシピを下書き' },
+  { image: '02a-picker.png', seconds: 2.4, caption: 'お店で撮った写真から' },
+  { image: '02b-confirm.png', seconds: 2.6, caption: 'えらぶだけで' },
+  { file: '03-recipe-detail-photo.mp4', seconds: 4.0, caption: 'AIがレシピを下書き' },
   { file: '04-cooking-mode.mp4', seconds: 3.0, caption: '料理中は次の一手だけ' },
-  { file: '05-recipe-library.mp4', seconds: 2.4, caption: 'いつでもすぐ検索' },
-  { file: '06-shopping-pantry.mp4', seconds: 0.65, caption: '買い物・在庫までひとつに' },
+  { file: '01-home.mp4', seconds: 3.0, caption: '家族の台所を、ひとつの手帳に' },
+  { file: '05-recipe-library.mp4', seconds: 2.6, caption: 'いつでもすぐ検索' },
+  { file: '06-shopping-pantry.mp4', seconds: 2.8, caption: '買い物・在庫までひとつに' },
 ];
 
 const ffmpeg = resolveFfmpeg();
@@ -46,7 +50,7 @@ function main() {
 
   console.log(`ffmpeg: ${ffmpeg}`);
   for (const cut of CUTS) {
-    const src = path.join(IN_DIR, cut.file);
+    const src = path.join(IN_DIR, cut.file ?? cut.image);
     if (!fs.existsSync(src))
       throw new Error(`missing scene: ${src}（先に record-promo-video.mjs を実行）`);
   }
@@ -58,9 +62,10 @@ function main() {
   // 2) 各シーンをトリム＋字幕焼き込み＋フェード
   const processed = [titleCardPath];
   for (const [index, cut] of CUTS.entries()) {
-    const src = path.join(IN_DIR, cut.file);
+    const src = path.join(IN_DIR, cut.file ?? cut.image);
     const dst = path.join(WORK_DIR, `cut-${String(index).padStart(2, '0')}.mp4`);
-    processScene(src, dst, cut);
+    if (cut.image) processImageScene(src, dst, cut);
+    else processScene(src, dst, cut);
     processed.push(dst);
   }
 
@@ -123,6 +128,42 @@ function processScene(src, dst, cut) {
     src,
     '-vf',
     vf,
+    '-an',
+    '-c:v',
+    'libx264',
+    '-crf',
+    '18',
+    '-preset',
+    'medium',
+    '-r',
+    '30',
+    dst,
+  ]);
+}
+
+/** 静止画から Ken Burns（ゆっくりズームイン）のクリップを生成する。 */
+function processImageScene(src, dst, cut) {
+  const fadeOutStart = Math.max(cut.seconds - FADE_MS / 1000, 0);
+  const drawtext = buildDrawtext(cut.caption);
+  const frames = Math.round(cut.seconds * 30);
+  const vf = [
+    `zoompan=z='min(1+0.0009*on,1.12)':d=${frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x2400:fps=30`,
+    `fade=t=in:st=0:d=${FADE_MS / 1000}`,
+    `fade=t=out:st=${fadeOutStart}:d=${FADE_MS / 1000}`,
+    drawtext,
+  ].join(',');
+  run([
+    '-y',
+    '-loop',
+    '1',
+    '-t',
+    String(cut.seconds),
+    '-i',
+    src,
+    '-vf',
+    vf,
+    '-frames:v',
+    String(frames),
     '-an',
     '-c:v',
     'libx264',

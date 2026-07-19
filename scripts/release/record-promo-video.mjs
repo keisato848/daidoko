@@ -43,31 +43,51 @@ const SCENES = [
     settleMs: 1800,
     durationMs: 3200,
     label: 'ホーム（家族の調理タイムライン）',
-    actions: [{ swipeNorm: [0.5, 0.7, 0.5, 0.35], atMs: 900 }], // 一覧を少し送る
+    actions: [
+      { swipeNorm: [0.5, 0.7, 0.5, 0.35], atMs: 900 }, // 一覧を少し送る
+      { swipeNorm: [0.5, 0.4, 0.5, 0.7], atMs: 2000 }, // 戻して尺を確保
+    ],
   },
   {
     file: '02-photo-to-recipe-intro.mp4',
     route: 'recipes/import-photo',
-    settleMs: 1500,
-    durationMs: 3500,
-    label: '写真からレシピ（導線・推し機能）',
-    actions: [{ swipeNorm: [0.5, 0.55, 0.5, 0.5], atMs: 1200 }], // わずかな動き（タップ演出の代替）
+    settleMs: 1800,
+    durationMs: 7000,
+    label: '写真からレシピ（ギャラリー選択→確認ダイアログ）',
+    // 実フローを見せる: ギャラリーを開き、お店の料理写真（チャーハン）を選んで
+    // 確認ダイアログまで。「レシピをつくる」は押さない（AI無料枠を消費するため）。
+    // 前提: Temp/promo-photos の3枚を adb push 済み・フォトピッカーの並びは
+    // 明太釜玉うどん/サンプル/麻辣湯うどん/チャーハン(2段目左)。
+    actions: [
+      { tapNorm: [0.5, 0.656], atMs: 1000 }, // 「ギャラリーから選ぶ」
+      { tapNorm: [0.165, 0.74], atMs: 3400 }, // チャーハン写真（ピッカー2段目左）
+    ],
   },
   {
     file: '03-recipe-detail-photo.mp4',
-    route: `recipes/${RECIPE_ID}`,
-    settleMs: 1500,
-    durationMs: 3500,
-    label: 'レシピ詳細（材料タブ）',
-    actions: [{ tapNorm: [0.32, 0.303], atMs: 1000 }], // 「手順」タブへ切替
+    route: 'recipes',
+    settleMs: 2200,
+    durationMs: 5000,
+    label: 'AI生成レシピ詳細（実写真の表紙）',
+    // AI写真レシピで作成済みの「ハムと卵の基本チャーハン」（一覧先頭）を開く。
+    // ID が動的なためディープリンク直指定ではなく一覧からタップで遷移する。
+    actions: [
+      { tapNorm: [0.262, 0.295], atMs: 800 }, // 一覧先頭カード
+      { swipeNorm: [0.5, 0.7, 0.5, 0.5], atMs: 3000 }, // 材料を少し見せる
+    ],
   },
   {
     file: '04-cooking-mode.mp4',
     route: `recipes/${RECIPE_ID}/cook`,
-    settleMs: 1500,
+    settleMs: 3500, // エミュ長時間稼働でコールドスタートが遅くなることがある
+
     durationMs: 3500,
     label: '料理中モード',
-    actions: [{ swipeNorm: [0.5, 0.75, 0.5, 0.35], atMs: 1000 }], // 次の手順へスワイプ
+    // 手順送りは「次へ」ボタンをタップ（画面中央のスワイプ/タップは材料シートが開く）
+    actions: [
+      { tapNorm: [0.66, 0.896], atMs: 1000 }, // 次へ →
+      { tapNorm: [0.66, 0.896], atMs: 2300 }, // さらに次へ
+    ],
   },
   {
     file: '05-recipe-library.mp4',
@@ -88,9 +108,10 @@ const SCENES = [
     settleMs: 3000, // 8件のDBクエリ描画がロードスピナーを挟むため長めに待つ
     durationMs: 3200,
     label: '買い物リスト',
+    // 8件では1画面に収まりスクロールしないため、チェック操作で動きを作る
     actions: [
-      { swipeNorm: [0.5, 0.75, 0.5, 0.3], atMs: 700 },
-      { swipeNorm: [0.5, 0.3, 0.5, 0.75], atMs: 1900 },
+      { tapNorm: [0.078, 0.217], atMs: 800 }, // 先頭項目をチェック
+      { tapNorm: [0.078, 0.217], atMs: 2200 }, // 元に戻す
     ],
   },
 ];
@@ -210,7 +231,9 @@ async function recordScene(scene) {
   adb(['shell', 'rm', '-f', devicePath]);
 
   const localPath = path.join(outDir, scene.file);
-  if (pull.status !== 0 || !fs.existsSync(localPath) || fs.statSync(localPath).size < 30_000) {
+  // 遷移がハードカットの画面（料理中モード等）はフレーム数が少なくファイルが小さい。
+  // 10KB 未満のみ失敗扱い（duration>0 かは ffprobe で別途確認する運用）。
+  if (pull.status !== 0 || !fs.existsSync(localPath) || fs.statSync(localPath).size < 10_000) {
     console.error(`FAILED pull for ${scene.file}: ${pull.stderr}`);
     return { ...scene, status: 'FAILED' };
   }
