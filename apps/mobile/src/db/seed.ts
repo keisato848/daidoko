@@ -4,7 +4,7 @@
  */
 import { normalizeItemName } from '../utils/itemName';
 
-import chahanCoverPhoto from '../../assets/seed-photos/chahan.jpg';
+import scrambledEggCoverPhoto from '../../assets/seed-photos/scrambled-egg.jpg';
 
 // ─── IDs ────────────────────────────────────────────────────────────────────
 const FAMILY_ID = 'family-001';
@@ -119,11 +119,11 @@ export const seedRecipes = [
   },
   {
     // 写真からレシピ（AI）機能のデモ用。表紙は seedBundledCoverPhotos（migrate.ts）が
-    // apps/mobile/assets/seed-photos/chahan.jpg をネイティブ環境でのみ設定する。
+    // apps/mobile/assets/seed-photos/scrambled-egg.jpg をネイティブ環境でのみ設定する。
     id: 'recipe-7',
     familyId: FAMILY_ID,
-    title: 'ハムと卵の基本チャーハン',
-    titleReading: 'はむとたまごのきほんちゃーはん',
+    title: 'ふわとろスクランブルエッグトースト',
+    titleReading: 'ふわとろすくらんぶるえっぐとーすと',
     currentRevId: 'rev-7',
     status: 'active' as const,
     createdBy: USER_KEI,
@@ -224,10 +224,10 @@ export const seedRevisions = [
     revisionNumber: 1,
     isMajor: true,
     servings: 1,
-    cookTimeMin: 15,
+    cookTimeMin: 10,
     prepTimeMin: 5,
     description:
-      'ハム、卵、玉ねぎ、そして彩りの良い緑の野菜が入った、家庭で手軽に作れる定番のチャーハンです。',
+      'バターと牛乳でふわふわに仕上げたスクランブルエッグを、こんがりトーストにのせるだけ。旅先の朝食のような一皿。',
     authorNote: null,
     sourceId: null,
     createdBy: USER_KEI,
@@ -636,14 +636,14 @@ export const seedIngredients = [
     note: null,
   },
 
-  // Recipe 7: ハムと卵の基本チャーハン
+  // Recipe 7: ふわとろスクランブルエッグトースト
   {
     id: 'ing-7-01',
     revisionId: 'rev-7',
     sortOrder: 1,
     groupLabel: null,
-    name: '温かいご飯',
-    amount: '茶碗1杯分',
+    name: '卵',
+    amount: '2個',
     note: null,
   },
   {
@@ -651,8 +651,8 @@ export const seedIngredients = [
     revisionId: 'rev-7',
     sortOrder: 2,
     groupLabel: null,
-    name: 'ハム',
-    amount: '50g',
+    name: '牛乳',
+    amount: '大さじ1',
     note: null,
   },
   {
@@ -660,26 +660,26 @@ export const seedIngredients = [
     revisionId: 'rev-7',
     sortOrder: 3,
     groupLabel: null,
-    name: '卵',
-    amount: '1個',
+    name: 'バター',
+    amount: '10g',
     note: null,
   },
   {
     id: 'ing-7-04',
     revisionId: 'rev-7',
     sortOrder: 4,
-    groupLabel: '野菜',
-    name: '玉ねぎ',
-    amount: '1/4個',
+    groupLabel: null,
+    name: '食パン',
+    amount: '1枚',
     note: null,
   },
   {
     id: 'ing-7-05',
     revisionId: 'rev-7',
     sortOrder: 5,
-    groupLabel: '野菜',
-    name: 'ピーマンまたはスナップエンドウ',
-    amount: '1/4個または2本',
+    groupLabel: null,
+    name: 'ハムまたはベーコン',
+    amount: '2枚',
     note: null,
   },
   {
@@ -687,8 +687,8 @@ export const seedIngredients = [
     revisionId: 'rev-7',
     sortOrder: 6,
     groupLabel: '調味料',
-    name: '鶏がらスープの素',
-    amount: '小さじ1',
+    name: '塩',
+    amount: '少々',
     note: null,
   },
   {
@@ -696,7 +696,7 @@ export const seedIngredients = [
     revisionId: 'rev-7',
     sortOrder: 7,
     groupLabel: '調味料',
-    name: '塩こしょう',
+    name: 'こしょう',
     amount: '少々',
     note: null,
   },
@@ -704,18 +704,9 @@ export const seedIngredients = [
     id: 'ing-7-08',
     revisionId: 'rev-7',
     sortOrder: 8,
-    groupLabel: '調味料',
-    name: '醤油',
-    amount: '小さじ1',
-    note: null,
-  },
-  {
-    id: 'ing-7-09',
-    revisionId: 'rev-7',
-    sortOrder: 9,
-    groupLabel: '調味料',
-    name: 'サラダ油',
-    amount: '大さじ1',
+    groupLabel: 'お好みで',
+    name: 'スプラウトやクレソン',
+    amount: '少々',
     note: null,
   },
 ] as const;
@@ -958,12 +949,12 @@ export const seedSteps = [
     photoId: null,
   },
 
-  // Recipe 7: ハムと卵の基本チャーハン
+  // Recipe 7: ふわとろスクランブルエッグトースト
   {
     id: 'step-7-01',
     revisionId: 'rev-7',
     sortOrder: 1,
-    body: 'ハム・玉ねぎ・ピーマンは1cm角に切る。卵は溶いておく。',
+    body: 'ボウルに卵・牛乳・塩・こしょうを入れてよく溶きほぐす。食パンはトーストしておく。',
     timerSec: null,
     photoId: null,
   },
@@ -971,7 +962,7 @@ export const seedSteps = [
     id: 'step-7-02',
     revisionId: 'rev-7',
     sortOrder: 2,
-    body: 'フライパンに油を熱し、溶き卵を入れて半熟になったらご飯を加えてほぐしながら炒める。',
+    body: 'フライパンにバターを熱し、卵液を流し入れる。弱火で大きくかき混ぜながら半熟に火を通す。',
     timerSec: 120,
     photoId: null,
   },
@@ -979,15 +970,15 @@ export const seedSteps = [
     id: 'step-7-03',
     revisionId: 'rev-7',
     sortOrder: 3,
-    body: 'ハム・玉ねぎ・ピーマンを加え、全体がパラッとするまで強火で炒め合わせる。',
-    timerSec: 180,
+    body: 'ハム（またはベーコン）をさっと焼く。',
+    timerSec: 60,
     photoId: null,
   },
   {
     id: 'step-7-04',
     revisionId: 'rev-7',
     sortOrder: 4,
-    body: '鶏がらスープの素・塩こしょう・醤油で味を調え、鍋肌から香りをつけて完成。',
+    body: 'トーストにスクランブルエッグをのせ、ハムを添える。お好みでスプラウトを飾って完成。',
     timerSec: null,
     photoId: null,
   },
@@ -1027,8 +1018,8 @@ export const seedRecipeTags = [
   // ハンバーグ: 肉, 洋食
   { recipeId: 'recipe-6', tagId: 'tag-01' },
   { recipeId: 'recipe-6', tagId: 'tag-09' },
-  // ハムと卵の基本チャーハン: ご飯
-  { recipeId: 'recipe-7', tagId: 'tag-06' },
+  // ふわとろスクランブルエッグトースト: 洋食
+  { recipeId: 'recipe-7', tagId: 'tag-09' },
 ] as const;
 
 // ─── CookingLogs ────────────────────────────────────────────────────────────
@@ -1212,7 +1203,7 @@ export const seedShoppingItems = [
 export const seedBundledCoverPhotos = [
   {
     recipeId: 'recipe-7',
-    module: chahanCoverPhoto,
+    module: scrambledEggCoverPhoto,
     takenAt: '2026-07-18T00:00:00.000Z',
   },
 ] as const;

@@ -44,13 +44,14 @@ const RECIPE_ID = args.recipe ?? 'recipe-1';
 const AI_RECIPE_ID = args.aiRecipe ?? 'recipe-7';
 
 /**
- * ギャラリー（フォトピッカー）に見せるお店の料理写真。
+ * ギャラリー（フォトピッカー）に見せる料理写真（主役はモルディブ旅行のスクランブル
+ * エッグ）。
  * 注意: push する順序はピッカーの表示順を制御しない（実測で確認済み — 恐らく
  * MediaStore が実ファイルの EXIF 撮影日時や既存 date_added を見ているため）。
- * 表示順は実機で常に mentai-kamatama-udon → mala-udon → chahan の固定順になる
- * ことを確認済みなので、シーン02 のタップ座標はこの順（チャーハン=3枚目）を前提にする。
+ * 写真の組み合わせを変えたら、シーン02 のタップ座標（下記 SCENES）は実機で
+ * 一度ピッカーを開いて実際の並びをスクショで確認してから合わせ直すこと。
  */
-const GALLERY_PHOTOS = ['mentai-kamatama-udon.jpg', 'mala-udon.jpg', 'chahan.jpg'];
+const GALLERY_PHOTOS = ['mentai-kamatama-udon.jpg', 'mala-udon.jpg', 'scrambled-egg.jpg'];
 
 /**
  * シーン定義。route はディープリンク先。actions は route を開いた後に行う
@@ -75,12 +76,12 @@ const SCENES = [
     settleMs: 1800,
     durationMs: 7000,
     label: '写真からレシピ（ギャラリー選択→確認ダイアログ）',
-    // 実フローを見せる: ギャラリーを開き、お店の料理写真（チャーハン=1枚目）を
-    // 選んで確認ダイアログまで。「レシピをつくる」は押さない（AI無料枠を温存・
-    // recipe-7 は既に seed.ts に定義済みなので実行の必要がない）。
+    // 実フローを見せる: ギャラリーを開き、モルディブのスクランブルエッグ写真
+    // （1枚目・左上）を選んで確認ダイアログまで。「レシピをつくる」は押さない
+    // （AI無料枠を温存・recipe-7 は既に seed.ts に定義済みなので実行の必要がない）。
     actions: [
       { tapNorm: [0.5, 0.656], atMs: 1000 }, // 「ギャラリーから選ぶ」
-      { tapNorm: [0.833, 0.59], atMs: 3400 }, // チャーハン写真（ピッカー3枚目・右上）
+      { tapNorm: [0.167, 0.59], atMs: 3400 }, // スクランブルエッグ写真（ピッカー1枚目・左上）
     ],
   },
   {

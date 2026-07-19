@@ -34,7 +34,7 @@ const DEFAULT_USER_NAME = '';
 const DEFAULT_FAMILY_NAME = 'わたしの台所';
 const DEFAULT_INVITE_CODE = 'DK0001';
 
-const SAMPLE_DATA_VERSION = '2'; // v2: recipe-7 (AI写真レシピ) + shoppingItems + bundled cover photo
+const SAMPLE_DATA_VERSION = '3'; // v3: recipe-7 をスクランブルエッグトースト（モルディブの朝食写真）に差し替え
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
 
 export interface SeedSnapshot {

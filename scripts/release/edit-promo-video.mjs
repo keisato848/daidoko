@@ -33,9 +33,9 @@ const FADE_MS = 350;
 // フォトピッカー表示中は screenrecord がフレームを出力しないため、ピッカー〜
 // 確認ダイアログは screencap した静止画で表現する。
 const CUTS = [
-  { image: '02a-picker.png', seconds: 2.4, caption: 'お店で撮った写真から' },
+  { image: '02a-picker.png', seconds: 2.4, caption: '旅先で撮った写真から' },
   { image: '02b-confirm.png', seconds: 2.6, caption: 'えらぶだけで' },
-  { file: '03-recipe-detail-photo.mp4', seconds: 4.0, caption: 'AIがレシピを下書き' },
+  { file: '03-recipe-detail-photo.mp4', seconds: 2.1, caption: 'AIがレシピを下書き' },
   { file: '04-cooking-mode.mp4', seconds: 3.0, caption: '料理中は次の一手だけ' },
   { file: '01-home.mp4', seconds: 3.0, caption: '家族の台所を、ひとつの手帳に' },
   { file: '05-recipe-library.mp4', seconds: 2.6, caption: 'いつでもすぐ検索' },
