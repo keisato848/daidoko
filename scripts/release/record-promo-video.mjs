@@ -12,8 +12,18 @@
  * バックグラウンドで開始した状態でスワイプ操作を注入し、確実に動きのある
  * 映像にしている（録画完了は --time-limit 到達を待つ）。
  *
- * 前提: capture-store-screenshots.mjs と同じ（サンプルデータ入りリリース APK
- * インストール済み・1080x2400 エミュレータ推奨）。
+ * データもコードとして管理する: 「写真からレシピ」シーンで見せるお店の料理写真は
+ * scripts/release/promo-assets/ にコミット済みで、このスクリプトが実行のたびに
+ * ギャラリーへ push する（Google Photos からの手動ダウンロード・adb push は不要）。
+ * レシピ内容・買い物リストの状態は apps/mobile/src/db/seed.ts の recipe-7 /
+ * seedShoppingItems に定義済みで、EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 ビルドが
+ * 起動時に自動投入する（AI推論の実行やUI操作での手入力は不要）。
+ *
+ * 前提: EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 でビルドしたリリース APK がインストール
+ * 済みであること（capture-store-screenshots.mjs と同じ。1080x2400 エミュレータ推奨）:
+ *   EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 \
+ *     node scripts/agent/build-android.mjs --arch x86_64
+ *   adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
  *
  * 使い方:
  *   node scripts/release/record-promo-video.mjs [--serial <serial>] [--out <dir>]
@@ -25,11 +35,22 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DEFAULT_OUT = path.join(ROOT, 'Temp/promo-video-raw');
+const PROMO_ASSETS_DIR = path.join(ROOT, 'scripts/release/promo-assets');
 const PACKAGE = 'com.daidoko.app';
 const SCHEME = 'daidoko';
 
 const args = parseArgs(process.argv.slice(2));
 const RECIPE_ID = args.recipe ?? 'recipe-1';
+const AI_RECIPE_ID = args.aiRecipe ?? 'recipe-7';
+
+/**
+ * ギャラリー（フォトピッカー）に見せるお店の料理写真。
+ * 注意: push する順序はピッカーの表示順を制御しない（実測で確認済み — 恐らく
+ * MediaStore が実ファイルの EXIF 撮影日時や既存 date_added を見ているため）。
+ * 表示順は実機で常に mentai-kamatama-udon → mala-udon → chahan の固定順になる
+ * ことを確認済みなので、シーン02 のタップ座標はこの順（チャーハン=3枚目）を前提にする。
+ */
+const GALLERY_PHOTOS = ['mentai-kamatama-udon.jpg', 'mala-udon.jpg', 'chahan.jpg'];
 
 /**
  * シーン定義。route はディープリンク先。actions は route を開いた後に行う
@@ -54,27 +75,21 @@ const SCENES = [
     settleMs: 1800,
     durationMs: 7000,
     label: '写真からレシピ（ギャラリー選択→確認ダイアログ）',
-    // 実フローを見せる: ギャラリーを開き、お店の料理写真（チャーハン）を選んで
-    // 確認ダイアログまで。「レシピをつくる」は押さない（AI無料枠を消費するため）。
-    // 前提: Temp/promo-photos の3枚を adb push 済み・フォトピッカーの並びは
-    // 明太釜玉うどん/サンプル/麻辣湯うどん/チャーハン(2段目左)。
+    // 実フローを見せる: ギャラリーを開き、お店の料理写真（チャーハン=1枚目）を
+    // 選んで確認ダイアログまで。「レシピをつくる」は押さない（AI無料枠を温存・
+    // recipe-7 は既に seed.ts に定義済みなので実行の必要がない）。
     actions: [
       { tapNorm: [0.5, 0.656], atMs: 1000 }, // 「ギャラリーから選ぶ」
-      { tapNorm: [0.165, 0.74], atMs: 3400 }, // チャーハン写真（ピッカー2段目左）
+      { tapNorm: [0.833, 0.59], atMs: 3400 }, // チャーハン写真（ピッカー3枚目・右上）
     ],
   },
   {
     file: '03-recipe-detail-photo.mp4',
-    route: 'recipes',
+    route: `recipes/${AI_RECIPE_ID}`,
     settleMs: 2200,
     durationMs: 5000,
     label: 'AI生成レシピ詳細（実写真の表紙）',
-    // AI写真レシピで作成済みの「ハムと卵の基本チャーハン」（一覧先頭）を開く。
-    // ID が動的なためディープリンク直指定ではなく一覧からタップで遷移する。
-    actions: [
-      { tapNorm: [0.262, 0.295], atMs: 800 }, // 一覧先頭カード
-      { swipeNorm: [0.5, 0.7, 0.5, 0.5], atMs: 3000 }, // 材料を少し見せる
-    ],
+    actions: [{ swipeNorm: [0.5, 0.7, 0.5, 0.5], atMs: 1200 }], // 材料を少し見せる
   },
   {
     file: '04-cooking-mode.mp4',
@@ -129,6 +144,7 @@ const selected = SCENES.filter(
 );
 
 async function main() {
+  pushGalleryPhotos();
   enterDemoMode();
   sleep(3000);
   dismissAnrIfPresent();
@@ -148,6 +164,31 @@ async function main() {
   }
   const failed = results.filter((r) => r.status === 'FAILED');
   process.exit(failed.length ? 1 : 0);
+}
+
+/**
+ * scripts/release/promo-assets/ の3枚を端末ギャラリーへ push する。GALLERY_PHOTOS の
+ * 並び順で push し、MediaScanner に個別通知（一括だと反映されないことがある）。
+ * 冪等: 既にあれば上書きするだけなので毎回呼んで良い。
+ */
+function pushGalleryPhotos() {
+  for (const file of GALLERY_PHOTOS) {
+    const src = path.join(PROMO_ASSETS_DIR, file);
+    if (!fs.existsSync(src)) throw new Error(`missing promo asset: ${src}`);
+    const devicePath = `/sdcard/Pictures/${file}`;
+    const push = spawnSync(adbPath, ['-s', serial, 'push', src, devicePath], { encoding: 'utf8' });
+    if (push.status !== 0) throw new Error(`adb push failed for ${file}: ${push.stderr}`);
+    adb([
+      'shell',
+      'am',
+      'broadcast',
+      '-a',
+      'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+      '-d',
+      `file://${devicePath}`,
+    ]);
+  }
+  console.log(`gallery: pushed ${GALLERY_PHOTOS.length} promo photos`);
 }
 
 // ─── record ──────────────────────────────────────────────────────────────────
@@ -374,6 +415,7 @@ function parseArgs(argv) {
     if (t === '--serial') parsed.serial = argv[++i];
     else if (t === '--out') parsed.out = argv[++i];
     else if (t === '--recipe') parsed.recipe = argv[++i];
+    else if (t === '--ai-recipe') parsed.aiRecipe = argv[++i];
     else if (t === '--scenes') parsed.scenes = argv[++i].split(',').map((s) => s.trim());
   }
   return parsed;

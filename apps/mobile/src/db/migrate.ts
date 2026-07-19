@@ -5,9 +5,11 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 
+import { isNativePlatform } from './client';
 import * as schema from './schema';
 import { isSampleDataEnabled } from './sampleData';
 import {
+  seedBundledCoverPhotos,
   seedCookingLogs,
   seedCookingPhotos,
   seedFamilies,
@@ -15,6 +17,7 @@ import {
   seedRecipeTags,
   seedRecipes,
   seedRevisions,
+  seedShoppingItems,
   seedSteps,
   seedTags,
   seedUsers,
@@ -31,7 +34,7 @@ const DEFAULT_USER_NAME = '';
 const DEFAULT_FAMILY_NAME = 'わたしの台所';
 const DEFAULT_INVITE_CODE = 'DK0001';
 
-const SAMPLE_DATA_VERSION = '1';
+const SAMPLE_DATA_VERSION = '2'; // v2: recipe-7 (AI写真レシピ) + shoppingItems + bundled cover photo
 const SAMPLE_DATA_META_KEY = 'sample_data_version';
 
 export interface SeedSnapshot {
@@ -44,6 +47,7 @@ export interface SeedSnapshot {
   tagIds: string[];
   cookingLogIds: string[];
   cookingPhotoIds: string[];
+  shoppingItemIds: string[];
 }
 
 export interface MigrationResult {
@@ -60,6 +64,7 @@ const seedIdSets = {
   tagIds: new Set(seedTags.map((item) => item.id)),
   cookingLogIds: new Set(seedCookingLogs.map((item) => item.id)),
   cookingPhotoIds: new Set(seedCookingPhotos.map((item) => item.id)),
+  shoppingItemIds: new Set(seedShoppingItems.map((item) => item.id)),
 } satisfies Record<keyof SeedSnapshot, Set<string>>;
 
 const CREATE_TABLES_SQL = `
@@ -420,6 +425,9 @@ async function getSeedSnapshot(database: DB): Promise<SeedSnapshot> {
   const cookingPhotos = await database
     .select({ id: schema.cookingPhotos.id })
     .from(schema.cookingPhotos);
+  const shoppingItems = await database
+    .select({ id: schema.shoppingItems.id })
+    .from(schema.shoppingItems);
 
   return {
     userIds: users.map((item) => item.id),
@@ -431,6 +439,7 @@ async function getSeedSnapshot(database: DB): Promise<SeedSnapshot> {
     tagIds: tags.map((item) => item.id),
     cookingLogIds: cookingLogs.map((item) => item.id),
     cookingPhotoIds: cookingPhotos.map((item) => item.id),
+    shoppingItemIds: shoppingItems.map((item) => item.id),
   };
 }
 
@@ -517,10 +526,53 @@ export async function seedDatabase(database: DB): Promise<void> {
       .values([...seedCookingPhotos])
       .onConflictDoNothing();
   }
+  await database
+    .insert(schema.shoppingItems)
+    .values([...seedShoppingItems])
+    .onConflictDoNothing();
+  await seedBundledPhotos(database);
 
   // Populate FTS index
   await rebuildFts(database);
   await markSampleDataVersion(database);
+}
+
+/**
+ * Copy bundled seed photos (apps/mobile/assets/seed-photos/) into the app's
+ * recipe-photos directory and point the matching recipe's coverPhotoPath at it.
+ * Native-only (expo-file-system has no meaningful documentDirectory on web) and
+ * skipped under Jest — real file I/O against bundled assets is unnecessary
+ * there, and seed data for recipe-7 works fine with coverPhotoPath left null.
+ */
+async function seedBundledPhotos(database: DB): Promise<void> {
+  if (!isNativePlatform || typeof process.env.JEST_WORKER_ID === 'string') return;
+
+  const [{ Asset }, FileSystem, { createRecipePhotoFileName }] = await Promise.all([
+    import('expo-asset'),
+    import('expo-file-system/legacy'),
+    import('../services/photo-storage.service'),
+  ]);
+
+  const documentDirectory = FileSystem.documentDirectory;
+  if (!documentDirectory) return;
+  const directory = `${documentDirectory}recipe-photos/`;
+  const info = await FileSystem.getInfoAsync(directory);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+  }
+
+  for (const item of seedBundledCoverPhotos) {
+    const asset = Asset.fromModule(item.module);
+    await asset.downloadAsync();
+    if (!asset.localUri) continue;
+
+    const destination = `${directory}${createRecipePhotoFileName(item.takenAt, 'jpg', item.recipeId)}`;
+    await FileSystem.copyAsync({ from: asset.localUri, to: destination });
+    await database
+      .update(schema.recipes)
+      .set({ coverPhotoPath: destination })
+      .where(eq(schema.recipes.id, item.recipeId));
+  }
 }
 
 /** Rebuild FTS5 index from current recipe data */
