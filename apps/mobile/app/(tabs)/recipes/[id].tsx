@@ -3,7 +3,13 @@
  * Hero image, meta info, tabs (ingredients/steps/memo/history), cooking start CTA
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Bookmark, ChevronLeft, MoreVertical, ShoppingCart } from 'lucide-react-native';
+import {
+  Bookmark,
+  ChevronLeft,
+  ClipboardCheck,
+  MoreVertical,
+  ShoppingCart,
+} from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 
@@ -101,6 +107,7 @@ export default function RecipeDetailScreen() {
   const cookRef = useRef<View>(null);
   const missingRef = useRef<View>(null);
   const menuRef = useRef<View>(null);
+  const logShortcutRef = useRef<View>(null);
   const coach = useCoachMarks(
     'recipe-detail',
     [
@@ -109,6 +116,12 @@ export default function RecipeDetailScreen() {
         title: '調理開始',
         text: '全画面で手順を1つずつ表示します。タイマー・画面スリープ防止つきで料理に集中できます。',
         ref: cookRef,
+      },
+      {
+        key: 'logShortcut',
+        title: '作った記録をつける',
+        text: '調理中モードを進めなくても、ここから直接、評価・メモ・写真を記録できます。',
+        ref: logShortcutRef,
       },
       {
         key: 'missing',
@@ -455,6 +468,17 @@ export default function RecipeDetailScreen() {
             </Text>
           </PressableScale>
         </View>
+        <View ref={logShortcutRef} collapsable={false}>
+          <PressableScale
+            style={styles.logButton}
+            scaleTo={0.97}
+            onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/log`)}
+            accessibilityRole="button"
+            accessibilityLabel="作った記録をつける"
+          >
+            <ClipboardCheck size={18} color={Colors.gold} />
+          </PressableScale>
+        </View>
       </View>
 
       <CoachMarkOverlay
@@ -735,6 +759,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
   },
   shopButton: {
+    width: 52,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.bgCard,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logButton: {
     width: 52,
     paddingVertical: 14,
     borderRadius: 8,
