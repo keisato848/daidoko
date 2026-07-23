@@ -2,6 +2,9 @@
  * Optional sample seed data
  * Based on mockup/app-mockup.jsx RECIPES, RECIPE_INGREDIENTS, STEPS, TIMELINE
  */
+import { normalizeItemName } from '../utils/itemName';
+
+import scrambledEggCoverPhoto from '../../assets/seed-photos/scrambled-egg.jpg';
 
 // ─── IDs ────────────────────────────────────────────────────────────────────
 const FAMILY_ID = 'family-001';
@@ -114,6 +117,19 @@ export const seedRecipes = [
     createdAt: '2024-03-01T00:00:00.000Z',
     updatedAt: '2024-04-10T00:00:00.000Z',
   },
+  {
+    // 写真からレシピ（AI）機能のデモ用。表紙は seedBundledCoverPhotos（migrate.ts）が
+    // apps/mobile/assets/seed-photos/scrambled-egg.jpg をネイティブ環境でのみ設定する。
+    id: 'recipe-7',
+    familyId: FAMILY_ID,
+    title: 'ふわとろスクランブルエッグトースト',
+    titleReading: 'ふわとろすくらんぶるえっぐとーすと',
+    currentRevId: 'rev-7',
+    status: 'active' as const,
+    createdBy: USER_KEI,
+    createdAt: '2026-07-18T00:00:00.000Z',
+    updatedAt: '2026-07-18T00:00:00.000Z',
+  },
 ] as const;
 
 // ─── RecipeRevisions ────────────────────────────────────────────────────────
@@ -201,6 +217,21 @@ export const seedRevisions = [
     sourceId: null,
     createdBy: USER_KEI,
     createdAt: '2024-03-01T00:00:00.000Z',
+  },
+  {
+    id: 'rev-7',
+    recipeId: 'recipe-7',
+    revisionNumber: 1,
+    isMajor: true,
+    servings: 1,
+    cookTimeMin: 10,
+    prepTimeMin: 5,
+    description:
+      'バターと牛乳でふわふわに仕上げたスクランブルエッグを、こんがりトーストにのせるだけ。旅先の朝食のような一皿。',
+    authorNote: null,
+    sourceId: null,
+    createdBy: USER_KEI,
+    createdAt: '2026-07-18T00:00:00.000Z',
   },
 ] as const;
 
@@ -604,6 +635,80 @@ export const seedIngredients = [
     amount: '大さじ2',
     note: null,
   },
+
+  // Recipe 7: ふわとろスクランブルエッグトースト
+  {
+    id: 'ing-7-01',
+    revisionId: 'rev-7',
+    sortOrder: 1,
+    groupLabel: null,
+    name: '卵',
+    amount: '2個',
+    note: null,
+  },
+  {
+    id: 'ing-7-02',
+    revisionId: 'rev-7',
+    sortOrder: 2,
+    groupLabel: null,
+    name: '牛乳',
+    amount: '大さじ1',
+    note: null,
+  },
+  {
+    id: 'ing-7-03',
+    revisionId: 'rev-7',
+    sortOrder: 3,
+    groupLabel: null,
+    name: 'バター',
+    amount: '10g',
+    note: null,
+  },
+  {
+    id: 'ing-7-04',
+    revisionId: 'rev-7',
+    sortOrder: 4,
+    groupLabel: null,
+    name: '食パン',
+    amount: '1枚',
+    note: null,
+  },
+  {
+    id: 'ing-7-05',
+    revisionId: 'rev-7',
+    sortOrder: 5,
+    groupLabel: null,
+    name: 'ハムまたはベーコン',
+    amount: '2枚',
+    note: null,
+  },
+  {
+    id: 'ing-7-06',
+    revisionId: 'rev-7',
+    sortOrder: 6,
+    groupLabel: '調味料',
+    name: '塩',
+    amount: '少々',
+    note: null,
+  },
+  {
+    id: 'ing-7-07',
+    revisionId: 'rev-7',
+    sortOrder: 7,
+    groupLabel: '調味料',
+    name: 'こしょう',
+    amount: '少々',
+    note: null,
+  },
+  {
+    id: 'ing-7-08',
+    revisionId: 'rev-7',
+    sortOrder: 8,
+    groupLabel: 'お好みで',
+    name: 'スプラウトやクレソン',
+    amount: '少々',
+    note: null,
+  },
 ] as const;
 
 // ─── Steps ──────────────────────────────────────────────────────────────────
@@ -843,6 +948,40 @@ export const seedSteps = [
     timerSec: 120,
     photoId: null,
   },
+
+  // Recipe 7: ふわとろスクランブルエッグトースト
+  {
+    id: 'step-7-01',
+    revisionId: 'rev-7',
+    sortOrder: 1,
+    body: 'ボウルに卵・牛乳・塩・こしょうを入れてよく溶きほぐす。食パンはトーストしておく。',
+    timerSec: null,
+    photoId: null,
+  },
+  {
+    id: 'step-7-02',
+    revisionId: 'rev-7',
+    sortOrder: 2,
+    body: 'フライパンにバターを熱し、卵液を流し入れる。弱火で大きくかき混ぜながら半熟に火を通す。',
+    timerSec: 120,
+    photoId: null,
+  },
+  {
+    id: 'step-7-03',
+    revisionId: 'rev-7',
+    sortOrder: 3,
+    body: 'ハム（またはベーコン）をさっと焼く。',
+    timerSec: 60,
+    photoId: null,
+  },
+  {
+    id: 'step-7-04',
+    revisionId: 'rev-7',
+    sortOrder: 4,
+    body: 'トーストにスクランブルエッグをのせ、ハムを添える。お好みでスプラウトを飾って完成。',
+    timerSec: null,
+    photoId: null,
+  },
 ] as const;
 
 // ─── Tags ───────────────────────────────────────────────────────────────────
@@ -879,6 +1018,8 @@ export const seedRecipeTags = [
   // ハンバーグ: 肉, 洋食
   { recipeId: 'recipe-6', tagId: 'tag-01' },
   { recipeId: 'recipe-6', tagId: 'tag-09' },
+  // ふわとろスクランブルエッグトースト: 洋食
+  { recipeId: 'recipe-7', tagId: 'tag-09' },
 ] as const;
 
 // ─── CookingLogs ────────────────────────────────────────────────────────────
@@ -930,6 +1071,140 @@ export const seedCookingLogs = [
     rating: 4,
     memo: null,
     createdAt: '2024-04-20T12:30:00.000Z',
+  },
+  {
+    id: 'log-5',
+    familyId: FAMILY_ID,
+    recipeId: 'recipe-7',
+    revisionId: 'rev-7',
+    cookedBy: USER_KEI,
+    cookedAt: '2026-07-18T12:00:00.000Z',
+    servings: 1,
+    rating: null,
+    memo: null,
+    createdAt: '2026-07-18T12:30:00.000Z',
+  },
+] as const;
+
+// ─── ShoppingItems（買い物リスト, P1）───────────────────────────────────────
+// 肉じゃが（recipe-1）の「足りない材料を買い物リストに追加」を実行した状態を再現。
+// じゃがいもだけ在庫にあった想定でチェック済み。
+export const seedShoppingItems = [
+  {
+    id: 'shop-01',
+    familyId: FAMILY_ID,
+    name: 'じゃがいも（メークイン）',
+    nameNormalized: normalizeItemName('じゃがいも（メークイン）'),
+    amount: '3個',
+    checked: 1,
+    source: 'recipe' as const,
+    recipeId: 'recipe-1',
+    sortOrder: 0,
+    createdAt: '2026-07-18T10:00:00.000Z',
+    checkedAt: '2026-07-18T10:05:00.000Z',
+  },
+  {
+    id: 'shop-02',
+    familyId: FAMILY_ID,
+    name: '玉ねぎ',
+    nameNormalized: normalizeItemName('玉ねぎ'),
+    amount: '1個',
+    checked: 0,
+    source: 'recipe' as const,
+    recipeId: 'recipe-1',
+    sortOrder: 0,
+    createdAt: '2026-07-18T10:00:00.000Z',
+    checkedAt: null,
+  },
+  {
+    id: 'shop-03',
+    familyId: FAMILY_ID,
+    name: '牛薄切り肉',
+    nameNormalized: normalizeItemName('牛薄切り肉'),
+    amount: '200g',
+    checked: 0,
+    source: 'recipe' as const,
+    recipeId: 'recipe-1',
+    sortOrder: 0,
+    createdAt: '2026-07-18T10:00:00.000Z',
+    checkedAt: null,
+  },
+  {
+    id: 'shop-04',
+    familyId: FAMILY_ID,
+    name: 'にんじん',
+    nameNormalized: normalizeItemName('にんじん'),
+    amount: '½本',
+    checked: 0,
+    source: 'recipe' as const,
+    recipeId: 'recipe-1',
+    sortOrder: 0,
+    createdAt: '2026-07-18T10:00:00.000Z',
+    checkedAt: null,
+  },
+  {
+    id: 'shop-05',
+    familyId: FAMILY_ID,
+    name: '醤油',
+    nameNormalized: normalizeItemName('醤油'),
+    amount: '大さじ3',
+    checked: 0,
+    source: 'recipe' as const,
+    recipeId: 'recipe-1',
+    sortOrder: 0,
+    createdAt: '2026-07-18T10:00:00.000Z',
+    checkedAt: null,
+  },
+  {
+    id: 'shop-06',
+    familyId: FAMILY_ID,
+    name: 'みりん',
+    nameNormalized: normalizeItemName('みりん'),
+    amount: '大さじ3',
+    checked: 0,
+    source: 'recipe' as const,
+    recipeId: 'recipe-1',
+    sortOrder: 0,
+    createdAt: '2026-07-18T10:00:00.000Z',
+    checkedAt: null,
+  },
+  {
+    id: 'shop-07',
+    familyId: FAMILY_ID,
+    name: '砂糖',
+    nameNormalized: normalizeItemName('砂糖'),
+    amount: '大さじ2',
+    checked: 0,
+    source: 'recipe' as const,
+    recipeId: 'recipe-1',
+    sortOrder: 0,
+    createdAt: '2026-07-18T10:00:00.000Z',
+    checkedAt: null,
+  },
+  {
+    id: 'shop-08',
+    familyId: FAMILY_ID,
+    name: 'だし汁',
+    nameNormalized: normalizeItemName('だし汁'),
+    amount: '300ml',
+    checked: 0,
+    source: 'recipe' as const,
+    recipeId: 'recipe-1',
+    sortOrder: 0,
+    createdAt: '2026-07-18T10:00:00.000Z',
+    checkedAt: null,
+  },
+] as const;
+
+// ─── BundledCoverPhotos（表紙写真, ネイティブ環境のみ） ─────────────────────
+// Jest / web では実行しない（コメント: seedCookingPhotos 参照）。ネイティブでのみ
+// migrate.ts の seedBundledCoverPhotos() が apps/mobile/assets/seed-photos/ から
+// recipe-photos/ ディレクトリへコピーし、coverPhotoPath を更新する。
+export const seedBundledCoverPhotos = [
+  {
+    recipeId: 'recipe-7',
+    module: scrambledEggCoverPhoto,
+    takenAt: '2026-07-18T00:00:00.000Z',
   },
 ] as const;
 

@@ -38,6 +38,7 @@ export default function PaywallScreen() {
   const [loadingOffer, setLoadingOffer] = useState(true);
   const [busy, setBusy] = useState(false);
   const [canWatchAd, setCanWatchAd] = useState(false);
+  const [tokenBalance, setTokenBalance] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -54,7 +55,10 @@ export default function PaywallScreen() {
       });
     getFreemiumStatus()
       .then((status) => {
-        if (mounted) setCanWatchAd(status.canWatchAdForMore);
+        if (mounted) {
+          setCanWatchAd(status.canWatchAdForMore);
+          setTokenBalance(status.tokenBalance);
+        }
       })
       .catch(() => {
         if (mounted) setCanWatchAd(false);
@@ -69,8 +73,12 @@ export default function PaywallScreen() {
     try {
       const { rewarded } = await getAdRewardProvider().showRewardedAd();
       if (rewarded) {
-        await grantAdBonus();
-        Alert.alert('ありがとうございます', '写真からのレシピづくりを 1 回ぶん追加しました。');
+        const newBalance = await grantAdBonus();
+        setTokenBalance(newBalance);
+        Alert.alert(
+          'ありがとうございます',
+          `写真からのレシピづくりが 1 回ぶん貯まりました（残り ${newBalance} 回ぶん）。\n無料枠がなくなった日にいつでも使えます。`,
+        );
         router.back();
       }
     } catch {
@@ -184,9 +192,15 @@ export default function PaywallScreen() {
               disabled={busy}
             >
               <Gift size={18} color={Colors.gold} />
-              <Text style={styles.adButtonText}>広告を見て 1 回ぶん使う</Text>
+              <Text style={styles.adButtonText}>広告を見て 1 回ぶん貯める</Text>
             </Pressable>
+            <Text style={styles.tokenHint}>
+              貯めた回数はなくなりません。無料枠がなくなった日にいつでも使えます。
+            </Text>
           </>
+        )}
+        {tokenBalance > 0 && (
+          <Text style={styles.tokenBalance}>ためた回数: 残り{tokenBalance}回ぶん</Text>
         )}
 
         <Pressable
@@ -320,6 +334,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: Colors.gold,
+  },
+  tokenHint: {
+    fontSize: 11,
+    color: Colors.muted,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  tokenBalance: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.gold,
+    textAlign: 'center',
   },
   restoreButton: {
     paddingVertical: 8,
