@@ -10,6 +10,8 @@ module.exports = {
   setNotificationChannelAsync: jest.fn(async () => null),
   scheduleNotificationAsync: jest.fn(async () => 'mock-notification-id'),
   cancelScheduledNotificationAsync: jest.fn(async () => undefined),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  getLastNotificationResponseAsync: jest.fn(async () => null),
   AndroidImportance: { HIGH: 4, DEFAULT: 3 },
   SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval' },
 };

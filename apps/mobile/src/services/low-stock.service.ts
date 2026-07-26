@@ -10,6 +10,7 @@ import { isNativePlatform } from '../db/client';
 import { getAppMeta, setAppMeta } from './app-meta.service';
 import { presentLowStockNotification } from './notification.service';
 import { getPantryItems } from './pantry.service';
+import { addShoppingItem } from './shopping-list.service';
 import type { PantryItem } from './types';
 
 const NOTIFIED_DAY_KEY = 'low_stock_notified_day';
@@ -56,4 +57,23 @@ export async function checkAndNotifyLowStock(): Promise<boolean> {
 
   await setAppMeta(NOTIFIED_DAY_KEY, today);
   return true;
+}
+
+/**
+ * Add every currently-low-stock pantry item to the shopping list
+ * (source='low_stock'). Used by the low-stock notification's tap handler —
+ * no confirmation screen, since the notification itself already named the
+ * items. Returns how many were actually added (dedup against an existing
+ * unchecked entry is handled by addShoppingItem).
+ */
+export async function addAllLowStockToShoppingList(): Promise<number> {
+  if (!isNativePlatform) return 0;
+  const low = filterLowStock(await getPantryItems());
+
+  let added = 0;
+  for (const it of low) {
+    const result = await addShoppingItem(it.name, undefined, { source: 'low_stock' });
+    if (result) added += 1;
+  }
+  return added;
 }

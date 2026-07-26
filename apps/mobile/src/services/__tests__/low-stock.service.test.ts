@@ -2,11 +2,18 @@ jest.mock('../../db/client', () => ({ isNativePlatform: true }));
 jest.mock('../pantry.service', () => ({ getPantryItems: jest.fn() }));
 jest.mock('../app-meta.service', () => ({ getAppMeta: jest.fn(), setAppMeta: jest.fn() }));
 jest.mock('../notification.service', () => ({ presentLowStockNotification: jest.fn() }));
+jest.mock('../shopping-list.service', () => ({ addShoppingItem: jest.fn() }));
 
 import { getAppMeta, setAppMeta } from '../app-meta.service';
-import { buildLowStockBody, checkAndNotifyLowStock, filterLowStock } from '../low-stock.service';
+import {
+  addAllLowStockToShoppingList,
+  buildLowStockBody,
+  checkAndNotifyLowStock,
+  filterLowStock,
+} from '../low-stock.service';
 import { presentLowStockNotification } from '../notification.service';
 import { getPantryItems } from '../pantry.service';
+import { addShoppingItem } from '../shopping-list.service';
 import type { PantryItem } from '../types';
 
 function item(partial: Partial<PantryItem>): PantryItem {
@@ -26,6 +33,7 @@ const mockGetAppMeta = getAppMeta as jest.MockedFunction<typeof getAppMeta>;
 const mockPresent = presentLowStockNotification as jest.MockedFunction<
   typeof presentLowStockNotification
 >;
+const mockAddShoppingItem = addShoppingItem as jest.MockedFunction<typeof addShoppingItem>;
 
 describe('filterLowStock', () => {
   it('keeps only items at/below their threshold', () => {
@@ -97,5 +105,41 @@ describe('checkAndNotifyLowStock', () => {
 
     expect(await checkAndNotifyLowStock()).toBe(false);
     expect(setAppMeta).not.toHaveBeenCalled();
+  });
+});
+
+describe('addAllLowStockToShoppingList', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('adds only the low-stock items, tagged source=low_stock', async () => {
+    mockGetPantryItems.mockResolvedValue([
+      item({ id: 'a', name: '卵', quantity: 1, lowStockThreshold: 1 }),
+      item({ id: 'b', name: '牛乳', quantity: 5, lowStockThreshold: 1 }),
+    ]);
+    mockAddShoppingItem.mockResolvedValue({
+      id: 'shop-1',
+      name: '卵',
+      amount: null,
+      checked: false,
+      source: 'low_stock',
+      recipeId: null,
+    });
+
+    expect(await addAllLowStockToShoppingList()).toBe(1);
+    expect(mockAddShoppingItem).toHaveBeenCalledTimes(1);
+    expect(mockAddShoppingItem).toHaveBeenCalledWith('卵', undefined, { source: 'low_stock' });
+  });
+
+  it('does not count items addShoppingItem skipped as duplicates', async () => {
+    mockGetPantryItems.mockResolvedValue([item({ quantity: 0, lowStockThreshold: 1 })]);
+    mockAddShoppingItem.mockResolvedValue(null);
+
+    expect(await addAllLowStockToShoppingList()).toBe(0);
+  });
+
+  it('returns 0 with nothing low', async () => {
+    mockGetPantryItems.mockResolvedValue([item({ quantity: 5, lowStockThreshold: 1 })]);
+    expect(await addAllLowStockToShoppingList()).toBe(0);
+    expect(mockAddShoppingItem).not.toHaveBeenCalled();
   });
 });
