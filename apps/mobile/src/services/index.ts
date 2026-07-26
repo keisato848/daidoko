@@ -23,9 +23,7 @@ export {
   addShoppingItem,
   addRecipeIngredientsToList,
   addMissingRecipeIngredientsToList,
-  setShoppingItemChecked,
   removeShoppingItem,
-  clearCheckedShoppingItems,
 } from './shopping-list.service';
 export {
   getPantryItems,
@@ -34,6 +32,7 @@ export {
   removePantryItem,
   getInStockNormalizedNames,
   moveCheckedShoppingItemsToPantry,
+  moveShoppingItemToPantry,
 } from './pantry.service';
 export { lookupJan, rememberJan } from './jan.service';
 export { getCookableRecipes, rankByCoverage, type CookableRecipe } from './cookable.service';

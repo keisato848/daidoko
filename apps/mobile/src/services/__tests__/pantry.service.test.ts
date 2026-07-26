@@ -8,6 +8,7 @@ import {
   getInStockNormalizedNames,
   getPantryItems,
   moveCheckedShoppingItemsToPantry,
+  moveShoppingItemToPantry,
   removePantryItem,
   updatePantryItem,
 } from '../pantry.service';
@@ -31,6 +32,10 @@ describe('pantry.service (web / non-native)', () => {
 
   it('moves nothing when not native', async () => {
     expect(await moveCheckedShoppingItemsToPantry()).toBe(0);
+  });
+
+  it('single-item move is a no-op on web', async () => {
+    expect(await moveShoppingItemToPantry({ id: 'x', name: '玉ねぎ', amount: '1個' })).toBe(false);
   });
 
   it('mutations are safe no-ops on web', async () => {

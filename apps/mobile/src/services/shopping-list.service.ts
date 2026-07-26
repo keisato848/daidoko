@@ -167,37 +167,10 @@ export async function addMissingRecipeIngredientsToList(recipeId: string): Promi
   return added;
 }
 
-export async function setShoppingItemChecked(id: string, checked: boolean): Promise<void> {
-  if (!isNativePlatform) return;
-  const { eq } = await import('drizzle-orm');
-  const { getDb } = await import('../db/client');
-  const schema = await import('../db/schema');
-  await getDb()
-    .update(schema.shoppingItems)
-    .set({ checked: checked ? 1 : 0, checkedAt: checked ? new Date().toISOString() : null })
-    .where(eq(schema.shoppingItems.id, id));
-}
-
 export async function removeShoppingItem(id: string): Promise<void> {
   if (!isNativePlatform) return;
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
   await getDb().delete(schema.shoppingItems).where(eq(schema.shoppingItems.id, id));
-}
-
-/** Remove all checked (= already bought) items. */
-export async function clearCheckedShoppingItems(): Promise<void> {
-  if (!isNativePlatform) return;
-  const { eq, and } = await import('drizzle-orm');
-  const { getDb } = await import('../db/client');
-  const schema = await import('../db/schema');
-  await getDb()
-    .delete(schema.shoppingItems)
-    .where(
-      and(
-        eq(schema.shoppingItems.familyId, await currentFamilyId()),
-        eq(schema.shoppingItems.checked, 1),
-      ),
-    );
 }

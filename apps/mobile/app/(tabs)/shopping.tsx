@@ -1,24 +1,23 @@
 /**
  * 買い物リスト（集約・永続）— ホーム右上のカートから開く。
- * 手動追加・チェック（永続）・削除・チェック済み一括削除。レシピからの追加は
- * レシピ詳細の「材料を買い物リストに追加」から。docs/買い物リスト・在庫設計.md §5.1
+ * 手動追加・タップで即座に在庫へ（#66③）・削除。レシピからの追加は
+ * レシピ詳細の「足りない材料を買い物リストに追加」から。docs/買い物リスト・在庫設計.md §5.1
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Check, Package, Plus, Trash2, X } from 'lucide-react-native';
+import { Plus, X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
+import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
-import { moveCheckedShoppingItemsToPantry } from '../../src/services/pantry.service';
+import { moveShoppingItemToPantry } from '../../src/services/pantry.service';
 import {
   addShoppingItem,
-  clearCheckedShoppingItems,
   getShoppingItems,
   removeShoppingItem,
-  setShoppingItemChecked,
 } from '../../src/services/shopping-list.service';
 import type { ShoppingItem } from '../../src/services/types';
 
@@ -42,13 +41,18 @@ export default function ShoppingListScreen() {
     refresh();
   }, [input, refresh]);
 
-  const handleToggle = useCallback(
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastVisible, setToastVisible] = useState(false);
+
+  // タップ＝買った、で即座に在庫へ移す（チェック→ボタン押下の2ステップを解消; #66③）
+  const handleBuy = useCallback(
     async (item: ShoppingItem) => {
-      // optimistic
-      setItems((prev) =>
-        prev.map((it) => (it.id === item.id ? { ...it, checked: !it.checked } : it)),
-      );
-      await setShoppingItemChecked(item.id, !item.checked).catch(() => undefined);
+      setItems((prev) => prev.filter((it) => it.id !== item.id));
+      const moved = await moveShoppingItemToPantry(item).catch(() => false);
+      if (moved) {
+        setToastMessage(`${item.name} を在庫に入れました`);
+        setToastVisible(true);
+      }
       refresh();
     },
     [refresh],
@@ -63,18 +67,6 @@ export default function ShoppingListScreen() {
     [refresh],
   );
 
-  const handleClearChecked = useCallback(async () => {
-    await clearCheckedShoppingItems().catch(() => undefined);
-    refresh();
-  }, [refresh]);
-
-  const handleMoveToPantry = useCallback(async () => {
-    await moveCheckedShoppingItemsToPantry().catch(() => undefined);
-    refresh();
-  }, [refresh]);
-
-  const checkedCount = items.filter((it) => it.checked).length;
-
   // 初回利用ガイド（コーチマーク）
   const pantryLinkRef = useRef<View>(null);
   const coach = useCoachMarks('shopping', [
@@ -87,7 +79,7 @@ export default function ShoppingListScreen() {
     {
       key: 'move',
       title: '買った→在庫へ',
-      text: '買ったものにチェックを付けると「在庫に入れる」で一括で在庫へ移せます（分量も自動で読み取り）。',
+      text: 'タップするだけで、その品目が在庫へ移ります（分量も自動で読み取り）。',
     },
   ]);
 
@@ -142,14 +134,16 @@ export default function ShoppingListScreen() {
         }
         renderItem={({ item }) => (
           <View style={styles.row}>
-            <Pressable style={styles.rowMain} onPress={() => handleToggle(item)} hitSlop={6}>
-              <View style={[styles.checkbox, item.checked && styles.checkboxOn]}>
-                {item.checked && <Check size={14} color={Colors.bg} />}
-              </View>
+            <Pressable
+              style={styles.rowMain}
+              onPress={() => handleBuy(item)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.name}を買った（在庫に入れる）`}
+            >
+              <View style={styles.checkbox} />
               <View style={styles.rowText}>
-                <Text style={[styles.itemName, item.checked && styles.itemNameChecked]}>
-                  {item.name}
-                </Text>
+                <Text style={styles.itemName}>{item.name}</Text>
                 {item.amount ? <Text style={styles.itemAmount}>{item.amount}</Text> : null}
               </View>
             </Pressable>
@@ -160,22 +154,11 @@ export default function ShoppingListScreen() {
         )}
       />
 
-      {checkedCount > 0 && (
-        <View style={styles.footer}>
-          <Pressable style={styles.pantryButton} onPress={handleMoveToPantry}>
-            <Package size={16} color={Colors.gold} />
-            <Text style={styles.pantryButtonText}>在庫に入れる（{checkedCount}）</Text>
-          </Pressable>
-          <Pressable
-            style={styles.clearButton}
-            onPress={handleClearChecked}
-            accessibilityLabel="チェック済みを削除"
-          >
-            <Trash2 size={16} color={Colors.muted} />
-            <Text style={styles.clearText}>削除</Text>
-          </Pressable>
-        </View>
-      )}
+      <Toast
+        message={toastMessage}
+        visible={toastVisible}
+        onDismiss={() => setToastVisible(false)}
+      />
 
       <CoachMarkOverlay
         visible={coach.visible}
@@ -251,40 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxOn: { backgroundColor: Colors.gold, borderColor: Colors.gold },
   rowText: { flex: 1, gap: 2 },
   itemName: { fontSize: 15, color: Colors.paper },
-  itemNameChecked: { color: Colors.muted, textDecorationLine: 'line-through' },
   itemAmount: { fontSize: 12, color: Colors.paperDim },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  pantryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.gold,
-    backgroundColor: '#150F07',
-  },
-  pantryButtonText: { fontSize: 14, fontWeight: '600', color: Colors.gold },
-  clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  clearText: { fontSize: 13, color: Colors.muted },
 });
