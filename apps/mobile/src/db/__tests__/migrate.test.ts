@@ -17,6 +17,7 @@ function snapshot(overrides: Partial<SeedSnapshot> = {}): SeedSnapshot {
     tagIds: [],
     cookingLogIds: [],
     cookingPhotoIds: [],
+    shoppingItemIds: [],
     ...overrides,
   };
 }

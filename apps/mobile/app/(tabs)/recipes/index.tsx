@@ -4,7 +4,7 @@
  * Long-press enables multi-select mode with bulk delete action.
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ArrowUpDown, Check, Search, Trash2, X } from 'lucide-react-native';
+import { ArrowUpDown, Check, Plus, Search, Trash2, X } from 'lucide-react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -371,6 +371,17 @@ export default function RecipeListScreen() {
         })}
       </BottomSheet>
 
+      {!selectMode && (
+        <Pressable
+          style={styles.addFab}
+          onPress={() => router.push('/(tabs)/add')}
+          accessibilityRole="button"
+          accessibilityLabel="レシピを追加"
+        >
+          <Plus size={24} color={Colors.bg} />
+        </Pressable>
+      )}
+
       <CoachMarkOverlay
         visible={coach.visible}
         step={coach.step}
@@ -385,6 +396,22 @@ export default function RecipeListScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg, paddingTop: 54 },
+  addFab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -27,13 +27,15 @@ import {
   currentDayKey,
   deriveFreemiumStatus,
   FREE_DAILY_LIMIT,
-  getAdBonusGranted,
+  getAdWatchedToday,
   getDailyUsage,
   getFreemiumStatus,
+  getTokenBalance,
   grantAdBonus,
   incrementDailyUsage,
   recordCloudInference,
   remainingFree,
+  spendToken,
 } from '../usage.service';
 
 describe('usage.service', () => {
@@ -79,8 +81,8 @@ describe('usage.service', () => {
       // EXPO_PUBLIC_FREE_DAILY_LIMIT=0 のビルド（広告フロー検証にも使う）
       const status = deriveFreemiumStatus(false, 0, 0, true, false, 0);
       expect(status).toMatchObject({ remaining: 0, canInfer: false, canWatchAdForMore: true });
-      const afterBonus = deriveFreemiumStatus(false, 0, 1, true, false, 0);
-      expect(afterBonus).toMatchObject({ remaining: 1, canInfer: true });
+      const withToken = deriveFreemiumStatus(false, 0, 1, true, false, 0);
+      expect(withToken).toMatchObject({ remaining: 1, canInfer: true });
     });
   });
 
@@ -140,37 +142,75 @@ describe('usage.service', () => {
       await recordCloudInference();
       expect(await getDailyUsage()).toBe(0);
     });
+
+    it('spends a banked token once the daily free allowance is used up', async () => {
+      await recordCloudInference(); // spends the 1 free daily use
+      expect(await getDailyUsage()).toBe(FREE_DAILY_LIMIT);
+      await grantAdBonus(); // bank 1 token
+      expect(await getTokenBalance()).toBe(1);
+
+      await recordCloudInference(); // free allowance already used → spends the token
+      expect(await getDailyUsage()).toBe(FREE_DAILY_LIMIT); // daily counter untouched
+      expect(await getTokenBalance()).toBe(0);
+    });
   });
 
-  describe('ad bonus', () => {
-    it('grants extra uses up to the daily cap', async () => {
+  describe('token banking', () => {
+    it('grants a token per watch, up to the daily watch cap', async () => {
       const d = new Date(2026, 5, 10);
-      expect(await getAdBonusGranted(d)).toBe(0);
+      expect(await getTokenBalance()).toBe(0);
       expect(await grantAdBonus(d)).toBe(1);
       expect(await grantAdBonus(d)).toBe(2);
       expect(await grantAdBonus(d)).toBe(AD_BONUS_DAILY_LIMIT);
-      // further grants are capped
+      // today's watch cap reached — further grants are no-ops
       expect(await grantAdBonus(d)).toBe(AD_BONUS_DAILY_LIMIT);
+      expect(await getAdWatchedToday(d)).toBe(AD_BONUS_DAILY_LIMIT);
+    });
+
+    it('banks tokens indefinitely — balance survives a day change and watch cap resets', async () => {
+      const day1 = new Date(2026, 5, 10);
+      const day2 = new Date(2026, 5, 11);
+      for (let i = 0; i < AD_BONUS_DAILY_LIMIT; i += 1) await grantAdBonus(day1);
+      expect(await getTokenBalance()).toBe(AD_BONUS_DAILY_LIMIT);
+
+      // new day: watch count resets, but the banked balance does not
+      expect(await getAdWatchedToday(day2)).toBe(0);
+      expect(await getTokenBalance()).toBe(AD_BONUS_DAILY_LIMIT);
+      expect(await grantAdBonus(day2)).toBe(AD_BONUS_DAILY_LIMIT + 1);
+    });
+
+    it('spendToken floors at zero', async () => {
+      expect(await spendToken()).toBe(0);
+      await grantAdBonus();
+      expect(await spendToken()).toBe(0);
     });
 
     it('raises the effective allowance via deriveFreemiumStatus', () => {
-      // used 1 (base spent) but 1 ad bonus granted → 1 use left
+      // used 1 (base spent) but 1 token banked → 1 use left
       expect(deriveFreemiumStatus(false, 1, 1, true)).toMatchObject({
         remaining: 1,
         canInfer: true,
       });
     });
 
-    it('offers an ad only when out of uses, ads available, cap not reached', () => {
+    it('offers an ad only when out of uses, ads available, today’s watch cap not reached', () => {
       expect(deriveFreemiumStatus(false, 1, 0, true).canWatchAdForMore).toBe(true);
       // ads unavailable → no offer
       expect(deriveFreemiumStatus(false, 1, 0, false).canWatchAdForMore).toBe(false);
       // still has a use left → no offer yet
       expect(deriveFreemiumStatus(false, 0, 0, true).canWatchAdForMore).toBe(false);
-      // bonus cap reached → no offer
+      // today's watch cap reached → no offer (even with zero banked tokens)
       expect(
-        deriveFreemiumStatus(false, 1 + AD_BONUS_DAILY_LIMIT, AD_BONUS_DAILY_LIMIT, true)
-          .canWatchAdForMore,
+        deriveFreemiumStatus(
+          false,
+          1,
+          0,
+          true,
+          false,
+          FREE_DAILY_LIMIT,
+          AD_BONUS_DAILY_LIMIT,
+          AD_BONUS_DAILY_LIMIT,
+        ).canWatchAdForMore,
       ).toBe(false);
     });
 

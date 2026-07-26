@@ -56,6 +56,9 @@ importers:
       expo:
         specifier: ~54.0.0
         version: 54.0.35(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(graphql@15.8.0)(react-native@0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
+      expo-asset:
+        specifier: ~12.0.13
+        version: 12.0.13(expo@54.0.35)(react-native@0.81.5(@babel/core@7.29.0)(@react-native-community/cli@13.6.9)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
       expo-build-properties:
         specifier: ~1.0.10
         version: 1.0.10(expo@54.0.35)
