@@ -180,6 +180,15 @@ export default function RecipeDetailScreen() {
     ]);
   };
 
+  const handleAddMissingToList = async () => {
+    if (!recipe) return;
+    const added = await addMissingRecipeIngredientsToList(recipe.id);
+    Alert.alert(
+      '買い物リスト',
+      added > 0 ? `足りない${added}件を買い物リストに追加しました` : 'すべて在庫にあります',
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -349,15 +358,7 @@ export default function RecipeDetailScreen() {
               ref={missingRef}
               collapsable={false}
               style={styles.addToListButton}
-              onPress={async () => {
-                const added = await addMissingRecipeIngredientsToList(recipe.id);
-                Alert.alert(
-                  '買い物リスト',
-                  added > 0
-                    ? `足りない${added}件を買い物リストに追加しました`
-                    : 'すべて在庫にあります',
-                );
-              }}
+              onPress={handleAddMissingToList}
             >
               <ShoppingCart size={16} color={Colors.gold} />
               <Text style={styles.addToListText}>足りない材料を買い物リストに追加</Text>
@@ -453,7 +454,9 @@ export default function RecipeDetailScreen() {
         <PressableScale
           style={styles.shopButton}
           scaleTo={0.97}
-          onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/shop`)}
+          onPress={handleAddMissingToList}
+          accessibilityRole="button"
+          accessibilityLabel="足りない材料を買い物リストに追加"
         >
           <ShoppingCart size={18} color={Colors.gold} />
         </PressableScale>
