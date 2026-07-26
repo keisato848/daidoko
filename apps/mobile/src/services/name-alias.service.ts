@@ -13,6 +13,11 @@ export interface AliasEntry {
   canonical: string;
 }
 
+export interface AliasRecord extends AliasEntry {
+  id: string;
+  updatedAt: string;
+}
+
 async function currentFamilyId(): Promise<string> {
   const { getCurrentFamily } = await import('./user.service');
   return getCurrentFamily().id;
@@ -50,6 +55,48 @@ export async function getUncachedNames(normalizedNames: string[]): Promise<strin
     }
   }
   return result;
+}
+
+/** All cached entries, newest-updated first — for the maintenance UI (#66④). */
+export async function getAliasEntries(): Promise<AliasRecord[]> {
+  if (!isNativePlatform) return [];
+  const { eq, desc } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  return getDb()
+    .select({
+      id: schema.nameAliases.id,
+      sourceNormalized: schema.nameAliases.sourceNormalized,
+      canonical: schema.nameAliases.canonical,
+      updatedAt: schema.nameAliases.updatedAt,
+    })
+    .from(schema.nameAliases)
+    .where(eq(schema.nameAliases.familyId, await currentFamilyId()))
+    .orderBy(desc(schema.nameAliases.updatedAt));
+}
+
+/** Correct a mis-resolved entry's canonical name (maintenance UI, #66④). */
+export async function updateAliasCanonical(id: string, canonical: string): Promise<void> {
+  if (!isNativePlatform) return;
+  const trimmed = canonical.trim();
+  if (!trimmed) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  await getDb()
+    .update(schema.nameAliases)
+    .set({ canonical: trimmed, updatedAt: new Date().toISOString() })
+    .where(eq(schema.nameAliases.id, id));
+}
+
+/** Remove a cached entry — it will be re-resolved by AI next time it's seen. */
+export async function deleteAlias(id: string): Promise<void> {
+  if (!isNativePlatform) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  await getDb().delete(schema.nameAliases).where(eq(schema.nameAliases.id, id));
 }
 
 /** Upsert resolved aliases. */

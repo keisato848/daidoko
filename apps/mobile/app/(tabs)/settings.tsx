@@ -205,6 +205,13 @@ export default function SettingsScreen() {
           enabled: false,
           onPress: showComingSoon,
         },
+        {
+          id: 'name-aliases',
+          label: '名寄せ辞書',
+          subtitle: 'AIが覚えた食材名の対応を確認・修正',
+          enabled: true,
+          onPress: () => router.push('/(tabs)/name-aliases'),
+        },
       ],
     },
     {

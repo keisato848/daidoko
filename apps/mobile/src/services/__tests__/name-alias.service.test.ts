@@ -3,7 +3,14 @@ jest.mock('../../db/client', () => ({
   getDb: jest.fn(),
 }));
 
-import { cacheAliases, getAliasMap, getUncachedNames } from '../name-alias.service';
+import {
+  cacheAliases,
+  deleteAlias,
+  getAliasEntries,
+  getAliasMap,
+  getUncachedNames,
+  updateAliasCanonical,
+} from '../name-alias.service';
 
 describe('name-alias.service (web / non-native)', () => {
   it('returns an empty alias map', async () => {
@@ -18,5 +25,14 @@ describe('name-alias.service (web / non-native)', () => {
     await expect(
       cacheAliases([{ sourceNormalized: 'とっとごたまご', canonical: '卵' }]),
     ).resolves.toBeUndefined();
+  });
+
+  it('returns no entries on web', async () => {
+    expect(await getAliasEntries()).toEqual([]);
+  });
+
+  it('maintenance mutations are safe no-ops on web', async () => {
+    await expect(updateAliasCanonical('x', '卵')).resolves.toBeUndefined();
+    await expect(deleteAlias('x')).resolves.toBeUndefined();
   });
 });
