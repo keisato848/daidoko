@@ -3,8 +3,20 @@
  * .claude/settings.json で配線される。deny=遮断 / ask=ユーザー確認 / allow=通過。
  * ルールは docs/開発ハーネス.md に一覧。実際に事故った・時間を失った操作だけを載せる。
  */
-import { readStdinJson } from './lib/runtime.mjs';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { readStdinJson, runCommand } from './lib/runtime.mjs';
 import { classifySigningEnv } from './lib/signing.mjs';
+
+// リポジトリルートはこのファイルの位置（scripts/agent/）から導出する。
+// フォルダ名ハードコードは別名 clone でガードが無効化されるため禁止（edit-guard と同じ方針）。
+const REPO_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+
+// eas submit ガード（releaseTagStatus）のメモ化用。関数定義より前、メインの判定チェーンより
+// 前に宣言する必要がある（`let` は TDZ にかかるため、関数だけ先に巻き上がっても呼べない）。
+let releaseTagStatusCache;
 
 const payload = await readStdinJson();
 const commandText = extractCommandText(payload);
@@ -46,6 +58,19 @@ if (!commandText) {
   );
 } else if (/\brailway\s+up\b/i.test(commandText)) {
   respond('ask', 'Railway 本番へのデプロイです。ユーザーの明示承認を確認してください。');
+} else if (
+  /\beas\s+submit\b/i.test(commandText) &&
+  !/(-p|--platform)\s+ios\b/i.test(commandText) &&
+  releaseTagStatus()?.missing
+) {
+  const { version, versionCode } = releaseTagStatus();
+  const tagName = `v${version}-play-${versionCode}`;
+  respond(
+    'deny',
+    `apps/mobile/app.json の versionCode ${versionCode}（v${version}）に対応する git タグがありません。` +
+      `先に \`git tag -a ${tagName} -m "..."\` を作成し、` +
+      `\`git push origin ${tagName}\` で共有してから submit してください（docs/開発ハーネス.md）。`,
+  );
 } else if (/\beas\s+submit\b/i.test(commandText)) {
   respond(
     'ask',
@@ -143,4 +168,33 @@ function extractToolName(value) {
 
 function missingSigningEnv() {
   return classifySigningEnv().missing;
+}
+
+// `eas submit` ガード用: 現在の apps/mobile/app.json の versionCode に対応する git タグが
+// あるかを調べる。app.json が読めない・git 呼び出しが失敗する場合は null を返し呼び出し側で
+// フェイルオープン（ガードを効かせない）にする — インフラの不調でリリースを止めたくないため。
+function releaseTagStatus() {
+  if (releaseTagStatusCache !== undefined) return releaseTagStatusCache;
+  releaseTagStatusCache = computeReleaseTagStatus();
+  return releaseTagStatusCache;
+}
+
+function computeReleaseTagStatus() {
+  let version;
+  let versionCode;
+  try {
+    const app = JSON.parse(readFileSync(resolve(REPO_ROOT, 'apps/mobile/app.json'), 'utf8'));
+    version = app?.expo?.version;
+    versionCode = app?.expo?.android?.versionCode;
+  } catch {
+    return null;
+  }
+  if (!version || !versionCode) return null;
+
+  const tagList = runCommand('git', ['tag', '-l'], { cwd: REPO_ROOT });
+  if (!tagList.ok) return null;
+
+  const tags = tagList.stdout.split(/\r?\n/).filter(Boolean);
+  const hasTag = tags.some((tag) => new RegExp(`\\b${versionCode}\\b`).test(tag));
+  return { version, versionCode, missing: !hasTag };
 }
