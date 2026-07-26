@@ -6,10 +6,8 @@ jest.mock('../../db/client', () => ({
 import {
   addRecipeIngredientsToList,
   addShoppingItem,
-  clearCheckedShoppingItems,
   getShoppingItems,
   removeShoppingItem,
-  setShoppingItemChecked,
 } from '../shopping-list.service';
 
 describe('shopping-list.service (web / non-native)', () => {
@@ -30,8 +28,6 @@ describe('shopping-list.service (web / non-native)', () => {
   });
 
   it('mutations are safe no-ops on web', async () => {
-    await expect(setShoppingItemChecked('x', true)).resolves.toBeUndefined();
     await expect(removeShoppingItem('x')).resolves.toBeUndefined();
-    await expect(clearCheckedShoppingItems()).resolves.toBeUndefined();
   });
 });

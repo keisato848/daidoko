@@ -220,24 +220,38 @@ export async function getInStockNormalizedNames(): Promise<string[]> {
 }
 
 /**
- * Move all checked shopping items into the pantry (買った→在庫): upsert each into
- * the pantry (parsing its amount), then remove it from the shopping list.
- * Returns how many were moved.
+ * Move a single shopping item into the pantry (買った→在庫、ワンタップ): upsert it
+ * into the pantry (parsing its amount), then remove it from the shopping list.
+ * Returns whether it was actually moved.
+ */
+export async function moveShoppingItemToPantry(item: {
+  id: string;
+  name: string;
+  amount: string | null;
+}): Promise<boolean> {
+  if (!isNativePlatform) return false;
+  const { removeShoppingItem } = await import('./shopping-list.service');
+  const { quantity, unit } = parseAmount(item.amount);
+  const result = await addPantryItem(item.name, { quantity, unit });
+  if (!result) return false;
+  await removeShoppingItem(item.id);
+  return true;
+}
+
+/**
+ * Move all checked shopping items into the pantry (買った→在庫). Returns how many
+ * were moved. Retained for any items left checked from before the one-tap flow
+ * (#66③) — normal use now moves each item the moment it's tapped.
  */
 export async function moveCheckedShoppingItemsToPantry(): Promise<number> {
   if (!isNativePlatform) return 0;
-  const { getShoppingItems, removeShoppingItem } = await import('./shopping-list.service');
+  const { getShoppingItems } = await import('./shopping-list.service');
   const items = await getShoppingItems();
   const checked = items.filter((it) => it.checked);
 
   let moved = 0;
   for (const item of checked) {
-    const { quantity, unit } = parseAmount(item.amount);
-    const result = await addPantryItem(item.name, { quantity, unit });
-    if (result) {
-      await removeShoppingItem(item.id);
-      moved += 1;
-    }
+    if (await moveShoppingItemToPantry(item)) moved += 1;
   }
   return moved;
 }
