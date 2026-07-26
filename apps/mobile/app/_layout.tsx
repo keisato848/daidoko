@@ -1,4 +1,4 @@
-import { Stack, usePathname } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 
@@ -10,10 +10,18 @@ import {
   noteAppBackgrounded,
 } from '../src/services/app-open-ad.service';
 import { maybeCreateAutoSnapshot } from '../src/services/backup.service';
-import { checkAndNotifyLowStock } from '../src/services/low-stock.service';
+import {
+  addAllLowStockToShoppingList,
+  checkAndNotifyLowStock,
+} from '../src/services/low-stock.service';
+import {
+  addLowStockTapListener,
+  consumeLowStockLaunchTap,
+} from '../src/services/notification.service';
 
 export default function RootLayout() {
   const { isReady, error } = useDatabase();
+  const router = useRouter();
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
@@ -28,6 +36,24 @@ export default function RootLayout() {
       initAppOpenAds().catch(() => undefined);
     }
   }, [isReady]);
+
+  // 残量通知タップ → 確認なしで一括買い物リスト追加（#66②）。
+  // cold-start（タップでアプリが起動したケース）はリスナー登録前なので別途 consume で拾う。
+  useEffect(() => {
+    if (!isReady) return;
+    const handleTap = () => {
+      addAllLowStockToShoppingList()
+        .then(() => router.push('/(tabs)/shopping'))
+        .catch(() => undefined);
+    };
+    consumeLowStockLaunchTap()
+      .then((launched) => {
+        if (launched) handleTap();
+      })
+      .catch(() => undefined);
+    const sub = addLowStockTapListener(handleTap);
+    return () => sub.remove();
+  }, [isReady, router]);
 
   // フォアグラウンド復帰でアプリ起動広告（表示条件は service 側で全て判定）
   useEffect(() => {

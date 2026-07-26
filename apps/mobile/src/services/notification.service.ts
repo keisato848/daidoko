@@ -12,6 +12,7 @@ import { isNativePlatform } from '../db/client';
 
 const TIMER_CHANNEL_ID = 'timer';
 const LOW_STOCK_CHANNEL_ID = 'low-stock';
+const LOW_STOCK_DATA_TYPE = 'low-stock';
 
 let handlerSet = false;
 let permissionGranted: boolean | null = null;
@@ -96,12 +97,36 @@ export async function presentLowStockNotification(body: string): Promise<string 
         title: '在庫がなくなりそうです',
         body,
         sound: 'default',
+        data: { type: LOW_STOCK_DATA_TYPE },
       },
       trigger: Platform.OS === 'android' ? { channelId: LOW_STOCK_CHANNEL_ID } : null,
     });
   } catch {
     return null;
   }
+}
+
+/**
+ * Fire `onTap` when the user taps a low-stock notification while the app is
+ * already running (foreground or backgrounded-but-alive). Returns the
+ * subscription to remove on unmount. For the cold-start case (app launched BY
+ * the tap), see `consumeLowStockLaunchTap`.
+ */
+export function addLowStockTapListener(onTap: () => void): { remove: () => void } {
+  return Notifications.addNotificationResponseReceivedListener((response) => {
+    if (response.notification.request.content.data?.type === LOW_STOCK_DATA_TYPE) onTap();
+  });
+}
+
+/**
+ * Check whether the app was cold-launched by tapping a low-stock notification
+ * (the response listener above is only registered after mount, so it misses
+ * the launch-triggering tap). Call once on startup.
+ */
+export async function consumeLowStockLaunchTap(): Promise<boolean> {
+  if (!isNativePlatform) return false;
+  const response = await Notifications.getLastNotificationResponseAsync();
+  return response?.notification.request.content.data?.type === LOW_STOCK_DATA_TYPE;
 }
 
 /** Cancel a scheduled timer notification (no-op if already fired/absent). */
