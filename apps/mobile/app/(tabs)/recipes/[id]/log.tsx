@@ -33,6 +33,7 @@ import {
   MAX_COOKING_LOG_PHOTOS,
   persistCookingLogPhotos,
 } from '../../../../src/services/photo-storage.service';
+import { maybeRequestStoreReview } from '../../../../src/services/review-request.service';
 import type { SaveCookingPhotoInput } from '../../../../src/services/types';
 
 function StarRow({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -98,6 +99,8 @@ export default function CookingLogScreen() {
         photos: persistedPhotos,
       });
       setShowToast(true);
+      // 保存成功＝ポジティブな瞬間にストア評価を打診（条件・頻度はサービス側で管理）
+      void maybeRequestStoreReview();
       setTimeout(() => router.push('/(tabs)'), 1500);
     } catch (error) {
       await cleanupStoredCookingPhotos(persistedPhotos);

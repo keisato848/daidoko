@@ -96,6 +96,22 @@ export async function deleteCookingLog(logId: string): Promise<void> {
   await db.delete(schema.cookingLogs).where(eq(schema.cookingLogs.id, logId));
 }
 
+/** 家族全体の調理記録の総数（ストア評価プロンプトのしきい値判定などに使う）。 */
+export async function getCookingLogCount(): Promise<number> {
+  if (!isNativePlatform) return 0;
+
+  const { eq, count } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const { getCurrentFamily } = await import('./user.service');
+
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(schema.cookingLogs)
+    .where(eq(schema.cookingLogs.familyId, getCurrentFamily().id));
+  return rows[0]?.value ?? 0;
+}
+
 export async function getLogsForRecipe(recipeId: string): Promise<CookingLogEntry[]> {
   if (!isNativePlatform) {
     return getMockCookingLogsForRecipe(recipeId);
