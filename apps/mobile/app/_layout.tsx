@@ -18,6 +18,7 @@ import {
   addLowStockTapListener,
   consumeLowStockLaunchTap,
 } from '../src/services/notification.service';
+import { grantLaunchBonusOnce } from '../src/services/usage.service';
 
 export default function RootLayout() {
   const { isReady, error } = useDatabase();
@@ -29,11 +30,13 @@ export default function RootLayout() {
   // 起動時に在庫の残量しきい値をチェック（1日1回まとめて通知; P3）
   // + 週次の自動バックアップスナップショット（#79。失敗しても起動は止めない）
   // + アプリ起動広告の初期化（広告有効ビルドのみ・ガード多数 — app-open-ad.service）
+  // + リリース記念ボーナスの一度きり付与（評価とは無関係の無条件配布）
   useEffect(() => {
     if (isReady) {
       checkAndNotifyLowStock().catch(() => undefined);
       maybeCreateAutoSnapshot().catch(() => undefined);
       initAppOpenAds().catch(() => undefined);
+      grantLaunchBonusOnce().catch(() => undefined);
     }
   }, [isReady]);
 

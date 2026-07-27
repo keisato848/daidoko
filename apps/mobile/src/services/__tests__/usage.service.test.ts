@@ -32,7 +32,9 @@ import {
   getFreemiumStatus,
   getTokenBalance,
   grantAdBonus,
+  grantLaunchBonusOnce,
   incrementDailyUsage,
+  LAUNCH_BONUS_TOKENS,
   recordCloudInference,
   remainingFree,
   spendToken,
@@ -183,6 +185,20 @@ describe('usage.service', () => {
       expect(await spendToken()).toBe(0);
       await grantAdBonus();
       expect(await spendToken()).toBe(0);
+    });
+
+    it('launch bonus grants LAUNCH_BONUS_TOKENS once, then no-ops', async () => {
+      expect(await grantLaunchBonusOnce()).toBe(true);
+      expect(await getTokenBalance()).toBe(LAUNCH_BONUS_TOKENS);
+      // second call: already granted on this install
+      expect(await grantLaunchBonusOnce()).toBe(false);
+      expect(await getTokenBalance()).toBe(LAUNCH_BONUS_TOKENS);
+    });
+
+    it('launch bonus stacks on top of ad-earned tokens', async () => {
+      await grantAdBonus();
+      await grantLaunchBonusOnce();
+      expect(await getTokenBalance()).toBe(1 + LAUNCH_BONUS_TOKENS);
     });
 
     it('raises the effective allowance via deriveFreemiumStatus', () => {
