@@ -2,7 +2,7 @@
   "expo": {
     "name": "だいどこ",
     "slug": "daidoko",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "orientation": "default",
     "scheme": "daidoko",
     "userInterfaceStyle": "dark",
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.daidoko.app",
-      "versionCode": 10012,
+      "versionCode": 10013,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"
