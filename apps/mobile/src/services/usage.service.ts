@@ -24,6 +24,10 @@ export const AD_BONUS_DAILY_LIMIT = 3;
 const USAGE_KEY_PREFIX = 'ai_photo_recipe_usage:';
 const AD_WATCH_KEY_PREFIX = 'ai_photo_recipe_ad_watch:';
 const TOKEN_BALANCE_KEY = 'ai_photo_recipe_token_balance';
+const LAUNCH_BONUS_KEY = 'launch_bonus_2026_07';
+
+/** リリース記念ボーナスで一度だけ配るトークン数。 */
+export const LAUNCH_BONUS_TOKENS = 3;
 
 export interface FreemiumStatus {
   isPremium: boolean;
@@ -140,6 +144,19 @@ export async function grantAdBonus(date: Date = new Date()): Promise<number> {
   const next = balance + 1;
   await setTokenBalance(next);
   return next;
+}
+
+/**
+ * リリース記念ボーナス: 端末（インストール）ごとに一度だけ、無条件でトークンを
+ * まとめて付与する。評価・レビューとは一切連動しない（Play ポリシー上、評価への
+ * 見返りは禁止のため、条件付き付与は実装しない）。付与済みなら no-op で false。
+ */
+export async function grantLaunchBonusOnce(): Promise<boolean> {
+  if ((await getAppMeta(LAUNCH_BONUS_KEY)) != null) return false;
+  // 先にフラグを立てる（途中失敗時に二重付与するより取りこぼす方を選ぶ）
+  await setAppMeta(LAUNCH_BONUS_KEY, new Date().toISOString());
+  await setTokenBalance((await getTokenBalance()) + LAUNCH_BONUS_TOKENS);
+  return true;
 }
 
 /** Spend one banked token (floors at 0). Returns the new balance. */
