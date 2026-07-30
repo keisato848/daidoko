@@ -32,6 +32,11 @@ type BackupRow = Record<string, SqlValue>;
 interface BackupTableDefinition {
   name: BackupTableName;
   columns: readonly string[];
+  /**
+   * 後から対象に加えたテーブル。旧アプリが書き出したファイルにはキーが無いため、
+   * 欠けていても「0件」として扱う（バージョンは上げずに前方/後方互換を保つ）。
+   */
+  optional?: boolean;
 }
 
 const BACKUP_TABLES = [
@@ -140,6 +145,50 @@ const BACKUP_TABLES = [
   {
     name: 'app_meta',
     columns: ['key', 'value', 'updated_at'],
+  },
+  // ─── 在庫・買い物まわり（optional: 2026-07 に対象へ追加。旧ファイルには存在しない）───
+  {
+    name: 'pantry_items',
+    columns: [
+      'id',
+      'family_id',
+      'name',
+      'name_normalized',
+      'quantity',
+      'unit',
+      'low_stock_threshold',
+      'jan_code',
+      'created_at',
+      'updated_at',
+    ],
+    optional: true,
+  },
+  {
+    name: 'shopping_items',
+    columns: [
+      'id',
+      'family_id',
+      'name',
+      'name_normalized',
+      'amount',
+      'checked',
+      'source',
+      'recipe_id',
+      'sort_order',
+      'created_at',
+      'checked_at',
+    ],
+    optional: true,
+  },
+  {
+    name: 'jan_catalog',
+    columns: ['id', 'family_id', 'jan_code', 'name', 'unit', 'updated_at'],
+    optional: true,
+  },
+  {
+    name: 'name_aliases',
+    columns: ['id', 'family_id', 'source_normalized', 'canonical', 'updated_at'],
+    optional: true,
   },
 ] as const;
 
@@ -286,7 +335,15 @@ function createEmptyBackupTables(): BackupTables {
     memos: [],
     sync_meta: [],
     app_meta: [],
+    pantry_items: [],
+    shopping_items: [],
+    jan_catalog: [],
+    name_aliases: [],
   };
+}
+
+function isOptionalTable(table: BackupTableDefinition): boolean {
+  return table.optional === true;
 }
 
 function quoteIdentifier(identifier: string): string {
@@ -334,6 +391,8 @@ function parseLocalBackupPayloadObject(parsed: Record<string, unknown>): LocalBa
   const tableRecord = rawTables as Record<string, unknown>;
   for (const table of BACKUP_TABLES) {
     const rows = tableRecord[table.name];
+    // 省略可のテーブルはキーが無ければ 0 件（旧アプリが書き出したファイルの復元）
+    if (rows === undefined && isOptionalTable(table)) continue;
     if (!Array.isArray(rows) || !rows.every(isBackupRow)) {
       throw new Error(`${table.name} のバックアップ内容が不正です`);
     }
