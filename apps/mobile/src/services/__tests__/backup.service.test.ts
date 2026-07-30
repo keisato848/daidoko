@@ -62,6 +62,102 @@ describe('backup.service', () => {
     expect(payload.schemaVersion).toBe(1);
   });
 
+  it('treats a payload without the pantry tables as empty (旧形式バックアップ互換)', () => {
+    // emptyTables = 2026-07 以前の 15 テーブルのみ。復元できなくなってはいけない
+    const payload = parseLocalBackupPayload(
+      JSON.stringify({
+        format: 'daidoko.local-backup',
+        schemaVersion: 1,
+        exportedAt: '2026-05-30T00:00:00.000Z',
+        tables: emptyTables,
+      }),
+    );
+
+    expect(payload.tables.pantry_items).toEqual([]);
+    expect(payload.tables.shopping_items).toEqual([]);
+    expect(payload.tables.jan_catalog).toEqual([]);
+    expect(payload.tables.name_aliases).toEqual([]);
+  });
+
+  it('round-trips the pantry / shopping / alias tables', () => {
+    const payload = parseLocalBackupPayload(
+      JSON.stringify({
+        format: 'daidoko.local-backup',
+        schemaVersion: 1,
+        exportedAt: '2026-07-30T00:00:00.000Z',
+        tables: {
+          ...emptyTables,
+          pantry_items: [
+            {
+              id: 'pantry-1',
+              family_id: 'family-1',
+              name: '玉ねぎ',
+              name_normalized: 'たまねぎ',
+              quantity: 2,
+              unit: '個',
+              low_stock_threshold: 1,
+              jan_code: null,
+              created_at: '2026-07-30T00:00:00.000Z',
+              updated_at: '2026-07-30T00:00:00.000Z',
+            },
+          ],
+          shopping_items: [
+            {
+              id: 'shopping-1',
+              family_id: 'family-1',
+              name: '牛乳',
+              name_normalized: 'ぎゅうにゅう',
+              amount: '1本',
+              checked: 0,
+              source: 'low_stock',
+              recipe_id: null,
+              sort_order: 0,
+              created_at: '2026-07-30T00:00:00.000Z',
+              checked_at: null,
+            },
+          ],
+          jan_catalog: [
+            {
+              id: 'jan-1',
+              family_id: 'family-1',
+              jan_code: '4901234567894',
+              name: '牛乳 1L',
+              unit: '本',
+              updated_at: '2026-07-30T00:00:00.000Z',
+            },
+          ],
+          name_aliases: [
+            {
+              id: 'alias-1',
+              family_id: 'family-1',
+              source_normalized: 'たまねき',
+              canonical: '玉ねぎ',
+              updated_at: '2026-07-30T00:00:00.000Z',
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(payload.tables.pantry_items[0]?.name).toBe('玉ねぎ');
+    expect(payload.tables.shopping_items[0]?.source).toBe('low_stock');
+    expect(payload.tables.jan_catalog[0]?.jan_code).toBe('4901234567894');
+    expect(payload.tables.name_aliases[0]?.canonical).toBe('玉ねぎ');
+  });
+
+  it('rejects a pantry table that is present but malformed', () => {
+    expect(() =>
+      parseLocalBackupPayload(
+        JSON.stringify({
+          format: 'daidoko.local-backup',
+          schemaVersion: 1,
+          exportedAt: '2026-07-30T00:00:00.000Z',
+          tables: { ...emptyTables, pantry_items: 'broken' },
+        }),
+      ),
+    ).toThrow('pantry_items のバックアップ内容が不正です');
+  });
+
   it('rejects unknown backup schema versions', () => {
     expect(() =>
       parseLocalBackupPayload(
