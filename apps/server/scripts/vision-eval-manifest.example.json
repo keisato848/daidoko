@@ -1,0 +1,57 @@
+{
+  "_comment": [
+    "評価セットの manifest 雛形（R0 / Issue #118・設計: docs/レシピ推論の評価設計.md）。",
+    "このファイルをコピーして評価セットのディレクトリに manifest.json として置く。",
+    "画像と実データの manifest.json は個人の外食履歴のためリポジトリにコミットしない。",
+    "外食20 / 家庭10 / 陰性5。外食のうち10件は crossSection と menu も撮る。"
+  ],
+  "cases": [
+    {
+      "id": "r01",
+      "photo": "r01-main.jpg",
+      "crossSection": "r01-cross.jpg",
+      "menu": "r01-menu.jpg",
+      "expectedDish": "麻婆豆腐",
+      "genre": "中華",
+      "condition": "暗い店内・寄り",
+      "kind": "eaten_out"
+    },
+    {
+      "id": "r02",
+      "photo": "r02-main.jpg",
+      "expectedDish": "油淋鶏",
+      "genre": "中華",
+      "condition": "明るい・俯瞰",
+      "kind": "eaten_out"
+    },
+    {
+      "id": "h01",
+      "photo": "h01-main.jpg",
+      "expectedDish": "肉じゃが",
+      "genre": "和食",
+      "condition": "自宅・明るい",
+      "kind": "home"
+    },
+    {
+      "id": "n01",
+      "photo": "n01-landscape.jpg",
+      "condition": "風景",
+      "kind": "negative",
+      "expectReject": true
+    },
+    {
+      "id": "n02",
+      "photo": "n02-ingredients.jpg",
+      "condition": "食材のみ（じゃがいも3個）",
+      "kind": "negative",
+      "expectReject": true
+    },
+    {
+      "id": "n03",
+      "photo": "n03-cookbook.jpg",
+      "condition": "レシピ本のページ",
+      "kind": "negative",
+      "expectReject": true
+    }
+  ]
+}
