@@ -41,6 +41,11 @@ describe('buildSystemPrompt', () => {
     // 思考の順序と、店名を料理の特定に使うこと
     expect(prompt).toContain('料理を特定する');
     expect(prompt).toContain('店名やメニュー名');
+    // 複数皿を1レシピにまとめない（v0 ベースラインで観測した失敗モード）
+    expect(prompt).toContain('主となる1品だけ');
+    expect(prompt).toContain('付け合わせ');
+    // 説明的な言い換えではなく通用する料理名を使う（同じくベースラインの失敗モード）
+    expect(prompt).toContain('一般に通用する料理名');
     // 家庭への翻訳（この機能の中心）
     expect(prompt).toContain('業務用の器具を前提にしない');
     // 見えないものは推定と明記
