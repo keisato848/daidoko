@@ -28,6 +28,8 @@ export async function getTimeline(): Promise<TimelineEntry[]> {
       servings: schema.cookingLogs.servings,
       rating: schema.cookingLogs.rating,
       memo: schema.cookingLogs.memo,
+      kind: schema.cookingLogs.kind,
+      placeName: schema.cookingLogs.placeName,
     })
     .from(schema.cookingLogs)
     .leftJoin(schema.recipes, eq(schema.cookingLogs.recipeId, schema.recipes.id))
@@ -69,5 +71,7 @@ export async function getTimeline(): Promise<TimelineEntry[]> {
       rating: l.rating,
       memo: l.memo,
       photos: (photosByLogId.get(l.id) ?? []).sort((a, b) => a.sortOrder - b.sortOrder),
+      kind: l.kind === 'eaten_out' ? ('eaten_out' as const) : ('cooked' as const),
+      placeName: l.placeName,
     }));
 }

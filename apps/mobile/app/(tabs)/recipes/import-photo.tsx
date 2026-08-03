@@ -40,13 +40,18 @@ import {
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
-import { createRecipe, createRecipeMemo } from '../../../src/services/recipe.service';
+import {
+  createRecipe,
+  createRecipeMemo,
+  setRecipePinned,
+} from '../../../src/services/recipe.service';
 import {
   getFreemiumStatus,
   recordCloudInference,
   type FreemiumStatus,
 } from '../../../src/services/usage.service';
 import { createCookingLog } from '../../../src/services/cooking-log.service';
+import type { CookingLogKind } from '../../../src/services/types';
 import { persistCookingLogPhotos } from '../../../src/services/photo-storage.service';
 import { createPhotoSource } from '../../../src/services/source.service';
 import { applyAutoStepTimers } from '../../../src/utils/stepTimer';
@@ -76,6 +81,9 @@ export default function ImportPhotoScreen() {
   const [notes, setNotes] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState<CapturedPhoto | null>(null);
   const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
+  // R1: 店で食べた / 家で作った。主役は「店の味の再現」なので既定は eaten_out
+  const [logKind, setLogKind] = useState<CookingLogKind>('eaten_out');
+  const [placeName, setPlaceName] = useState('');
 
   // Refresh the freemium quota on focus (e.g. after returning from the paywall).
   const refreshFreemium = useCallback(() => {
@@ -240,21 +248,72 @@ export default function ImportPhotoScreen() {
             recipeId,
             cookedAt: new Date().toISOString(),
             photos: persisted,
+            kind: logKind,
+            ...(logKind === 'eaten_out' && placeName.trim() ? { placeName: placeName.trim() } : {}),
           });
         } catch {
           // non-fatal — recipe is saved even if the photo could not be stored
         }
       }
 
-      setToastMessage('レシピを保存しました');
-      setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
+      // 店で食べたものは「次に家で作る」のが自然な流れなので、再現したい棚へ入れる
+      if (logKind === 'eaten_out') {
+        try {
+          await setRecipePinned(recipeId, true);
+        } catch {
+          // non-fatal
+        }
+      }
+
+      setToastMessage(
+        logKind === 'eaten_out'
+          ? 'レシピを保存し、再現したいに追加しました'
+          : 'レシピを保存しました',
+      );
+      // 一覧ではなく、いま作ったレシピへ着地する（探させない）
+      setTimeout(() => router.replace(`/(tabs)/recipes/${recipeId}`), 1500);
     },
-    [capturedPhoto, notes, photoResult, router],
+    [capturedPhoto, logKind, notes, photoResult, placeName, router],
   );
 
   if (phase === 'preview') {
     return (
       <View style={styles.container}>
+        {/* どこで食べたか（R1）。店なら調理記録は「食べた」になり、再現したい棚に入る */}
+        <View style={styles.placeBar}>
+          <View style={styles.placeToggle}>
+            {(
+              [
+                ['eaten_out', 'お店で食べた'],
+                ['cooked', '家で作った'],
+              ] as const
+            ).map(([value, label]) => (
+              <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: logKind === value }}
+                style={[styles.placeChip, logKind === value && styles.placeChipActive]}
+                onPress={() => setLogKind(value)}
+              >
+                <Text
+                  style={[styles.placeChipText, logKind === value && styles.placeChipTextActive]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {logKind === 'eaten_out' && (
+            <TextInput
+              style={styles.placeInput}
+              value={placeName}
+              onChangeText={setPlaceName}
+              placeholder="お店の名前（任意）"
+              placeholderTextColor={Colors.muted}
+              maxLength={60}
+            />
+          )}
+        </View>
         <RecipeForm
           initialValues={
             photoResult?.draft
@@ -422,6 +481,48 @@ export default function ImportPhotoScreen() {
 }
 
 const styles = StyleSheet.create({
+  placeBar: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  placeToggle: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  placeChip: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  placeChipActive: {
+    backgroundColor: Colors.gold,
+    borderColor: Colors.gold,
+  },
+  placeChipText: {
+    fontSize: 13,
+    color: Colors.paperDim,
+  },
+  placeChipTextActive: {
+    color: Colors.bg,
+    fontWeight: '600',
+  },
+  placeInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
+    color: Colors.paper,
+    backgroundColor: Colors.bgCard,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.bg,

@@ -83,6 +83,9 @@ export interface StepItem {
   photoPath: string | null;
 }
 
+/** 体験の種類。'eaten_out' は店で食べた記録で、調理はしていない。 */
+export type CookingLogKind = 'cooked' | 'eaten_out';
+
 export interface TimelineEntry {
   id: string;
   recipeId: string | null;
@@ -93,6 +96,9 @@ export interface TimelineEntry {
   rating: number | null;
   memo: string | null;
   photos: CookingPhotoItem[];
+  kind: CookingLogKind;
+  /** 店名（kind='eaten_out' のとき） */
+  placeName: string | null;
 }
 
 export interface CookingPhotoItem {
@@ -177,6 +183,10 @@ export interface SaveCookingLogInput {
   memo?: string;
   cookedAt: string;
   photos?: SaveCookingPhotoInput[];
+  /** 省略時は 'cooked'（家で作った） */
+  kind?: CookingLogKind;
+  /** 店名（kind='eaten_out' のとき） */
+  placeName?: string;
 }
 
 export interface SaveCookingPhotoInput {
@@ -195,6 +205,9 @@ export interface CookingLogEntry {
   rating: number | null;
   memo: string | null;
   photos: CookingPhotoItem[];
+  kind: CookingLogKind;
+  /** 店名（kind='eaten_out' のとき） */
+  placeName: string | null;
 }
 
 export type ShoppingItemSource = 'manual' | 'recipe' | 'low_stock' | 'receipt';

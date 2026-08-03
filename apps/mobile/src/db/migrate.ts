@@ -25,7 +25,7 @@ import {
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 8;
+export const CURRENT_SCHEMA_VERSION = 9;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -194,7 +194,9 @@ const CREATE_TABLES_SQL = `
     servings INTEGER,
     rating INTEGER,
     memo TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'cooked',
+    place_name TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_cooking_logs_family_date ON cooking_logs(family_id, cooked_at);
@@ -318,6 +320,9 @@ const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   { table: 'recipes', columnDdl: 'cover_photo_path TEXT' }, // v7
   { table: 'steps', columnDdl: 'photo_path TEXT' }, // v7
   { table: 'recipes', columnDdl: 'pinned_at TEXT' }, // v8: 作りたいリスト
+  // v9: 店で食べた / 家で作った の区別（docs/お店の味を再現設計.md §3）
+  { table: 'cooking_logs', columnDdl: "kind TEXT NOT NULL DEFAULT 'cooked'" },
+  { table: 'cooking_logs', columnDdl: 'place_name TEXT' },
 ];
 
 /** Run migrations (create tables + additive column changes) */
