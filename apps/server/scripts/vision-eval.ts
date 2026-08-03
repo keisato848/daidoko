@@ -24,6 +24,43 @@ import {
   type VisionRecipeRaw,
 } from '../src/lib/vision-recipe.js';
 
+// ─── 料金表（コスト A/B 用） ─────────────────────────────────────────────────
+// USD / 100万トークン。**Google の価格改定に追従しないので、変わったらここを直す。**
+// 出典: https://ai.google.dev/gemini-api/docs/pricing
+// 思考トークンは出力として課金されるため outputUsd に含めて計算する。
+const PRICING_USD_PER_MTOK: Record<string, { input: number; output: number }> = {
+  'gemini-2.5-flash': { input: 0.3, output: 2.5 },
+  'gemini-2.5-pro': { input: 1.25, output: 10.0 },
+};
+const DEFAULT_JPY_PER_USD = 155;
+
+function priceFor(model: string): { input: number; output: number } | null {
+  return PRICING_USD_PER_MTOK[model] ?? null;
+}
+
+/** 1 推論のコスト（円）。料金表にないモデルは null（コスト欄は空になる）。 */
+function costJpy(
+  usage: VisionUsageLike | undefined,
+  model: string,
+  jpyPerUsd: number,
+): number | null {
+  if (!usage) return null;
+  const price = priceFor(model);
+  if (!price) return null;
+  // thoughts は課金上は出力。candidatesTokenCount に含まれない実装があるため足す。
+  const outputTokens = usage.outputTokens + usage.thoughtsTokens;
+  const usd =
+    (usage.promptTokens / 1_000_000) * price.input + (outputTokens / 1_000_000) * price.output;
+  return usd * jpyPerUsd;
+}
+
+interface VisionUsageLike {
+  promptTokens: number;
+  outputTokens: number;
+  thoughtsTokens: number;
+  totalTokens: number;
+}
+
 // ─── 評価セットの形 ──────────────────────────────────────────────────────────
 
 interface EvalCase {
@@ -102,6 +139,11 @@ interface RunOutcome {
   raw?: VisionRecipeRaw;
   error?: string;
   elapsedMs: number;
+  /** 実測コスト（円）。料金表にないモデルでは null */
+  costJpy?: number | null;
+  /** 実行時の設定。あとから条件を取り違えないよう結果に埋め込む */
+  model?: string;
+  thinkingBudget?: number;
 }
 
 function buildContext(evalCase: EvalCase, withOptions: Set<WithOption>): string | undefined {
@@ -167,7 +209,20 @@ async function runEval(args: Map<string, string>): Promise<void> {
     ...(model ? { model } : {}),
   });
 
-  const label = [variant, model ?? 'default', ...[...withOptions].sort()].join('-');
+  const thinkingRaw = args.get('thinking');
+  const thinkingBudget = thinkingRaw !== undefined ? Number(thinkingRaw) : undefined;
+  if (thinkingBudget !== undefined && !Number.isFinite(thinkingBudget)) {
+    fail('--thinking は数値（0 で思考オフ）で指定してください');
+  }
+  const jpyPerUsd = Number(args.get('jpy') ?? DEFAULT_JPY_PER_USD);
+  const modelId = model ?? 'gemini-2.5-flash';
+
+  const label = [
+    variant,
+    model ?? 'default',
+    ...(thinkingBudget !== undefined ? [`think${thinkingBudget}`] : []),
+    ...[...withOptions].sort(),
+  ].join('-');
   const outDir = args.get('out') ?? path.join(setDir, 'results');
   const stamp = args.get('stamp') ?? 'latest';
   const base = `${stamp}-${label}`;
@@ -204,7 +259,9 @@ async function runEval(args: Map<string, string>): Promise<void> {
         mimeType: main.mimeType,
         ...(context ? { context } : {}),
         ...(extraImages.length > 0 ? { extraImages } : {}),
+        ...(thinkingBudget !== undefined ? { thinkingBudget } : {}),
       });
+      const cost = costJpy(raw.usage, modelId, jpyPerUsd);
       outcomes.push({
         id: evalCase.id,
         expectedDish: evalCase.expectedDish ?? '',
@@ -213,10 +270,14 @@ async function runEval(args: Map<string, string>): Promise<void> {
         ok: true,
         raw,
         elapsedMs: Date.now() - startedAt,
+        costJpy: cost,
+        model: modelId,
+        ...(thinkingBudget !== undefined ? { thinkingBudget } : {}),
       });
       process.stdout.write(
         `[${index + 1}/${cases.length}] ${evalCase.id}: ` +
-          `${raw.isDish ? (raw.title ?? '(タイトルなし)') : `拒否(${raw.rejectReason ?? '理由なし'})`}\n`,
+          `${raw.isDish ? (raw.title ?? '(タイトルなし)') : `拒否(${raw.rejectReason ?? '理由なし'})`}` +
+          `${cost !== null ? ` (¥${cost.toFixed(2)})` : ''}\n`,
       );
     } catch (err) {
       outcomes.push({
@@ -241,6 +302,17 @@ async function runEval(args: Map<string, string>): Promise<void> {
   writeFileSync(jsonPath, JSON.stringify(outcomes, null, 2), 'utf8');
   const markdownPath = path.join(outDir, `${base}.md`);
   writeFileSync(markdownPath, renderMarkdown(label, model, outcomes), 'utf8');
+
+  const costs = outcomes
+    .map((outcome) => outcome.costJpy)
+    .filter((value): value is number => typeof value === 'number');
+  if (costs.length > 0) {
+    const total = costs.reduce((sum, value) => sum + value, 0);
+    process.stdout.write(
+      `\nコスト: 合計 ¥${total.toFixed(1)} / 1件あたり ¥${(total / costs.length).toFixed(2)}` +
+        `（${costs.length}件・${modelId}・$1=¥${jpyPerUsd}）\n`,
+    );
+  }
 
   const failed = outcomes.filter((outcome) => !outcome.ok);
   if (failed.length > 0) {
@@ -271,10 +343,23 @@ function renderMarkdown(label: string, model: string | undefined, outcomes: RunO
   lines.push('- A: 料理の特定 / B: 材料 / C: 家庭で作れるか / D: 手順');
   lines.push('- 陰性ケース（kind=negative）は A〜D を空のままにし、`拒否` 列だけ見る');
   lines.push('');
+  const costs = outcomes
+    .map((outcome) => outcome.costJpy)
+    .filter((value): value is number => typeof value === 'number');
+  if (costs.length > 0) {
+    const total = costs.reduce((sum, value) => sum + value, 0);
+    lines.push(
+      `- コスト: 合計 ¥${total.toFixed(1)} / 1件あたり **¥${(total / costs.length).toFixed(2)}**`,
+    );
+    lines.push('');
+  }
+
   lines.push(
-    '| id | 種別 | 撮影条件 | 期待する料理 | 出力タイトル | 拒否 | conf | ヒント | A | B | C | D |',
+    '| id | 種別 | 撮影条件 | 期待する料理 | 出力タイトル | 拒否 | conf | ヒント | 思考tok | 出力tok | ¥ | A | B | C | D |',
   );
-  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+  lines.push(
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+  );
 
   for (const outcome of outcomes) {
     const raw = outcome.raw;
@@ -286,10 +371,13 @@ function renderMarkdown(label: string, model: string | undefined, outcomes: RunO
         : (raw?.title ?? '(タイトルなし)');
     const reject = rejected ? (raw?.rejectReason ?? 'true') : '';
     const hints = raw?.improvementHints?.join(' / ') ?? '';
+    const cost = typeof outcome.costJpy === 'number' ? outcome.costJpy.toFixed(2) : '';
     lines.push(
       `| ${outcome.id} | ${outcome.kind} | ${escapeCell(outcome.condition)} | ` +
         `${escapeCell(outcome.expectedDish)} | ${escapeCell(title)} | ${reject} | ` +
-        `${raw?.confidence ?? ''} | ${escapeCell(hints)} |  |  |  |  |`,
+        `${raw?.confidence ?? ''} | ${escapeCell(hints)} | ` +
+        `${raw?.usage?.thoughtsTokens ?? ''} | ${raw?.usage?.outputTokens ?? ''} | ${cost} ` +
+        `|  |  |  |  |`,
     );
   }
 
@@ -305,6 +393,7 @@ interface ParsedRow {
   rejected: boolean;
   confidence: string;
   scores: Partial<Record<(typeof SCORE_AXES)[number], number>>;
+  costJpy?: number;
 }
 
 function parseMarkdown(markdown: string): ParsedRow[] {
@@ -315,8 +404,23 @@ function parseMarkdown(markdown: string): ParsedRow[] {
       .split('|')
       .slice(1, -1)
       .map((cell) => cell.trim());
-    if (cells.length < 12) continue;
-    const [id, kind, , , , reject, confidence, , a, b, c, d] = cells;
+    // 15列 = トークン/コスト列あり（現行）、12列 = それ以前の採点シート。両方読めるようにする。
+    let id: string | undefined;
+    let kind: string | undefined;
+    let reject: string | undefined;
+    let confidence: string | undefined;
+    let cost = '';
+    let a: string | undefined;
+    let b: string | undefined;
+    let c: string | undefined;
+    let d: string | undefined;
+    if (cells.length >= 15) {
+      [id, kind, , , , reject, confidence, , , , cost, a, b, c, d] = cells;
+    } else if (cells.length >= 12) {
+      [id, kind, , , , reject, confidence, , a, b, c, d] = cells;
+    } else {
+      continue;
+    }
     if (!id || id === 'id' || id.startsWith('---')) continue;
 
     const scores: ParsedRow['scores'] = {};
@@ -331,12 +435,14 @@ function parseMarkdown(markdown: string): ParsedRow[] {
         scores[axis as (typeof SCORE_AXES)[number]] = parsed;
       }
     }
+    const costValue = Number(cost);
     rows.push({
       id,
       kind: kind ?? '',
       rejected: (reject ?? '') !== '',
       confidence: confidence ?? '',
       scores,
+      ...(cost !== '' && Number.isFinite(costValue) ? { costJpy: costValue } : {}),
     });
   }
   return rows;
@@ -375,6 +481,16 @@ function summarize(args: Map<string, string>): void {
     process.stdout.write(
       `${axis}: ${formatVerdict(average(values), THRESHOLDS[axis])} ` +
         `(ライン ${THRESHOLDS[axis]} / 採点済み ${values.length}件)\n`,
+    );
+  }
+
+  const costs = rows
+    .map((row) => row.costJpy)
+    .filter((value): value is number => typeof value === 'number');
+  if (costs.length > 0) {
+    const total = costs.reduce((sum, value) => sum + value, 0);
+    process.stdout.write(
+      `コスト: 合計 ¥${total.toFixed(1)} / 1件あたり ¥${(total / costs.length).toFixed(2)}\n`,
     );
   }
 
@@ -421,6 +537,98 @@ function summarize(args: Map<string, string>): void {
   process.stdout.write('\n');
 }
 
+// ─── A/B 比較 ────────────────────────────────────────────────────────────────
+
+interface VariantSummary {
+  name: string;
+  scored: number;
+  averages: Partial<Record<(typeof SCORE_AXES)[number], number | null>>;
+  costPerCase: number | null;
+  totalCost: number | null;
+  rejectedNegatives: string;
+}
+
+function summarizeRows(name: string, rows: ParsedRow[]): VariantSummary {
+  const scored = rows.filter((row) => row.kind !== 'negative');
+  const averages: VariantSummary['averages'] = {};
+  for (const axis of SCORE_AXES) {
+    averages[axis] = average(
+      scored.map((row) => row.scores[axis]).filter((value): value is number => value !== undefined),
+    );
+  }
+  const costs = rows
+    .map((row) => row.costJpy)
+    .filter((value): value is number => typeof value === 'number');
+  const totalCost = costs.length > 0 ? costs.reduce((sum, value) => sum + value, 0) : null;
+  const negatives = rows.filter((row) => row.kind === 'negative');
+  return {
+    name,
+    scored: scored.length,
+    averages,
+    costPerCase: totalCost !== null ? totalCost / costs.length : null,
+    totalCost,
+    rejectedNegatives:
+      negatives.length > 0
+        ? `${negatives.filter((row) => row.rejected).length}/${negatives.length}`
+        : '—',
+  };
+}
+
+/**
+ * 複数の採点シートを品質とコストで並べる。
+ * 「品質をどれだけ落とさずにコストを下げられるか」をいつでも判断できるようにするための入口。
+ */
+function compare(args: Map<string, string>): void {
+  const files = (args.get('files') ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (files.length < 2) fail('--files <a.md,b.md[,...]> を2つ以上指定してください');
+
+  const summaries = files.map((file) => {
+    if (!existsSync(file)) fail(`ファイルが見つかりません: ${file}`);
+    return summarizeRows(path.basename(file, '.md'), parseMarkdown(readFileSync(file, 'utf8')));
+  });
+
+  const cell = (value: number | null | undefined, digits = 2): string =>
+    typeof value === 'number' ? value.toFixed(digits) : '—';
+
+  process.stdout.write('\n=== A/B 比較 ===\n\n');
+  process.stdout.write('| 変種 | 件数 | A | B | C | D | 陰性拒否 | ¥/件 | ¥合計 |\n');
+  process.stdout.write('| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n');
+  for (const s of summaries) {
+    process.stdout.write(
+      `| ${s.name} | ${s.scored} | ${cell(s.averages.A)} | ${cell(s.averages.B)} | ` +
+        `${cell(s.averages.C)} | ${cell(s.averages.D)} | ${s.rejectedNegatives} | ` +
+        `${cell(s.costPerCase)} | ${cell(s.totalCost, 1)} |\n`,
+    );
+  }
+
+  // 先頭を基準に差分を出す（「安くしたが品質はどれだけ落ちたか」を一目で）
+  const base = summaries[0];
+  if (base && summaries.length > 1) {
+    process.stdout.write(`\n基準: ${base.name}\n`);
+    for (const s of summaries.slice(1)) {
+      const parts: string[] = [];
+      for (const axis of SCORE_AXES) {
+        const a = base.averages[axis];
+        const b = s.averages[axis];
+        if (typeof a === 'number' && typeof b === 'number') {
+          const diff = b - a;
+          parts.push(`${axis} ${diff >= 0 ? '+' : ''}${diff.toFixed(2)}`);
+        }
+      }
+      let costPart = '';
+      if (typeof base.costPerCase === 'number' && typeof s.costPerCase === 'number') {
+        const ratio = (s.costPerCase / base.costPerCase) * 100;
+        costPart = ` / コスト ${ratio.toFixed(0)}%（¥${s.costPerCase.toFixed(2)} 対 ¥${base.costPerCase.toFixed(2)}）`;
+      }
+      process.stdout.write(`  ${s.name}: ${parts.join('  ')}${costPart}\n`);
+    }
+  }
+  process.stdout.write('\n');
+}
+
 // ─── エントリポイント ────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -435,10 +643,18 @@ async function main(): Promise<void> {
     summarize(args);
     return;
   }
+  if (command === 'compare') {
+    compare(args);
+    return;
+  }
   fail(
     'Usage:\n' +
-      '  tsx scripts/vision-eval.ts run --set <dir> --variant v0|v1 [--model <id>] [--with name,cross,menu]\n' +
-      '  tsx scripts/vision-eval.ts summarize --file <採点済みの md>',
+      '  tsx scripts/vision-eval.ts run --set <dir> --variant v0|v1 [--model <id>]\n' +
+      '      [--with name,cross,menu] [--thinking <n>] [--delay <ms>] [--resume] [--jpy <rate>]\n' +
+      '  tsx scripts/vision-eval.ts summarize --file <採点済みの md>\n' +
+      '  tsx scripts/vision-eval.ts compare --files <a.md,b.md[,...]>\n' +
+      '\n' +
+      '  --thinking 0 で思考トークンを無効化（コスト削減の A/B 用）',
   );
 }
 

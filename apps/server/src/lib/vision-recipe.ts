@@ -22,6 +22,23 @@ export interface VisionRecipeInput {
    * （`docs/レシピ推論の評価設計.md` §8）。
    */
   extraImages?: VisionRecipeImage[];
+  /**
+   * 思考トークンの上限。**0 で思考を無効化**する。
+   * 2.5-flash は思考トークンが出力に計上され、実測では出力の大半を占めてコストを支配していた
+   * （1 推論あたり出力 ≒4,800 トークン）。品質とのトレードオフを測るための切り替え。
+   * 未指定ならモデル既定（＝思考あり）。
+   */
+  thinkingBudget?: number;
+}
+
+/** プロバイダが実測した消費トークン（モデルの出力内容ではなくテレメトリ）。 */
+export interface VisionUsage {
+  promptTokens: number;
+  /** 応答本文のトークン（thoughts を含まない） */
+  outputTokens: number;
+  /** 思考トークン。課金上は出力に計上される */
+  thoughtsTokens: number;
+  totalTokens: number;
 }
 
 /** なぜレシピ化できなかったか。v1 プロンプトのみが返す（`docs/レシピ推論の評価設計.md` §7-2）。 */
@@ -57,6 +74,11 @@ export interface VisionRecipeRaw {
   rejectReason?: VisionRejectReason;
   /** v1 のみ。最大 2 件。 */
   improvementHints?: VisionImprovementHint[];
+  /**
+   * プロバイダが埋めるテレメトリ（モデル出力ではない）。コスト計測用。
+   * 本番の `normalizeDraft` は無視するため挙動に影響しない。
+   */
+  usage?: VisionUsage;
 }
 
 /** プロンプトの版。既定は v0（現行の本番挙動を変えないため）。 */
@@ -282,6 +304,9 @@ export class GeminiVisionRecipeProvider implements VisionRecipeProvider {
         temperature: 0.4,
         responseMimeType: 'application/json',
         responseSchema: buildResponseSchema(this.variant),
+        ...(input.thinkingBudget !== undefined && {
+          thinkingConfig: { thinkingBudget: input.thinkingBudget },
+        }),
       },
     };
 
@@ -318,17 +343,35 @@ export class GeminiVisionRecipeProvider implements VisionRecipeProvider {
 
       const json = (await res.json()) as {
         candidates?: { content?: { parts?: { text?: string }[] } }[];
+        usageMetadata?: {
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+          thoughtsTokenCount?: number;
+          totalTokenCount?: number;
+        };
       };
       const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) {
         throw new VisionRequestError('Gemini returned no content');
       }
 
+      let parsed: VisionRecipeRaw;
       try {
-        return JSON.parse(text) as VisionRecipeRaw;
+        parsed = JSON.parse(text) as VisionRecipeRaw;
       } catch {
         throw new VisionRequestError('Gemini returned non-JSON content');
       }
+
+      const meta = json.usageMetadata;
+      if (meta) {
+        parsed.usage = {
+          promptTokens: meta.promptTokenCount ?? 0,
+          outputTokens: meta.candidatesTokenCount ?? 0,
+          thoughtsTokens: meta.thoughtsTokenCount ?? 0,
+          totalTokens: meta.totalTokenCount ?? 0,
+        };
+      }
+      return parsed;
     }
 
     throw new VisionRequestError(`Gemini unavailable after ${MAX_ATTEMPTS} attempts: ${lastError}`);
