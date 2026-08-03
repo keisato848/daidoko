@@ -131,6 +131,15 @@ function isRunnable(evalCase: EvalCase, withOptions: Set<WithOption>): boolean {
   return true;
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 連続実行は Gemini の分あたりクォータ（429）に当たる。provider 内の再試行だけでは
+ * 足りないため、ケース間に間隔を空ける。**本番と同じ API キーを使うので、
+ * 使い切ると実ユーザーの推論も失敗する**（`docs/レシピ推論の評価設計.md` §9）。
+ */
+const DEFAULT_DELAY_MS = 6_000;
+
 async function runEval(args: Map<string, string>): Promise<void> {
   const setDir = args.get('set') ?? fail('--set <評価セットのディレクトリ> が必要です');
   const variant = (args.get('variant') ?? 'v1') as PromptVariant;
@@ -150,8 +159,8 @@ async function runEval(args: Map<string, string>): Promise<void> {
   if (!existsSync(manifestPath)) fail(`manifest.json が見つかりません: ${manifestPath}`);
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as EvalManifest;
 
-  const cases = manifest.cases.filter((evalCase) => isRunnable(evalCase, withOptions));
-  const skipped = manifest.cases.length - cases.length;
+  const allRunnable = manifest.cases.filter((evalCase) => isRunnable(evalCase, withOptions));
+  const skipped = manifest.cases.length - allRunnable.length;
 
   const provider = new GeminiVisionRecipeProvider({
     variant,
@@ -159,13 +168,31 @@ async function runEval(args: Map<string, string>): Promise<void> {
   });
 
   const label = [variant, model ?? 'default', ...[...withOptions].sort()].join('-');
+  const outDir = args.get('out') ?? path.join(setDir, 'results');
+  const stamp = args.get('stamp') ?? 'latest';
+  const base = `${stamp}-${label}`;
+  const jsonPath = path.join(outDir, `${base}.json`);
+  const delayMs = Number(args.get('delay') ?? DEFAULT_DELAY_MS);
+
+  // --resume: 前回成功したケースを引き継ぎ、失敗・未実行のものだけ流し直す。
+  // クォータ切れで途中終了しても、成功分を捨てずに続きから回せる。
+  const outcomes: RunOutcome[] = [];
+  if (args.get('resume') === 'true' && existsSync(jsonPath)) {
+    const previous = JSON.parse(readFileSync(jsonPath, 'utf8')) as RunOutcome[];
+    outcomes.push(...previous.filter((outcome) => outcome.ok));
+    process.stdout.write(`再開: 成功済み ${outcomes.length} 件を引き継ぎます\n`);
+  }
+  const doneIds = new Set(outcomes.map((outcome) => outcome.id));
+  const cases = allRunnable.filter((evalCase) => !doneIds.has(evalCase.id));
+
   process.stdout.write(
-    `評価開始: ${cases.length} 件（スキップ ${skipped} 件）/ 変種 ${label}\n` +
-      `追加入力: ${withOptions.size > 0 ? [...withOptions].join(', ') : 'なし（全体1枚のみ）'}\n\n`,
+    `評価開始: ${cases.length} 件（対象外 ${skipped} 件）/ 変種 ${label}\n` +
+      `追加入力: ${withOptions.size > 0 ? [...withOptions].join(', ') : 'なし（全体1枚のみ）'}\n` +
+      `ケース間の待機: ${delayMs}ms\n\n`,
   );
 
-  const outcomes: RunOutcome[] = [];
   for (const [index, evalCase] of cases.entries()) {
+    if (index > 0) await sleep(delayMs);
     const main = readImage(setDir, evalCase.photo);
     const extraImages = buildExtraImages(evalCase, setDir, withOptions);
     const context = buildContext(evalCase, withOptions);
@@ -205,18 +232,24 @@ async function runEval(args: Map<string, string>): Promise<void> {
     }
   }
 
-  const outDir = args.get('out') ?? path.join(setDir, 'results');
   mkdirSync(outDir, { recursive: true });
-  const stamp = args.get('stamp') ?? 'latest';
-  const base = `${stamp}-${label}`;
 
-  writeFileSync(path.join(outDir, `${base}.json`), JSON.stringify(outcomes, null, 2), 'utf8');
+  // manifest の順序に揃えてから書き出す（--resume で順序が崩れないように）
+  const order = new Map(manifest.cases.map((evalCase, index) => [evalCase.id, index]));
+  outcomes.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+
+  writeFileSync(jsonPath, JSON.stringify(outcomes, null, 2), 'utf8');
   const markdownPath = path.join(outDir, `${base}.md`);
   writeFileSync(markdownPath, renderMarkdown(label, model, outcomes), 'utf8');
 
-  process.stdout.write(
-    `\n採点シート: ${markdownPath}\n生の出力: ${path.join(outDir, `${base}.json`)}\n`,
-  );
+  const failed = outcomes.filter((outcome) => !outcome.ok);
+  if (failed.length > 0) {
+    process.stdout.write(
+      `\n⚠ ${failed.length} 件が失敗（${failed.map((outcome) => outcome.id).join(', ')}）。\n` +
+        `  クォータ切れなら時間をおいて --resume を付けて再実行してください。\n`,
+    );
+  }
+  process.stdout.write(`\n採点シート: ${markdownPath}\n生の出力: ${jsonPath}\n`);
 }
 
 // ─── 採点シート ──────────────────────────────────────────────────────────────
