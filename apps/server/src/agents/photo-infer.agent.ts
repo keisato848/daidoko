@@ -23,6 +23,8 @@ export type AgentErrorCode =
   | 'AI_QUOTA_EXCEEDED'
   | 'PHOTO_RECIPE_FAILED'
   | 'VISION_NOT_A_DISH'
+  /** 感想から変更点を読み取れず、推測で書き換えなかった（失敗ではなく入力不足） */
+  | 'REFINE_NO_CHANGE'
   | 'RATE_LIMITED'
   | 'UNKNOWN';
 
