@@ -42,6 +42,39 @@ describe('normalizeRefinedRaw', () => {
     ).toBeNull();
   });
 
+  it('材料の amount が抜けていたら現行レシピの値を残す', () => {
+    // 実測: 感想と無関係な材料の分量を落とした応答が返ることがある。
+    // 分量が消えるのは黙った書き換えと同じなので、名前で突き合わせて埋める
+    const draft = normalizeRefinedRaw(
+      {
+        changed: true,
+        ingredients: [{ name: '木綿豆腐' }, { name: '甜麺醤', amount: '大さじ1' }],
+        steps: [{ body: '煮る' }],
+      },
+      BASE,
+    );
+
+    expect(draft?.ingredients).toContainEqual(
+      expect.objectContaining({ name: '木綿豆腐', amount: '1丁' }),
+    );
+    expect(draft?.ingredients).toContainEqual(
+      expect.objectContaining({ name: '甜麺醤', amount: '大さじ1' }),
+    );
+  });
+
+  it('文字列の "null" は空として扱う', () => {
+    const draft = normalizeRefinedRaw(
+      {
+        changed: true,
+        ingredients: [{ name: '甜麺醤', amount: '大さじ1', note: 'null' }],
+        steps: [{ body: '煮る' }],
+      },
+      BASE,
+    );
+
+    expect(draft?.ingredients[0]?.note).toBeUndefined();
+  });
+
   it('空文字の材料名は落とす', () => {
     const draft = normalizeRefinedRaw(
       {

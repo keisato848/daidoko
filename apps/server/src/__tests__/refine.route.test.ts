@@ -216,6 +216,56 @@ describe('POST /api/v1/infer/refine', () => {
   });
 });
 
+describe('normalizeRefined — モデルの取りこぼしをコードで埋める', () => {
+  // 実測: プロンプトで戒めても、感想と無関係な材料の amount / groupLabel を
+  // 落とした応答が返ることがあった。分量が消えるのは黙った書き換えと同じなので、
+  // 名前で突き合わせて現行レシピの値を残す
+  it('材料の amount / groupLabel が抜けていたら現行レシピの値を残す', () => {
+    const result = normalizeRefined(
+      {
+        changed: true,
+        ingredients: [{ name: '木綿豆腐' }, { name: '甜麺醤', amount: '大さじ1' }],
+        steps: [{ body: '煮る' }],
+      },
+      CURRENT_RECIPE,
+    );
+
+    expect(result?.ingredients).toContainEqual(
+      expect.objectContaining({ name: '木綿豆腐', amount: '1丁', groupLabel: '主材料' }),
+    );
+    // 指示された変更は通す
+    expect(result?.ingredients).toContainEqual(
+      expect.objectContaining({ name: '甜麺醤', amount: '大さじ1' }),
+    );
+  });
+
+  it('文字列の "null" は空として扱う（構造化出力でも返ることがある）', () => {
+    const result = normalizeRefined(
+      {
+        changed: true,
+        ingredients: [{ name: '甜麺醤', amount: '大さじ1', note: 'null' }],
+        steps: [{ body: '煮る' }],
+      },
+      CURRENT_RECIPE,
+    );
+
+    expect(result?.ingredients[0]?.note).toBeUndefined();
+  });
+
+  it('新しく増えた材料は現行レシピに無いのでそのまま通す', () => {
+    const result = normalizeRefined(
+      {
+        changed: true,
+        ingredients: [{ name: '花椒粉', amount: '小さじ1/2' }],
+        steps: [{ body: '振る' }],
+      },
+      CURRENT_RECIPE,
+    );
+
+    expect(result?.ingredients).toEqual([{ name: '花椒粉', amount: '小さじ1/2' }]);
+  });
+});
+
 describe('normalizeRefined', () => {
   it('材料が全滅したら null（現行レシピで埋めて「直した」と偽らない）', () => {
     const result = normalizeRefined(

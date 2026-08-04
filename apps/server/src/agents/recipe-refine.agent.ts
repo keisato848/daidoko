@@ -36,7 +36,10 @@ function fail(
 function cleanString(value: unknown, max: number): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, max) : undefined;
+  // 構造化出力でも "null" / "undefined" という文字列が返ることがある（実測）。
+  // そのまま入れると材料の備考が「null」になるので、空として扱う
+  if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return undefined;
+  return trimmed.slice(0, max);
 }
 
 function cleanPositiveInt(value: unknown, min: number, max: number): number | undefined {
@@ -56,13 +59,19 @@ export function normalizeRefined(
   raw: RefineRecipeRaw,
   base: RefineRecipeInput['recipe'],
 ): RecipeDraft | null {
+  // 材料ごとの省略も base で埋める。実測では、感想と無関係な材料の amount を
+  // 丸ごと落とした応答が返ることがあった（分量が消えるのは黙った書き換えと同じ）。
+  // プロンプトで戒めるより、名前で突き合わせてコードで担保する方が確実。
+  const baseByName = new Map(base.ingredients.map((ing) => [ing.name.trim(), ing]));
+
   const ingredients = (raw.ingredients ?? [])
     .map((item) => {
       const name = cleanString(item?.name, 50);
       if (!name) return null;
-      const groupLabel = cleanString(item?.groupLabel, 30);
-      const amount = cleanString(item?.amount, 30);
-      const note = cleanString(item?.note, 100);
+      const original = baseByName.get(name);
+      const groupLabel = cleanString(item?.groupLabel, 30) ?? original?.groupLabel;
+      const amount = cleanString(item?.amount, 30) ?? original?.amount;
+      const note = cleanString(item?.note, 100) ?? original?.note;
       return {
         name,
         ...(groupLabel !== undefined && { groupLabel }),

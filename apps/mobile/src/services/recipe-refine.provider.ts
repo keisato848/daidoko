@@ -132,6 +132,11 @@ const SYSTEM_PROMPT = [
   '- 変更は最小限にする。「ついでに良くする」ことをしてはならない。',
   '  ユーザーは自分のレシピを育てており、勝手な書き換えは信頼を壊す。',
   '',
+  '## レシピの不備は直さない',
+  '手順に出てくるのに材料表にない、分量が書かれていない、といった不備に気づいても、',
+  '**感想と関係がなければ直さない**。気づいた点は changeSummary の末尾に一言添えるだけにする。',
+  'ユーザーが意図してそう書いている可能性があり、頼まれていない補完は書き換えと同じである。',
+  '',
   '## 変えられないときは変えない',
   '感想から「何をどう変えるか」が読み取れない場合（例: 「おいしかった」「また作る」のような',
   '感想のみ、内容が空、レシピと無関係）は changed=false とし、changeSummary に',
@@ -206,7 +211,9 @@ interface GeminiRefineRaw {
 function cleanString(value: unknown, max: number): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, max) : undefined;
+  // 構造化出力でも "null" / "undefined" という文字列が返ることがある（実測）
+  if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return undefined;
+  return trimmed.slice(0, max);
 }
 
 function cleanPositiveInt(value: unknown, min: number, max: number): number | undefined {
@@ -224,13 +231,18 @@ export function normalizeRefinedRaw(
   raw: GeminiRefineRaw,
   base: RefineRecipeSnapshot,
 ): ServerDraft | null {
+  // 材料ごとの省略も現行レシピで埋める（サーバーの normalizeRefined と同じ担保）。
+  // 感想と無関係な材料の amount が落ちた応答が実測で出たため、名前で突き合わせる
+  const baseByName = new Map(base.ingredients.map((ing) => [ing.name.trim(), ing]));
+
   const ingredients = (raw.ingredients ?? [])
     .map((item) => {
       const name = cleanString(item?.name, 50);
       if (!name) return null;
-      const groupLabel = cleanString(item?.groupLabel, 30);
-      const amount = cleanString(item?.amount, 30);
-      const note = cleanString(item?.note, 100);
+      const original = baseByName.get(name);
+      const groupLabel = cleanString(item?.groupLabel, 30) ?? original?.groupLabel;
+      const amount = cleanString(item?.amount, 30) ?? original?.amount;
+      const note = cleanString(item?.note, 100) ?? original?.note;
       return {
         name,
         ...(groupLabel !== undefined && { groupLabel }),
