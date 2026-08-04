@@ -1,7 +1,9 @@
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getDevices, resolveAdbPath } from './lib/adb.mjs';
 import { SIGNAL_CODES, createSignal } from './lib/android-signals.mjs';
 
 import { runCommand } from './lib/runtime.mjs';
@@ -21,6 +23,14 @@ if (!options.prebuild) {
     );
   }
 }
+// 端末の ABI と食い違う arch でビルドすると、インストールは成功するのに起動直後に
+// SoLoaderDSONotFoundError（libreactnative.so が無い）で落ちる。原因が JS の変更に
+// 見えてしまうので、接続中の端末を見て先に警告する。
+// 既定は実機（arm64-v8a）だが、エミュレーターは x86_64 のことが多い。
+if (!options.bundle && !options.archExplicit) {
+  warnOnDeviceAbiMismatch(options.arch);
+}
+
 const wrapperPath = join(androidDir, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
 const gradleCache = process.env.GRADLE_CACHE || join(tmpdir(), 'daidoko-gradle-project-cache');
 
@@ -182,9 +192,54 @@ function invalidateJsBundleIfPublicEnvChanged() {
   }
 }
 
+/**
+ * 接続中の端末の主 ABI と targetArch が食い違うときに警告する。
+ * adb が無い / 端末が繋がっていない場合は黙って何もしない（ビルドは止めない）。
+ *
+ * 見るのは ro.product.cpu.abilist ではなく **ro.product.cpu.abi**（主 ABI）。
+ * x86_64 エミュレーターは abilist に arm64-v8a を含むので、abilist で判定すると
+ * この不一致をすり抜ける。SoLoader が探すのは主 ABI 側なので落ちる。
+ */
+function warnOnDeviceAbiMismatch(targetArch) {
+  let devices;
+  let adbPath;
+  try {
+    adbPath = resolveAdbPath();
+    devices = getDevices(adbPath).filter((device) => device.status === 'device');
+  } catch {
+    return; // adb 不在ならこのチェックは対象外
+  }
+  if (devices.length === 0) return;
+
+  const mismatched = [];
+  for (const device of devices) {
+    const result = spawnSync(
+      adbPath,
+      ['-s', device.serial, 'shell', 'getprop', 'ro.product.cpu.abi'],
+      { encoding: 'utf8', shell: false },
+    );
+    if (result.status !== 0 || result.error) continue;
+    const primaryAbi = result.stdout.trim();
+    if (primaryAbi && primaryAbi !== targetArch) {
+      mismatched.push({ serial: device.serial, primaryAbi });
+    }
+  }
+  // 対応端末が1台でも繋がっていれば、そちらで試すつもりとみなして黙る
+  if (mismatched.length === 0 || mismatched.length < devices.length) return;
+
+  console.warn(
+    `[WARN] 接続中の端末の ABI は ${targetArch} ではありません: ` +
+      mismatched.map((m) => `${m.serial} (${m.primaryAbi})`).join(', ') +
+      '\n       このまま入れると、インストールは成功するのに起動時に' +
+      ' libreactnative.so が見つからず落ちます。' +
+      `\n       この端末で試すなら --arch ${mismatched[0].primaryAbi} を付けてください。`,
+  );
+}
+
 function parseArgs(argv) {
   const parsed = {
     arch: 'arm64-v8a',
+    archExplicit: false,
     bundle: false,
     json: false,
     prebuild: false,
@@ -194,6 +249,7 @@ function parseArgs(argv) {
     const token = argv[index];
     if (token === '--arch' && argv[index + 1]) {
       parsed.arch = argv[index + 1];
+      parsed.archExplicit = true;
       index += 1;
       continue;
     }
