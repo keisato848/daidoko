@@ -11,7 +11,19 @@ import {
   ShoppingCart,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Image,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
@@ -70,6 +82,11 @@ export default function RecipeDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [tab, setTab] = useState<TabKey>('ingredients');
   const [showMenu, setShowMenu] = useState(false);
+  // タブは水平スワイプでも切り替わる。ページ幅は実測（回転・分割画面に追従）し、
+  // 初回フレームだけウィンドウ幅を使う
+  const { width: windowWidth } = useWindowDimensions();
+  const [pageWidth, setPageWidth] = useState(windowWidth);
+  const pagerRef = useRef<ScrollView>(null);
   const [cookingLogs, setCookingLogs] = useState<TimelineEntry[]>([]);
   const [memos, setMemos] = useState<MemoItem[]>([]);
   // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
@@ -96,11 +113,15 @@ export default function RecipeDetailScreen() {
     setMemos(await getMemosForRecipe(id));
   }, [id]);
 
-  // 編集モーダルから戻ったときも最新を表示するためフォーカス毎に再取得
+  // 編集モーダルから戻ったときも最新を表示するためフォーカス毎に再取得。
+  // メモ・履歴も一緒に取る: スワイプ中は隣のタブが見えるので、
+  // タブが切り替わってから読み込むのでは間に合わない
   useFocusEffect(
     useCallback(() => {
       void loadRecipe();
-    }, [loadRecipe]),
+      void loadMemos();
+      void loadLogs();
+    }, [loadRecipe, loadMemos, loadLogs]),
   );
 
   // 初回利用ガイド（コーチマーク）
@@ -139,10 +160,36 @@ export default function RecipeDetailScreen() {
     recipe != null && tab === 'ingredients' && !showMenu,
   );
 
+  // --- タブ切り替え（タップとスワイプの2経路を1か所に集約） ---
+
+  const goToTab = useCallback(
+    (key: TabKey) => {
+      setTab(key);
+      const index = TABS.findIndex((t) => t.key === key);
+      pagerRef.current?.scrollTo({ x: index * pageWidth, animated: true });
+    },
+    [pageWidth],
+  );
+
+  const handlePagerScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (pageWidth <= 0) return;
+      const key = TABS[Math.round(event.nativeEvent.contentOffset.x / pageWidth)]?.key;
+      if (key) setTab(key);
+    },
+    [pageWidth],
+  );
+
+  // 幅が変わったとき（回転・分割画面）に表示中のタブへ位置を戻す。
+  // tab を依存に入れるとタップ時のアニメーションを打ち消してしまうので ref で読む
+  const currentTabRef = useRef<TabKey>(tab);
   useEffect(() => {
-    if (tab === 'history') void loadLogs();
-    if (tab === 'memo') void loadMemos();
-  }, [tab, loadLogs, loadMemos]);
+    currentTabRef.current = tab;
+  }, [tab]);
+  useEffect(() => {
+    const index = TABS.findIndex((t) => t.key === currentTabRef.current);
+    pagerRef.current?.scrollTo({ x: index * pageWidth, animated: false });
+  }, [pageWidth]);
 
   // 作りたいリスト（ホームに表示）へのピン留めトグル
   const handleTogglePin = async () => {
@@ -213,6 +260,8 @@ export default function RecipeDetailScreen() {
 
   // 分量換算（基準人数が未登録なら常に等倍）
   const ingredientRatio = servingRatio(recipe.servings, targetServings ?? recipe.servings ?? 1);
+  // 各タブは1ページ＝画面幅。横スクロールの子なので flex ではなく実寸で指定する
+  const pageStyle = { width: pageWidth };
 
   return (
     <View style={styles.container}>
@@ -317,15 +366,29 @@ export default function RecipeDetailScreen() {
 
       <View style={styles.tabBar}>
         {TABS.map(({ key, label }) => (
-          <Pressable key={key} style={styles.tabItem} onPress={() => setTab(key)}>
+          <Pressable
+            key={key}
+            style={styles.tabItem}
+            onPress={() => goToTab(key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: tab === key }}
+          >
             <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
             {tab === key && <View style={styles.tabUnderline} />}
           </Pressable>
         ))}
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {tab === 'ingredients' && (
+      <ScrollView
+        ref={pagerRef}
+        style={styles.content}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}
+        onMomentumScrollEnd={handlePagerScrollEnd}
+      >
+        <ScrollView style={pageStyle} contentContainerStyle={styles.contentInner}>
           <View>
             {recipe.servings != null && (
               <View style={styles.servingsRow}>
@@ -364,9 +427,9 @@ export default function RecipeDetailScreen() {
               <Text style={styles.addToListText}>足りない材料を買い物リストに追加</Text>
             </Pressable>
           </View>
-        )}
+        </ScrollView>
 
-        {tab === 'steps' && (
+        <ScrollView style={pageStyle} contentContainerStyle={styles.contentInner}>
           <View style={styles.stepList}>
             {recipe.steps.map((step) => (
               <View key={step.id} style={styles.stepRow}>
@@ -396,10 +459,10 @@ export default function RecipeDetailScreen() {
               </View>
             ))}
           </View>
-        )}
+        </ScrollView>
 
-        {tab === 'memo' &&
-          (recipe.description || memos.length > 0 ? (
+        <ScrollView style={pageStyle} contentContainerStyle={styles.contentInner}>
+          {recipe.description || memos.length > 0 ? (
             <View style={styles.memoList}>
               {recipe.description && <Text style={styles.memoBody}>{recipe.description}</Text>}
               {memos.map((memo) => (
@@ -413,9 +476,10 @@ export default function RecipeDetailScreen() {
             <View style={styles.memoContainer}>
               <Text style={styles.memoPlaceholder}>メモはまだありません</Text>
             </View>
-          ))}
+          )}
+        </ScrollView>
 
-        {tab === 'history' && (
+        <ScrollView style={pageStyle} contentContainerStyle={styles.contentInner}>
           <View>
             {cookingLogs.length === 0 ? (
               <View style={styles.memoContainer}>
@@ -447,7 +511,7 @@ export default function RecipeDetailScreen() {
               })
             )}
           </View>
-        )}
+        </ScrollView>
       </ScrollView>
 
       <View style={styles.ctaContainer}>
