@@ -101,6 +101,30 @@ export default function CookingLogScreen() {
       setShowToast(true);
       // 保存成功＝ポジティブな瞬間にストア評価を打診（条件・頻度はサービス側で管理）
       void maybeRequestStoreReview();
+
+      // 感想を書いた直後は「レシピに反映する」の最良のタイミング（R2 / Issue #113）。
+      // メモが無いときは何も聞かない（材料がないので AI も直しようがない）
+      const trimmedMemo = memo.trim();
+      if (id && trimmedMemo) {
+        setTimeout(() => {
+          Alert.alert(
+            'レシピに反映しますか？',
+            'いま書いた感想をもとに、AI がレシピをお店の味に近づけます。',
+            [
+              { text: 'あとで', style: 'cancel', onPress: () => router.push('/(tabs)') },
+              {
+                text: '近づける',
+                onPress: () =>
+                  router.replace({
+                    pathname: '/(tabs)/recipes/[id]/refine',
+                    params: { id, feedback: trimmedMemo },
+                  }),
+              },
+            ],
+          );
+        }, 1200);
+        return;
+      }
       setTimeout(() => router.push('/(tabs)'), 1500);
     } catch (error) {
       await cleanupStoredCookingPhotos(persistedPhotos);
