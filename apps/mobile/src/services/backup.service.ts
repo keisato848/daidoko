@@ -39,7 +39,12 @@ interface BackupTableDefinition {
   optional?: boolean;
 }
 
-const BACKUP_TABLES = [
+/**
+ * バックアップ対象。**列を足したテーブルはここも直すこと。**
+ * 過去に pantry 系4テーブルがまるごと漏れていた（PR #109）。同じ事故を防ぐため
+ * export し、テストで対象と列を固定している。
+ */
+export const BACKUP_TABLES = [
   {
     name: 'users',
     columns: ['id', 'display_name', 'avatar_url', 'created_at', 'updated_at'],
