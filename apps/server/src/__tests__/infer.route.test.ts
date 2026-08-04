@@ -8,6 +8,7 @@ import app from '../index.js';
 import { setInferProviderForTesting } from '../routes/infer.js';
 import { resetRateLimitForTesting } from '../lib/rate-limit.js';
 import {
+  VisionQuotaError,
   VisionRequestError,
   type VisionRecipeProvider,
   type VisionRecipeRaw,
@@ -111,6 +112,28 @@ describe('POST /api/v1/infer/photo', () => {
       expect(body.ok).toBe(false);
       expect(body.error?.code).toBe('AI_API_UNAVAILABLE');
       expect(body.error?.retryable).toBe(true);
+    });
+  });
+
+  describe('上流の利用枠切れ（Issue #120）', () => {
+    it('枠切れは AI_QUOTA_EXCEEDED を返し、接続エラーと区別する', async () => {
+      stubProvider(async () => {
+        throw new VisionQuotaError('Gemini unavailable after 4 attempts: 429 RESOURCE_EXHAUSTED');
+      });
+      const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+      const body = (await res.json()) as {
+        ok: boolean;
+        error?: { code: string; message: string; retryable: boolean };
+      };
+
+      expect(body.ok).toBe(false);
+      expect(body.error?.code).toBe('AI_QUOTA_EXCEEDED');
+      // 待っても当面回復しないので retryable ではない
+      expect(body.error?.retryable).toBe(false);
+      expect(body.error?.message).toContain('上限');
+      // 上流の生メッセージ（英語・内部情報）を漏らさない
+      expect(body.error?.message).not.toContain('Gemini');
+      expect(body.error?.message).not.toContain('RESOURCE_EXHAUSTED');
     });
   });
 

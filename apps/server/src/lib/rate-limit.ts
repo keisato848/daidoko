@@ -8,10 +8,14 @@
  *
  * Two independent caps, both configurable via env and both enforced per 24h:
  *   - INFER_DAILY_LIMIT          per-client (by IP) requests/day   (default 20)
- *   - INFER_GLOBAL_DAILY_LIMIT   total requests/day across clients (default 200)
+ *   - INFER_GLOBAL_DAILY_LIMIT   total requests/day across clients (default 30)
  *
  * The global cap is the real cost ceiling — it bounds total Gemini calls/day
  * regardless of how many clients hit the endpoint. Set either to 0 to disable.
+ *
+ * 既定 30 は「月の上限を ¥1,000 以内に収める」方針から逆算した値
+ * （1 推論 ≒ ¥1 の実測 × 30 日）。ユーザーが増えたら上げる。
+ * 実測コストと上限の考え方は docs/レシピ推論の評価設計.md §9。
  *
  * Note: INFER_DAILY_LIMIT is coarse anti-abuse only. Because premium users are
  * "unlimited" but indistinguishable here, keep it generous (or 0) so it does
@@ -62,7 +66,7 @@ function currentBucket(key: string, now: number): Bucket {
  */
 export function checkRateLimit(clientId: string, now = Date.now()): RateLimitResult {
   const clientLimit = limitFromEnv('INFER_DAILY_LIMIT', 20);
-  const globalLimit = limitFromEnv('INFER_GLOBAL_DAILY_LIMIT', 200);
+  const globalLimit = limitFromEnv('INFER_GLOBAL_DAILY_LIMIT', 30);
 
   const globalBucket = currentBucket(GLOBAL_KEY, now);
   if (globalLimit > 0 && globalBucket.count >= globalLimit) {

@@ -7,6 +7,7 @@
  */
 import {
   VisionConfigError,
+  VisionQuotaError,
   VisionRequestError,
   type VisionRecipeInput,
   type VisionRecipeProvider,
@@ -18,6 +19,8 @@ import {
 // url-fetch.agent.ts, which defines the same shapes locally).
 export type AgentErrorCode =
   | 'AI_API_UNAVAILABLE'
+  /** 上流（Gemini）の利用枠切れ。待っても当面回復しないので「つながらない」と区別する */
+  | 'AI_QUOTA_EXCEEDED'
   | 'PHOTO_RECIPE_FAILED'
   | 'VISION_NOT_A_DISH'
   | 'RATE_LIMITED'
@@ -141,6 +144,14 @@ export async function runPhotoInferAgent(
   } catch (err) {
     if (err instanceof VisionConfigError) {
       return fail('AI_API_UNAVAILABLE', 'AI 推論が利用できません', false);
+    }
+    // VisionQuotaError は VisionRequestError の派生なので、先に判定する
+    if (err instanceof VisionQuotaError) {
+      return fail(
+        'AI_QUOTA_EXCEEDED',
+        '本日の AI 利用上限に達しました。時間をおいてお試しください。',
+        false,
+      );
     }
     if (err instanceof VisionRequestError) {
       return fail('AI_API_UNAVAILABLE', 'AI 推論サービスへの接続に失敗しました', true);
