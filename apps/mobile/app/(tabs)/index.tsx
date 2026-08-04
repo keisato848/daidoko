@@ -4,7 +4,15 @@
  * cooking logs with filter tabs
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Bookmark, CalendarDays, LayoutGrid, ShoppingCart, Trash2, X } from 'lucide-react-native';
+import {
+  Bookmark,
+  CalendarDays,
+  LayoutGrid,
+  ShoppingCart,
+  Store,
+  Trash2,
+  X,
+} from 'lucide-react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -205,6 +213,14 @@ export default function HomeScreen() {
               <View style={styles.cardUser}>
                 <Avatar name={userName} size={22} />
                 <Text style={styles.userName}>{userName}</Text>
+                {item.kind === 'eaten_out' && (
+                  <View style={styles.eatenOutBadge}>
+                    <Store size={10} color={Colors.goldDim} />
+                    <Text style={styles.eatenOutText} numberOfLines={1}>
+                      {item.placeName ? item.placeName : 'お店で食べた'}
+                    </Text>
+                  </View>
+                )}
               </View>
               {item.memo ? (
                 <Text style={styles.memo} numberOfLines={1}>
@@ -389,6 +405,21 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  eatenOutBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    maxWidth: 140,
+  },
+  eatenOutText: {
+    fontSize: 10,
+    color: Colors.goldDim,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.bg,

@@ -109,6 +109,8 @@ interface MutableCookingLog {
   servings: number | null;
   rating: number | null;
   memo: string | null;
+  kind?: 'cooked' | 'eaten_out';
+  placeName?: string | null;
 }
 
 interface MutableCookingPhoto {
@@ -161,6 +163,8 @@ export function getMockTimeline(): TimelineEntry[] {
         servings: log.servings,
         rating: log.rating,
         memo: log.memo,
+        kind: log.kind ?? 'cooked',
+        placeName: log.placeName ?? null,
         photos: getPhotosForLog(log.id),
       };
     });
@@ -507,6 +511,8 @@ export function createMockCookingLog(input: SaveCookingLogInput): string {
     servings: input.servings ?? null,
     rating: input.rating ?? null,
     memo: input.memo ?? null,
+    kind: input.kind ?? 'cooked',
+    placeName: input.placeName ?? null,
   });
   input.photos?.forEach((photo, index) => {
     mockCookingPhotos.push({
@@ -538,6 +544,8 @@ export function getMockCookingLogsForRecipe(recipeId: string): TimelineEntry[] {
         servings: log.servings,
         rating: log.rating,
         memo: log.memo,
+        kind: log.kind ?? 'cooked',
+        placeName: log.placeName ?? null,
         photos: getPhotosForLog(log.id),
       };
     });

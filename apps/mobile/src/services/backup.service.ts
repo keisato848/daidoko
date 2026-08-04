@@ -128,6 +128,9 @@ const BACKUP_TABLES = [
       'rating',
       'memo',
       'created_at',
+      // v9: 店で食べた / 家で作った の区別。追加し忘れると復元で欠落する
+      'kind',
+      'place_name',
     ],
   },
   {

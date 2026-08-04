@@ -203,12 +203,23 @@ export const cookingLogs = sqliteTable(
     rating: integer('rating'),
     memo: text('memo'),
     createdAt: text('created_at').notNull(),
+    /**
+     * 体験の種類（v9）。'cooked' = 家で作った（既定）/ 'eaten_out' = 店で食べた。
+     * 「食べた」も「作った」もその料理を体験した記録なので、テーブルは分けず列で区別する
+     * （`docs/お店の味を再現設計.md` §3）。
+     */
+    kind: text('kind').notNull().default('cooked'),
+    /** 店名（kind='eaten_out' のとき。任意） */
+    placeName: text('place_name'),
   },
   (table) => ({
     familyDateIdx: index('idx_cooking_logs_family_date').on(table.familyId, table.cookedAt),
     recipeDateIdx: index('idx_cooking_logs_recipe_date').on(table.recipeId, table.cookedAt),
   }),
 );
+
+/** 調理記録の種類。'eaten_out' は店で食べた記録で、調理はしていない。 */
+export type CookingLogKind = 'cooked' | 'eaten_out';
 
 // ─── CookingPhoto ─────────��──────────────────────────────────��──────────────
 export const cookingPhotos = sqliteTable(

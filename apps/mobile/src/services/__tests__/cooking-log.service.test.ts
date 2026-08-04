@@ -229,3 +229,38 @@ describe('getLogsForRecipe', () => {
     expect(logs.find((entry) => entry.id === id)).toBeUndefined();
   });
 });
+
+describe('店で食べた / 家で作った の区別（R1）', () => {
+  it('既定は cooked（家で作った）', async () => {
+    const id = await createCookingLog({
+      recipeId: 'recipe-kind-default',
+      cookedAt: new Date('2026-08-03T12:00:00Z').toISOString(),
+    });
+    const log = (await getLogsForRecipe('recipe-kind-default')).find((l) => l.id === id);
+    expect(log?.kind).toBe('cooked');
+    expect(log?.placeName).toBeNull();
+  });
+
+  it('店で食べた記録は kind と店名を保持する', async () => {
+    const id = await createCookingLog({
+      recipeId: 'recipe-kind-eatenout',
+      cookedAt: new Date('2026-08-03T13:00:00Z').toISOString(),
+      kind: 'eaten_out',
+      placeName: '中華料理 大成',
+    });
+    const log = (await getLogsForRecipe('recipe-kind-eatenout')).find((l) => l.id === id);
+    expect(log?.kind).toBe('eaten_out');
+    expect(log?.placeName).toBe('中華料理 大成');
+  });
+
+  it('タイムラインにも kind が出る（作った記録として並べない）', async () => {
+    await createCookingLog({
+      recipeId: 'recipe-kind-timeline',
+      cookedAt: new Date('2026-08-03T14:00:00Z').toISOString(),
+      kind: 'eaten_out',
+      placeName: 'ラーメン一番',
+    });
+    const entry = (await getTimeline()).find((e) => e.placeName === 'ラーメン一番');
+    expect(entry?.kind).toBe('eaten_out');
+  });
+});
