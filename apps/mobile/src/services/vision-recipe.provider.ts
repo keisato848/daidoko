@@ -61,6 +61,11 @@ export type VisionErrorKind =
   | 'quota_exceeded'
   /** 一時的な混雑・タイムアウト。少し待てば直る */
   | 'transient'
+  /**
+   * レシピ調整で、感想から変更点を読み取れなかった（R2）。
+   * **失敗ではなく入力不足**なので、再試行を促すのではなく書き方を伝える
+   */
+  | 'no_change'
   | 'failed';
 
 export class VisionInferenceError extends Error {
@@ -95,6 +100,13 @@ export function visionErrorMessage(kind: VisionErrorKind, fallback?: string): st
     case 'not_a_dish':
       return (
         fallback ?? '写真から料理を認識できませんでした。料理がはっきり写った写真でお試しください。'
+      );
+    case 'no_change':
+      // AI が「何を直せばよいか分からない」と答えたときは、その理由をそのまま出す。
+      // 「もう一度お試しください」では、次に何を書けばよいか分からない
+      return (
+        fallback ??
+        '感想から、何をどう変えればよいか読み取れませんでした。「甘すぎた」「もっと辛く」のように、味の方向を書いてみてください。'
       );
     default:
       return fallback ?? '写真からレシピをつくれませんでした。';

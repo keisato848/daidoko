@@ -311,6 +311,15 @@ export default function RecipeDetailScreen() {
             style={styles.menuItem}
             onPress={() => {
               setShowMenu(false);
+              router.push(`/(tabs)/recipes/${id}/refine`);
+            }}
+          >
+            <Text style={styles.menuItemText}>お店の味に近づける</Text>
+          </Pressable>
+          <Pressable
+            style={styles.menuItem}
+            onPress={() => {
+              setShowMenu(false);
               router.push(`/recipes/${id}/edit`);
             }}
           >
