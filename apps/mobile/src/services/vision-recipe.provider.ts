@@ -49,7 +49,19 @@ interface ServerAgentResult {
   error?: { code: string; message: string; retryable: boolean };
 }
 
-export type VisionErrorKind = 'not_a_dish' | 'rate_limited' | 'transient' | 'failed';
+/**
+ * 失敗の種別。**ユーザーに出す文言と次の行動がこれで決まる**ため、
+ * 「つながらない」と「上限に達した」を必ず分ける（docs/お店の味を再現設計.md / Issue #120）。
+ */
+export type VisionErrorKind =
+  | 'not_a_dish'
+  /** 端末がオフライン。再接続すれば直る */
+  | 'offline'
+  /** 利用枠の使い切り（サーバーの日次上限 or 上流の枠）。待つしかない */
+  | 'quota_exceeded'
+  /** 一時的な混雑・タイムアウト。少し待てば直る */
+  | 'transient'
+  | 'failed';
 
 export class VisionInferenceError extends Error {
   readonly retryable: boolean;
@@ -64,9 +76,29 @@ export class VisionInferenceError extends Error {
 
 function kindFromCode(code: string | undefined): VisionErrorKind {
   if (code === 'VISION_NOT_A_DISH') return 'not_a_dish';
-  if (code === 'RATE_LIMITED') return 'rate_limited';
+  // RATE_LIMITED はサーバーの日次上限、AI_QUOTA_EXCEEDED は上流の枠切れ。
+  // どちらもユーザーから見れば「今日はもう使えない」で同じ
+  if (code === 'RATE_LIMITED' || code === 'AI_QUOTA_EXCEEDED') return 'quota_exceeded';
   if (code === 'AI_API_UNAVAILABLE') return 'transient';
   return 'failed';
+}
+
+/** 種別ごとの、ユーザーに出す日本語。**次に何をすればよいかまで書く。** */
+export function visionErrorMessage(kind: VisionErrorKind, fallback?: string): string {
+  switch (kind) {
+    case 'offline':
+      return 'インターネットにつながっていません。接続してからもう一度お試しください。';
+    case 'quota_exceeded':
+      return fallback ?? '本日の AI 利用上限に達しました。時間をおいてお試しください。';
+    case 'transient':
+      return 'AI が混み合っています。少し時間をおいてもう一度お試しください。';
+    case 'not_a_dish':
+      return (
+        fallback ?? '写真から料理を認識できませんでした。料理がはっきり写った写真でお試しください。'
+      );
+    default:
+      return fallback ?? '写真からレシピをつくれませんでした。';
+  }
 }
 
 function toFormData(draft: ServerRecipeDraft): RecipeFormData {
@@ -259,6 +291,8 @@ async function inferViaByok(
   const url = `${GEMINI_ENDPOINT}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   let lastError = '';
+  // 使い切りの 429 は待っても回復しないので、最後の失敗が 429 だったかを覚えておく
+  let lastStatusWasQuota = false;
   for (let attempt = 0; attempt < GEMINI_BACKOFF_MS.length; attempt++) {
     if (attempt > 0) await sleep(GEMINI_BACKOFF_MS[attempt] ?? 4_000);
     const controller = new AbortController();
@@ -273,6 +307,7 @@ async function inferViaByok(
       });
     } catch {
       lastError = 'network';
+      lastStatusWasQuota = false;
       clearTimeout(timer);
       continue;
     }
@@ -280,6 +315,7 @@ async function inferViaByok(
 
     if (!res.ok) {
       lastError = `Gemini ${res.status}`;
+      lastStatusWasQuota = res.status === 429;
       if (GEMINI_RETRYABLE_STATUS.has(res.status)) continue;
       // 400/401/403 are usually a bad/disabled key — not retryable, not transient.
       throw new VisionInferenceError('APIキーを確認してください（無効・権限不足の可能性）', false);
@@ -308,7 +344,21 @@ async function inferViaByok(
     if (!draft) throw new VisionInferenceError('レシピ下書きに変換できませんでした', true);
     return { draft: toFormData(draft), confidence: draft.confidence, warnings: VISION_WARNINGS };
   }
-  throw new VisionInferenceError(`AIにつながりませんでした（${lastError}）`, true, 'transient');
+  // 使い切りの 429 は待っても回復しない。「つながらない」と混同させない
+  if (lastStatusWasQuota) {
+    throw new VisionInferenceError(
+      'ご自身の Gemini キーの利用上限に達しました。時間をおいてお試しください。',
+      false,
+      'quota_exceeded',
+    );
+  }
+  throw new VisionInferenceError(
+    lastError === 'network'
+      ? 'インターネットにつながっていません。接続してからもう一度お試しください。'
+      : `AIにつながりませんでした（${lastError}）`,
+    true,
+    lastError === 'network' ? 'offline' : 'transient',
+  );
 }
 
 async function inferViaServer(
@@ -351,9 +401,13 @@ async function inferViaServer(
   } catch (err) {
     if (err instanceof VisionInferenceError) throw err;
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new VisionInferenceError('リクエストがタイムアウトしました', true);
+      throw new VisionInferenceError('リクエストがタイムアウトしました', true, 'transient');
     }
-    throw new VisionInferenceError('インターネット接続を確認してください', true);
+    throw new VisionInferenceError(
+      'インターネットにつながっていません。接続してからもう一度お試しください。',
+      true,
+      'offline',
+    );
   } finally {
     clearTimeout(timer);
   }

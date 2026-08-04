@@ -142,6 +142,89 @@ describe('IMG-RECIPE-AGT-03 Vision LLM primary path', () => {
     expect(labelImage).not.toHaveBeenCalled();
   });
 
+  describe('失敗したときにユーザーへ出す文言（Issue #120）', () => {
+    // 端末内フォールバック（ML Kit）が投げる内部エラー。実際にこの英文が画面に出ていた
+    const mlKitError = new Error(
+      'Waiting for the label optional module to be downloaded. Please wait.',
+    );
+
+    it('オフラインなら、ML Kit の内部エラーではなく接続を促す日本語を出す', async () => {
+      const offline = Object.assign(
+        new Error('インターネットにつながっていません。接続してからもう一度お試しください。'),
+        { kind: 'offline' },
+      );
+      const result = await runRecipePhotoAgent(
+        { imageUri: 'file:///tmp/dish.jpg', allowCloudInference: true },
+        {
+          labelImage: async () => {
+            throw mlKitError;
+          },
+          inferRecipeFromVision: async () => {
+            throw offline;
+          },
+        },
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.message).toContain('インターネットにつながっていません');
+      expect(result.error?.message).not.toContain('optional module');
+    });
+
+    it('利用枠切れなら、その旨を出す（「つながらない」と混同しない）', async () => {
+      const quota = Object.assign(
+        new Error('本日の AI 利用上限に達しました。時間をおいてお試しください。'),
+        { kind: 'quota_exceeded' },
+      );
+      const result = await runRecipePhotoAgent(
+        { imageUri: 'file:///tmp/dish.jpg', allowCloudInference: true },
+        {
+          labelImage: async () => {
+            throw mlKitError;
+          },
+          inferRecipeFromVision: async () => {
+            throw quota;
+          },
+        },
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.message).toContain('利用上限');
+      expect(result.error?.message).not.toContain('optional module');
+    });
+
+    it('端末内フォールバックが用意されていなくても内部文言を出さない', async () => {
+      const offline = Object.assign(new Error('offline'), { kind: 'offline' });
+      const result = await runRecipePhotoAgent(
+        { imageUri: 'file:///tmp/dish.jpg', allowCloudInference: true },
+        {
+          inferRecipeFromVision: async () => {
+            throw offline;
+          },
+        },
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.message).toContain('インターネットにつながっていません');
+      expect(result.error?.message).not.toContain('provider');
+    });
+
+    it('原因不明でも英語の内部エラーは出さない', async () => {
+      const result = await runRecipePhotoAgent(
+        { imageUri: 'file:///tmp/dish.jpg' },
+        {
+          labelImage: async () => {
+            throw mlKitError;
+          },
+        },
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.message).toBe(
+        '写真からレシピをつくれませんでした。もう一度お試しください。',
+      );
+    });
+  });
+
   it('skips Vision when not opted in (allowCloudInference falsy)', async () => {
     const inferRecipeFromVision = jest.fn();
     const result = await runRecipePhotoAgent(
@@ -161,11 +244,13 @@ describe('IMG-RECIPE-AGT-02 runRecipePhotoAgent errors', () => {
   it('returns PHOTO_RECIPE_FAILED when the client label provider is missing', async () => {
     const result = await runRecipePhotoAgent({ imageUri: 'file:///tmp/curry.jpg' });
 
+    // 旧実装は「画像ラベル provider が設定されていません」という開発者向け文言を出していた。
+    // ユーザーには意味がないので、汎用の日本語に変えた（Issue #120）
     expect(result).toMatchObject({
       ok: false,
       error: {
         code: 'PHOTO_RECIPE_FAILED',
-        message: '画像ラベル provider が設定されていません',
+        message: '写真からレシピをつくれませんでした。もう一度お試しください。',
         retryable: true,
       },
     });

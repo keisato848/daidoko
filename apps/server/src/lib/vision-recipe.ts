@@ -90,6 +90,11 @@ export interface VisionRecipeProvider {
 
 export class VisionConfigError extends Error {}
 export class VisionRequestError extends Error {}
+/**
+ * 上流（Gemini）の利用枠を使い切った場合。再試行しても当面回復しないため、
+ * 「つながらない」ではなく「上限に達した」としてユーザーに伝える必要がある。
+ */
+export class VisionQuotaError extends VisionRequestError {}
 
 const SYSTEM_PROMPT_V0 = [
   'あなたは料理写真からレシピを再現する、日本語のプロの料理人です。',
@@ -318,6 +323,9 @@ export class GeminiVisionRecipeProvider implements VisionRecipeProvider {
 
     const url = `${GEMINI_ENDPOINT}/${this.model}:generateContent?key=${this.apiKey}`;
     let lastError = '';
+    // 429 は再試行対象だが、使い切りの 429 は待っても回復しない。
+    // 最後の失敗が 429 だったかを覚えておき、終了時に区別して投げる。
+    let lastStatusWasQuota = false;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (attempt > 0) await sleep(BACKOFF_MS[attempt] ?? 8_000);
@@ -343,9 +351,11 @@ export class GeminiVisionRecipeProvider implements VisionRecipeProvider {
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
         lastError = `Gemini responded ${res.status}: ${detail.slice(0, 200)}`;
+        lastStatusWasQuota = res.status === 429;
         if (RETRYABLE_STATUS.has(res.status)) continue;
         throw new VisionRequestError(lastError);
       }
+      lastStatusWasQuota = false;
 
       const json = (await res.json()) as {
         candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -380,6 +390,7 @@ export class GeminiVisionRecipeProvider implements VisionRecipeProvider {
       return parsed;
     }
 
-    throw new VisionRequestError(`Gemini unavailable after ${MAX_ATTEMPTS} attempts: ${lastError}`);
+    const summary = `Gemini unavailable after ${MAX_ATTEMPTS} attempts: ${lastError}`;
+    throw lastStatusWasQuota ? new VisionQuotaError(summary) : new VisionRequestError(summary);
   }
 }

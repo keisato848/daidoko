@@ -59,6 +59,33 @@ function errorResult(message: string): AgentResult<RecipePhotoAgentOutput> {
   return { ok: false, error: { code: 'PHOTO_RECIPE_FAILED', message, retryable: true } };
 }
 
+/** クラウド推論が失敗したときの理由。端末内フォールバックも失敗した場合はこれを出す。 */
+interface CloudFailure {
+  kind: string | undefined;
+  message: string;
+}
+
+/**
+ * ユーザーに出す文言。**端末内フォールバック（ML Kit）の内部エラーを出さない**ための関数。
+ *
+ * 実際に「Waiting for the label optional module to be downloaded. Please wait.」という
+ * 英語の内部文言がそのまま画面に出ていた（Issue #120）。本当の原因はクラウド側の失敗
+ * （オフライン・利用枠切れ）なので、そちらを人間の言葉で伝える。
+ */
+function failureMessage(failure: CloudFailure | null): string {
+  if (!failure) return '写真からレシピをつくれませんでした。もう一度お試しください。';
+  switch (failure.kind) {
+    case 'offline':
+      return 'インターネットにつながっていません。接続してからもう一度お試しください。';
+    case 'quota_exceeded':
+      return failure.message || '本日の AI 利用上限に達しました。時間をおいてお試しください。';
+    case 'transient':
+      return 'AI が混み合っています。少し時間をおいてもう一度お試しください。';
+    default:
+      return failure.message || '写真からレシピをつくれませんでした。もう一度お試しください。';
+  }
+}
+
 async function defaultPreprocessImage(imageUri: string): Promise<RecipePhotoPreprocessResult> {
   return { imageUri };
 }
@@ -93,6 +120,7 @@ export async function runRecipePhotoAgent(
 
   const preprocessImage = dependencies.preprocessImage ?? defaultPreprocessImage;
   const visionWarnings: string[] = [];
+  let cloudFailure: CloudFailure | null = null;
 
   // 1. Cloud Vision LLM inference (primary path, when the user has opted in).
   //    On any failure we fall through to the on-device heuristic / OCR path.
@@ -135,6 +163,11 @@ export async function runRecipePhotoAgent(
         );
       }
       // Transient / other failures: degrade gracefully to the on-device path.
+      // 端末内フォールバックも失敗したときに本当の原因を出せるよう、理由を控えておく。
+      cloudFailure = {
+        kind,
+        message: error instanceof Error ? error.message : '',
+      };
       visionWarnings.push(
         error instanceof Error
           ? `AIにつながらなかったので、端末内でかんたんに下書きしました: ${error.message}`
@@ -145,7 +178,7 @@ export async function runRecipePhotoAgent(
 
   // 2/3. On-device fallback: image-label heuristic (+ OCR text if present).
   if (!dependencies.labelImage) {
-    return errorResult(visionWarnings[0] ?? '画像ラベル provider が設定されていません');
+    return errorResult(failureMessage(cloudFailure));
   }
 
   try {
@@ -217,10 +250,10 @@ export async function runRecipePhotoAgent(
         warnings: [...warnings, ...labelInferred.warnings],
       },
     };
-  } catch (error) {
-    return errorResult(
-      error instanceof Error ? error.message : '写真からレシピをつくれませんでした',
-    );
+  } catch {
+    // 端末内フォールバックの失敗（ML Kit のモジュール未取得など）はユーザーには意味がないので、
+    // その文言は出さない。クラウド側の理由が分かっていればそちらを、無ければ汎用の日本語を返す。
+    return errorResult(failureMessage(cloudFailure));
   }
 }
 
