@@ -483,7 +483,8 @@ export default function ImportPhotoScreen() {
 const styles = StyleSheet.create({
   placeBar: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    // 画面最上部に出るのでステータスバー分を空ける（この画面の header と同じ値）
+    paddingTop: 54,
     paddingBottom: 8,
     gap: 8,
     borderBottomWidth: 1,
