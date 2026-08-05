@@ -24,8 +24,10 @@ jest.mock('../byok.service', () => ({
 
 import {
   AD_BONUS_DAILY_LIMIT,
+  clearLaunchBonusAnnouncement,
   currentDayKey,
   deriveFreemiumStatus,
+  hasPendingLaunchBonusAnnouncement,
   FREE_DAILY_LIMIT,
   getAdWatchedToday,
   getDailyUsage,
@@ -199,6 +201,40 @@ describe('usage.service', () => {
       await grantAdBonus();
       await grantLaunchBonusOnce();
       expect(await getTokenBalance()).toBe(1 + LAUNCH_BONUS_TOKENS);
+    });
+
+    // 付与しただけでは完全に無言で、設定を開かないと気づけなかった（R5 問題1）
+    describe('記念ボーナスの告知', () => {
+      it('何も付与していなければ告知しない', async () => {
+        expect(await hasPendingLaunchBonusAnnouncement()).toBe(false);
+      });
+
+      it('付与すると告知が予約される', async () => {
+        await grantLaunchBonusOnce();
+        expect(await hasPendingLaunchBonusAnnouncement()).toBe(true);
+      });
+
+      it('見せたら消える（毎回は出さない）', async () => {
+        await grantLaunchBonusOnce();
+        await clearLaunchBonusAnnouncement();
+        expect(await hasPendingLaunchBonusAnnouncement()).toBe(false);
+      });
+
+      it('消したあとに再度 grant を呼んでも復活しない（付与済みなので no-op）', async () => {
+        await grantLaunchBonusOnce();
+        await clearLaunchBonusAnnouncement();
+        expect(await grantLaunchBonusOnce()).toBe(false);
+        expect(await hasPendingLaunchBonusAnnouncement()).toBe(false);
+      });
+
+      // ホーム側も grant を呼んでから読む（付与と同時に読むと書き込み前に読んでしまい、
+      // 付与したその回の起動で告知が出なかった — 実機で確認）。
+      // 二重に呼んでもトークンが増えないことを固定する
+      it('起動時とホームの二重呼び出しでもトークンは増えない', async () => {
+        await Promise.all([grantLaunchBonusOnce(), grantLaunchBonusOnce()]);
+        expect(await getTokenBalance()).toBe(LAUNCH_BONUS_TOKENS);
+        expect(await hasPendingLaunchBonusAnnouncement()).toBe(true);
+      });
     });
 
     it('raises the effective allowance via deriveFreemiumStatus', () => {
