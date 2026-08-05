@@ -62,6 +62,18 @@ describe('evaluateAppOpenAdGate', () => {
     }
   });
 
+  // R3「アプリを開いたらすぐ撮影」: 起動直後に撮影画面へ飛ぶので、
+  // 店を出た直後の数十秒に広告を挟まないことを二重に確かめる（Issue #114 完了条件）
+  it('起動即カメラの経路では出さない（コールドスタート・撮影画面の二重ガード）', () => {
+    expect(
+      evaluateAppOpenAdGate(
+        baseInput({ pathname: '/(tabs)/recipes/import-photo', backgroundedAt: null }),
+      ),
+    ).toBe('sensitive-screen');
+    // 撮影画面から戻ってきた直後も、撮影中フラグが立っていれば出さない
+    expect(evaluateAppOpenAdGate(baseInput({ photoCaptureInFlight: true }))).toBe('photo-capture');
+  });
+
   it('コールドスタート直後・短い離脱では出さない', () => {
     expect(evaluateAppOpenAdGate(baseInput({ backgroundedAt: null }))).toBe('cold-start');
     expect(

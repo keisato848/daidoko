@@ -9,6 +9,7 @@ import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 
 const CLOUD_INFERENCE_CONSENT_KEY = 'cloud_inference_consent';
+const LAUNCH_CAMERA_KEY = 'launch_camera';
 
 export async function getAppMeta(key: string): Promise<string | null> {
   if (!isNativePlatform) return null;
@@ -36,4 +37,18 @@ export async function hasCloudInferenceConsent(): Promise<boolean> {
 
 export async function setCloudInferenceConsent(granted: boolean): Promise<void> {
   await setAppMeta(CLOUD_INFERENCE_CONSENT_KEY, granted ? 'granted' : 'denied');
+}
+
+/**
+ * 「アプリを開いたらすぐ撮影」（R3 / Issue #114）。**既定オフ**。
+ *
+ * 店を出た直後には最適だが、レシピを見に来た人には邪魔になるので既定にはしない
+ * （`docs/お店の味を再現設計.md` §4.4）。
+ */
+export async function isLaunchCameraEnabled(): Promise<boolean> {
+  return (await getAppMeta(LAUNCH_CAMERA_KEY)) === 'on';
+}
+
+export async function setLaunchCameraEnabled(enabled: boolean): Promise<void> {
+  await setAppMeta(LAUNCH_CAMERA_KEY, enabled ? 'on' : 'off');
 }

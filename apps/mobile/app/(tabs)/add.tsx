@@ -23,19 +23,14 @@ interface MethodOption {
   androidOnly?: boolean;
 }
 
+// 主役（写真からレシピ）を先頭に置く。以前は 5 択の 4 番目で、上に手動・テキスト・URL が
+// 並んでいた（`docs/お店の味を再現設計.md` §4.3 問題2）。手動入力は最後でよい。
 const METHODS: MethodOption[] = [
   {
-    id: 'manual',
-    icon: <PenLine size={24} color={Colors.gold} />,
-    label: '手動で入力',
-    description: 'レシピを一から入力する',
-    enabled: true,
-  },
-  {
-    id: 'text',
-    icon: <FileText size={24} color={Colors.gold} />,
-    label: 'テキストから作成',
-    description: '本文を貼り付けて下書き化',
+    id: 'photo',
+    icon: <Camera size={24} color={Colors.gold} />,
+    label: '写真からレシピ',
+    description: 'お店で食べた料理も、写真から下書きに',
     enabled: true,
   },
   {
@@ -46,10 +41,10 @@ const METHODS: MethodOption[] = [
     enabled: true,
   },
   {
-    id: 'photo',
-    icon: <Camera size={24} color={Colors.gold} />,
-    label: '写真からレシピ',
-    description: '料理の写真からレシピの下書きをつくる',
+    id: 'text',
+    icon: <FileText size={24} color={Colors.gold} />,
+    label: 'テキストから作成',
+    description: '本文を貼り付けて下書き化',
     enabled: true,
   },
   {
@@ -59,6 +54,13 @@ const METHODS: MethodOption[] = [
     description: 'レシピ本や手書きメモの文字を読み取り',
     enabled: true,
     androidOnly: true,
+  },
+  {
+    id: 'manual',
+    icon: <PenLine size={24} color={Colors.gold} />,
+    label: '手動で入力',
+    description: 'レシピを一から入力する',
+    enabled: true,
   },
 ];
 

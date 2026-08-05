@@ -1,9 +1,10 @@
 import { Stack, useRouter, usePathname } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
+import { isLaunchCameraEnabled } from '../src/services/app-meta.service';
 import {
   initAppOpenAds,
   maybeShowAppOpenAdOnForeground,
@@ -19,6 +20,7 @@ import {
   consumeLowStockLaunchTap,
 } from '../src/services/notification.service';
 import { grantLaunchBonusOnce } from '../src/services/usage.service';
+import { decideLaunchDestination } from '../src/utils/launchDestination';
 
 export default function RootLayout() {
   const { isReady, error } = useDatabase();
@@ -26,6 +28,12 @@ export default function RootLayout() {
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
+
+  const handleLowStockTap = useCallback(() => {
+    addAllLowStockToShoppingList()
+      .then(() => router.push('/(tabs)/shopping'))
+      .catch(() => undefined);
+  }, [router]);
 
   // 起動時に在庫の残量しきい値をチェック（1日1回まとめて通知; P3）
   // + 週次の自動バックアップスナップショット（#79。失敗しても起動は止めない）
@@ -41,22 +49,33 @@ export default function RootLayout() {
   }, [isReady]);
 
   // 残量通知タップ → 確認なしで一括買い物リスト追加（#66②）。
-  // cold-start（タップでアプリが起動したケース）はリスナー登録前なので別途 consume で拾う。
   useEffect(() => {
     if (!isReady) return;
-    const handleTap = () => {
-      addAllLowStockToShoppingList()
-        .then(() => router.push('/(tabs)/shopping'))
-        .catch(() => undefined);
-    };
-    consumeLowStockLaunchTap()
-      .then((launched) => {
-        if (launched) handleTap();
-      })
-      .catch(() => undefined);
-    const sub = addLowStockTapListener(handleTap);
+    const sub = addLowStockTapListener(handleLowStockTap);
     return () => sub.remove();
-  }, [isReady, router]);
+  }, [isReady, handleLowStockTap]);
+
+  // 起動時の行き先を **1 回だけ** 決める。
+  // 通知タップ（明示的な操作）が最優先、次に「アプリを開いたらすぐ撮影」（R3・既定オフ）。
+  // どちらも無ければ通常どおりホーム。cold-start はリスナー登録前なので consume で拾う。
+  const launchRoutedRef = useRef(false);
+  useEffect(() => {
+    if (!isReady || launchRoutedRef.current) return;
+    launchRoutedRef.current = true;
+    void (async () => {
+      const [tappedLowStockNotification, launchCameraEnabled] = await Promise.all([
+        consumeLowStockLaunchTap().catch(() => false),
+        isLaunchCameraEnabled().catch(() => false),
+      ]);
+      const destination = decideLaunchDestination({
+        tappedLowStockNotification,
+        launchCameraEnabled,
+      });
+      if (destination === 'low-stock') handleLowStockTap();
+      // push（replace ではない）ので、戻るでホームに帰れる
+      if (destination === 'capture') router.push('/(tabs)/recipes/import-photo');
+    })();
+  }, [isReady, router, handleLowStockTap]);
 
   // フォアグラウンド復帰でアプリ起動広告（表示条件は service 側で全て判定）
   useEffect(() => {
