@@ -7,6 +7,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Bookmark,
   CalendarDays,
+  Camera,
   LayoutGrid,
   ShoppingCart,
   Store,
@@ -301,8 +302,21 @@ export default function HomeScreen() {
           ]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            !selectMode && (wantList.length > 0 || monthlyStats.count > 0) ? (
+            !selectMode ? (
               <View>
+                {/* 主役への直行。FAB（＋ → 追加方法選択）は残すが、写真からレシピだけは
+                    1タップで届かせる（`docs/お店の味を再現設計.md` §4.3 問題2） */}
+                <PressableScale
+                  style={styles.captureButton}
+                  scaleTo={0.98}
+                  onPress={() => router.push('/(tabs)/recipes/import-photo')}
+                  accessibilityRole="button"
+                  accessibilityLabel="お店の料理を撮る"
+                >
+                  <Camera size={20} color={Colors.bg} />
+                  <Text style={styles.captureText}>お店の料理を撮る</Text>
+                </PressableScale>
+
                 {wantList.length > 0 && (
                   <View style={styles.wantSection}>
                     <View style={styles.wantHeader}>
@@ -477,6 +491,23 @@ const styles = StyleSheet.create({
     fontSize: 12, // xs: タイムスタンプ・日付ヘッダー
     color: Colors.paperDim,
     letterSpacing: 2,
+  },
+  captureButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: Colors.gold,
+    borderRadius: 10,
+    paddingVertical: 15,
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  captureText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.bg,
+    letterSpacing: 1,
   },
   wantSection: {
     paddingTop: 12,

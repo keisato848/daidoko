@@ -1,8 +1,12 @@
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Tabs } from 'expo-router';
 import { Home, BookOpen, Plus, Settings } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
+
+/** レシピスタックのうち、タブバーを隠す画面（全画面で集中させたいもの）。 */
+const FULLSCREEN_CHILD_ROUTES = ['import-photo'];
 
 export default function TabLayout() {
   return (
@@ -24,10 +28,17 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="recipes"
-        options={{
+        options={({ route }) => ({
           title: 'レシピ',
           tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} />,
-        }}
+          // 撮影画面はタブバーを出さない。店内で集中して撮る画面としてノイズになる
+          // （`docs/お店の味を再現設計.md` §4.3 問題7）。
+          // recipes 配下は入れ子スタックなので、Tabs.Screen の href:null では制御できない。
+          // 親タブ側で「いま開いている子ルート」を見て切り替える（React Navigation の定石）
+          tabBarStyle: FULLSCREEN_CHILD_ROUTES.includes(getFocusedRouteNameFromRoute(route) ?? '')
+            ? { display: 'none' as const }
+            : styles.tabBar,
+        })}
       />
       <Tabs.Screen
         name="add"

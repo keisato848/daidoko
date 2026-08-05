@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
@@ -21,6 +21,7 @@ import {
   getCurrentUserProfile,
 } from '../../src/services/user.service';
 import { getAdRewardProvider } from '../../src/services/ad-reward.service';
+import { isLaunchCameraEnabled, setLaunchCameraEnabled } from '../../src/services/app-meta.service';
 import { getFreemiumStatus, type FreemiumStatus } from '../../src/services/usage.service';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 
@@ -31,6 +32,8 @@ interface SettingItem {
   statusLabel?: string;
   enabled: boolean;
   onPress?: () => void;
+  /** 指定するとシェブロンの代わりにスイッチを出す（行タップでも切り替わる） */
+  toggle?: { value: boolean; onValueChange: (next: boolean) => void };
 }
 
 interface SettingSection {
@@ -47,6 +50,8 @@ export default function SettingsScreen() {
   const [family, setFamily] = useState(getCurrentFamily());
   const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
   const [adPrivacyRequired, setAdPrivacyRequired] = useState(false);
+  // R3: アプリを開いたらすぐ撮影（既定オフ）
+  const [launchCamera, setLaunchCamera] = useState(false);
   const userDisplayName = formatProfileDisplayName(user.displayName);
 
   useFocusEffect(
@@ -65,8 +70,17 @@ export default function SettingsScreen() {
         .isPrivacyOptionsRequired()
         .then(setAdPrivacyRequired)
         .catch(() => setAdPrivacyRequired(false));
+      void isLaunchCameraEnabled()
+        .then(setLaunchCamera)
+        .catch(() => setLaunchCamera(false));
     }, []),
   );
+
+  const handleToggleLaunchCamera = useCallback((next: boolean) => {
+    // 先に画面へ反映してから保存する（トグルの反応を待たせない）
+    setLaunchCamera(next);
+    void setLaunchCameraEnabled(next).catch(() => setLaunchCamera(!next));
+  }, []);
 
   // Plan row content depends on premium state (avoid nested ternaries).
   let planLabel = 'プレミアムにする';
@@ -118,6 +132,18 @@ export default function SettingsScreen() {
   ]);
 
   const sections: SettingSection[] = [
+    {
+      title: 'お店の味を再現',
+      items: [
+        {
+          id: 'launch-camera',
+          label: 'アプリを開いたらすぐ撮影',
+          subtitle: '店を出た直後に、起動から1アクションで撮れます',
+          enabled: true,
+          toggle: { value: launchCamera, onValueChange: handleToggleLaunchCamera },
+        },
+      ],
+    },
     {
       title: 'プラン',
       items: [
@@ -272,8 +298,12 @@ export default function SettingsScreen() {
                 ref={item.id === 'plan' ? planRef : item.id === 'backup' ? backupRef : undefined}
                 collapsable={false}
                 style={[styles.settingRow, !item.enabled && styles.settingRowDisabled]}
-                onPress={item.onPress}
-                disabled={!item.onPress}
+                onPress={
+                  item.toggle ? () => item.toggle?.onValueChange(!item.toggle.value) : item.onPress
+                }
+                disabled={!item.onPress && !item.toggle}
+                accessibilityRole={item.toggle ? 'switch' : 'button'}
+                {...(item.toggle && { accessibilityState: { checked: item.toggle.value } })}
               >
                 <View style={styles.settingContent}>
                   <Text style={[styles.settingLabel, !item.enabled && styles.settingLabelDisabled]}>
@@ -282,8 +312,17 @@ export default function SettingsScreen() {
                   {item.subtitle && <Text style={styles.settingSubtitle}>{item.subtitle}</Text>}
                   {item.statusLabel && <Text style={styles.statusBadge}>{item.statusLabel}</Text>}
                 </View>
-                {item.onPress && (
-                  <ChevronRight size={16} color={item.enabled ? Colors.goldDim : Colors.muted} />
+                {item.toggle ? (
+                  <Switch
+                    value={item.toggle.value}
+                    onValueChange={item.toggle.onValueChange}
+                    trackColor={{ false: Colors.border, true: Colors.gold }}
+                    thumbColor={Colors.paper}
+                  />
+                ) : (
+                  item.onPress && (
+                    <ChevronRight size={16} color={item.enabled ? Colors.goldDim : Colors.muted} />
+                  )
                 )}
               </Pressable>
             ))}
