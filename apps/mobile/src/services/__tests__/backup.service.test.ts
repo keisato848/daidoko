@@ -1,4 +1,5 @@
 import {
+  BACKUP_TABLES,
   createMigrationPhotoArchivePath,
   createMigrationRecipePhotoArchivePath,
   formatBackupFileName,
@@ -28,6 +29,60 @@ const emptyTables = {
   sync_meta: [],
   app_meta: [],
 };
+
+/**
+ * バックアップ対象の取りこぼしは、**気づくのが復元のときになる**（そのときには手遅れ）。
+ * 実際に pantry 系4テーブルがまるごと漏れていた（PR #109）。
+ * 列を足したのにここを直し忘れる事故を、テストで止める。
+ */
+describe('バックアップ対象の取りこぼし防止', () => {
+  const columnsOf = (table: string): string[] =>
+    BACKUP_TABLES.find((entry) => entry.name === table)?.columns ?? [];
+
+  it('全テーブルが対象に入っている', () => {
+    expect(BACKUP_TABLES.map((entry) => entry.name).sort()).toEqual(
+      [
+        'app_meta',
+        'cooking_logs',
+        'cooking_photos',
+        'families',
+        'family_members',
+        'ingredients',
+        'jan_catalog',
+        'memos',
+        'name_aliases',
+        'pantry_items',
+        'recipe_revisions',
+        'recipe_tags',
+        'recipes',
+        'shopping_items',
+        'sources',
+        'steps',
+        'sync_meta',
+        'tags',
+        'users',
+      ].sort(),
+    );
+  });
+
+  it('R1 で足した cooking_logs.kind / place_name が入っている', () => {
+    expect(columnsOf('cooking_logs')).toEqual(expect.arrayContaining(['kind', 'place_name']));
+  });
+
+  it('写真パスの列が入っている（復元後に写真が見えなくなるのを防ぐ）', () => {
+    expect(columnsOf('recipes')).toContain('cover_photo_path');
+    expect(columnsOf('steps')).toContain('photo_path');
+    expect(columnsOf('cooking_photos')).toContain('local_path');
+  });
+
+  it('R2 の感想が残る author_note が入っている', () => {
+    expect(columnsOf('recipe_revisions')).toContain('author_note');
+  });
+
+  it('作りたいリストの pinned_at が入っている', () => {
+    expect(columnsOf('recipes')).toContain('pinned_at');
+  });
+});
 
 describe('backup.service', () => {
   it('formats backup file names with local timestamp components', () => {
