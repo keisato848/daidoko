@@ -129,6 +129,9 @@ export default function RecipeDetailScreen() {
   const missingRef = useRef<View>(null);
   const menuRef = useRef<View>(null);
   const logShortcutRef = useRef<View>(null);
+  // 4 枚あったが、初回に連続で出てまとめてスキップされていた（R5 問題4）。
+  // 再現ループの2歩目（作る）と3歩目（近づける）に絞る。買い物リスト追加と
+  // メニューは画面上に見えているので、案内が無くても辿り着ける
   const coach = useCoachMarks(
     'recipe-detail',
     [
@@ -140,21 +143,9 @@ export default function RecipeDetailScreen() {
       },
       {
         key: 'logShortcut',
-        title: '作った記録をつける',
-        text: '調理中モードを進めなくても、ここから直接、評価・メモ・写真を記録できます。',
+        title: '作ったら記録して、味を近づける',
+        text: '評価・メモ・写真をここから記録できます。感想を書くと、右上のメニューの「お店の味に近づける」でレシピを調整できます。',
         ref: logShortcutRef,
-      },
-      {
-        key: 'missing',
-        title: '足りない材料だけ買い物へ',
-        text: '家の在庫と照合して、足りない材料だけを買い物リストに追加します。',
-        ref: missingRef,
-      },
-      {
-        key: 'menu',
-        title: '編集・写真・履歴',
-        text: 'レシピの編集、表紙や手順写真の追加・変更、版履歴の確認はここから。',
-        ref: menuRef,
       },
     ],
     recipe != null && tab === 'ingredients' && !showMenu,
@@ -295,7 +286,7 @@ export default function RecipeDetailScreen() {
           style={styles.pinButton}
           onPress={() => void handleTogglePin()}
           hitSlop={12}
-          accessibilityLabel={recipe.pinnedAt != null ? '作りたいから外す' : '作りたいに追加'}
+          accessibilityLabel={recipe.pinnedAt != null ? '再現したいから外す' : '再現したいに追加'}
         >
           <Bookmark
             size={20}

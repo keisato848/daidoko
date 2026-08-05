@@ -25,6 +25,7 @@ const USAGE_KEY_PREFIX = 'ai_photo_recipe_usage:';
 const AD_WATCH_KEY_PREFIX = 'ai_photo_recipe_ad_watch:';
 const TOKEN_BALANCE_KEY = 'ai_photo_recipe_token_balance';
 const LAUNCH_BONUS_KEY = 'launch_bonus_2026_07';
+const LAUNCH_BONUS_ANNOUNCE_KEY = 'launch_bonus_announced';
 
 /** リリース記念ボーナスで一度だけ配るトークン数。 */
 export const LAUNCH_BONUS_TOKENS = 3;
@@ -156,7 +157,22 @@ export async function grantLaunchBonusOnce(): Promise<boolean> {
   // 先にフラグを立てる（途中失敗時に二重付与するより取りこぼす方を選ぶ）
   await setAppMeta(LAUNCH_BONUS_KEY, new Date().toISOString());
   await setTokenBalance((await getTokenBalance()) + LAUNCH_BONUS_TOKENS);
+  // 付与しただけでは**完全に無言**で、設定を開かないと気づけなかった（R5 問題1）。
+  // ホームで一度だけ知らせるための予約。見せた側が消す
+  await setAppMeta(LAUNCH_BONUS_ANNOUNCE_KEY, 'pending');
   return true;
+}
+
+/**
+ * 記念ボーナスの告知がまだ出ていないか。
+ * 付与直後にアプリが落ちても次の起動で出せるよう、フラグで持ち越す。
+ */
+export async function hasPendingLaunchBonusAnnouncement(): Promise<boolean> {
+  return (await getAppMeta(LAUNCH_BONUS_ANNOUNCE_KEY)) === 'pending';
+}
+
+export async function clearLaunchBonusAnnouncement(): Promise<void> {
+  await setAppMeta(LAUNCH_BONUS_ANNOUNCE_KEY, 'done');
 }
 
 /** Spend one banked token (floors at 0). Returns the new balance. */
