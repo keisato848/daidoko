@@ -14,8 +14,10 @@ import { classifySigningEnv } from './lib/signing.mjs';
 // フォルダ名ハードコードは別名 clone でガードが無効化されるため禁止（edit-guard と同じ方針）。
 const REPO_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
-// eas submit ガード（releaseTagStatus）のメモ化用。関数定義より前、メインの判定チェーンより
-// 前に宣言する必要がある（`let` は TDZ にかかるため、関数だけ先に巻き上がっても呼べない）。
+// 提出ガード（releaseTagStatus / deviceVerificationStatus）のメモ化用。関数定義より前、
+// メインの判定チェーンより前に宣言する必要がある
+// （`let` は TDZ にかかるため、関数だけ先に巻き上がっても呼べない）。
+let deviceVerificationStatusCache;
 let releaseTagStatusCache;
 
 const payload = await readStdinJson();
@@ -71,6 +73,12 @@ if (!commandText) {
       `先に \`git tag -a ${tagName} -m "..."\` を作成し、` +
       `\`git push origin ${tagName}\` で共有してから submit してください（docs/開発ハーネス.md）。`,
   );
+} else if (
+  /\beas\s+submit\b/i.test(commandText) &&
+  !/(-p|--platform)\s+ios\b/i.test(commandText) &&
+  deviceVerificationStatus()?.blocked
+) {
+  respond('deny', deviceVerificationStatus().reason);
 } else if (/\beas\s+submit\b/i.test(commandText)) {
   respond(
     'ask',
@@ -177,6 +185,80 @@ function releaseTagStatus() {
   if (releaseTagStatusCache !== undefined) return releaseTagStatusCache;
   releaseTagStatusCache = computeReleaseTagStatus();
   return releaseTagStatusCache;
+}
+
+/**
+ * リリース前の実機検証記録を調べる。
+ *
+ * 1.4.5 の準備で、**エミュレーターでは1件も出なかった不具合が実機で4件**出た
+ * （出力枠の枯渇・差分が注記で埋まる・同名材料の取り違え・明るい写真でボタンが消える）。
+ * 「確認したつもり」でリリースしないよう、記録の存在を機械が確かめる。
+ *
+ * 記録は `node scripts/agent/record-device-verification.mjs` が作る。あれは実際に
+ * 端末へ接続し、入っているビルドの versionCode が app.json と一致することまで見る。
+ *
+ * app.json / git / ファイルの読み取りに失敗したら null（フェイルオープン）。
+ * インフラの不調でリリースを止めたくないため。
+ */
+function deviceVerificationStatus() {
+  if (deviceVerificationStatusCache !== undefined) return deviceVerificationStatusCache;
+  deviceVerificationStatusCache = computeDeviceVerificationStatus();
+  return deviceVerificationStatusCache;
+}
+
+function computeDeviceVerificationStatus() {
+  const release = releaseTagStatus();
+  if (!release) return null;
+  const { version, versionCode } = release;
+  const relativePath = `docs/verification/${version}-${versionCode}.json`;
+
+  let record;
+  try {
+    record = JSON.parse(readFileSync(resolve(REPO_ROOT, relativePath), 'utf8'));
+  } catch {
+    return {
+      blocked: true,
+      reason:
+        `v${version}（versionCode ${versionCode}）の実機検証記録がありません（${relativePath}）。\n` +
+        '実機にこのビルドを入れて確認し、次で記録してから提出してください:\n' +
+        '  node scripts/agent/record-device-verification.mjs --checked "確認した内容"\n' +
+        'エミュレーターだけでは足りません。1.4.5 の準備では実機のみで4件の不具合が出ています（docs/開発ハーネス.md §4）。',
+    };
+  }
+
+  if (record?.device?.isEmulator) {
+    return {
+      blocked: true,
+      reason:
+        `${relativePath} はエミュレーターでの記録です（${record.device?.model ?? '不明'}）。\n` +
+        '**リリース前の検証は実機で行ってください。** 実データの規模・同名材料・明るい写真といった\n' +
+        '条件はエミュレーターでは揃わず、1.4.5 の準備で実機のみで見つかった不具合が4件あります。',
+    };
+  }
+
+  // 記録した後にアプリを変えたなら、その変更は検証されていない
+  const changed = appChangedSince(record.headCommit);
+  if (changed && changed.length > 0) {
+    return {
+      blocked: true,
+      reason:
+        `実機検証（${record.verifiedAt}）の後に apps/ が変更されています。検証されていない変更が含まれます:\n` +
+        `${changed.slice(0, 5).join('\n')}${changed.length > 5 ? `\n… 他 ${changed.length - 5} 件` : ''}\n` +
+        '入れ直して再検証し、記録を取り直してください。',
+    };
+  }
+
+  return { blocked: false };
+}
+
+/** 記録時のコミット以降に apps/ が変わっていればそのコミット一覧を返す。判定不能なら null。 */
+function appChangedSince(headCommit) {
+  if (!headCommit) return null;
+  const log = runCommand('git', ['log', '--oneline', `${headCommit}..HEAD`, '--', 'apps'], {
+    cwd: REPO_ROOT,
+  });
+  if (!log.ok) return null;
+  return log.stdout.split(/\r?\n/).filter(Boolean);
 }
 
 function computeReleaseTagStatus() {
