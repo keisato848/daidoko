@@ -253,6 +253,34 @@ describe('normalizeRefined — モデルの取りこぼしをコードで埋め�
     expect(result?.ingredients[0]?.note).toBeUndefined();
   });
 
+  // 実機で被弾: 水を 200→220ml にしただけなのに、他の全材料へ「（ドレッシング）」
+  // 「（生地用）」といった注記が足され、差分がほぼ全材料で「変更」になった。
+  // 差分プレビューは黙った書き換えを防ぐ仕組みなので、埋め尽くされると意味を失う
+  it('分量が変わっていない材料に注記だけ足されても無視する', () => {
+    const result = normalizeRefined(
+      {
+        changed: true,
+        ingredients: [
+          // 分量そのまま＋注記だけ追加 → 無視する
+          { groupLabel: '主材料', name: '木綿豆腐', amount: '1丁', note: '（主材料）' },
+          // 分量が変わった材料の注記は通す
+          { groupLabel: '調味料', name: '甜麺醤', amount: '大さじ1', note: '控えめに' },
+        ],
+        steps: [{ body: '煮る' }],
+      },
+      CURRENT_RECIPE,
+    );
+
+    expect(result?.ingredients).toContainEqual({
+      groupLabel: '主材料',
+      name: '木綿豆腐',
+      amount: '1丁',
+    });
+    expect(result?.ingredients).toContainEqual(
+      expect.objectContaining({ name: '甜麺醤', amount: '大さじ1', note: '控えめに' }),
+    );
+  });
+
   it('新しく増えた材料は現行レシピに無いのでそのまま通す', () => {
     const result = normalizeRefined(
       {

@@ -71,7 +71,17 @@ export function normalizeRefined(
       const original = baseByName.get(name);
       const groupLabel = cleanString(item?.groupLabel, 30) ?? original?.groupLabel;
       const amount = cleanString(item?.amount, 30) ?? original?.amount;
-      const note = cleanString(item?.note, 100) ?? original?.note;
+      // 分量が変わっていない材料の note は**元のまま**にする。
+      // 実機で、水を 200→220ml にしただけなのに、他の全材料へ「（ドレッシング）」
+      // 「（生地用）」といった注記が足され、差分がほぼ全材料で「変更」になった。
+      // そうなると「ここに出ていない材料は変わっていません」が意味を失い、
+      // **本当の変更を見つけられなくなる**（差分プレビューは黙った書き換えを防ぐ仕組みなので致命的）。
+      // 感想は味や見た目についてのものなので、注記だけの変更が求められることはない。
+      // 説明したいことは changeSummary に書けばよい。
+      const amountUnchanged = original !== undefined && amount === original.amount;
+      const note = amountUnchanged
+        ? original.note
+        : (cleanString(item?.note, 100) ?? original?.note);
       return {
         name,
         ...(groupLabel !== undefined && { groupLabel }),
