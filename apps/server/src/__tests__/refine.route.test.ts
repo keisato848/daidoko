@@ -281,6 +281,36 @@ describe('normalizeRefined — モデルの取りこぼしをコードで埋め�
     );
   });
 
+  // 実機のガレットのレシピで発生: 卵が「生地用」と「目玉焼き用」の2つあり、
+  // 名前だけで引くと別の材料の分量で埋めてしまう
+  it('同名の材料が複数あってもグループで区別して埋める', () => {
+    const base = {
+      title: 'ガレット',
+      ingredients: [
+        { groupLabel: '生地', name: '卵', amount: '1個' },
+        { groupLabel: '具材', name: '卵', amount: '2個' },
+      ],
+      steps: [{ body: '焼く' }],
+    };
+    const result = normalizeRefined(
+      {
+        changed: true,
+        // どちらも amount を省略 → それぞれのグループの値で埋まるべき
+        ingredients: [
+          { groupLabel: '生地', name: '卵' },
+          { groupLabel: '具材', name: '卵' },
+        ],
+        steps: [{ body: '焼く' }],
+      },
+      base,
+    );
+
+    expect(result?.ingredients).toEqual([
+      { groupLabel: '生地', name: '卵', amount: '1個' },
+      { groupLabel: '具材', name: '卵', amount: '2個' },
+    ]);
+  });
+
   it('新しく増えた材料は現行レシピに無いのでそのまま通す', () => {
     const result = normalizeRefined(
       {
