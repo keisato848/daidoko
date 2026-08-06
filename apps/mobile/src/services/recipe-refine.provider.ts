@@ -192,7 +192,8 @@ const GEMINI_RESPONSE_SCHEMA = {
     },
     tags: { type: 'ARRAY', items: { type: 'STRING' } },
   },
-  required: ['changed', 'changeSummary'],
+  // サーバー側と同じ。必須にしないとモデルが材料・手順を省くことがある（実機で被弾）
+  required: ['changed', 'changeSummary', 'ingredients', 'steps'],
 };
 
 interface GeminiRefineRaw {
@@ -343,6 +344,10 @@ async function refineViaByok(
       temperature: 0.2,
       responseMimeType: 'application/json',
       responseSchema: GEMINI_RESPONSE_SCHEMA,
+      // レシピ全体を返させるので出力が長い。既定のままだと打ち切られる
+      maxOutputTokens: 8192,
+      // 思考は切る（出力枠を食う・この処理には不要・コストも下がる）
+      thinkingConfig: { thinkingBudget: 0 },
     },
   };
   const url = `${GEMINI_ENDPOINT}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;

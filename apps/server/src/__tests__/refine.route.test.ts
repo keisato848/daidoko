@@ -12,6 +12,7 @@ import {
   RefineRequestError,
   buildImageLegend,
   buildRecipeText,
+  buildRefineResponseSchema,
   type RecipeRefineProvider,
   type RefineRecipeInput,
   type RefineRecipeRaw,
@@ -285,6 +286,17 @@ describe('normalizeRefined', () => {
       { title: '麻婆豆腐', ingredients: [{ name: '豆腐' }], steps: [{ body: '切る' }] },
     );
     expect(result?.title).toBe('麻婆豆腐');
+  });
+});
+
+describe('構造化出力スキーマ', () => {
+  // 実機で被弾: 材料18・手順6のレシピに対し、changed=true と changeSummary だけ返り
+  // 材料・手順が空の応答になった（→「調整結果をレシピに変換できませんでした」）。
+  // 必須にしていなかったので、出力枠が苦しいモデルが正当に省略できてしまっていた
+  it('材料と手順を必須にする（省略できないようにする）', () => {
+    expect(buildRefineResponseSchema().required).toEqual(
+      expect.arrayContaining(['changed', 'changeSummary', 'ingredients', 'steps']),
+    );
   });
 });
 
