@@ -61,6 +61,26 @@ describe('diffRecipes', () => {
     expect(rows).toContainEqual(expect.objectContaining({ kind: 'added', label: '黒酢' }));
   });
 
+  // 実機のガレットのレシピで発生: 卵が「生地用」と「目玉焼き用」の2つ、塩が2つあり、
+  // 名前だけで突き合わせると別物どうしを比べて「変更」に見えていた
+  it('同名の材料が複数あってもグループで区別する', () => {
+    const withDuplicates = (eggAmount: string): RecipeFormData =>
+      recipe({
+        ingredients: [
+          { groupLabel: '生地', name: '卵', amount: '1個', note: '' },
+          { groupLabel: '具材', name: '卵', amount: eggAmount, note: '' },
+        ],
+      });
+
+    // 具材の卵だけ変えた → 生地の卵は unchanged のまま
+    const diff = diffRecipes(withDuplicates('1個'), withDuplicates('2個'));
+    const changed = onlyChanged(diff.ingredients);
+
+    expect(changed).toHaveLength(1);
+    expect(changed[0]).toMatchObject({ before: '1個', after: '2個' });
+    expect(diff.ingredients.filter((row) => row.kind === 'unchanged')).toHaveLength(1);
+  });
+
   it('材料の並び替えだけでは変更にならない（名前で対応づける）', () => {
     const after = recipe({
       ingredients: [
