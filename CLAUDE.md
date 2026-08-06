@@ -130,6 +130,7 @@ daidoko/
 - コミットメッセージ: Conventional Commits（`feat:`, `fix:`, `test:`, `docs:`, `chore:`）。
 - `main` への直接 push 禁止。PR 経由のみ。
 - **マージ前に必ずエミュレーター/実機で動作確認する**（`.claude/settings.json` で配線された PreToolUse フック `scripts/agent/hook-pretool-guard.mjs` が `gh pr merge` / `git merge` を検知して確認を促す。全ルールは `docs/開発ハーネス.md` §2）。
+- **リリース（ストア提出）は実機検証の記録が無いとできない。** エミュレーターだけでは不足（実データの規模・同名材料・明るい写真といった条件が揃わず、1.4.5 の準備では実機のみで4件の不具合が出た）。`node scripts/agent/record-device-verification.mjs --checked "…"` で記録してから提出する。記録後に `apps/` を変更したら再検証が必要（`docs/開発ハーネス.md` §4-2）。
 - pre-commit はシークレットスキャン→Prettier 自動整形→スライス検証の順で走る（`docs/開発ハーネス.md` §3）。
 
 ---
