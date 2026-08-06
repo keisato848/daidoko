@@ -243,7 +243,12 @@ export function normalizeRefinedRaw(
       const original = baseByName.get(name);
       const groupLabel = cleanString(item?.groupLabel, 30) ?? original?.groupLabel;
       const amount = cleanString(item?.amount, 30) ?? original?.amount;
-      const note = cleanString(item?.note, 100) ?? original?.note;
+      // 分量が変わっていない材料の note は元のまま（サーバーの normalizeRefined と同じ）。
+      // 注記だけの変更で差分が埋まると、本当の変更を見つけられなくなる
+      const amountUnchanged = original !== undefined && amount === original.amount;
+      const note = amountUnchanged
+        ? original.note
+        : (cleanString(item?.note, 100) ?? original?.note);
       return {
         name,
         ...(groupLabel !== undefined && { groupLabel }),
