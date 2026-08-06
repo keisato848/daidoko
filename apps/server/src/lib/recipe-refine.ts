@@ -147,7 +147,11 @@ const GEMINI_RESPONSE_SCHEMA = {
     },
     tags: { type: 'ARRAY', items: { type: 'STRING' } },
   },
-  required: ['changed', 'changeSummary'],
+  // ingredients / steps を必須にする。**これが無いとモデルが省ける**。
+  // 実機で、材料18・手順6のレシピに対して changed=true と changeSummary だけ返し、
+  // 材料・手順が空の応答が返った（→「調整結果をレシピに変換できませんでした」）。
+  // changed=false のときも埋まるが、その場合は使わないので害はない。
+  required: ['changed', 'changeSummary', 'ingredients', 'steps'],
   propertyOrdering: [
     'changed',
     'changeSummary',
@@ -161,6 +165,11 @@ const GEMINI_RESPONSE_SCHEMA = {
     'tags',
   ],
 };
+
+/** 構造化出力のスキーマ（テストから必須項目を固定するために公開する）。 */
+export function buildRefineResponseSchema(): typeof GEMINI_RESPONSE_SCHEMA {
+  return GEMINI_RESPONSE_SCHEMA;
+}
 
 /** モデルに渡す現行レシピ。JSON にして user メッセージへ入れる。 */
 export function buildRecipeText(recipe: RefineRecipeSnapshot): string {
@@ -242,6 +251,13 @@ export class GeminiRecipeRefineProvider implements RecipeRefineProvider {
         temperature: 0.2,
         responseMimeType: 'application/json',
         responseSchema: GEMINI_RESPONSE_SCHEMA,
+        // レシピ全体を返させるので、材料・手順が多いと出力が長い。既定のままだと
+        // 途中で打ち切られて中身の無い応答になる（実機で被弾）。
+        maxOutputTokens: 8192,
+        // **思考は切る。** 思考トークンは出力枠を食う一方、この処理は「言われた点だけ直す」
+        // 制約付きの編集で、深い推論を必要としない（写真レシピとは性質が違う）。
+        // コストも下がる（R0 の実測では思考が出力の大半を占めていた）。
+        thinkingConfig: { thinkingBudget: 0 },
       },
     };
 
