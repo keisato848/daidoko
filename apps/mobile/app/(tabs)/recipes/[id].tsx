@@ -267,7 +267,7 @@ export default function RecipeDetailScreen() {
           <Text style={styles.heroEmoji}>{getEmoji(recipe.title)}</Text>
         )}
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <ChevronLeft size={20} color={Colors.goldDim} />
+          <ChevronLeft size={20} color={Colors.paper} />
           <Text style={styles.backText}>戻る</Text>
         </Pressable>
         <Pressable
@@ -276,10 +276,13 @@ export default function RecipeDetailScreen() {
           style={styles.menuButton}
           onPress={() => setShowMenu(!showMenu)}
           hitSlop={12}
+          accessibilityLabel="メニュー（編集・お店の味に近づける・版履歴）"
         >
-          <MoreVertical size={20} color={Colors.goldDim} />
+          <View style={styles.heroButton}>
+            <MoreVertical size={20} color={Colors.paper} />
+          </View>
         </Pressable>
-        <View style={styles.helpButton}>
+        <View style={[styles.helpButton, styles.heroButton]}>
           <HelpButton onPress={coach.show} />
         </View>
         <Pressable
@@ -288,11 +291,13 @@ export default function RecipeDetailScreen() {
           hitSlop={12}
           accessibilityLabel={recipe.pinnedAt != null ? '再現したいから外す' : '再現したいに追加'}
         >
-          <Bookmark
-            size={20}
-            color={Colors.gold}
-            fill={recipe.pinnedAt != null ? Colors.gold : 'transparent'}
-          />
+          <View style={styles.heroButton}>
+            <Bookmark
+              size={20}
+              color={Colors.gold}
+              fill={recipe.pinnedAt != null ? Colors.gold : 'transparent'}
+            />
+          </View>
         </Pressable>
       </View>
 
@@ -572,33 +577,51 @@ const styles = StyleSheet.create({
   },
   heroEmoji: { fontSize: 56 },
   heroPhoto: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  // ヘッダーのボタンは表紙写真の上に重なる。**写真が明るいと見えなくなる**ため
+  // （実機で、明るいガレットの写真でメニュー ⋮ が事実上不可視になった）、
+  // 半透明の暗い下地を敷く。編集・お店の味に近づける・版履歴はメニューの中にしか
+  // 入口がないので、見えないことは導線が無いのと同じ
+  heroButton: {
+    backgroundColor: 'rgba(10, 8, 5, 0.6)',
+    borderRadius: 18,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   backButton: {
     position: 'absolute',
     top: 50,
-    left: 16,
+    left: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+    backgroundColor: 'rgba(10, 8, 5, 0.6)',
+    borderRadius: 18,
+    height: 36,
+    paddingLeft: 6,
+    paddingRight: 12,
   },
   backText: {
     fontSize: 15,
     fontWeight: '400',
-    color: Colors.goldDim,
+    // 下地を敷いたので、写真の明るさに関係なく読める色にする
+    color: Colors.paper,
   },
   menuButton: {
     position: 'absolute',
     top: 50,
-    right: 16,
+    right: 12,
   },
   helpButton: {
     position: 'absolute',
-    top: 51,
-    right: 52,
+    top: 50,
+    right: 56,
   },
   pinButton: {
     position: 'absolute',
     top: 50,
-    right: 88,
+    right: 100,
   },
   menuDropdown: {
     position: 'absolute',
