@@ -138,7 +138,12 @@ function mimeTypeFor(uri: string): 'image/jpeg' | 'image/png' | 'image/webp' {
   return 'image/jpeg';
 }
 
-const VISION_WARNINGS = ['AIがつくったレシピです。分量・手順は必ず確認・調整してください。'];
+// 写真から判別できない材料（だし・油・調味料の原材料）が含まれるため、
+// 「分量・手順」だけでなく**材料そのもの**の確認を促す。
+// アレルゲンの検出・警告は行わない方針（docs/privacy-policy.md §7）
+const VISION_WARNINGS = [
+  'AIが推定したレシピです。材料・分量・手順は必ずご確認ください（アレルギーのある方は特にご注意ください）。',
+];
 
 // ── BYOK: direct Gemini call from the device (the user's own key) ───────────
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
