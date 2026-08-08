@@ -287,6 +287,14 @@ export default function RefineRecipeScreen() {
                 <Text style={styles.diffHint}>
                   ここに出ていない材料・手順は変わっていません。内容を確認してから保存してください。
                 </Text>
+                {/* AI が材料を「増やす」ことがある経路なので、写真レシピより強く注意を出す。
+                    アレルゲンの検出・警告は行わない方針（docs/privacy-policy.md §7） */}
+                <View style={styles.cautionCard}>
+                  <Text style={styles.cautionText}>
+                    AIが調整した内容です。材料が追加されることがあります。アレルギーのある方は、
+                    保存前に材料をすべてご確認ください。
+                  </Text>
+                </View>
               </>
             ) : (
               <View style={styles.noticeCard}>
@@ -589,6 +597,16 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     lineHeight: 18,
   },
+  cautionCard: {
+    marginHorizontal: 24,
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.goldDim,
+    backgroundColor: Colors.bgCard,
+  },
+  cautionText: { fontSize: 12, fontWeight: '400', color: Colors.paperDim, lineHeight: 19 },
   noticeCard: {
     marginHorizontal: 24,
     marginTop: 18,
