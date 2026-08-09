@@ -230,7 +230,7 @@ export default function RecipeListScreen() {
           {hasIngredientHit && !selectMode && (
             <View style={styles.ingredientBadge}>
               <Text style={styles.ingredientBadgeText}>
-                🥬 {matchedIngs.slice(0, 2).join('・')}
+                🥬 {matchedIngs.slice(0, 2).join(t('common.listSeparator'))}
                 {matchedIngs.length > 2 ? ' …' : ''}
               </Text>
             </View>

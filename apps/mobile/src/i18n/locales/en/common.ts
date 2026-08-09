@@ -24,6 +24,8 @@ const common: typeof ja = {
   deletePhoto: 'Remove photo',
   photoAddFailed: "We couldn't add that photo",
 
+  listSeparator: ', ',
+
   all: 'All',
   unknown: 'Unknown',
 };

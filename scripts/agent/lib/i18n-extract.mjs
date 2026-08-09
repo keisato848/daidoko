@@ -110,10 +110,13 @@ export function extractFromSource(source) {
     //
     // **コメント行を捨てる前に判定する。** 前の行に書いた印は、
     // `//` の早期 return に阻まれると届かない。
+    const isComment = line.startsWith('//') || line.startsWith('*');
     const ignoreThis = ignoreNext || /\/\/\s*i18n-ignore/.test(rawLine);
-    ignoreNext = /^\/\/\s*i18n-ignore/.test(line);
+    // 印はコメント行をまたいで生き延びる。`// i18n-ignore` の下に
+    // `// eslint-disable-next-line` を重ねて書くことがあるため
+    ignoreNext = /^\/\/\s*i18n-ignore/.test(line) || (ignoreThis && isComment);
 
-    if (line.startsWith('//') || line.startsWith('*')) return;
+    if (isComment) return;
     if (ignoreThis) return;
 
     // 行末コメントを落とす（URL の // を巻き込むが、日本語判定には影響しない）

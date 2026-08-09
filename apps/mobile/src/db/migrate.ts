@@ -382,6 +382,7 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
         and(
           eq(schema.users.id, DEFAULT_USER_ID),
           // i18n-ignore 旧サンプルの掃除。DB に入っている過去の値と比べるので訳さない
+          // eslint-disable-next-line no-restricted-syntax
           inArray(schema.users.displayName, ['恵', 'あなた']),
         ),
       );
@@ -393,6 +394,7 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
       .set({ name: defaultFamilyName(), inviteCode: DEFAULT_INVITE_CODE, updatedAt: now })
       .where(
         // i18n-ignore 旧サンプルの掃除。DB に入っている過去の値と比べるので訳さない
+        // eslint-disable-next-line no-restricted-syntax
         and(eq(schema.families.id, DEFAULT_FAMILY_ID), eq(schema.families.name, '佐藤家の台所')),
       );
   }

@@ -31,6 +31,9 @@ const common = {
   deletePhoto: '写真を削除',
   photoAddFailed: '写真を追加できませんでした',
 
+  /** 語を並べるときの区切り。英語は読点ではなくカンマ＋空白。 */
+  listSeparator: '・',
+
   all: 'すべて',
   unknown: '不明',
 };

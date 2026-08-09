@@ -126,7 +126,7 @@ export default function CookableScreen() {
               {!full && item.missing.length > 0 && (
                 <Text style={styles.missing} numberOfLines={1}>
                   {tCount('pantry.cookable.missing', item.missing.length)}
-                  {item.missing.slice(0, 4).join('、')}
+                  {item.missing.slice(0, 4).join(t('common.listSeparator'))}
                 </Text>
               )}
             </Pressable>
