@@ -9,6 +9,7 @@
 import type jaDict from '../ja';
 
 import ai from './ai';
+import backup from './backup';
 import common from './common';
 import error from './error';
 import home from './home';
@@ -17,6 +18,7 @@ import recipe from './recipe';
 
 const en: typeof jaDict = {
   ai,
+  backup,
   common,
   error,
   home,

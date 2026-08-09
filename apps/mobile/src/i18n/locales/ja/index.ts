@@ -6,6 +6,7 @@
  * （埋めないとコンパイルで落ちる — それが狙い）。
  */
 import ai from './ai';
+import backup from './backup';
 import common from './common';
 import error from './error';
 import home from './home';
@@ -14,6 +15,7 @@ import recipe from './recipe';
 
 const ja = {
   ai,
+  backup,
   common,
   error,
   home,

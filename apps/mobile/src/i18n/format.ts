@@ -53,6 +53,15 @@ export function formatMonthLabel(date: Date): string {
   return `${date.getMonth() + 1}月`;
 }
 
+/** 日時（バックアップ一覧など）。ja: `2026/08/04 13:05` / en: `Aug 4, 2026 13:05` */
+export function formatDateTime(date: Date): string {
+  const time = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  if (getLocale() === 'en') {
+    return `${MONTH_SHORT_EN[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()} ${time}`;
+  }
+  return `${date.getFullYear()}/${pad2(date.getMonth() + 1)}/${pad2(date.getDate())} ${time}`;
+}
+
 /** 年つきの月見出し。ja: `2026年8月` / en: `August 2026` */
 export function formatYearMonth(date: Date): string {
   if (getLocale() === 'en') return `${MONTH_LONG_EN[date.getMonth()]} ${date.getFullYear()}`;
