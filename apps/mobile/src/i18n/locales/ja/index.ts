@@ -5,6 +5,7 @@
  * 追加するときは対応する `../en/<名前空間>.ts` も同時に埋めること
  * （埋めないとコンパイルで落ちる — それが狙い）。
  */
+import ai from './ai';
 import common from './common';
 import error from './error';
 import home from './home';
@@ -12,6 +13,7 @@ import log from './log';
 import recipe from './recipe';
 
 const ja = {
+  ai,
   common,
   error,
   home,

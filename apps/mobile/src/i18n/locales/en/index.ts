@@ -8,6 +8,7 @@
  */
 import type jaDict from '../ja';
 
+import ai from './ai';
 import common from './common';
 import error from './error';
 import home from './home';
@@ -15,6 +16,7 @@ import log from './log';
 import recipe from './recipe';
 
 const en: typeof jaDict = {
+  ai,
   common,
   error,
   home,

@@ -101,9 +101,7 @@ export function visionErrorMessage(kind: VisionErrorKind, fallback?: string): st
     case 'transient':
       return t('error.transient');
     case 'not_a_dish':
-      return (
-        fallback ?? '写真から料理を認識できませんでした。料理がはっきり写った写真でお試しください。'
-      );
+      return t('error.notADish');
     case 'no_change':
       // AI が「何を直せばよいか分からない」と答えたときは、その理由をそのまま出す。
       // 「もう一度お試しください」では、次に何を書けばよいか分からない
@@ -141,9 +139,10 @@ function mimeTypeFor(uri: string): 'image/jpeg' | 'image/png' | 'image/webp' {
 // 写真から判別できない材料（だし・油・調味料の原材料）が含まれるため、
 // 「分量・手順」だけでなく**材料そのもの**の確認を促す。
 // アレルゲンの検出・警告は行わない方針（docs/privacy-policy.md §7）
-const VISION_WARNINGS = [
-  'AIが推定したレシピです。材料・分量・手順は必ずご確認ください（アレルギーのある方は特にご注意ください）。',
-];
+// **定数にしない。** import 時のロケールで固定され、英語端末でも日本語が出る
+function visionWarnings(): string[] {
+  return [t('ai.disclaimer')];
+}
 
 // ── BYOK: direct Gemini call from the device (the user's own key) ───────────
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -335,44 +334,34 @@ async function inferViaByok(
       lastStatusWasQuota = res.status === 429;
       if (GEMINI_RETRYABLE_STATUS.has(res.status)) continue;
       // 400/401/403 are usually a bad/disabled key — not retryable, not transient.
-      throw new VisionInferenceError('APIキーを確認してください（無効・権限不足の可能性）', false);
+      throw new VisionInferenceError(t('ai.error.apiKey'), false);
     }
 
     const json = (await res.json().catch(() => null)) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     } | null;
     const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new VisionInferenceError('AIから結果を取得できませんでした', true);
+    if (!text) throw new VisionInferenceError(t('ai.error.noResult'), true);
 
     let raw: GeminiRecipeRaw;
     try {
       raw = JSON.parse(text) as GeminiRecipeRaw;
     } catch {
-      throw new VisionInferenceError('AIの応答を解析できませんでした', true);
+      throw new VisionInferenceError(t('ai.error.unparsable'), true);
     }
     if (!raw.isDish) {
-      throw new VisionInferenceError(
-        '写真から料理を認識できませんでした。料理がはっきり写った写真でお試しください。',
-        false,
-        'not_a_dish',
-      );
+      throw new VisionInferenceError(t('error.notADish'), false, 'not_a_dish');
     }
     const draft = normalizeGeminiRaw(raw);
-    if (!draft) throw new VisionInferenceError('レシピ下書きに変換できませんでした', true);
-    return { draft: toFormData(draft), confidence: draft.confidence, warnings: VISION_WARNINGS };
+    if (!draft) throw new VisionInferenceError(t('ai.error.draftConvertFailed'), true);
+    return { draft: toFormData(draft), confidence: draft.confidence, warnings: visionWarnings() };
   }
   // 使い切りの 429 は待っても回復しない。「つながらない」と混同させない
   if (lastStatusWasQuota) {
-    throw new VisionInferenceError(
-      'ご自身の Gemini キーの利用上限に達しました。時間をおいてお試しください。',
-      false,
-      'quota_exceeded',
-    );
+    throw new VisionInferenceError(t('ai.error.byokQuota'), false, 'quota_exceeded');
   }
   throw new VisionInferenceError(
-    lastError === 'network'
-      ? 'インターネットにつながっていません。接続してからもう一度お試しください。'
-      : `AIにつながりませんでした（${lastError}）`,
+    lastError === 'network' ? t('error.offline') : t('ai.error.unreachable', { reason: lastError }),
     true,
     lastError === 'network' ? 'offline' : 'transient',
   );
@@ -398,13 +387,18 @@ async function inferViaServer(
     });
 
     if (!res.ok) {
-      throw new VisionInferenceError(`サーバーエラー (${res.status})`, res.status >= 500);
+      throw new VisionInferenceError(
+        t('ai.error.serverError', { status: res.status }),
+        res.status >= 500,
+      );
     }
 
     const result = (await res.json()) as ServerAgentResult;
     if (!result.ok || !result.data) {
+      // サーバーの文言は日本語固定。原因が分かる種別は visionErrorMessage 側で
+      // 辞書から出すので、ここでは種別を伝えることに徹する
       throw new VisionInferenceError(
-        result.error?.message ?? '写真からレシピをつくれませんでした',
+        result.error?.message ?? t('error.photoRecipeFailed'),
         result.error?.retryable ?? true,
         kindFromCode(result.error?.code),
       );
@@ -413,18 +407,14 @@ async function inferViaServer(
     return {
       draft: toFormData(result.data),
       confidence: result.data.confidence,
-      warnings: VISION_WARNINGS,
+      warnings: visionWarnings(),
     };
   } catch (err) {
     if (err instanceof VisionInferenceError) throw err;
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new VisionInferenceError('リクエストがタイムアウトしました', true, 'transient');
+      throw new VisionInferenceError(t('ai.error.timeout'), true, 'transient');
     }
-    throw new VisionInferenceError(
-      'インターネットにつながっていません。接続してからもう一度お試しください。',
-      true,
-      'offline',
-    );
+    throw new VisionInferenceError(t('error.offline'), true, 'offline');
   } finally {
     clearTimeout(timer);
   }
@@ -445,7 +435,7 @@ export async function inferRecipeFromVision(args: {
       encoding: FileSystem.EncodingType.Base64,
     });
   } catch {
-    throw new VisionInferenceError('画像の読み込みに失敗しました', false);
+    throw new VisionInferenceError(t('ai.error.imageLoadFailed'), false);
   }
 
   const mimeType = mimeTypeFor(args.imageUri);

@@ -14,6 +14,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_V1, GEMINI_MODEL } from '../config';
+import { t } from '../i18n';
 import { getUserApiKey } from './byok.service';
 import { VisionInferenceError, type VisionErrorKind } from './vision-recipe.provider';
 import type { RecipeFormData } from '../validation/recipe.schema';
@@ -290,9 +291,6 @@ export function normalizeRefinedRaw(
   };
 }
 
-const NO_CHANGE_FALLBACK =
-  '感想から、何をどう変えればよいか読み取れませんでした。「甘すぎた」「もっと辛く」のように、味の方向を書いてみてください。';
-
 function buildUserText(
   recipe: RefineRecipeSnapshot,
   feedback: string,
@@ -383,48 +381,42 @@ async function refineViaByok(
       lastError = `Gemini ${res.status}`;
       lastStatusWasQuota = res.status === 429;
       if (GEMINI_RETRYABLE_STATUS.has(res.status)) continue;
-      throw new VisionInferenceError('APIキーを確認してください（無効・権限不足の可能性）', false);
+      throw new VisionInferenceError(t('ai.error.apiKey'), false);
     }
 
     const json = (await res.json().catch(() => null)) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     } | null;
     const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new VisionInferenceError('AIから結果を取得できませんでした', true);
+    if (!text) throw new VisionInferenceError(t('ai.error.noResult'), true);
 
     let raw: GeminiRefineRaw;
     try {
       raw = JSON.parse(text) as GeminiRefineRaw;
     } catch {
-      throw new VisionInferenceError('AIの応答を解析できませんでした', true);
+      throw new VisionInferenceError(t('ai.error.unparsable'), true);
     }
 
     if (!raw.changed) {
       throw new VisionInferenceError(
-        cleanString(raw.changeSummary, 300) ?? NO_CHANGE_FALLBACK,
+        cleanString(raw.changeSummary, 300) ?? t('recipe.refine.noChange'),
         false,
         'no_change',
       );
     }
     const draft = normalizeRefinedRaw(raw, recipe);
-    if (!draft) throw new VisionInferenceError('調整結果をレシピに変換できませんでした', true);
+    if (!draft) throw new VisionInferenceError(t('recipe.refine.convertFailed'), true);
     return {
       draft: toFormData(draft),
-      changeSummary: cleanString(raw.changeSummary, 300) ?? 'レシピを調整しました。',
+      changeSummary: cleanString(raw.changeSummary, 300) ?? t('recipe.refine.done'),
     };
   }
 
   if (lastStatusWasQuota) {
-    throw new VisionInferenceError(
-      'ご自身の Gemini キーの利用上限に達しました。時間をおいてお試しください。',
-      false,
-      'quota_exceeded',
-    );
+    throw new VisionInferenceError(t('ai.error.byokQuota'), false, 'quota_exceeded');
   }
   throw new VisionInferenceError(
-    lastError === 'network'
-      ? 'インターネットにつながっていません。接続してからもう一度お試しください。'
-      : `AIにつながりませんでした（${lastError}）`,
+    lastError === 'network' ? t('error.offline') : t('ai.error.unreachable', { reason: lastError }),
     true,
     lastError === 'network' ? 'offline' : 'transient',
   );
@@ -450,14 +442,17 @@ async function refineViaServer(
     });
 
     if (!res.ok) {
-      throw new VisionInferenceError(`サーバーエラー (${res.status})`, res.status >= 500);
+      throw new VisionInferenceError(
+        t('ai.error.serverError', { status: res.status }),
+        res.status >= 500,
+      );
     }
 
     const result = (await res.json()) as ServerAgentResult;
     if (!result.ok || !result.data) {
       const code = result.error?.code;
       throw new VisionInferenceError(
-        result.error?.message ?? 'レシピを調整できませんでした',
+        result.error?.message ?? t('recipe.refine.failed'),
         result.error?.retryable ?? true,
         code === 'REFINE_NO_CHANGE' ? 'no_change' : kindFromCode(code),
       );
@@ -467,13 +462,9 @@ async function refineViaServer(
   } catch (err) {
     if (err instanceof VisionInferenceError) throw err;
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new VisionInferenceError('リクエストがタイムアウトしました', true, 'transient');
+      throw new VisionInferenceError(t('ai.error.timeout'), true, 'transient');
     }
-    throw new VisionInferenceError(
-      'インターネットにつながっていません。接続してからもう一度お試しください。',
-      true,
-      'offline',
-    );
+    throw new VisionInferenceError(t('error.offline'), true, 'offline');
   } finally {
     clearTimeout(timer);
   }

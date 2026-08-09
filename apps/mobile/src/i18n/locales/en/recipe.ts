@@ -16,6 +16,10 @@ const recipe: typeof ja = {
         'MUST NOT be a bare "try again" — retrying the same text cannot succeed. ' +
         'This is an input-insufficiency message, not an error.',
     },
+
+    failed: "We couldn't adjust the recipe",
+    convertFailed: "We couldn't apply the adjustment to the recipe",
+    done: 'Recipe adjusted.',
   },
 };
 

@@ -28,6 +28,10 @@ const recipe = {
         'MUST NOT be a bare "try again" — retrying the same text cannot succeed. ' +
         'This is an input-insufficiency message, not an error.',
     } satisfies CriticalMessage,
+
+    failed: 'レシピを調整できませんでした',
+    convertFailed: '調整結果をレシピに変換できませんでした',
+    done: 'レシピを調整しました。',
   },
 };
 
