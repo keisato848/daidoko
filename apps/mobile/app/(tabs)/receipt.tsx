@@ -12,6 +12,7 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 
 import { Loading } from '../../src/components/Loading';
 import { Colors } from '../../src/constants/theme';
+import { t, tCount } from '../../src/i18n';
 import { createClientOcrRecognizer } from '../../src/services/client-ocr.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../src/services/expo-photo-capture.adapter';
@@ -78,9 +79,7 @@ export default function ReceiptScreen() {
             mimeType: mimeTypeFor(photo.localPath),
           });
           if (!inference.isReceipt) {
-            setErrorMsg(
-              'レシートを認識できませんでした。レシート全体が写るように撮り直してください。',
-            );
+            setErrorMsg(t('pantry.receipt.notRecognized'));
             setPhase('error');
             return;
           }
@@ -88,7 +87,7 @@ export default function ReceiptScreen() {
         }
 
         if (names.length === 0) {
-          setErrorMsg('レシートから品目を読み取れませんでした。明るく正面から撮り直してください。');
+          setErrorMsg(t('pantry.receipt.noItems'));
           setPhase('error');
           return;
         }
@@ -99,7 +98,7 @@ export default function ReceiptScreen() {
           setPhase('select');
           return;
         }
-        setErrorMsg(error instanceof Error ? error.message : '読み取りに失敗しました');
+        setErrorMsg(error instanceof Error ? error.message : t('pantry.receipt.failed'));
         setPhase('error');
       }
     },
@@ -119,45 +118,43 @@ export default function ReceiptScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel={t('common.close')}
+        >
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>レシートから在庫に追加</Text>
+        <Text style={styles.headerTitle}>{t('pantry.receipt.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      {phase === 'processing' && <Loading message="レシートを読み取っています" />}
+      {phase === 'processing' && <Loading message={t('pantry.receipt.reading')} />}
 
       {(phase === 'select' || phase === 'error') && (
         <View style={styles.selectArea}>
           {phase === 'error' && errorMsg ? (
             <Text style={styles.errorText}>{errorMsg}</Text>
           ) : (
-            <Text style={styles.hint}>
-              レシートを撮影／選択すると、品目を読み取って在庫に一括追加できます。
-            </Text>
+            <Text style={styles.hint}>{t('pantry.receipt.lead')}</Text>
           )}
           <Pressable style={styles.bigButton} onPress={() => handlePick('camera')}>
             <Camera size={20} color={Colors.bg} />
-            <Text style={styles.bigButtonText}>レシートを撮影</Text>
+            <Text style={styles.bigButtonText}>{t('pantry.receipt.capture')}</Text>
           </Pressable>
           <Pressable style={styles.bigButtonOutline} onPress={() => handlePick('gallery')}>
             <ImageIcon size={20} color={Colors.gold} />
-            <Text style={styles.bigButtonOutlineText}>ギャラリーから選ぶ</Text>
+            <Text style={styles.bigButtonOutlineText}>{t('common.pickFromGallery')}</Text>
           </Pressable>
           {!nativeRecognize && (
-            <Text style={styles.cloudNote}>
-              読み取りにはクラウド AI を使用します。写真は解析のためだけに送信され、保存されません。
-            </Text>
+            <Text style={styles.cloudNote}>{t('pantry.receipt.disclosure')}</Text>
           )}
         </View>
       )}
 
       {phase === 'review' && (
         <>
-          <Text style={styles.reviewHint}>
-            読み取った品目です。不要な行のチェックを外し、名前を直して追加してください。
-          </Text>
+          <Text style={styles.reviewHint}>{t('pantry.receipt.resultHint')}</Text>
           <FlatList
             data={items}
             keyExtractor={(item) => item.id}
@@ -171,7 +168,9 @@ export default function ReceiptScreen() {
                     )
                   }
                   hitSlop={6}
-                  accessibilityLabel={item.include ? '除外' : '含める'}
+                  accessibilityLabel={
+                    item.include ? t('pantry.receipt.exclude') : t('pantry.receipt.include')
+                  }
                 >
                   <View style={[styles.checkbox, item.include && styles.checkboxOn]}>
                     {item.include && <Check size={14} color={Colors.bg} />}
@@ -193,14 +192,16 @@ export default function ReceiptScreen() {
           />
           <View style={styles.footer}>
             <Pressable style={styles.linkButton} onPress={() => setPhase('select')}>
-              <Text style={styles.linkText}>やり直す</Text>
+              <Text style={styles.linkText}>{t('pantry.receipt.retry')}</Text>
             </Pressable>
             <Pressable
               style={[styles.addButton, chosenCount === 0 && styles.addButtonDisabled]}
               onPress={handleAdd}
               disabled={chosenCount === 0}
             >
-              <Text style={styles.addButtonText}>在庫に追加（{chosenCount}）</Text>
+              <Text style={styles.addButtonText}>
+                {tCount('pantry.receipt.confirm', chosenCount)}
+              </Text>
             </Pressable>
           </View>
         </>

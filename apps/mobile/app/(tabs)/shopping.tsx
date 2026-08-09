@@ -12,6 +12,7 @@ import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
+import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { moveShoppingItemToPantry } from '../../src/services/pantry.service';
 import {
@@ -50,7 +51,7 @@ export default function ShoppingListScreen() {
       setItems((prev) => prev.filter((it) => it.id !== item.id));
       const moved = await moveShoppingItemToPantry(item).catch(() => false);
       if (moved) {
-        setToastMessage(`${item.name} を在庫に入れました`);
+        setToastMessage(t('pantry.shopping.movedToPantry', { name: item.name }));
         setToastVisible(true);
       }
       refresh();
@@ -72,24 +73,28 @@ export default function ShoppingListScreen() {
   const coach = useCoachMarks('shopping', [
     {
       key: 'pantry',
-      title: '在庫とつながっています',
-      text: '家にある食材は「在庫」で管理。レシピの足りない材料だけをこのリストに追加することもできます。',
+      title: t('pantry.shopping.coach.linkTitle'),
+      text: t('pantry.shopping.coach.linkText'),
       ref: pantryLinkRef,
     },
     {
       key: 'move',
-      title: '買った→在庫へ',
-      text: 'タップするだけで、その品目が在庫へ移ります（分量も自動で読み取り）。',
+      title: t('pantry.shopping.coach.moveTitle'),
+      text: t('pantry.shopping.coach.moveText'),
     },
   ]);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel={t('common.close')}
+        >
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>買い物リスト</Text>
+        <Text style={styles.headerTitle}>{t('pantry.shopping.title')}</Text>
         <View style={styles.headerActions}>
           <HelpButton onPress={coach.show} />
           <Pressable
@@ -97,9 +102,9 @@ export default function ShoppingListScreen() {
             collapsable={false}
             onPress={() => router.push('/(tabs)/pantry')}
             hitSlop={10}
-            accessibilityLabel="在庫"
+            accessibilityLabel={t('pantry.title')}
           >
-            <Text style={styles.headerLink}>在庫</Text>
+            <Text style={styles.headerLink}>{t('pantry.title')}</Text>
           </Pressable>
         </View>
       </View>
@@ -109,7 +114,7 @@ export default function ShoppingListScreen() {
           style={styles.addInput}
           value={input}
           onChangeText={setInput}
-          placeholder="品目を追加（例: 牛乳）"
+          placeholder={t('pantry.shopping.addPlaceholder')}
           placeholderTextColor={Colors.muted}
           returnKeyType="done"
           onSubmitEditing={handleAdd}
@@ -119,7 +124,7 @@ export default function ShoppingListScreen() {
           style={[styles.addButton, !input.trim() && styles.addButtonDisabled]}
           onPress={handleAdd}
           disabled={!input.trim()}
-          accessibilityLabel="追加"
+          accessibilityLabel={t('common.add')}
         >
           <Plus size={20} color={Colors.bg} />
         </Pressable>
@@ -129,9 +134,7 @@ export default function ShoppingListScreen() {
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <Text style={styles.empty}>買い物リストは空です。{'\n'}品目を追加してください。</Text>
-        }
+        ListEmptyComponent={<Text style={styles.empty}>{t('pantry.shopping.empty')}</Text>}
         renderItem={({ item }) => (
           <View style={styles.row}>
             <Pressable
@@ -139,7 +142,7 @@ export default function ShoppingListScreen() {
               onPress={() => handleBuy(item)}
               hitSlop={6}
               accessibilityRole="button"
-              accessibilityLabel={`${item.name}を買った（在庫に入れる）`}
+              accessibilityLabel={t('pantry.shopping.buyLabel', { name: item.name })}
             >
               <View style={styles.checkbox} />
               <View style={styles.rowText}>
@@ -147,7 +150,11 @@ export default function ShoppingListScreen() {
                 {item.amount ? <Text style={styles.itemAmount}>{item.amount}</Text> : null}
               </View>
             </Pressable>
-            <Pressable onPress={() => handleRemove(item.id)} hitSlop={10} accessibilityLabel="削除">
+            <Pressable
+              onPress={() => handleRemove(item.id)}
+              hitSlop={10}
+              accessibilityLabel={t('common.delete')}
+            >
               <X size={16} color={Colors.muted} />
             </Pressable>
           </View>

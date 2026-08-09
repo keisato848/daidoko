@@ -10,6 +10,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
+import { t, tCount } from '../../src/i18n';
 import { getAdRewardProvider, isAdRewardAvailable } from '../../src/services/ad-reward.service';
 import { getCookableRecipes, type CookableRecipe } from '../../src/services/cookable.service';
 import { grantResolveAdBonus, resolvePantryNames } from '../../src/services/name-resolve.service';
@@ -69,27 +70,33 @@ export default function CookableScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel={t('common.close')}
+        >
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>在庫で作れる</Text>
+        <Text style={styles.headerTitle}>{t('pantry.cookable.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       {resolving && (
         <View style={styles.banner}>
           <ActivityIndicator size="small" color={Colors.gold} />
-          <Text style={styles.bannerText}>AI で在庫名を照合中…</Text>
+          <Text style={styles.bannerText}>{t('pantry.cookable.matching')}</Text>
         </View>
       )}
       {!resolving && adRemaining != null && adRemaining > 0 && isAdRewardAvailable() && (
         <Pressable
           style={styles.banner}
           onPress={handleWatchAd}
-          accessibilityLabel="広告を見て照合"
+          accessibilityLabel={t('pantry.cookable.watchAd')}
         >
           <Sparkles size={16} color={Colors.gold} />
-          <Text style={styles.bannerText}>AI照合の残り {adRemaining} 件 — 広告を見て照合</Text>
+          <Text style={styles.bannerText}>
+            {tCount('pantry.cookable.watchAdRemaining', adRemaining)}
+          </Text>
         </Pressable>
       )}
 
@@ -97,11 +104,7 @@ export default function CookableScreen() {
         data={recipes}
         keyExtractor={(item) => item.recipeId}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <Text style={styles.empty}>
-            レシピと在庫を登録すると、{'\n'}作れるレシピが分かります。
-          </Text>
-        }
+        ListEmptyComponent={<Text style={styles.empty}>{t('pantry.cookable.empty')}</Text>}
         renderItem={({ item }) => {
           const full = item.total > 0 && item.inStock === item.total;
           return (
@@ -114,7 +117,7 @@ export default function CookableScreen() {
                   {item.title}
                 </Text>
                 <Text style={[styles.fraction, full && styles.fractionFull]}>
-                  {full ? '作れる' : `${item.inStock}/${item.total}`}
+                  {full ? t('pantry.cookable.ready') : `${item.inStock}/${item.total}`}
                 </Text>
               </View>
               <View style={styles.barTrack}>
@@ -122,7 +125,8 @@ export default function CookableScreen() {
               </View>
               {!full && item.missing.length > 0 && (
                 <Text style={styles.missing} numberOfLines={1}>
-                  あと{item.missing.length}品: {item.missing.slice(0, 4).join('、')}
+                  {tCount('pantry.cookable.missing', item.missing.length)}
+                  {item.missing.slice(0, 4).join('、')}
                 </Text>
               )}
             </Pressable>

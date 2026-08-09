@@ -12,6 +12,7 @@ import common from './common';
 import error from './error';
 import home from './home';
 import log from './log';
+import pantry from './pantry';
 import paywall from './paywall';
 import recipe from './recipe';
 import settings from './settings';
@@ -24,6 +25,7 @@ const ja = {
   error,
   home,
   log,
+  pantry,
   paywall,
   recipe,
   settings,

@@ -10,6 +10,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
+import { t } from '../../src/i18n';
 import { lookupJan, rememberJan } from '../../src/services/jan.service';
 import { addPantryItem } from '../../src/services/pantry.service';
 
@@ -32,7 +33,7 @@ export default function ScanBarcodeScreen() {
         await addPantryItem(known.name, { janCode: code, unit: known.unit, quantity: 1 }).catch(
           () => undefined,
         );
-        Alert.alert('在庫', `「${known.name}」を在庫に追加しました`, [
+        Alert.alert(t('pantry.title'), t('pantry.scan.added', { name: known.name }), [
           { text: 'OK', onPress: () => router.back() },
         ]);
       } else {
@@ -60,12 +61,12 @@ export default function ScanBarcodeScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.center}>
-        <Text style={styles.message}>バーコードを読み取るにはカメラの許可が必要です。</Text>
+        <Text style={styles.message}>{t('pantry.scan.permissionNeeded')}</Text>
         <Pressable style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>カメラを許可</Text>
+          <Text style={styles.buttonText}>{t('pantry.scan.grantCamera')}</Text>
         </Pressable>
         <Pressable onPress={() => router.back()} hitSlop={8}>
-          <Text style={styles.link}>戻る</Text>
+          <Text style={styles.link}>{t('common.back')}</Text>
         </Pressable>
       </View>
     );
@@ -74,13 +75,13 @@ export default function ScanBarcodeScreen() {
   if (scannedCode) {
     return (
       <View style={styles.center}>
-        <Text style={styles.namingTitle}>新しい商品</Text>
+        <Text style={styles.namingTitle}>{t('pantry.scan.newProduct')}</Text>
         <Text style={styles.code}>JAN: {scannedCode}</Text>
         <TextInput
           style={styles.input}
           value={name}
           onChangeText={setName}
-          placeholder="商品名（例: 牛乳）"
+          placeholder={t('pantry.scan.namePlaceholder')}
           placeholderTextColor={Colors.muted}
           autoFocus
           maxLength={50}
@@ -89,7 +90,7 @@ export default function ScanBarcodeScreen() {
           style={styles.input}
           value={unit}
           onChangeText={setUnit}
-          placeholder="単位（任意, 例: 本）"
+          placeholder={t('pantry.scan.unitPlaceholder')}
           placeholderTextColor={Colors.muted}
           maxLength={6}
         />
@@ -98,10 +99,10 @@ export default function ScanBarcodeScreen() {
           onPress={handleSave}
           disabled={!name.trim()}
         >
-          <Text style={styles.buttonText}>在庫に追加して記憶</Text>
+          <Text style={styles.buttonText}>{t('pantry.scan.addAndRemember')}</Text>
         </Pressable>
         <Pressable onPress={() => router.back()} hitSlop={8}>
-          <Text style={styles.link}>キャンセル</Text>
+          <Text style={styles.link}>{t('common.cancel')}</Text>
         </Pressable>
       </View>
     );
@@ -119,7 +120,7 @@ export default function ScanBarcodeScreen() {
           <X size={26} color="#FFFFFF" />
         </Pressable>
         <View style={styles.frame} />
-        <Text style={styles.hint}>商品のバーコードを枠に合わせてください</Text>
+        <Text style={styles.hint}>{t('pantry.scan.guide')}</Text>
       </View>
     </View>
   );
