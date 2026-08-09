@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { Clipboard } from 'react-native';
 
 import ImportTextScreen from '../import-text';
+import { t } from '../../../../src/i18n';
 import { RECIPE_TEXT_AI_PROMPT } from '../../../../src/utils/recipeTextParser';
 
 jest.mock('expo-router', () => ({
@@ -17,7 +18,7 @@ describe('ImportTextScreen', () => {
     const setStringSpy = jest.spyOn(Clipboard, 'setString').mockImplementation(jest.fn());
 
     render(<ImportTextScreen />);
-    fireEvent.press(screen.getByText('AI用指示をコピー'));
+    fireEvent.press(screen.getByText(t('recipeImport.text.copyPrompt')));
 
     expect(setStringSpy).toHaveBeenCalledWith(RECIPE_TEXT_AI_PROMPT);
     setStringSpy.mockRestore();
