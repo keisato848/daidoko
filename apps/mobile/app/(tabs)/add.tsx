@@ -11,13 +11,14 @@ import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { PressableScale } from '../../src/components/PressableScale';
 import { Colors } from '../../src/constants/theme';
+import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 
+type MethodId = 'photo' | 'url' | 'text' | 'ocr' | 'manual';
+
 interface MethodOption {
-  id: string;
+  id: MethodId;
   icon: React.ReactNode;
-  label: string;
-  description: string;
   enabled: boolean;
   /** 端末内 ML Kit を使う機能は Android のみ（iOS 版がないため入口を隠す）。 */
   androidOnly?: boolean;
@@ -25,44 +26,53 @@ interface MethodOption {
 
 // 主役（写真からレシピ）を先頭に置く。以前は 5 択の 4 番目で、上に手動・テキスト・URL が
 // 並んでいた（`docs/お店の味を再現設計.md` §4.3 問題2）。手動入力は最後でよい。
+// **文言は定数に持たせない。** import 時のロケールで固定されてしまう。
+// ここには見た目の定義（アイコン・並び・対応 OS）だけを置き、
+// ラベルと説明は描画のたびに辞書から引く
 const METHODS: MethodOption[] = [
   {
     id: 'photo',
     icon: <Camera size={24} color={Colors.gold} />,
-    label: '写真からレシピ',
-    description: 'お店で食べた料理も、写真から下書きに',
     enabled: true,
   },
   {
     id: 'url',
     icon: <Globe size={24} color={Colors.gold} />,
-    label: 'URLから取り込み',
-    description: 'レシピサイトのURLを貼り付け',
     enabled: true,
   },
   {
     id: 'text',
     icon: <FileText size={24} color={Colors.gold} />,
-    label: 'テキストから作成',
-    description: '本文を貼り付けて下書き化',
     enabled: true,
   },
   {
     id: 'ocr',
     icon: <ImageIcon size={24} color={Colors.gold} />,
-    label: '文字入り画像から作成',
-    description: 'レシピ本や手書きメモの文字を読み取り',
     enabled: true,
     androidOnly: true,
   },
   {
     id: 'manual',
     icon: <PenLine size={24} color={Colors.gold} />,
-    label: '手動で入力',
-    description: 'レシピを一から入力する',
     enabled: true,
   },
 ];
+
+function methodLabel(id: MethodId): string {
+  if (id === 'photo') return t('recipe.add.method.photo');
+  if (id === 'url') return t('recipe.add.method.url');
+  if (id === 'text') return t('recipe.add.method.text');
+  if (id === 'ocr') return t('recipe.add.method.ocr');
+  return t('recipe.add.method.manual');
+}
+
+function methodDescription(id: MethodId): string {
+  if (id === 'photo') return t('recipe.add.method.photoDescription');
+  if (id === 'url') return t('recipe.add.method.urlDescription');
+  if (id === 'text') return t('recipe.add.method.textDescription');
+  if (id === 'ocr') return t('recipe.add.method.ocrDescription');
+  return t('recipe.add.method.manualDescription');
+}
 
 const VISIBLE_METHODS = METHODS.filter(
   (method) => !method.androidOnly || Platform.OS === 'android',
@@ -77,14 +87,14 @@ export default function AddScreen() {
   const coach = useCoachMarks('add', [
     {
       key: 'photo',
-      title: '写真からAIでレシピ',
-      text: '料理の写真を選ぶだけでAIが下書きを作成します。URL取り込み・文字入り画像の読み取りもここから（AI解析には1日の無料枠があります）。',
+      title: t('recipe.add.coach.photoTitle'),
+      text: t('recipe.add.coach.photoText'),
       ref: photoRef,
     },
     {
       key: 'manual',
-      title: 'じっくり書くなら手動で',
-      text: '一から入力。表紙写真・手順ごとの写真・タイマーも設定できます。',
+      title: t('recipe.add.coach.manualTitle'),
+      text: t('recipe.add.coach.manualText'),
       ref: manualRef,
     },
   ]);
@@ -107,10 +117,10 @@ export default function AddScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>レシピを追加</Text>
+        <Text style={styles.heading}>{t('recipe.add.heading')}</Text>
         <HelpButton onPress={coach.show} />
       </View>
-      <Text style={styles.subheading}>追加方法を選んでください</Text>
+      <Text style={styles.subheading}>{t('recipe.add.subheading')}</Text>
 
       <View style={styles.methods}>
         {VISIBLE_METHODS.map((method) => (
@@ -126,10 +136,12 @@ export default function AddScreen() {
               <View style={styles.methodIcon}>{method.icon}</View>
               <View style={styles.methodText}>
                 <Text style={[styles.methodLabel, !method.enabled && styles.methodLabelDisabled]}>
-                  {method.label}
+                  {methodLabel(method.id)}
                 </Text>
-                <Text style={styles.methodDescription}>{method.description}</Text>
-                {!method.enabled && <Text style={styles.comingSoon}>今後追加予定</Text>}
+                <Text style={styles.methodDescription}>{methodDescription(method.id)}</Text>
+                {!method.enabled && (
+                  <Text style={styles.comingSoon}>{t('settings.comingSoonStatus')}</Text>
+                )}
               </View>
             </PressableScale>
           </View>

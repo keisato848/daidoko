@@ -7,20 +7,24 @@
  */
 import ai from './ai';
 import backup from './backup';
+import byok from './byok';
 import common from './common';
 import error from './error';
 import home from './home';
 import log from './log';
+import paywall from './paywall';
 import recipe from './recipe';
 import settings from './settings';
 
 const ja = {
   ai,
   backup,
+  byok,
   common,
   error,
   home,
   log,
+  paywall,
   recipe,
   settings,
 };

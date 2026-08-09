@@ -73,9 +73,12 @@ export function displayStringsIn(line) {
     .filter((text) => JAPANESE.test(text));
   if (quoted.length > 0) return quoted;
 
+  // **順序が効く。** タグを先に落とすと、`{cond && <Text>日本語</Text>}` が
+  // 1 つの `{…}` とみなされて文言ごと消える（実際に取りこぼしていた）。
+  // 先に JS 式を落としてからタグを落とす。
   const stripped = line
-    .replace(/<[^>]*>/g, '')
     .replace(/\{[^}]*\}/g, '')
+    .replace(/<[^>]*>/g, '')
     .trim();
   return JAPANESE.test(stripped) ? [stripped] : [];
 }

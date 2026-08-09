@@ -142,6 +142,31 @@ const recipe = {
     },
   },
 
+  /** S03 追加方法の選択。 */
+  add: {
+    heading: 'レシピを追加',
+    subheading: '追加方法を選んでください',
+    method: {
+      photo: '写真からレシピ',
+      photoDescription: 'お店で食べた料理も、写真から下書きに',
+      url: 'URLから取り込み',
+      urlDescription: 'レシピサイトのURLを貼り付け',
+      text: 'テキストから作成',
+      textDescription: '本文を貼り付けて下書き化',
+      ocr: '文字入り画像から作成',
+      ocrDescription: 'レシピ本や手書きメモの文字を読み取り',
+      manual: '手動で入力',
+      manualDescription: 'レシピを一から入力する',
+    },
+    coach: {
+      photoTitle: '写真からAIでレシピ',
+      photoText:
+        '料理の写真を選ぶだけでAIが下書きを作成します。URL取り込み・文字入り画像の読み取りもここから（AI解析には1日の無料枠があります）。',
+      manualTitle: 'じっくり書くなら手動で',
+      manualText: '一から入力。表紙写真・手順ごとの写真・タイマーも設定できます。',
+    },
+  },
+
   /** S12 写真からレシピ（主役の入口）。 */
   photo: {
     title: '写真からレシピをつくろう',

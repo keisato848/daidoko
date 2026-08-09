@@ -20,6 +20,7 @@ import {
 
 import { InfoTooltip } from '../../src/components/InfoTooltip';
 import { Colors } from '../../src/constants/theme';
+import { t } from '../../src/i18n';
 import {
   clearUserApiKey,
   getUserApiKey,
@@ -49,7 +50,7 @@ export default function AiKeyScreen() {
 
   const handleSave = useCallback(async () => {
     if (!looksLikeApiKey(keyInput)) {
-      Alert.alert('お知らせ', 'APIキーの形式が正しくないようです。貼り付け直してください。');
+      Alert.alert(t('byok.invalidTitle'), t('byok.invalidBody'));
       return;
     }
     setBusy(true);
@@ -57,20 +58,20 @@ export default function AiKeyScreen() {
       await setUserApiKey(keyInput);
       setHasKey(true);
       setKeyInput('');
-      Alert.alert('保存しました', '自分のキーで、写真からのレシピづくりが無制限になりました。');
+      Alert.alert(t('byok.savedTitle'), t('byok.savedBody'));
       router.back();
     } catch {
-      Alert.alert('お知らせ', 'キーを保存できませんでした。');
+      Alert.alert(t('byok.saveFailedTitle'), t('byok.saveFailedBody'));
     } finally {
       setBusy(false);
     }
   }, [keyInput, router]);
 
   const handleClear = useCallback(() => {
-    Alert.alert('キーを削除', '保存したAPIキーを削除しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
+    Alert.alert(t('byok.removeTitle'), t('byok.removeConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '削除',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
           void clearUserApiKey().then(() => {
@@ -85,10 +86,14 @@ export default function AiKeyScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel={t('common.close')}
+        >
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>自分のAIキー</Text>
+        <Text style={styles.headerTitle}>{t('byok.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -97,24 +102,16 @@ export default function AiKeyScreen() {
           <KeyRound size={34} color={Colors.gold} />
         </View>
 
-        <Text style={styles.lead}>
-          自分の Gemini API
-          キーを入れると、写真からのレシピづくりが回数無制限になります（サーバーを介さず、あなたのキーで直接実行）。
-        </Text>
-        <Text style={styles.note}>
-          キーは端末内に暗号化して保存され、Google 以外には送信されません。料金はあなたの Google
-          アカウントに課金されます。
-        </Text>
+        <Text style={styles.lead}>{t('byok.lead')}</Text>
+        <Text style={styles.note}>{t('byok.billingNote')}</Text>
 
-        {hasKey && <Text style={styles.statusOn}>● 設定済み（無制限）</Text>}
+        {hasKey && <Text style={styles.statusOn}>● {t('settings.byok.configured')}</Text>}
 
         <TextInput
           style={styles.input}
           value={keyInput}
           onChangeText={setKeyInput}
-          placeholder={
-            hasKey ? '新しいキーで上書きする場合は貼り付け' : 'AIza... から始まるキーを貼り付け'
-          }
+          placeholder={hasKey ? t('byok.inputPlaceholderReplace') : t('byok.inputPlaceholderNew')}
           placeholderTextColor={Colors.muted}
           autoCapitalize="none"
           autoCorrect={false}
@@ -128,12 +125,12 @@ export default function AiKeyScreen() {
           onPress={handleSave}
           disabled={busy}
         >
-          <Text style={styles.saveText}>保存する</Text>
+          <Text style={styles.saveText}>{t('byok.save')}</Text>
         </Pressable>
 
         {hasKey && (
           <Pressable accessibilityRole="button" style={styles.clearButton} onPress={handleClear}>
-            <Text style={styles.clearText}>保存したキーを削除</Text>
+            <Text style={styles.clearText}>{t('byok.remove')}</Text>
           </Pressable>
         )}
 
@@ -142,29 +139,23 @@ export default function AiKeyScreen() {
           onPress={() => Linking.openURL(AI_STUDIO_URL).catch(() => undefined)}
           hitSlop={8}
         >
-          <Text style={styles.link}>キーの取得方法（Google AI Studio）</Text>
+          <Text style={styles.link}>{t('byok.howTo')}</Text>
         </Pressable>
 
         <View style={styles.detailsSection}>
+          <InfoTooltip label={t('byok.detail.storageTitle')} detail={t('byok.detail.storage')} />
           <InfoTooltip
-            label="保存場所"
-            detail="端末のセキュアな保管領域（Android は Keystore、iPhone は Keychain）に暗号化して保存します。だいどこのサーバーには一切送信されません。"
+            label={t('byok.detail.destinationTitle')}
+            detail={t('byok.detail.destination')}
+          />
+          <InfoTooltip label={t('byok.detail.removalTitle')} detail={t('byok.detail.removal')} />
+          <InfoTooltip
+            label={t('byok.detail.migrationTitle')}
+            detail={t('byok.detail.migration')}
           />
           <InfoTooltip
-            label="送信先"
-            detail="キーを保存すると、写真からのレシピづくりは端末から Google の Gemini に直接送信されます（だいどこのサーバーは経由しません）。料金はキーを発行した Google アカウントに直接課金されます。"
-          />
-          <InfoTooltip
-            label="削除方法"
-            detail="上の「保存したキーを削除」でいつでも削除できます。アプリをアンインストールした場合も、端末の保管領域ごと自動的に削除されます。"
-          />
-          <InfoTooltip
-            label="機種変更・バックアップについて"
-            detail="このキーはバックアップ・機種変更用の移行ファイルには含まれません（意図的な設計です）。新しい端末では、この画面でキーを貼り付け直してください。"
-          />
-          <InfoTooltip
-            label="対応しているキー"
-            detail="現在は Google の Gemini API キーのみに対応しています。他社（OpenAI・Claude など）のキーは使用できません。"
+            label={t('byok.detail.supportedTitle')}
+            detail={t('byok.detail.supported')}
           />
         </View>
       </ScrollView>
