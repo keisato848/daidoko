@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 
 import { Loading } from '../../../../src/components/Loading';
+import { t } from '../../../../src/i18n';
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../../src/services/cooking-log.service';
@@ -284,9 +285,7 @@ export default function RefineRecipeScreen() {
                 <DiffSection title="レシピ情報" rows={diff.meta} />
                 <DiffSection title="材料" rows={changedIngredients} />
                 <DiffSection title="手順" rows={changedSteps} />
-                <Text style={styles.diffHint}>
-                  ここに出ていない材料・手順は変わっていません。内容を確認してから保存してください。
-                </Text>
+                <Text style={styles.diffHint}>{t('recipe.refine.diffGuarantee')}</Text>
                 {/* AI が材料を「増やす」ことがある経路なので、写真レシピより強く注意を出す。
                     アレルゲンの検出・警告は行わない方針（docs/privacy-policy.md §7） */}
                 <View style={styles.cautionCard}>

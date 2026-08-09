@@ -13,6 +13,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_V1, GEMINI_MODEL } from '../config';
+import { t } from '../i18n';
 import { getUserApiKey } from './byok.service';
 import type { RecipeFormData } from '../validation/recipe.schema';
 
@@ -91,12 +92,14 @@ function kindFromCode(code: string | undefined): VisionErrorKind {
 /** 種別ごとの、ユーザーに出す日本語。**次に何をすればよいかまで書く。** */
 export function visionErrorMessage(kind: VisionErrorKind, fallback?: string): string {
   switch (kind) {
+    // **原因が分かっている種別は辞書を優先する。** fallback はサーバー由来で
+    // 日本語固定のため、英語ロケールでサーバーの言語が画面に出てしまう
     case 'offline':
-      return 'インターネットにつながっていません。接続してからもう一度お試しください。';
+      return t('error.offline');
     case 'quota_exceeded':
-      return fallback ?? '本日の AI 利用上限に達しました。時間をおいてお試しください。';
+      return t('error.quotaExceeded');
     case 'transient':
-      return 'AI が混み合っています。少し時間をおいてもう一度お試しください。';
+      return t('error.transient');
     case 'not_a_dish':
       return (
         fallback ?? '写真から料理を認識できませんでした。料理がはっきり写った写真でお試しください。'
@@ -104,12 +107,9 @@ export function visionErrorMessage(kind: VisionErrorKind, fallback?: string): st
     case 'no_change':
       // AI が「何を直せばよいか分からない」と答えたときは、その理由をそのまま出す。
       // 「もう一度お試しください」では、次に何を書けばよいか分からない
-      return (
-        fallback ??
-        '感想から、何をどう変えればよいか読み取れませんでした。「甘すぎた」「もっと辛く」のように、味の方向を書いてみてください。'
-      );
+      return fallback ?? t('recipe.refine.noChange');
     default:
-      return fallback ?? '写真からレシピをつくれませんでした。';
+      return fallback ?? t('error.photoRecipeFailed');
   }
 }
 

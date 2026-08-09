@@ -4,6 +4,7 @@ import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-nativ
 
 import { Colors } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
+import { initLocaleFromDevice } from '../src/i18n';
 import { isLaunchCameraEnabled } from '../src/services/app-meta.service';
 import {
   initAppOpenAds,
@@ -21,6 +22,10 @@ import {
 } from '../src/services/notification.service';
 import { grantLaunchBonusOnce } from '../src/services/usage.service';
 import { decideLaunchDestination } from '../src/utils/launchDestination';
+
+// 端末の言語設定を反映する。**描画前に一度だけ**（モジュール読み込み時）行う。
+// i18n 側の既定は ja 固定で、ここを通ったときだけ端末ロケールに切り替わる
+initLocaleFromDevice();
 
 export default function RootLayout() {
   const { isReady, error } = useDatabase();

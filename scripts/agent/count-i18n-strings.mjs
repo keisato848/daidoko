@@ -119,8 +119,12 @@ console.log(`  ${'合計'.padEnd(28)}${String(total).padStart(5)}`);
 console.log(`\n  除外（日本語処理ロジック・サンプルデータ）: ${excluded}`);
 
 if (showFiles) {
-  console.log('\nファイル別（上位30）');
-  for (const { rel, count } of byFile.sort((a, b) => b.count - a.count).slice(0, 30)) {
+  // 移行の計画には**全件**が要る（上位だけ見ると尻尾を数え落とす）
+  const all = process.argv.includes('--all');
+  const rows = byFile.sort((a, b) => b.count - a.count);
+  const shown = all ? rows : rows.slice(0, 30);
+  console.log(`\nファイル別（${all ? `全 ${rows.length} ファイル` : '上位30'}）`);
+  for (const { rel, count } of shown) {
     console.log(`  ${String(count).padStart(4)}  ${rel}`);
   }
 }

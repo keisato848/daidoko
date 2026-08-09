@@ -3,6 +3,8 @@
  */
 import { AgentBridge, type AgentResult } from '@daidoko/shared';
 
+import { t } from '../i18n';
+
 import {
   inferRecipeFromPhotoLabels,
   type PhotoRecipeConfidence,
@@ -73,16 +75,20 @@ interface CloudFailure {
  * （オフライン・利用枠切れ）なので、そちらを人間の言葉で伝える。
  */
 function failureMessage(failure: CloudFailure | null): string {
-  if (!failure) return '写真からレシピをつくれませんでした。もう一度お試しください。';
+  if (!failure) return t('error.photoRecipeFailed');
+  // **原因が分かっている種別は、必ず辞書から出す。**
+  // failure.message はサーバー由来で日本語固定のため、英語ロケールで
+  // サーバーの言語がそのまま画面に出てしまう（ロケール横断テストで発覚）。
   switch (failure.kind) {
     case 'offline':
-      return 'インターネットにつながっていません。接続してからもう一度お試しください。';
+      return t('error.offline');
     case 'quota_exceeded':
-      return failure.message || '本日の AI 利用上限に達しました。時間をおいてお試しください。';
+      return t('error.quotaExceeded');
     case 'transient':
-      return 'AI が混み合っています。少し時間をおいてもう一度お試しください。';
+      return t('error.transient');
     default:
-      return failure.message || '写真からレシピをつくれませんでした。もう一度お試しください。';
+      // 種別が分からないときだけ上流の文言に頼る。何も無いよりはましなため
+      return failure.message || t('error.photoRecipeFailed');
   }
 }
 

@@ -3,6 +3,8 @@ import { AgentBridge } from '@daidoko/shared';
 import { registerRecipePhotoAgent, runRecipePhotoAgent } from '../recipe-photo.agent';
 import type { ClientImageLabel } from '../../services/client-image-label.provider';
 import type { OcrRecognitionResult } from '../../services/ocr.service';
+import { setLocale, SUPPORTED_LOCALES, t } from '../../i18n';
+import { EXPECTED_KEYWORDS } from '../../i18n/expectations';
 
 function label(text: string, confidence: number): ClientImageLabel {
   return { text, confidence };
@@ -142,88 +144,99 @@ describe('IMG-RECIPE-AGT-03 Vision LLM primary path', () => {
     expect(labelImage).not.toHaveBeenCalled();
   });
 
-  describe('失敗したときにユーザーへ出す文言（Issue #120）', () => {
-    // 端末内フォールバック（ML Kit）が投げる内部エラー。実際にこの英文が画面に出ていた
-    const mlKitError = new Error(
-      'Waiting for the label optional module to be downloaded. Please wait.',
-    );
+  // i18n 導入後、文言は辞書から来る。**日本語文字列に固定すると英語で検査できない**ため、
+  // ロケールを切り替えて両方で同じ性質が成り立つことを見る（docs/多言語対応設計.md §6-5）。
+  describe.each(SUPPORTED_LOCALES)(
+    '%s: 失敗したときにユーザーへ出す文言（Issue #120）',
+    (locale) => {
+      beforeEach(() => setLocale(locale));
+      afterEach(() => setLocale('ja'));
 
-    it('オフラインなら、ML Kit の内部エラーではなく接続を促す日本語を出す', async () => {
-      const offline = Object.assign(
-        new Error('インターネットにつながっていません。接続してからもう一度お試しください。'),
-        { kind: 'offline' },
+      // 端末内フォールバック（ML Kit）が投げる内部エラー。実際にこの英文が画面に出ていた
+      const mlKitError = new Error(
+        'Waiting for the label optional module to be downloaded. Please wait.',
       );
-      const result = await runRecipePhotoAgent(
-        { imageUri: 'file:///tmp/dish.jpg', allowCloudInference: true },
-        {
-          labelImage: async () => {
-            throw mlKitError;
+
+      it('オフラインなら、ML Kit の内部エラーではなく接続を促す文言を出す', async () => {
+        const offline = Object.assign(
+          new Error('インターネットにつながっていません。接続してからもう一度お試しください。'),
+          { kind: 'offline' },
+        );
+        const result = await runRecipePhotoAgent(
+          { imageUri: 'file:///tmp/dish.jpg', allowCloudInference: true },
+          {
+            labelImage: async () => {
+              throw mlKitError;
+            },
+            inferRecipeFromVision: async () => {
+              throw offline;
+            },
           },
-          inferRecipeFromVision: async () => {
-            throw offline;
+        );
+
+        expect(result.ok).toBe(false);
+        expect(result.error?.message).toMatch(EXPECTED_KEYWORDS[locale].reconnect);
+        expect(result.error?.message).not.toContain('optional module');
+      });
+
+      it('利用枠切れなら、その旨を出す（「つながらない」と混同しない）', async () => {
+        const quota = Object.assign(
+          new Error('本日の AI 利用上限に達しました。時間をおいてお試しください。'),
+          { kind: 'quota_exceeded' },
+        );
+        const result = await runRecipePhotoAgent(
+          { imageUri: 'file:///tmp/dish.jpg', allowCloudInference: true },
+          {
+            labelImage: async () => {
+              throw mlKitError;
+            },
+            inferRecipeFromVision: async () => {
+              throw quota;
+            },
           },
-        },
-      );
+        );
 
-      expect(result.ok).toBe(false);
-      expect(result.error?.message).toContain('インターネットにつながっていません');
-      expect(result.error?.message).not.toContain('optional module');
-    });
+        expect(result.ok).toBe(false);
+        expect(result.error?.message).toMatch(EXPECTED_KEYWORDS[locale].limit);
+        // 枠切れなのに再接続を促すと、オフラインと混同される
+        expect(result.error?.message).not.toMatch(EXPECTED_KEYWORDS[locale].reconnect);
+        expect(result.error?.message).not.toContain('optional module');
+      });
 
-    it('利用枠切れなら、その旨を出す（「つながらない」と混同しない）', async () => {
-      const quota = Object.assign(
-        new Error('本日の AI 利用上限に達しました。時間をおいてお試しください。'),
-        { kind: 'quota_exceeded' },
-      );
-      const result = await runRecipePhotoAgent(
-        { imageUri: 'file:///tmp/dish.jpg', allowCloudInference: true },
-        {
-          labelImage: async () => {
-            throw mlKitError;
+      it('端末内フォールバックが用意されていなくても内部文言を出さない', async () => {
+        const offline = Object.assign(new Error('offline'), { kind: 'offline' });
+        const result = await runRecipePhotoAgent(
+          { imageUri: 'file:///tmp/dish.jpg', allowCloudInference: true },
+          {
+            inferRecipeFromVision: async () => {
+              throw offline;
+            },
           },
-          inferRecipeFromVision: async () => {
-            throw quota;
+        );
+
+        expect(result.ok).toBe(false);
+        expect(result.error?.message).toMatch(EXPECTED_KEYWORDS[locale].reconnect);
+        expect(result.error?.message).not.toContain('provider');
+      });
+
+      it('原因不明でも英語の内部エラーは出さない', async () => {
+        const result = await runRecipePhotoAgent(
+          { imageUri: 'file:///tmp/dish.jpg' },
+          {
+            labelImage: async () => {
+              throw mlKitError;
+            },
           },
-        },
-      );
+        );
 
-      expect(result.ok).toBe(false);
-      expect(result.error?.message).toContain('利用上限');
-      expect(result.error?.message).not.toContain('optional module');
-    });
-
-    it('端末内フォールバックが用意されていなくても内部文言を出さない', async () => {
-      const offline = Object.assign(new Error('offline'), { kind: 'offline' });
-      const result = await runRecipePhotoAgent(
-        { imageUri: 'file:///tmp/dish.jpg', allowCloudInference: true },
-        {
-          inferRecipeFromVision: async () => {
-            throw offline;
-          },
-        },
-      );
-
-      expect(result.ok).toBe(false);
-      expect(result.error?.message).toContain('インターネットにつながっていません');
-      expect(result.error?.message).not.toContain('provider');
-    });
-
-    it('原因不明でも英語の内部エラーは出さない', async () => {
-      const result = await runRecipePhotoAgent(
-        { imageUri: 'file:///tmp/dish.jpg' },
-        {
-          labelImage: async () => {
-            throw mlKitError;
-          },
-        },
-      );
-
-      expect(result.ok).toBe(false);
-      expect(result.error?.message).toBe(
-        '写真からレシピをつくれませんでした。もう一度お試しください。',
-      );
-    });
-  });
+        expect(result.ok).toBe(false);
+        // 原因が分からないときは汎用文言。**具体的な原因を騙らない**
+        expect(result.error?.message).toBe(t('error.photoRecipeFailed'));
+        expect(result.error?.message).not.toMatch(EXPECTED_KEYWORDS[locale].reconnect);
+        expect(result.error?.message).not.toMatch(EXPECTED_KEYWORDS[locale].limit);
+      });
+    },
+  );
 
   it('skips Vision when not opted in (allowCloudInference falsy)', async () => {
     const inferRecipeFromVision = jest.fn();
