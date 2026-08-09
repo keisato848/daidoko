@@ -135,10 +135,6 @@ if (!summary.ok) {
 console.log(`Android build OK: ${summary.artifact}`);
 
 /**
- * app.json / plugins/ の最終更新が android/ の生成物より新しければ、その一覧を返す。
- * android/ が未生成（初回）の場合は prebuild が必須なので全ソースを返す。
- */
-/**
  * `apps/mobile/package.json` の Expo パッケージが、SDK の想定版と揃っているか。
  *
  * 揃っていないと、**ビルドは通るのに起動直後に落ちる**。しかも JS のテストは
@@ -199,6 +195,10 @@ function assertExpoSdkVersions() {
   }
 }
 
+/**
+ * app.json / plugins/ / package.json の最終更新が android/ の生成物より新しければ、その一覧を返す。
+ * android/ が未生成（初回）の場合は prebuild が必須なので全ソースを返す。
+ */
 function detectPrebuildStaleness() {
   // package.json も見る。**ネイティブモジュールの追加・削除は app.json に出ない**ので、
   // ここを見ないと prebuild が要ることに気づけない
