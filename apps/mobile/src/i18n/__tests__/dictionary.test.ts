@@ -4,10 +4,36 @@
  * 949 件を手で移した以上、抜け・貼り間違い・訳し忘れは必ず出る。
  * 目視では見つからないので、辞書を丸ごと歩いて機械的に落とす。
  */
-import { en, ja } from '../index';
+import { en, ja, resolveLocale } from '../index';
 import { isCriticalMessage } from '../types';
 
 const JAPANESE = /[ぁ-んァ-ヶ一-龯]/;
+
+/**
+ * 端末の言語タグからロケールを決める部分。
+ *
+ * **実機で英語表示にならない不具合は、ほぼここで起きる。** 端末が返すタグは
+ * `en-US` `ja-JP` `en-GB` のように地域つきで、素朴に一致を見ると全部外れる。
+ */
+describe('resolveLocale（端末の言語タグ）', () => {
+  it('地域つきのタグを言語に寄せる', () => {
+    expect(resolveLocale(['en-US'])).toBe('en');
+    expect(resolveLocale(['en-GB'])).toBe('en');
+    expect(resolveLocale(['ja-JP'])).toBe('ja');
+    expect(resolveLocale(['EN-us'])).toBe('en'); // 大文字で返す端末がある
+  });
+
+  it('対応していない言語は ja に倒す', () => {
+    // 半端な英語を出すより、日本語で一貫させる（§3 の判断）
+    expect(resolveLocale(['fr-FR'])).toBe('ja');
+    expect(resolveLocale([])).toBe('ja');
+  });
+
+  it('複数言語が設定されているときは、対応する最初のものを採る', () => {
+    expect(resolveLocale(['fr-FR', 'en-US', 'ja-JP'])).toBe('en');
+    expect(resolveLocale(['ko-KR', 'ja-JP'])).toBe('ja');
+  });
+});
 
 /** 辞書を歩いて `[キーのパス, 文字列]` を全部返す。 */
 function walk(node: unknown, prefix = ''): [string, string][] {
