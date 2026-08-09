@@ -36,6 +36,7 @@ export const EXCLUDED_FILES = new Set([
   'src/utils/itemMatch.ts', // 食材の名寄せ
   'src/utils/itemName.ts',
   'src/utils/kana.ts', // かな正規化
+  'src/utils/recipeEmoji.ts', // 日本語の料理名 → 絵文字。言語ごとに作り直し
   // 端末内フォールバック（ML Kit ラベル → 料理名）の日本語辞書。
   // 英語圏では辞書ごと作り直しになる（設計 §7・P5）
   'src/services/recipe-photo-inference.service.ts',

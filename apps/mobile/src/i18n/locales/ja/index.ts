@@ -12,6 +12,7 @@ import error from './error';
 import home from './home';
 import log from './log';
 import recipe from './recipe';
+import settings from './settings';
 
 const ja = {
   ai,
@@ -21,6 +22,7 @@ const ja = {
   home,
   log,
   recipe,
+  settings,
 };
 
 export default ja;

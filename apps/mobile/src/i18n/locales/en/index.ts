@@ -15,6 +15,7 @@ import error from './error';
 import home from './home';
 import log from './log';
 import recipe from './recipe';
+import settings from './settings';
 
 const en: typeof jaDict = {
   ai,
@@ -24,6 +25,7 @@ const en: typeof jaDict = {
   home,
   log,
   recipe,
+  settings,
 };
 
 export default en;

@@ -5,7 +5,7 @@
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ArrowUpDown, Check, Plus, Search, Trash2, X } from 'lucide-react-native';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -27,38 +27,36 @@ import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
+import { t, tCount } from '../../../src/i18n';
 import { getAliasMap } from '../../../src/services/name-alias.service';
 import { deleteRecipe, getRecipeList } from '../../../src/services/recipe.service';
 import type { RecipeListItem } from '../../../src/services/types';
 import { recipeMatchesQuery } from '../../../src/utils/recipeSearch';
+import { getRecipeEmoji } from '../../../src/utils/recipeEmoji';
 import {
   DEFAULT_RECIPE_SORT,
-  RECIPE_SORT_OPTIONS,
+  RECIPE_SORT_KEYS,
   recipeSortLabel,
   sortRecipes,
   type RecipeSortKey,
 } from '../../../src/utils/recipeSort';
 
-const TAG_FILTERS = ['すべて', '肉', '魚', '野菜', '汁物', 'ご飯', '洋食'];
-
-function getEmoji(title: string): string {
-  const map: Record<string, string> = {
-    肉じゃが: '🍲',
-    味噌汁: '🍜',
-    唐揚げ: '🍗',
-    炊き込みご飯: '🍚',
-    豚汁: '🫕',
-    ハンバーグ: '🍔',
-  };
-  return map[title] ?? '🍽️';
-}
+/**
+ * タグの絞り込み。**固定の日本語リストにしない。**
+ *
+ * タグはレシピが実際に持っている値（DB のデータ）で、訳すと一致しなくなる。
+ * 固定リストだと、載っていないタグでは絞り込めなかった。実データから作れば
+ * 言語に依存せず、ユーザーが付けたタグでそのまま絞り込める。
+ * `null` は「すべて」を表す。
+ */
+const MAX_TAG_FILTERS = 12;
 
 export default function RecipeListScreen() {
   const router = useRouter();
   const [recipes, setRecipes] = useState<RecipeListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [activeTagFilter, setActiveTagFilter] = useState('すべて');
+  const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<RecipeSortKey>(DEFAULT_RECIPE_SORT);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
@@ -80,14 +78,14 @@ export default function RecipeListScreen() {
     [
       {
         key: 'search',
-        title: 'レシピを探す',
-        text: 'レシピ名だけでなく、タグや食材名（例: 卵）でも検索できます。',
+        title: t('recipe.list.coach.searchTitle'),
+        text: t('recipe.list.coach.searchText'),
         ref: searchRef,
       },
       {
         key: 'add',
-        title: 'レシピを増やすには',
-        text: '下の「追加」タブから、手入力・URL取り込み・写真からのAI作成でレシピを登録できます。',
+        title: t('recipe.list.coach.addTitle'),
+        text: t('recipe.list.coach.addText'),
       },
     ],
     !loading && !selectMode,
@@ -116,10 +114,31 @@ export default function RecipeListScreen() {
     });
   }, []);
 
+  // 実データにあるタグから絞り込みチップを作る（多い順）。
+  // 固定リストだと載っていないタグで絞り込めず、言語も日本語に固定されていた
+  const tagFilters = useMemo<(string | null)[]>(() => {
+    const counts = new Map<string, number>();
+    for (const item of recipes) {
+      for (const tag of item.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+    const ranked = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, MAX_TAG_FILTERS)
+      .map(([tag]) => tag);
+    return [null, ...ranked];
+  }, [recipes]);
+
+  // 絞り込み中のタグが消えたら「すべて」に戻す（選べない状態で残さない）
+  useEffect(() => {
+    if (activeTagFilter !== null && !tagFilters.includes(activeTagFilter)) {
+      setActiveTagFilter(null);
+    }
+  }, [tagFilters, activeTagFilter]);
+
   const filtered = useMemo(() => {
     let result = recipes;
 
-    if (activeTagFilter !== 'すべて') {
+    if (activeTagFilter !== null) {
       result = result.filter((r) => r.tags.includes(activeTagFilter));
     }
 
@@ -133,10 +152,10 @@ export default function RecipeListScreen() {
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;
     if (count === 0) return;
-    Alert.alert('レシピを削除', `${count}件のレシピを削除しますか？この操作は取り消せません。`, [
-      { text: 'キャンセル', style: 'cancel' },
+    Alert.alert(t('recipe.list.deleteTitle'), tCount('recipe.list.deleteConfirm', count), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '削除',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await Promise.all([...selectedIds].map((id) => deleteRecipe(id)));
@@ -192,7 +211,7 @@ export default function RecipeListScreen() {
               resizeMode="cover"
             />
           ) : (
-            <Text style={styles.cardEmoji}>{getEmoji(item.title)}</Text>
+            <Text style={styles.cardEmoji}>{getRecipeEmoji(item.title)}</Text>
           )}
           {selectMode && (
             <View style={[styles.checkBadge, isSelected && styles.checkBadgeSelected]}>
@@ -203,7 +222,11 @@ export default function RecipeListScreen() {
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle}>{item.title}</Text>
           {item.rating != null && <Stars rating={item.rating} size={12} />}
-          {item.cookTimeMin != null && <Text style={styles.cardTime}>⏱ {item.cookTimeMin}分</Text>}
+          {item.cookTimeMin != null && (
+            <Text style={styles.cardTime}>
+              ⏱ {tCount('recipe.detail.cookTimeValue', item.cookTimeMin)}
+            </Text>
+          )}
           {hasIngredientHit && !selectMode && (
             <View style={styles.ingredientBadge}>
               <Text style={styles.ingredientBadgeText}>
@@ -225,9 +248,11 @@ export default function RecipeListScreen() {
           <Pressable style={styles.selectCancelBtn} onPress={exitSelectMode}>
             <X size={18} color={Colors.paper} />
           </Pressable>
-          <Text style={styles.selectCount}>{selectedIds.size}件選択中</Text>
+          <Text style={styles.selectCount}>
+            {tCount('recipe.list.selectCount', selectedIds.size)}
+          </Text>
           <Pressable style={styles.selectAllBtn} onPress={handleSelectAll}>
-            <Text style={styles.selectAllText}>すべて選択</Text>
+            <Text style={styles.selectAllText}>{t('recipe.list.selectAll')}</Text>
           </Pressable>
         </View>
       ) : (
@@ -240,14 +265,14 @@ export default function RecipeListScreen() {
                 style={styles.searchInput}
                 value={query}
                 onChangeText={setQuery}
-                placeholder="レシピを探す"
+                placeholder={t('recipe.list.search')}
                 placeholderTextColor={Colors.muted}
               />
             </View>
             <Pressable
               style={styles.sortButton}
               onPress={() => setSortSheetOpen(true)}
-              accessibilityLabel="並び替え"
+              accessibilityLabel={t('recipe.list.sort')}
             >
               <ArrowUpDown size={14} color={Colors.gold} />
               <Text style={styles.sortButtonText}>{recipeSortLabel(sortKey)}</Text>
@@ -261,9 +286,9 @@ export default function RecipeListScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.filterContent}
             >
-              {TAG_FILTERS.map((tag) => (
+              {tagFilters.map((tag) => (
                 <Pressable
-                  key={tag}
+                  key={tag ?? '__all__'}
                   style={[styles.filterChip, activeTagFilter === tag && styles.filterChipActive]}
                   onPress={() => setActiveTagFilter(tag)}
                 >
@@ -273,7 +298,7 @@ export default function RecipeListScreen() {
                       activeTagFilter === tag && styles.filterChipTextActive,
                     ]}
                   >
-                    {tag}
+                    {tag ?? t('recipe.list.filterAll')}
                   </Text>
                 </Pressable>
               ))}
@@ -283,9 +308,11 @@ export default function RecipeListScreen() {
           {query.length > 0 && (
             <View style={styles.searchHint}>
               <Text style={styles.searchHintText}>
-                {filtered.length} 件
+                {tCount('recipe.list.countSuffix', filtered.length)}
                 {filtered.some((r) => getMatchedIngredients(r).length > 0) && (
-                  <Text style={styles.searchHintHighlight}>（食材名でヒットあり）</Text>
+                  <Text style={styles.searchHintHighlight}>
+                    {t('recipe.list.ingredientHitNote')}
+                  </Text>
                 )}
               </Text>
             </View>
@@ -294,7 +321,7 @@ export default function RecipeListScreen() {
       )}
 
       {loading ? (
-        <Loading message="レシピを読み込んでいます" />
+        <Loading message={t('recipe.list.loading')} />
       ) : (
         <FlatList
           data={filtered}
@@ -312,16 +339,16 @@ export default function RecipeListScreen() {
             recipes.length === 0 ? (
               <EmptyState
                 icon="📖"
-                title="まだレシピがありません"
-                message="URL・写真・手動入力でレシピを追加すると、ここに蔵書として並びます。"
-                actionLabel="レシピを追加"
+                title={t('recipe.list.emptyTitle')}
+                message={t('recipe.list.emptyMessage')}
+                actionLabel={t('recipe.list.emptyAction')}
                 onAction={() => router.push('/(tabs)/add')}
               />
             ) : (
               <EmptyState
                 icon="🔍"
-                title="条件に合うレシピが見つかりません"
-                message="検索キーワードやフィルターを変えてお試しください。"
+                title={t('recipe.list.noMatchTitle')}
+                message={t('recipe.list.noMatchMessage')}
               />
             )
           }
@@ -344,26 +371,30 @@ export default function RecipeListScreen() {
             <Text
               style={[styles.actionBtnText, selectedIds.size === 0 && styles.actionBtnTextDisabled]}
             >
-              削除
+              {t('common.delete')}
             </Text>
           </Pressable>
         </View>
       )}
 
-      <BottomSheet visible={sortSheetOpen} onClose={() => setSortSheetOpen(false)} title="並び替え">
-        {RECIPE_SORT_OPTIONS.map((option) => {
-          const active = option.key === sortKey;
+      <BottomSheet
+        visible={sortSheetOpen}
+        onClose={() => setSortSheetOpen(false)}
+        title={t('recipe.list.sort')}
+      >
+        {RECIPE_SORT_KEYS.map((option) => {
+          const active = option === sortKey;
           return (
             <Pressable
-              key={option.key}
+              key={option}
               style={styles.sortOption}
               onPress={() => {
-                setSortKey(option.key);
+                setSortKey(option);
                 setSortSheetOpen(false);
               }}
             >
               <Text style={[styles.sortOptionText, active && styles.sortOptionTextActive]}>
-                {option.label}
+                {recipeSortLabel(option)}
               </Text>
               {active && <Check size={18} color={Colors.gold} />}
             </Pressable>
@@ -376,7 +407,7 @@ export default function RecipeListScreen() {
           style={styles.addFab}
           onPress={() => router.push('/(tabs)/add')}
           accessibilityRole="button"
-          accessibilityLabel="レシピを追加"
+          accessibilityLabel={t('recipe.list.addLabel')}
         >
           <Plus size={24} color={Colors.bg} />
         </Pressable>
