@@ -219,6 +219,37 @@ const recipe = {
     commentConfirm: 'レシピをつくる',
   },
 
+  /** S06 料理中モード。 */
+  cook: {
+    loading: '読み込み中...',
+    switchTimerTitle: 'タイマーを切り替え',
+    switchTimerBody:
+      '手順{{step}}のタイマーが動いています。停止してこの手順のタイマーを開始しますか？',
+    switchTimerAction: '切り替える',
+    chipStep: '⏱ 手順{{step}}',
+    timerFinished: '完了！',
+    timerPaused: '{{time}}（一時停止中）',
+    startTimer: 'タイマーを開始',
+    detectedFromBody: '（本文から検出）',
+    tapHint: '画面をタップで材料を表示',
+    prev: '← 前へ',
+    finish: '✓ 完成！記録する',
+    next: '次へ →',
+  },
+
+  /** S13 版履歴。 */
+  revisions: {
+    titleSuffix: '— 版履歴',
+    loading: '読み込み中...',
+    empty: '版履歴がありません',
+    revisionLabel: 'v{{number}} 修正',
+    current: '現在',
+    servings: '👥 {{count}}人前',
+    cookTime: '⏱ {{count}}分',
+    ingredientCount: '🥬 材料 {{count}}品',
+    stepCount: '📋 手順 {{count}}ステップ',
+  },
+
   refine: {
     /** 差分の見出し・バッジ。 */
     title: 'お店の味に近づける',

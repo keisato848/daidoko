@@ -211,6 +211,35 @@ const recipe: typeof ja = {
     commentConfirm: 'Create recipe',
   },
 
+  cook: {
+    loading: 'Loading…',
+    switchTimerTitle: 'Switch timer',
+    switchTimerBody:
+      'A timer for step {{step}} is running. Stop it and start the timer for this step?',
+    switchTimerAction: 'Switch',
+    chipStep: '⏱ Step {{step}}',
+    timerFinished: 'Done!',
+    timerPaused: '{{time}} (paused)',
+    startTimer: 'Start timer',
+    detectedFromBody: ' (found in the step)',
+    tapHint: 'Tap the screen to see the ingredients',
+    prev: '← Back',
+    finish: '✓ Done — record it',
+    next: 'Next →',
+  },
+
+  revisions: {
+    titleSuffix: '— version history',
+    loading: 'Loading…',
+    empty: 'No version history',
+    revisionLabel: 'v{{number}} edit',
+    current: 'Current',
+    servings: '👥 serves {{count}}',
+    cookTime: '⏱ {{count}} min',
+    ingredientCount: '🥬 {{count}} ingredients',
+    stepCount: '📋 {{count}} steps',
+  },
+
   refine: {
     title: 'Get closer to the restaurant taste',
     summaryLabel: 'What the AI changed',

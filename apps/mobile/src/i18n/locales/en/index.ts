@@ -13,11 +13,13 @@ import backup from './backup';
 import byok from './byok';
 import common from './common';
 import error from './error';
+import family from './family';
 import home from './home';
 import log from './log';
 import pantry from './pantry';
 import paywall from './paywall';
 import recipe from './recipe';
+import recipeImport from './recipeImport';
 import settings from './settings';
 
 const en: typeof jaDict = {
@@ -26,11 +28,13 @@ const en: typeof jaDict = {
   byok,
   common,
   error,
+  family,
   home,
   log,
   pantry,
   paywall,
   recipe,
+  recipeImport,
   settings,
 };
 

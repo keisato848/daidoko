@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../../../src/constants/theme';
+import { t } from '../../../../src/i18n';
 import { getRecipeDetail, getRecipeRevisions } from '../../../../src/services/recipe.service';
 import type { RecipeRevisionSummary } from '../../../../src/services/types';
 
@@ -53,23 +54,23 @@ export default function RevisionsScreen() {
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <ChevronLeft size={20} color={Colors.goldDim} />
-          <Text style={styles.backText}>戻る</Text>
+          <Text style={styles.backText}>{t('common.back')}</Text>
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {title} — 版履歴
+          {title} {t('recipe.revisions.titleSuffix')}
         </Text>
         <View style={styles.headerSpacer} />
       </View>
 
       {loading ? (
         <View style={styles.center}>
-          <Text style={styles.mutedText}>読み込み中...</Text>
+          <Text style={styles.mutedText}>{t('recipe.revisions.loading')}</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {revisions.length === 0 ? (
             <View style={styles.emptyBox}>
-              <Text style={styles.mutedText}>版履歴がありません</Text>
+              <Text style={styles.mutedText}>{t('recipe.revisions.empty')}</Text>
             </View>
           ) : (
             revisions.map((rev) => (
@@ -77,12 +78,14 @@ export default function RevisionsScreen() {
                 <View style={styles.revisionHeader}>
                   <View style={styles.revisionBadge}>
                     <Text style={styles.revisionBadgeText}>
-                      {rev.isMajor ? `v${rev.revisionNumber}` : `v${rev.revisionNumber} 修正`}
+                      {rev.isMajor
+                        ? `v${rev.revisionNumber}`
+                        : t('recipe.revisions.revisionLabel', { number: rev.revisionNumber })}
                     </Text>
                   </View>
                   {rev.isCurrent && (
                     <View style={styles.currentBadge}>
-                      <Text style={styles.currentBadgeText}>現在</Text>
+                      <Text style={styles.currentBadgeText}>{t('recipe.revisions.current')}</Text>
                     </View>
                   )}
                   <Text style={styles.revisionDate}>{formatDate(rev.createdAt)}</Text>
@@ -90,13 +93,21 @@ export default function RevisionsScreen() {
 
                 <View style={styles.revisionMeta}>
                   {rev.servings != null && (
-                    <Text style={styles.revisionMetaItem}>👥 {rev.servings}人前</Text>
+                    <Text style={styles.revisionMetaItem}>
+                      {t('recipe.revisions.servings', { count: rev.servings })}
+                    </Text>
                   )}
                   {rev.cookTimeMin != null && (
-                    <Text style={styles.revisionMetaItem}>⏱ {rev.cookTimeMin}分</Text>
+                    <Text style={styles.revisionMetaItem}>
+                      {t('recipe.revisions.cookTime', { count: rev.cookTimeMin })}
+                    </Text>
                   )}
-                  <Text style={styles.revisionMetaItem}>🥬 材料 {rev.ingredientCount}品</Text>
-                  <Text style={styles.revisionMetaItem}>📋 手順 {rev.stepCount}ステップ</Text>
+                  <Text style={styles.revisionMetaItem}>
+                    {t('recipe.revisions.ingredientCount', { count: rev.ingredientCount })}
+                  </Text>
+                  <Text style={styles.revisionMetaItem}>
+                    {t('recipe.revisions.stepCount', { count: rev.stepCount })}
+                  </Text>
                 </View>
 
                 {rev.description && <Text style={styles.revisionBody}>{rev.description}</Text>}

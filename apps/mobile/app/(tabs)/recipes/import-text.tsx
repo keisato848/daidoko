@@ -10,6 +10,7 @@ import { Clipboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } f
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
+import { t } from '../../../src/i18n';
 import { createRecipe } from '../../../src/services/recipe.service';
 import { RECIPE_TEXT_AI_PROMPT, type ParsedRecipeText } from '../../../src/utils/recipeTextParser';
 import { parseRecipeTextWithAssistance } from '../../../src/utils/recipeTextNormalizer';
@@ -17,28 +18,17 @@ import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
 type Phase = 'input' | 'preview';
 
-const SAMPLE_PLACEHOLDER = `肉じゃが
-4人分
-材料
-じゃがいも 3個
-玉ねぎ 1個
-牛こま肉 200g
-作り方
-1. 材料を切る
-2. 肉を炒めて野菜を加える
-3. 煮汁を入れて煮込む`;
+function confidenceLabel(confidence: ParsedRecipeText['confidence']): string {
+  if (confidence === 'high') return t('recipeImport.text.confidence.high');
+  if (confidence === 'medium') return t('recipeImport.text.confidence.medium');
+  return t('recipeImport.text.confidence.low');
+}
 
-const CONFIDENCE_LABEL: Record<ParsedRecipeText['confidence'], string> = {
-  high: '解析できました',
-  medium: '一部を確認してください',
-  low: '入力を補ってください',
-};
-
-const NORMALIZED_LABEL: Record<ParsedRecipeText['normalizedBy'], string> = {
-  parser: '',
-  'gemma-native': '端末内AIで補正しました',
-  'local-heuristic': '補正して解析しました',
-};
+function normalizedLabel(normalizedBy: ParsedRecipeText['normalizedBy']): string {
+  if (normalizedBy === 'gemma-native') return t('recipeImport.text.normalized.gemmaNative');
+  if (normalizedBy === 'local-heuristic') return t('recipeImport.text.normalized.localHeuristic');
+  return '';
+}
 
 export default function ImportTextScreen() {
   const router = useRouter();
@@ -65,13 +55,13 @@ export default function ImportTextScreen() {
 
   const handleCopyPrompt = useCallback(() => {
     Clipboard.setString(RECIPE_TEXT_AI_PROMPT);
-    showToast('AI用指示をコピーしました');
+    showToast(t('recipeImport.text.copied'));
   }, [showToast]);
 
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
       await createRecipe(data);
-      showToast('レシピを保存しました');
+      showToast(t('recipeImport.saved'));
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
     [router, showToast],
@@ -84,7 +74,7 @@ export default function ImportTextScreen() {
           <View style={styles.sourceBanner}>
             <FileText size={12} color={Colors.goldDim} />
             <Text style={styles.sourceName}>
-              {[CONFIDENCE_LABEL[parsed.confidence], NORMALIZED_LABEL[parsed.normalizedBy]]
+              {[confidenceLabel(parsed.confidence), normalizedLabel(parsed.normalizedBy)]
                 .filter(Boolean)
                 .join(' / ')}
             </Text>
@@ -94,8 +84,8 @@ export default function ImportTextScreen() {
           initialValues={parsed?.formData}
           onSubmit={handleSave}
           onCancel={() => setPhase('input')}
-          title="レシピを確認・編集"
-          submitLabel="保存"
+          title={t('recipeImport.formTitle')}
+          submitLabel={t('common.save')}
         />
         <Toast
           message={toastMessage ?? ''}
@@ -112,7 +102,7 @@ export default function ImportTextScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>テキストから作成</Text>
+        <Text style={styles.headerTitle}>{t('recipeImport.text.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -120,21 +110,21 @@ export default function ImportTextScreen() {
         <View style={styles.iconWrapper}>
           <FileText size={32} color={Colors.gold} />
         </View>
-        <Text style={styles.title}>レシピ本文を貼り付け</Text>
+        <Text style={styles.title}>{t('recipeImport.text.heading')}</Text>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="AI用指示をコピー"
+          accessibilityLabel={t('recipeImport.text.copyPrompt')}
           style={styles.copyButton}
           onPress={handleCopyPrompt}
         >
           <ClipboardCopy size={16} color={Colors.gold} />
-          <Text style={styles.copyButtonText}>AI用指示をコピー</Text>
+          <Text style={styles.copyButtonText}>{t('recipeImport.text.copyPrompt')}</Text>
         </Pressable>
         <TextInput
           style={styles.textInput}
           value={rawText}
           onChangeText={setRawText}
-          placeholder={SAMPLE_PLACEHOLDER}
+          placeholder={t('recipeImport.text.samplePlaceholder')}
           placeholderTextColor={Colors.muted}
           multiline
           textAlignVertical="top"
@@ -146,7 +136,9 @@ export default function ImportTextScreen() {
           onPress={handleParse}
           disabled={!rawText.trim() || isParsing}
         >
-          <Text style={styles.parseButtonText}>{isParsing ? '解析中...' : '解析して確認'}</Text>
+          <Text style={styles.parseButtonText}>
+            {isParsing ? t('recipeImport.text.parsing') : t('recipeImport.text.parse')}
+          </Text>
         </Pressable>
       </ScrollView>
       <Toast

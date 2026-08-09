@@ -12,6 +12,7 @@ import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } fr
 import { NumberStepper } from '../../../../src/components/NumberStepper';
 import { TimerWidget } from '../../../../src/components/TimerWidget';
 import { Colors } from '../../../../src/constants/theme';
+import { t } from '../../../../src/i18n';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { getRecipeDetail } from '../../../../src/services/recipe.service';
 import { useTimerStore } from '../../../../src/stores/timer.store';
@@ -78,7 +79,7 @@ export default function CookingModeScreen() {
   if (steps.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingText}>読み込み中...</Text>
+        <Text style={styles.loadingText}>{t('recipe.cook.loading')}</Text>
       </View>
     );
   }
@@ -111,14 +112,17 @@ export default function CookingModeScreen() {
       });
       store.start();
     };
-    const t = useTimerStore.getState();
-    if ((t.status === 'running' || t.status === 'paused') && t.context?.stepId !== step.id) {
+    const running = useTimerStore.getState();
+    if (
+      (running.status === 'running' || running.status === 'paused') &&
+      running.context?.stepId !== step.id
+    ) {
       Alert.alert(
-        'タイマーを切り替え',
-        `手順${t.context?.stepNumber ?? '?'}のタイマーが動いています。停止してこの手順のタイマーを開始しますか？`,
+        t('recipe.cook.switchTimerTitle'),
+        t('recipe.cook.switchTimerBody', { step: running.context?.stepNumber ?? '?' }),
         [
-          { text: 'キャンセル', style: 'cancel' },
-          { text: '切り替える', onPress: begin },
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('recipe.cook.switchTimerAction'), onPress: begin },
         ],
       );
       return;
@@ -160,11 +164,11 @@ export default function CookingModeScreen() {
       {timerOnOtherStep && (
         <Pressable style={styles.timerChip} onPress={jumpToTimerStep} hitSlop={8}>
           <Text style={styles.timerChipText}>
-            ⏱ 手順{timerOnOtherStep.stepNumber}{' '}
+            {t('recipe.cook.chipStep', { step: timerOnOtherStep.stepNumber })}{' '}
             {timer.status === 'finished'
-              ? '完了！'
+              ? t('recipe.cook.timerFinished')
               : timer.status === 'paused'
-                ? `${formatMmSs(timer.remainingSec)}（一時停止中）`
+                ? t('recipe.cook.timerPaused', { time: formatMmSs(timer.remainingSec) })
                 : formatMmSs(timer.remainingSec)}
           </Text>
         </Pressable>
@@ -189,15 +193,15 @@ export default function CookingModeScreen() {
           >
             <Text style={styles.timerIcon}>⏱</Text>
             <Text style={styles.timerButtonText}>
-              {formatStepTimerLabel(effectiveTimerSec)} タイマーを開始
-              {detectedTimer != null ? '（本文から検出）' : ''}
+              {formatStepTimerLabel(effectiveTimerSec)} {t('recipe.cook.startTimer')}
+              {detectedTimer != null ? t('recipe.cook.detectedFromBody') : ''}
             </Text>
           </Pressable>
         )}
 
         {timerOnCurrentStep && <TimerWidget />}
 
-        <Text style={styles.tapHint}>画面をタップで材料を表示</Text>
+        <Text style={styles.tapHint}>{t('recipe.cook.tapHint')}</Text>
       </Pressable>
 
       {/* Navigation buttons */}
@@ -208,17 +212,17 @@ export default function CookingModeScreen() {
           disabled={currentStep === 0}
         >
           <Text style={[styles.navPrevText, currentStep === 0 && styles.navDisabledText]}>
-            ← 前へ
+            {t('recipe.cook.prev')}
           </Text>
         </Pressable>
 
         {isLastStep ? (
           <Pressable style={styles.navFinish} onPress={handleComplete}>
-            <Text style={styles.navFinishText}>✓ 完成！記録する</Text>
+            <Text style={styles.navFinishText}>{t('recipe.cook.finish')}</Text>
           </Pressable>
         ) : (
           <Pressable style={styles.navNext} onPress={() => setCurrentStep(currentStep + 1)}>
-            <Text style={styles.navNextText}>次へ →</Text>
+            <Text style={styles.navNextText}>{t('recipe.cook.next')}</Text>
           </Pressable>
         )}
       </View>
@@ -233,14 +237,14 @@ export default function CookingModeScreen() {
         <Pressable style={styles.overlayBackdrop} onPress={() => setShowIngredients(false)}>
           <Pressable style={styles.overlaySheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.overlayHandle} />
-            <Text style={styles.overlayTitle}>材料</Text>
+            <Text style={styles.overlayTitle}>{t('common.ingredients')}</Text>
             {servings != null && (
               <View style={styles.overlayStepper}>
                 <NumberStepper
-                  label="人数"
+                  label={t('common.servings')}
                   value={targetServings ?? servings}
                   onChange={setTargetServings}
-                  suffix="人前"
+                  suffix={t('recipe.detail.servingsSuffix')}
                   min={1}
                 />
               </View>
