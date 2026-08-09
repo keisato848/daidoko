@@ -65,6 +65,34 @@ const ui: typeof ja = {
     },
   },
 
+  tab: {
+    home: 'Home',
+    recipes: 'Recipes',
+    add: 'Add',
+    settings: 'Settings',
+  },
+
+  gallery: {
+    title: 'Gallery',
+    loading: 'Loading photos',
+    emptyTitle: 'No photos yet',
+    emptyMessage: 'Add a photo when you record your cooking and it will show up here.',
+  },
+
+  licenses: {
+    title: 'Licenses',
+    heading: 'Open-source licenses',
+    body: 'DAIDOKO uses the open-source packages listed below. Copyright notices and full license texts are those shipped with each package.',
+  },
+
+  share: {
+    servings: { one: 'Serves {{count}}', other: 'Serves {{count}}' },
+    cookTime: { one: 'Cook time {{count}} min', other: 'Cook time {{count}} min' },
+    ingredients: 'Ingredients',
+    steps: 'Method',
+    memo: 'Notes',
+  },
+
   calendar: {
     title: 'Calendar',
     loading: 'Loading your cooking records',

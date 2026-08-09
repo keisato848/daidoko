@@ -79,6 +79,43 @@ const ui = {
     } satisfies PluralMessage,
   },
 
+  /** ボトムタブ。 */
+  tab: {
+    home: 'ホーム',
+    recipes: 'レシピ',
+    add: '追加',
+    settings: '設定',
+  },
+
+  gallery: {
+    title: 'ギャラリー',
+    loading: '写真を読み込んでいます',
+    emptyTitle: 'まだ写真がありません',
+    emptyMessage: '調理を記録するときに写真を添えると、ここに料理の記録が並びます。',
+  },
+
+  licenses: {
+    title: 'ライセンス情報',
+    heading: 'オープンソースライセンス',
+    body: 'だいどこは以下の OSS パッケージを利用しています。各パッケージの著作権表示と完全なライセンス本文は配布元のパッケージに従います。',
+  },
+
+  /**
+   * 共有テキストの見出し。**取り込みパーサと往復できる書式**なので、
+   * 日本語側は変えないこと（`recipeTextParser` が日本語の見出しを見る）。
+   * 英語で往復させるには英語版パーサが要る（設計 §7・P5）。
+   */
+  share: {
+    servings: { one: '{{count}}人分', other: '{{count}}人分' } satisfies PluralMessage,
+    cookTime: {
+      one: '調理時間 {{count}}分',
+      other: '調理時間 {{count}}分',
+    } satisfies PluralMessage,
+    ingredients: '材料',
+    steps: '作り方',
+    memo: 'メモ',
+  },
+
   /** カレンダー表示。 */
   calendar: {
     title: 'カレンダー',

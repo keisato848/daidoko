@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 /**
  * Entitlement (premium membership) provider abstraction.
  *
@@ -36,7 +37,7 @@ export interface EntitlementProvider {
 
 /** Thrown when premium cannot be offered (e.g. RevenueCat not configured). */
 export class EntitlementUnavailableError extends Error {
-  constructor(message = 'プレミアムは現在ご利用いただけません') {
+  constructor(message = t('ads.premiumUnavailableShort')) {
     super(message);
     this.name = 'EntitlementUnavailableError';
   }

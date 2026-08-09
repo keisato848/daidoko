@@ -13,6 +13,7 @@ import { Colors, Typography } from '../src/constants/theme';
 import { getTimeline } from '../src/services/timeline.service';
 import type { TimelineEntry } from '../src/services/types';
 import { flattenGalleryPhotos } from '../src/utils/gallery';
+import { t } from '../src/i18n';
 
 const COLUMNS = 3;
 
@@ -40,12 +41,12 @@ export default function GalleryScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>ギャラリー</Text>
+        <Text style={styles.headerTitle}>{t('ui.gallery.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       {loading ? (
-        <Loading message="写真を読み込んでいます" />
+        <Loading message={t('ui.gallery.loading')} />
       ) : (
         <FlatList
           data={photos}
@@ -66,8 +67,8 @@ export default function GalleryScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="🖼"
-              title="まだ写真がありません"
-              message="調理を記録するときに写真を添えると、ここに料理の記録が並びます。"
+              title={t('ui.gallery.emptyTitle')}
+              message={t('ui.gallery.emptyMessage')}
             />
           }
         />

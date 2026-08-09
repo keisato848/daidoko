@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 /**
  * Rewarded-ad provider abstraction.
  *
@@ -29,7 +30,7 @@ export interface AdRewardProvider {
 
 /** Thrown when a rewarded ad cannot be loaded/shown. */
 export class AdUnavailableError extends Error {
-  constructor(message = '広告を読み込めませんでした。時間をおいてお試しください。') {
+  constructor(message = t('ads.loadFailed')) {
     super(message);
     this.name = 'AdUnavailableError';
   }

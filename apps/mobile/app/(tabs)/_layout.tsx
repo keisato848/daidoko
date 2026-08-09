@@ -4,6 +4,7 @@ import { Home, BookOpen, Plus, Settings } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
+import { t } from '../../src/i18n';
 
 /** レシピスタックのうち、タブバーを隠す画面（全画面で集中させたいもの）。 */
 const FULLSCREEN_CHILD_ROUTES = ['import-photo'];
@@ -22,14 +23,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'ホーム',
+          title: t('ui.tab.home'),
           tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="recipes"
         options={({ route }) => ({
-          title: 'レシピ',
+          title: t('ui.tab.recipes'),
           tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} />,
           // 撮影画面はタブバーを出さない。店内で集中して撮る画面としてノイズになる
           // （`docs/お店の味を再現設計.md` §4.3 問題7）。
@@ -43,7 +44,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="add"
         options={{
-          title: '追加',
+          title: t('ui.tab.add'),
           tabBarIcon: ({ color, size }) => (
             <View style={[styles.addButton, { borderColor: color }]}>
               <Plus size={size * 0.8} color={color} />
@@ -54,7 +55,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: '設定',
+          title: t('ui.tab.settings'),
           tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
         }}
       />

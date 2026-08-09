@@ -87,6 +87,9 @@ export function displayStringsIn(line) {
 export function extractFromSource(source) {
   const out = [];
   let inBlockComment = false;
+  // 直前の行の `// i18n-ignore`。長い行や複数行の式では、行末ではなく
+  // **前の行**に書くほうが自然なので、そちらも効くようにする
+  let ignoreNext = false;
 
   source.split(/\r?\n/).forEach((rawLine, index) => {
     const line = rawLine.trim();
@@ -100,13 +103,18 @@ export function extractFromSource(source) {
       if (!line.includes('*/')) inBlockComment = true;
       return;
     }
-    if (line.startsWith('//') || line.startsWith('*')) return;
-
     // **`// i18n-ignore` を付けた行は数えない。**
     // 日本語を「表示」ではなく「データ」として扱う箇所がある — 旧サンプルの
     // 掃除で過去の値と比較する、日本語の見出しを正規表現で拾う、など。
     // 訳すと動かなくなるので、意図的に日本語のままにしていることを示す。
-    if (/\/\/\s*i18n-ignore/.test(rawLine)) return;
+    //
+    // **コメント行を捨てる前に判定する。** 前の行に書いた印は、
+    // `//` の早期 return に阻まれると届かない。
+    const ignoreThis = ignoreNext || /\/\/\s*i18n-ignore/.test(rawLine);
+    ignoreNext = /^\/\/\s*i18n-ignore/.test(line);
+
+    if (line.startsWith('//') || line.startsWith('*')) return;
+    if (ignoreThis) return;
 
     // 行末コメントを落とす（URL の // を巻き込むが、日本語判定には影響しない）
     const code = line.replace(/\/\/.*$/, '');
