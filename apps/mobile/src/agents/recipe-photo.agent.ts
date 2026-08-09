@@ -3,8 +3,6 @@
  */
 import { AgentBridge, type AgentResult } from '@daidoko/shared';
 
-import { t } from '../i18n';
-
 import {
   inferRecipeFromPhotoLabels,
   type PhotoRecipeConfidence,
@@ -14,6 +12,7 @@ import type { ClientImageLabel } from '../services/client-image-label.provider';
 import { hasEnoughOcrText, parseOcrText, type OcrRecognitionResult } from '../services/ocr.service';
 import type { ParseConfidence, ParsedRecipeText } from '../utils/recipeTextParser';
 import { recipeFormSchema, type RecipeFormData } from '../validation/recipe.schema';
+import { t } from '../i18n';
 
 export interface RecipePhotoAgentInput {
   imageUri: string;

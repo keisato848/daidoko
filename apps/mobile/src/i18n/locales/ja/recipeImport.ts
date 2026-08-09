@@ -52,6 +52,8 @@ const recipeImport = {
     formTitle: '読み取り結果を確認・編集',
     reading: '端末内で読み取っています...',
     providerUnavailable: 'このビルドでは Android OCR provider を初期化できませんでした',
+    // provider が **渡されていない**（呼び出し側の設定漏れ）。初期化失敗とは別
+    providerNotConfigured: 'クライアントOCR providerが設定されていません',
     failed: 'OCR 処理に失敗しました',
     clearImage: '画像をクリア',
 
@@ -72,6 +74,8 @@ const recipeImport = {
     tooLittleText: '画像内の文字量が少ないため、画像ラベルから下書きしました',
     skipped: '画像内テキストの読み取りをスキップしました',
     skippedWithReason: '画像内テキストの読み取りをスキップしました: {{reason}}',
+    tooLittleTextRetry: 'テキストが少なすぎます。より鮮明な画像で試してください。',
+    missingRequiredFields: 'レシピとして必要な項目を読み取れませんでした',
   },
 
   /** レシピサイトの URL から取り込み。 */
@@ -87,6 +91,9 @@ const recipeImport = {
     importing: 'レシピを取り込んでいます...',
     submit: '取り込む',
     sourceLabel: '取り込み元:',
+    required: 'URLを入力してください',
+    mustBeHttp: 'URLはhttpまたはhttpsで始めてください',
+    tooLong: 'URLが長すぎます',
     failed: '取り込みに失敗しました',
     saved: 'レシピを保存しました！',
   },

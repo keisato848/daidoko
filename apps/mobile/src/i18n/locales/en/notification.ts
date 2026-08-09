@@ -1,0 +1,17 @@
+import type ja from '../ja/notification';
+
+const notification: typeof ja = {
+  timerChannel: 'Cooking timer',
+  timerDoneTitle: 'Timer finished',
+  timerDoneBody: 'Your cooking time is up.',
+
+  lowStockChannel: 'Low-stock alerts',
+  lowStockTitle: 'Running low on ingredients',
+  lowStockBody: 'You’re running low on {{names}}. Add them to your shopping list.',
+  lowStockMore: {
+    one: ' and {{count}} more',
+    other: ' and {{count}} more',
+  },
+};
+
+export default notification;

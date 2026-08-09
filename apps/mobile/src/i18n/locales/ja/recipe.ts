@@ -284,6 +284,9 @@ const recipe = {
     cookTime: '⏱ {{count}}分',
     ingredientCount: '🥬 材料 {{count}}品',
     stepCount: '📋 手順 {{count}}ステップ',
+    stepLabel: '手順 {{number}}',
+    // 差分の見出し。フォームの「レシピ名」とは別の語を使っている
+    metaTitle: '料理名',
   },
 
   refine: {

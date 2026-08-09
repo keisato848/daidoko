@@ -2,6 +2,7 @@
  * Pure helpers for the cooking-log calendar view (R12 / 利用フロー §5)
  */
 import type { TimelineEntry } from '../services/types';
+import { t } from '../i18n';
 
 export interface CalendarCell {
   /** Day of month (1-31) */
@@ -63,4 +64,9 @@ export function groupEntriesByDay(entries: TimelineEntry[]): Map<string, Timelin
   return map;
 }
 
-export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const;
+/**
+ * 曜日の頭文字（日曜始まり）。**定数にしない** — import 時のロケールで固定される。
+ */
+export function weekdayLabels(): string[] {
+  return t('ui.calendar.weekdays').split(',');
+}

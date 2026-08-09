@@ -1,0 +1,82 @@
+import type ja from '../ja/ui';
+
+const ui: typeof ja = {
+  coach: {
+    skipLabel: 'Skip the walkthrough',
+    skip: 'Skip',
+    closeLabel: 'Close the walkthrough',
+    nextLabel: 'Next tip',
+    start: 'Get started',
+    next: 'Next',
+  },
+
+  photo: {
+    captureLabel: 'Take a photo',
+    retake: 'Retake',
+    capture: 'Camera',
+    gallery: 'Library',
+  },
+
+  timer: {
+    start: 'Start',
+    pause: 'Pause',
+    resume: 'Resume',
+    reset: 'Reset',
+    finished: 'Done!',
+  },
+
+  step: {
+    placeholder: 'Describe the step…',
+    timerLabel: '⏱ Timer',
+    minutesSuffix: 'min',
+    suggestLabel: 'Set a {{label}} timer',
+    suggestSuffix: 'timer',
+  },
+
+  ingredient: {
+    groupPlaceholder: 'Group (e.g. A — seasonings)',
+    namePlaceholder: 'Ingredient',
+    amountPlaceholder: 'Amount',
+  },
+
+  tag: {
+    section: 'Tags',
+    addPlaceholder: 'Add a new tag',
+  },
+
+  confirm: {
+    title: 'Confirm',
+  },
+
+  help: {
+    label: 'Show how this screen works',
+    detailOpen: 'Show details for {{label}}',
+    detailClose: 'Hide details for {{label}}',
+  },
+
+  stats: {
+    cookUnit: {
+      one: 'time',
+      other: 'times',
+    },
+    dishUnit: {
+      one: 'dish',
+      other: 'dishes',
+    },
+  },
+
+  calendar: {
+    title: 'Calendar',
+    loading: 'Loading your cooking records',
+    prevMonth: 'Previous month',
+    nextMonth: 'Next month',
+    empty: 'Nothing recorded on this day',
+    logCount: {
+      one: '{{count}} record',
+      other: '{{count}} records',
+    },
+    weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].join(','),
+  },
+};
+
+export default ui;

@@ -25,6 +25,7 @@ import {
   seedTags,
   seedUsers,
 } from './seed';
+import { t } from '../i18n';
 
 // ─── Mutable State ─────────────────────────────────────────────────────────────
 
@@ -157,8 +158,8 @@ export function getMockTimeline(): TimelineEntry[] {
       return {
         id: log.id,
         recipeId: recipe?.status === 'active' ? log.recipeId : null,
-        recipeTitle: recipe?.title ?? 'フリー記録',
-        userName: user?.displayName ?? '不明',
+        recipeTitle: recipe?.title ?? t('log.freeform'),
+        userName: user?.displayName ?? t('common.unknown'),
         cookedAt: log.cookedAt,
         servings: log.servings,
         rating: log.rating,
@@ -480,7 +481,7 @@ export function createMockPhotoSource(input: {
     url: null,
     ocrRawText: input.labelSummary ?? null,
     siteName: null,
-    pageTitle: '写真からレシピ',
+    pageTitle: t('recipe.photo.tabLabel'),
     thumbnailUrl: null,
     capturedAt: input.capturedAt ?? now,
     createdAt: now,
@@ -538,8 +539,8 @@ export function getMockCookingLogsForRecipe(recipeId: string): TimelineEntry[] {
       return {
         id: log.id,
         recipeId: log.recipeId,
-        recipeTitle: recipe?.title ?? 'フリー記録',
-        userName: user?.displayName ?? '不明',
+        recipeTitle: recipe?.title ?? t('log.freeform'),
+        userName: user?.displayName ?? t('common.unknown'),
         cookedAt: log.cookedAt,
         servings: log.servings,
         rating: log.rating,

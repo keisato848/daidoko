@@ -1,4 +1,6 @@
-export const UNSET_PROFILE_DISPLAY_NAME = 'プロフィール未設定';
+import { t } from '../i18n';
+
+export const UNSET_PROFILE_DISPLAY_NAME = t('family.noProfile');
 
 export function formatProfileDisplayName(displayName: string): string {
   const trimmed = displayName.trim();

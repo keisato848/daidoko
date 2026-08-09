@@ -7,6 +7,7 @@ import { hasEnoughOcrText, parseOcrText, type OcrRecognitionResult } from '../se
 import type { RecipeFormData } from '../validation/recipe.schema';
 import { recipeFormSchema } from '../validation/recipe.schema';
 import type { ParseConfidence, ParsedRecipeText } from '../utils/recipeTextParser';
+import { t } from '../i18n';
 
 export interface OcrAgentInput {
   imageUri: string;
@@ -49,10 +50,10 @@ export async function runOcrAgent(
   dependencies: OcrAgentDependencies = {},
 ): Promise<AgentResult<OcrAgentOutput>> {
   if (!input.imageUri.trim()) {
-    return errorResult('OCR_FAILED', '画像が選択されていません');
+    return errorResult('OCR_FAILED', t('recipe.photo.noImage'));
   }
   if (!dependencies.recognizeText) {
-    return errorResult('OCR_FAILED', 'クライアントOCR providerが設定されていません');
+    return errorResult('OCR_FAILED', t('recipeImport.ocr.providerNotConfigured'));
   }
 
   try {
@@ -61,7 +62,7 @@ export async function runOcrAgent(
     const recognized = await dependencies.recognizeText(processed.imageUri);
 
     if (!hasEnoughOcrText(recognized.rawText)) {
-      return errorResult('OCR_FAILED', 'テキストが少なすぎます。より鮮明な画像で試してください。');
+      return errorResult('OCR_FAILED', t('recipeImport.ocr.tooLittleTextRetry'));
     }
 
     const parsed = dependencies.parseText
@@ -69,7 +70,7 @@ export async function runOcrAgent(
       : await parseOcrText(recognized.rawText);
 
     if (!recipeFormSchema.safeParse(parsed.formData).success) {
-      return errorResult('PARSE_FAILED', 'レシピとして必要な項目を読み取れませんでした');
+      return errorResult('PARSE_FAILED', t('recipeImport.ocr.missingRequiredFields'));
     }
 
     return {
@@ -87,7 +88,7 @@ export async function runOcrAgent(
   } catch (error) {
     return errorResult(
       'OCR_FAILED',
-      error instanceof Error ? error.message : 'OCR 処理に失敗しました',
+      error instanceof Error ? error.message : t('recipeImport.ocr.failed'),
     );
   }
 }

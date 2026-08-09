@@ -13,9 +13,9 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_V1, GEMINI_MODEL } from '../config';
-import { t } from '../i18n';
 import { getUserApiKey } from './byok.service';
 import type { RecipeFormData } from '../validation/recipe.schema';
+import { t } from '../i18n';
 
 const TIMEOUT_MS = 35_000;
 

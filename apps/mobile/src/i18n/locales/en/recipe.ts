@@ -269,6 +269,8 @@ const recipe: typeof ja = {
     cookTime: '⏱ {{count}} min',
     ingredientCount: '🥬 {{count}} ingredients',
     stepCount: '📋 {{count}} steps',
+    stepLabel: 'Step {{number}}',
+    metaTitle: 'Dish name',
   },
 
   refine: {

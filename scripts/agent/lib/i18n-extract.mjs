@@ -102,6 +102,12 @@ export function extractFromSource(source) {
     }
     if (line.startsWith('//') || line.startsWith('*')) return;
 
+    // **`// i18n-ignore` を付けた行は数えない。**
+    // 日本語を「表示」ではなく「データ」として扱う箇所がある — 旧サンプルの
+    // 掃除で過去の値と比較する、日本語の見出しを正規表現で拾う、など。
+    // 訳すと動かなくなるので、意図的に日本語のままにしていることを示す。
+    if (/\/\/\s*i18n-ignore/.test(rawLine)) return;
+
     // 行末コメントを落とす（URL の // を巻き込むが、日本語判定には影響しない）
     const code = line.replace(/\/\/.*$/, '');
     for (const text of displayStringsIn(code)) out.push({ line: index + 1, text });

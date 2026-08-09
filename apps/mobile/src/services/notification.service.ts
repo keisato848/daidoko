@@ -9,6 +9,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { isNativePlatform } from '../db/client';
+import { t } from '../i18n';
 
 const TIMER_CHANNEL_ID = 'timer';
 const LOW_STOCK_CHANNEL_ID = 'low-stock';
@@ -37,7 +38,7 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(TIMER_CHANNEL_ID, {
-      name: '調理タイマー',
+      name: t('notification.timerChannel'),
       importance: Notifications.AndroidImportance.HIGH,
       sound: 'default',
       vibrationPattern: [0, 250, 250, 250],
@@ -63,8 +64,8 @@ export async function scheduleTimerNotification(seconds: number): Promise<string
   try {
     return await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'タイマー終了',
-        body: '調理時間が終わりました。',
+        title: t('notification.timerDoneTitle'),
+        body: t('notification.timerDoneBody'),
         sound: 'default',
       },
       trigger: {
@@ -87,14 +88,14 @@ export async function presentLowStockNotification(body: string): Promise<string 
   if (!(await ensureNotificationPermission())) return null;
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(LOW_STOCK_CHANNEL_ID, {
-      name: '在庫の残量通知',
+      name: t('notification.lowStockChannel'),
       importance: Notifications.AndroidImportance.DEFAULT,
     });
   }
   try {
     return await Notifications.scheduleNotificationAsync({
       content: {
-        title: '在庫がなくなりそうです',
+        title: t('notification.lowStockTitle'),
         body,
         sound: 'default',
         data: { type: LOW_STOCK_DATA_TYPE },

@@ -3,9 +3,9 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { Platform } from 'react-native';
 
 import { getDb, getExpoDb, isNativePlatform } from '../db/client';
-import { t } from '../i18n';
 import { rebuildFts } from '../db/migrate';
 import { getAppMeta, setAppMeta } from './app-meta.service';
+import { t } from '../i18n';
 
 const BACKUP_FORMAT = 'daidoko.local-backup';
 const BACKUP_SCHEMA_VERSION = 1;

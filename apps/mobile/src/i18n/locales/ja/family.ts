@@ -44,6 +44,7 @@ const family = {
 
   /** 既定のグループ名（初回に作られる）。 */
   defaultGroupName: 'わたしの台所',
+  noProfile: 'プロフィール未設定',
 
   /** 入力の検証。数値は文に埋めず {{max}} で渡す（§3-4）。 */
   validation: {

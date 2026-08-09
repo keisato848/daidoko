@@ -5,7 +5,6 @@
 import { and, eq, ne } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
-import { t } from '../i18n';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
 import type {
@@ -15,6 +14,7 @@ import type {
   FamilyRole,
   JoinFamilyResult,
 } from './types';
+import { t } from '../i18n';
 
 export const CURRENT_USER_ID = 'user-kei';
 export const CURRENT_FAMILY_ID = 'family-001';

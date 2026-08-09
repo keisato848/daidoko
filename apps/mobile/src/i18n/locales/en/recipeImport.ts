@@ -43,6 +43,7 @@ const recipeImport: typeof ja = {
     formTitle: 'Check and edit what we read',
     reading: 'Reading on your device…',
     providerUnavailable: "This build couldn't start the Android OCR provider",
+    providerNotConfigured: 'No on-device OCR provider was configured',
     failed: 'Text recognition failed',
     clearImage: 'Clear image',
 
@@ -63,6 +64,8 @@ const recipeImport: typeof ja = {
     tooLittleText: 'There was little text in the image, so we drafted from image labels instead',
     skipped: 'Skipped reading text from the image',
     skippedWithReason: 'Skipped reading text from the image: {{reason}}',
+    tooLittleTextRetry: 'There was too little text. Try a sharper image.',
+    missingRequiredFields: "We couldn't read the fields a recipe needs",
   },
 
   url: {
@@ -74,6 +77,9 @@ const recipeImport: typeof ja = {
     importing: 'Importing the recipe…',
     submit: 'Import',
     sourceLabel: 'Source:',
+    required: 'Enter a URL',
+    mustBeHttp: 'The URL must start with http or https',
+    tooLong: 'That URL is too long',
     failed: 'Import failed',
     saved: 'Recipe saved!',
   },

@@ -12,6 +12,7 @@ import { presentLowStockNotification } from './notification.service';
 import { getPantryItems } from './pantry.service';
 import { addShoppingItem } from './shopping-list.service';
 import type { PantryItem } from './types';
+import { t, tCount } from '../i18n';
 
 const NOTIFIED_DAY_KEY = 'low_stock_notified_day';
 const MAX_NAMES_IN_BODY = 5;
@@ -34,8 +35,11 @@ export function filterLowStock(items: PantryItem[]): PantryItem[] {
 /** One batched message: 「卵、牛乳 ほか2件 の残りが少なくなっています。…」 */
 export function buildLowStockBody(names: string[]): string {
   const head = names.slice(0, MAX_NAMES_IN_BODY).join('、');
-  const rest = names.length > MAX_NAMES_IN_BODY ? ` ほか${names.length - MAX_NAMES_IN_BODY}件` : '';
-  return `${head}${rest} の残りが少なくなっています。買い物リストに追加しましょう。`;
+  const rest =
+    names.length > MAX_NAMES_IN_BODY
+      ? tCount('notification.lowStockMore', names.length - MAX_NAMES_IN_BODY)
+      : '';
+  return t('notification.lowStockBody', { names: `${head}${rest}` });
 }
 
 /**

@@ -4,6 +4,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { generateId } from '../utils/id';
 import type { CapturedPhoto } from './photo-capture.service';
 import type { SaveCookingPhotoInput } from './types';
+import { t, tCount } from '../i18n';
 
 export const MAX_COOKING_LOG_PHOTOS = 6;
 /** 保存写真の長辺上限（px）。これ以上は縮小してから保存する。 */
@@ -78,7 +79,7 @@ async function compressForStorage(
 
 function getPhotoDirectory(adapter: FileStorageAdapter): string {
   if (!adapter.documentDirectory) {
-    throw new Error('写真の保存先を取得できませんでした');
+    throw new Error(t('error.photoStorageUnavailable'));
   }
   return `${adapter.documentDirectory}cooking-photos/`;
 }
@@ -138,7 +139,7 @@ export async function persistCookingLogPhotos(
   compressAdapter: PhotoCompressAdapter = expoPhotoCompressAdapter,
 ): Promise<SaveCookingPhotoInput[]> {
   if (photos.length > MAX_COOKING_LOG_PHOTOS) {
-    throw new RangeError(`写真は${MAX_COOKING_LOG_PHOTOS}枚まで追加できます`);
+    throw new RangeError(tCount('log.form.photoLimit', MAX_COOKING_LOG_PHOTOS));
   }
 
   const persisted: SaveCookingPhotoInput[] = [];
@@ -161,7 +162,7 @@ export async function cleanupStoredCookingPhotos(
 
 function getRecipePhotoDirectory(adapter: FileStorageAdapter): string {
   if (!adapter.documentDirectory) {
-    throw new Error('写真の保存先を取得できませんでした');
+    throw new Error(t('error.photoStorageUnavailable'));
   }
   return `${adapter.documentDirectory}recipe-photos/`;
 }

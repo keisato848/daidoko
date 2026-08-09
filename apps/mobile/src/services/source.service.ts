@@ -4,6 +4,7 @@
 import { isNativePlatform } from '../db/client';
 import { createMockOcrSource, createMockPhotoSource } from '../db/mock';
 import { generateId } from '../utils/id';
+import { t } from '../i18n';
 
 export interface CreateOcrSourceInput {
   rawText: string;
@@ -62,7 +63,7 @@ export async function createPhotoSource(input: CreatePhotoSourceInput): Promise<
     url: null,
     ocrRawText: input.labelSummary ?? null,
     siteName: null,
-    pageTitle: '写真からレシピ',
+    pageTitle: t('recipe.photo.tabLabel'),
     thumbnailUrl: null,
     capturedAt: input.capturedAt ?? now,
     createdAt: now,

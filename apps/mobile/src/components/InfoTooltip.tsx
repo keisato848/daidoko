@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
+import { t } from '../i18n';
 
 interface InfoTooltipProps {
   label: string;
@@ -25,7 +26,9 @@ export function InfoTooltip({ label, detail }: InfoTooltipProps) {
         onPress={() => setOpen((prev) => !prev)}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel={`${label}の詳細を${open ? '閉じる' : '表示'}`}
+        accessibilityLabel={
+          open ? t('ui.help.detailClose', { label }) : t('ui.help.detailOpen', { label })
+        }
       >
         <Text style={styles.label}>{label}</Text>
         <Info size={14} color={Colors.muted} />

@@ -9,6 +9,7 @@
 import type jaDict from '../ja';
 
 import ai from './ai';
+import ads from './ads';
 import backup from './backup';
 import byok from './byok';
 import common from './common';
@@ -16,13 +17,16 @@ import error from './error';
 import family from './family';
 import home from './home';
 import log from './log';
+import notification from './notification';
 import pantry from './pantry';
 import paywall from './paywall';
 import recipe from './recipe';
 import recipeImport from './recipeImport';
 import settings from './settings';
+import ui from './ui';
 
 const en: typeof jaDict = {
+  ads,
   ai,
   backup,
   byok,
@@ -31,11 +35,13 @@ const en: typeof jaDict = {
   family,
   home,
   log,
+  notification,
   pantry,
   paywall,
   recipe,
   recipeImport,
   settings,
+  ui,
 };
 
 export default en;

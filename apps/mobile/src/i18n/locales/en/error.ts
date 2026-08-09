@@ -34,6 +34,10 @@ const error: typeof ja = {
   generic: 'Something went wrong. Please try again.',
   saveFailed: "Couldn't save",
   loadFailed: "Couldn't load",
+  photoStorageUnavailable: "We couldn't find a place to store photos",
+  imageTooSmall: 'That image is too small',
+  imageTooLarge: 'That image is too large',
+  cameraPermissionDenied: 'Camera access is not allowed',
 };
 
 export default error;

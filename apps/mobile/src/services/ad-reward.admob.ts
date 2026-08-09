@@ -26,6 +26,7 @@ import {
   type AdRewardProvider,
   type RewardedAdResult,
 } from './ad-reward.types';
+import { t } from '../i18n';
 
 const UNIT_ID = ADMOB_REWARDED_UNIT_ID || TestIds.REWARDED;
 
@@ -43,7 +44,7 @@ export class AdMobRewardProvider implements AdRewardProvider {
     }
     const info = await AdsConsent.getConsentInfo();
     if (!info.canRequestAds) {
-      throw new AdUnavailableError('広告の利用に必要な同意が確認できませんでした。');
+      throw new AdUnavailableError(t('ads.consentMissing'));
     }
     await mobileAds().initialize();
     this.initialized = true;
@@ -81,7 +82,7 @@ export class AdMobRewardProvider implements AdRewardProvider {
         ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
           ad.show().catch((error: unknown) => {
             cleanup();
-            reject(error instanceof Error ? error : new Error('広告を表示できませんでした'));
+            reject(error instanceof Error ? error : new Error(t('ads.showFailed')));
           });
         }),
       );
@@ -99,7 +100,7 @@ export class AdMobRewardProvider implements AdRewardProvider {
       cleanups.push(
         ad.addAdEventListener(AdEventType.ERROR, (error: unknown) => {
           cleanup();
-          reject(error instanceof Error ? error : new Error('広告の読み込みに失敗しました'));
+          reject(error instanceof Error ? error : new Error(t('ads.loadFailed')));
         }),
       );
 

@@ -10,6 +10,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
 import { useTimerStore } from '../stores/timer.store';
+import { t } from '../i18n';
 
 interface TimerWidgetProps {
   onFinish?: () => void;
@@ -41,10 +42,10 @@ export function TimerWidget({ onFinish }: TimerWidgetProps) {
   };
 
   const getActionLabel = (): string => {
-    if (status === 'idle') return '開始';
-    if (status === 'running') return '一時停止';
-    if (status === 'paused') return '再開';
-    return 'リセット';
+    if (status === 'idle') return t('ui.timer.start');
+    if (status === 'running') return t('ui.timer.pause');
+    if (status === 'paused') return t('ui.timer.resume');
+    return t('ui.timer.reset');
   };
 
   return (
@@ -58,7 +59,7 @@ export function TimerWidget({ onFinish }: TimerWidgetProps) {
 
       {/* Time display */}
       <Text style={[styles.time, status === 'finished' && styles.timeFinished]}>
-        {status === 'finished' ? '完了！' : formatTime(remainingSec)}
+        {status === 'finished' ? t('ui.timer.finished') : formatTime(remainingSec)}
       </Text>
 
       {/* Controls */}
@@ -83,7 +84,7 @@ export function TimerWidget({ onFinish }: TimerWidgetProps) {
         </Pressable>
         {(status === 'running' || status === 'paused') && (
           <Pressable style={styles.resetButton} onPress={reset}>
-            <Text style={styles.resetButtonText}>リセット</Text>
+            <Text style={styles.resetButtonText}>{t('ui.timer.reset')}</Text>
           </Pressable>
         )}
       </View>

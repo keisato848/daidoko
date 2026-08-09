@@ -56,6 +56,10 @@ const error = {
   generic: '問題が発生しました。もう一度お試しください。',
   saveFailed: '保存できませんでした',
   loadFailed: '読み込めませんでした',
+  photoStorageUnavailable: '写真の保存先を取得できませんでした',
+  imageTooSmall: '画像が小さすぎます',
+  imageTooLarge: '画像サイズが大きすぎます',
+  cameraPermissionDenied: 'カメラの使用が許可されていません',
 };
 
 export default error;

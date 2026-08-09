@@ -40,6 +40,7 @@ const family: typeof ja = {
   saveFailedTitle: 'Please check',
 
   defaultGroupName: 'My kitchen',
+  noProfile: 'No profile set',
 
   validation: {
     displayNameTooLong: 'Display names can be up to 32 characters',

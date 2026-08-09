@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Colors } from '../constants/theme';
 import { extractPrimaryStepTimer, formatStepTimerLabel } from '../utils/stepTimer';
 import { PhotoPickerField } from './PhotoPickerField';
+import { t } from '../i18n';
 
 interface StepRowProps {
   index: number;
@@ -61,14 +62,14 @@ export function StepRow({
         style={[styles.bodyInput, bodyHeight > 0 ? { height: bodyHeight } : undefined]}
         value={body}
         onChangeText={onChangeBody}
-        placeholder="手順を入力..."
+        placeholder={t('ui.step.placeholder')}
         placeholderTextColor={Colors.muted}
         multiline
         textAlignVertical="top"
         onContentSizeChange={(e) => setBodyHeight(e.nativeEvent.contentSize.height)}
       />
       <View style={styles.timerRow}>
-        <Text style={styles.timerLabel}>⏱ タイマー</Text>
+        <Text style={styles.timerLabel}>{t('ui.step.timerLabel')}</Text>
         <TextInput
           style={styles.timerInput}
           value={timerMin != null ? String(timerMin) : ''}
@@ -77,16 +78,19 @@ export function StepRow({
           placeholderTextColor={Colors.muted}
           keyboardType="numeric"
         />
-        <Text style={styles.timerSuffix}>分</Text>
+        <Text style={styles.timerSuffix}>{t('ui.step.minutesSuffix')}</Text>
         {suggestedTimer != null && (
           <Pressable
             style={styles.suggestChip}
             onPress={() => onChangeTimer(suggestedTimer.seconds)}
             hitSlop={6}
-            accessibilityLabel={`${formatStepTimerLabel(suggestedTimer.seconds)}のタイマーを設定`}
+            accessibilityLabel={t('ui.step.suggestLabel', {
+              label: formatStepTimerLabel(suggestedTimer.seconds),
+            })}
           >
             <Text style={styles.suggestChipText}>
-              {formatStepTimerLabel(suggestedTimer.seconds)}を設定
+              {formatStepTimerLabel(suggestedTimer.seconds)}
+              {t('ui.step.suggestSuffix')}
             </Text>
           </Pressable>
         )}
