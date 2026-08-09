@@ -1,0 +1,76 @@
+import type ja from '../ja/home';
+
+const home: typeof ja = {
+  filter: {
+    week: 'This week',
+    month: 'This month',
+    all: 'All',
+  },
+
+  loading: 'Loading your cooking records',
+
+  action: {
+    calendarLabel: 'Calendar',
+    calendar: 'Calendar',
+    galleryLabel: 'Photos',
+    gallery: 'Gallery',
+    shoppingLabel: 'Cart',
+    shopping: 'Shopping list',
+    helpLabel: 'Help',
+  },
+
+  select: {
+    count: { one: '{{count}} selected', other: '{{count}} selected' },
+    all: 'Select all',
+  },
+
+  delete: {
+    title: 'Delete records',
+    confirm: {
+      one: {
+        text: 'Delete {{count}} cooking record? This cannot be undone.',
+        intent:
+          'MUST state that the deletion CANNOT be undone, and MUST state how many records ' +
+          'are affected. MUST NOT soften "cannot be undone" — the user has no other warning.',
+      },
+      other: {
+        text: 'Delete {{count}} cooking records? This cannot be undone.',
+        intent:
+          'MUST state that the deletion CANNOT be undone, and MUST state how many records ' +
+          'are affected. MUST NOT soften "cannot be undone" — the user has no other warning.',
+      },
+    },
+  },
+
+  bonus: {
+    title: {
+      one: '{{count}} free AI recipe is on us',
+      other: '{{count}} free AI recipes are on us',
+    },
+    body: 'Photograph a dish you ate out, and it becomes a recipe you can cook at home.',
+  },
+
+  capture: 'Photograph a dish you ate out',
+
+  wantTitle: 'Want to recreate',
+
+  empty: {
+    allTitle: 'That dish you loved at a restaurant — capture it',
+    allMessage:
+      'One photo is all it takes: AI turns it into a recipe you can cook at home. Tell it how yours turned out, and it gets closer to the original.',
+    weekTitle: 'Nothing recorded this week',
+    monthTitle: 'Nothing recorded this month',
+    filteredMessage: 'Pick a different period, or add a new record.',
+  },
+
+  coach: {
+    fabTitle: 'Records and recipes start here',
+    fabText:
+      'Tap “+” to record a dish you cooked, or add a recipe — by hand, from a URL, or from a photo with AI.',
+    cartTitle: 'Shopping list and pantry',
+    cartText:
+      'Your shopping list, what’s in the kitchen, receipt scanning, and “what can I cook with this” all live behind this cart.',
+  },
+};
+
+export default home;

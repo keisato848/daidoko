@@ -18,6 +18,29 @@ export interface CriticalMessage {
   intent: string;
 }
 
+/**
+ * 数に応じて形が変わる文言。
+ *
+ * 日本語は単複の区別がないので `other` だけで足りるが、**英語は足りない**
+ * （「1 recipe」「2 recipes」）。日本語側も同じ形にしておかないと、
+ * 英語を書く人が「ここは数が入る」と気づけない。
+ *
+ * 使うときは `t()` ではなく `tCount()`。型で取り違えを防ぐ。
+ */
+export interface PluralMessage {
+  one: string;
+  other: string;
+}
+
+/**
+ * 数が変わり、かつ意味が崩れると機能が壊れる文言（削除件数の確認など）。
+ * `one`/`other` それぞれに intent を持たせる — 片方だけ弱まっても事故になる。
+ */
+export interface CriticalPluralMessage {
+  one: CriticalMessage;
+  other: CriticalMessage;
+}
+
 /** A 階層かどうかの判定（parity テストで使う）。 */
 export function isCriticalMessage(value: unknown): value is CriticalMessage {
   return (

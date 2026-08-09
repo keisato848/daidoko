@@ -7,11 +7,15 @@
  */
 import common from './common';
 import error from './error';
+import home from './home';
+import log from './log';
 import recipe from './recipe';
 
 const ja = {
   common,
   error,
+  home,
+  log,
   recipe,
 };
 

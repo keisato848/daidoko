@@ -9,7 +9,8 @@ import { getLocales } from 'expo-localization';
 
 import en from './locales/en';
 import ja from './locales/ja';
-import type { CriticalMessage } from './types';
+import { isCriticalMessage } from './types';
+import type { CriticalMessage, CriticalPluralMessage, PluralMessage } from './types';
 
 export type Locale = 'ja' | 'en';
 
@@ -17,15 +18,31 @@ export type Locale = 'ja' | 'en';
  * 辞書のキーを**型として**取り出す（`'error.offline'` のようなドット記法）。
  *
  * これが無いと、キーの打ち間違いは画面に `[missing "…"]` が出るまで気づけない。
- * 700 件を手で移す以上タイポは必ず出るので、**コンパイルで落とす**。
+ * 900 件超を手で移す以上タイポは必ず出るので、**コンパイルで落とす**。
  */
-type Leaf = string | CriticalMessage;
+type AnyPlural = PluralMessage | CriticalPluralMessage;
+type Leaf = string | CriticalMessage | AnyPlural;
 type LeafPaths<T> = {
   [K in keyof T & string]: T[K] extends Leaf ? K : `${K}.${LeafPaths<T[K]>}`;
 }[keyof T & string];
 
-/** `t()` に渡せるキー。辞書に無い文字列はコンパイルで弾かれる。 */
-export type MessageKey = LeafPaths<typeof ja>;
+/** 数が入る文言だけを取り出す（`tCount()` 専用）。 */
+type PluralPaths<T> = {
+  [K in keyof T & string]: T[K] extends AnyPlural
+    ? K
+    : T[K] extends Leaf
+      ? never
+      : `${K}.${PluralPaths<T[K]>}`;
+}[keyof T & string];
+
+/** `tCount()` に渡せるキー。数の入らない文言を渡すとコンパイルで落ちる。 */
+export type PluralKey = PluralPaths<typeof ja>;
+
+/**
+ * `t()` に渡せるキー。辞書に無い文字列はコンパイルで弾かれる。
+ * **数の入る文言は除く** — `t()` で引くと単複が選ばれないため、`tCount()` を使う。
+ */
+export type MessageKey = Exclude<LeafPaths<typeof ja>, PluralKey>;
 export const SUPPORTED_LOCALES: readonly Locale[] = ['ja', 'en'];
 export const DEFAULT_LOCALE: Locale = 'ja';
 
@@ -41,11 +58,35 @@ export function resolveLocale(languageCodes: readonly string[]): Locale {
   return DEFAULT_LOCALE;
 }
 
-// i18n-js は辞書をネストしたオブジェクトとして扱う。A 階層は { text, intent } の
-// オブジェクトなので、そのままでは t() が文字列を返さない。**text を引く**ヘルパーで包む。
-const i18n = new I18n({ ja, en });
+/**
+ * i18n-js に渡す辞書を作る。**A 階層の `intent` を落として text だけにする。**
+ *
+ * intent は翻訳する人と意味検査のためのもので、i18n-js は知らなくてよい。
+ * 渡してしまうと、複数形を選んだあとに `{text,intent}` を文字列として
+ * 補間しようとして落ちる（`message.match is not a function`）。
+ */
+function toPlainDictionary(node: unknown): unknown {
+  if (isCriticalMessage(node)) return node.text;
+  if (node && typeof node === 'object') {
+    return Object.fromEntries(
+      Object.entries(node as Record<string, unknown>).map(([key, value]) => [
+        key,
+        toPlainDictionary(value),
+      ]),
+    );
+  }
+  return node;
+}
+
+const i18n = new I18n({
+  ja: toPlainDictionary(ja) as Record<string, unknown>,
+  en: toPlainDictionary(en) as Record<string, unknown>,
+});
 i18n.enableFallback = true;
 i18n.defaultLocale = DEFAULT_LOCALE;
+// 日本語に単複の区別はない。既定（英語の規則）のままだと count=1 のとき
+// `one` を探しに行き、日本語辞書には無いので落ちる。**常に other を使う**
+i18n.pluralization.register('ja', () => ['other']);
 // **端末ロケールは import 時に読まない。** 読むと、テストや CI の結果が
 // 実行マシンの言語に左右される（実際 Jest では en と解決され、日本語を
 // 期待するテストが環境しだいで落ちた）。既定は ja のままにして、
@@ -72,25 +113,31 @@ export function setLocale(locale: Locale): void {
   i18n.locale = locale;
 }
 
-/**
- * 文言を引く。
- *
- * A 階層（`{ text, intent }`）は **text を返す**。intent は翻訳者向けの注釈で、
- * 画面には出さない。呼び出し側が A/B を意識しなくて済むよう、ここで吸収する。
- */
-export function t(key: MessageKey, options?: Record<string, unknown>): string {
+function translate(key: string, options?: Record<string, unknown>): string {
   const value = i18n.t(key, options) as unknown;
   if (typeof value === 'string') return value;
-  if (
-    value &&
-    typeof value === 'object' &&
-    typeof (value as { text?: unknown }).text === 'string'
-  ) {
-    return (value as { text: string }).text;
-  }
   // キーが無い場合 i18n-js は "[missing ...]" を返す。握りつぶすと画面に出るまで
   // 気づけないので、そのまま返して目立たせる
   return String(value);
+}
+
+/**
+ * 文言を引く。辞書に無いキー・数の入る文言はコンパイルで弾かれる。
+ * A 階層の `intent` は辞書の構築時に落としてあるので、ここでは常に文字列が返る。
+ */
+export function t(key: MessageKey, options?: Record<string, unknown>): string {
+  return translate(key, options);
+}
+
+/**
+ * 数が入る文言を引く。`{{count}}` に数が入り、英語は単複が選ばれる。
+ *
+ * `t()` と分けているのは**取り違えを型で止める**ため。`t()` に複数形の文言を
+ * 渡すと、i18n-js は `{one, other}` のオブジェクトを返し、画面に
+ * `[object Object]` が出る。
+ */
+export function tCount(key: PluralKey, count: number, options?: Record<string, unknown>): string {
+  return translate(key, { ...options, count });
 }
 
 export { en, ja };
