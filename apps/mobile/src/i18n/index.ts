@@ -140,4 +140,31 @@ export function tCount(key: PluralKey, count: number, options?: Record<string, u
   return translate(key, { ...options, count });
 }
 
+/** 辞書に実在するキーの集合。実行時に決まるキー（Zod のメッセージ）の判定に使う。 */
+const KNOWN_KEYS = new Set<string>();
+(function collectKeys(node: unknown, prefix: string): void {
+  if (typeof node === 'string') {
+    KNOWN_KEYS.add(prefix);
+    return;
+  }
+  if (!node || typeof node !== 'object') return;
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    collectKeys(value, prefix ? `${prefix}.${key}` : key);
+  }
+})(toPlainDictionary(ja), '');
+
+/**
+ * **実行時にキーが決まる**文言を引く。
+ *
+ * Zod のメッセージはスキーマを定義した時点で確定するので、そこで `t()` を
+ * 呼ぶと import 時のロケールに固定される。代わりに辞書のキーを持たせておき、
+ * 画面に出す直前にここで引く。
+ *
+ * 辞書に無い文字列（ライブラリ既定のメッセージなど）はそのまま返す。
+ */
+export function tDynamic(message: string | undefined): string | undefined {
+  if (!message) return undefined;
+  return KNOWN_KEYS.has(message) ? translate(message) : message;
+}
+
 export { en, ja };

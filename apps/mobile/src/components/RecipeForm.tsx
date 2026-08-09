@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 
 import { Colors } from '../constants/theme';
+import { t, tDynamic } from '../i18n';
 import { getTagsForFamily } from '../services/tag.service';
 import { recipeFormSchema, type RecipeFormData } from '../validation/recipe.schema';
 import { FormField } from './FormField';
@@ -51,7 +52,7 @@ export function RecipeForm({
   initialValues,
   onSubmit,
   onCancel,
-  submitLabel = '保存',
+  submitLabel,
   title,
   onFormChange,
 }: RecipeFormProps) {
@@ -112,7 +113,7 @@ export function RecipeForm({
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={onCancel} hitSlop={12}>
-          <Text style={styles.cancelText}>キャンセル</Text>
+          <Text style={styles.cancelText}>{t('common.cancel')}</Text>
         </Pressable>
         <Text style={styles.headerTitle}>{title}</Text>
         <Pressable
@@ -120,7 +121,9 @@ export function RecipeForm({
           onPress={handleSubmit(handleFormSubmit)}
           disabled={saving}
         >
-          <Text style={styles.saveButtonText}>{saving ? '保存中...' : submitLabel}</Text>
+          <Text style={styles.saveButtonText}>
+            {saving ? t('common.saving') : (submitLabel ?? t('common.save'))}
+          </Text>
         </Pressable>
       </View>
 
@@ -132,47 +135,47 @@ export function RecipeForm({
         {/* Basic Info */}
         <View style={styles.section}>
           <FormField
-            label="レシピ名"
+            label={t('recipe.form.titleLabel')}
             required
             value={watchedValues.title}
             onChangeText={(v) => setValue('title', v)}
-            placeholder="例: 肉じゃが"
-            error={errors.title?.message}
+            placeholder={t('recipe.form.titlePlaceholder')}
+            error={tDynamic(errors.title?.message)}
           />
           <FormField
-            label="読みがな"
+            label={t('recipe.form.readingLabel')}
             value={watchedValues.titleReading}
             onChangeText={(v) => setValue('titleReading', v)}
-            placeholder="例: にくじゃが"
+            placeholder={t('recipe.form.readingPlaceholder')}
           />
           <FormField
-            label="説明"
+            label={t('recipe.form.descriptionLabel')}
             value={watchedValues.description}
             onChangeText={(v) => setValue('description', v)}
-            placeholder="レシピの簡単な説明（任意）"
+            placeholder={t('recipe.form.descriptionPlaceholder')}
             multiline
             style={styles.multilineInput}
           />
           <View style={styles.stepperRow}>
             <NumberStepper
-              label="人数"
+              label={t('common.servings')}
               value={watchedValues.servings}
               onChange={(v) => setValue('servings', v)}
-              suffix="人前"
+              suffix={t('recipe.detail.servingsSuffix')}
             />
             <NumberStepper
-              label="調理時間"
+              label={t('common.cookTime')}
               value={watchedValues.cookTimeMin}
               onChange={(v) => setValue('cookTimeMin', v)}
               step={5}
-              suffix="分"
+              suffix={t('recipe.form.minutesSuffix')}
             />
           </View>
         </View>
 
         {/* Cover Photo */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>写真</Text>
+          <Text style={styles.sectionTitle}>{t('recipe.form.photoSection')}</Text>
           <PhotoPickerField
             variant="cover"
             value={watchedValues.coverPhotoPath || undefined}
@@ -182,9 +185,9 @@ export function RecipeForm({
 
         {/* Ingredients */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>材料</Text>
+          <Text style={styles.sectionTitle}>{t('common.ingredients')}</Text>
           {errors.ingredients?.message && (
-            <Text style={styles.sectionError}>{errors.ingredients.message}</Text>
+            <Text style={styles.sectionError}>{tDynamic(errors.ingredients.message)}</Text>
           )}
           {ingredientFields.map((field, index) => (
             <IngredientRow
@@ -207,14 +210,16 @@ export function RecipeForm({
             style={styles.addRowButton}
             onPress={() => appendIngredient({ name: '', amount: '', groupLabel: '', note: '' })}
           >
-            <Text style={styles.addRowButtonText}>＋ 材料を追加</Text>
+            <Text style={styles.addRowButtonText}>{t('recipe.form.addIngredient')}</Text>
           </Pressable>
         </View>
 
         {/* Steps */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>手順</Text>
-          {errors.steps?.message && <Text style={styles.sectionError}>{errors.steps.message}</Text>}
+          <Text style={styles.sectionTitle}>{t('common.steps')}</Text>
+          {errors.steps?.message && (
+            <Text style={styles.sectionError}>{tDynamic(errors.steps.message)}</Text>
+          )}
           {stepFields.map((field, index) => (
             <StepRow
               key={field.id}
@@ -232,7 +237,7 @@ export function RecipeForm({
             style={styles.addRowButton}
             onPress={() => appendStep({ body: '', timerSec: undefined, photoPath: undefined })}
           >
-            <Text style={styles.addRowButtonText}>＋ 手順を追加</Text>
+            <Text style={styles.addRowButtonText}>{t('recipe.form.addStep')}</Text>
           </Pressable>
         </View>
 

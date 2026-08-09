@@ -2,8 +2,11 @@
  * 数と日付の扱い。**日本語で書いていると気づけない**ところなので、
  * 英語ロケールでの出方を固定しておく。
  */
-import { setLocale, t, tCount } from '../index';
+import type { z } from 'zod';
+
+import { setLocale, t, tCount, tDynamic } from '../index';
 import { formatMonthDay, formatMonthLabel, formatYearMonth } from '../format';
+import { recipeFormSchema } from '../../validation/recipe.schema';
 
 afterEach(() => setLocale('ja'));
 
@@ -82,6 +85,61 @@ describe('日付の書式', () => {
       const label = formatMonthLabel(new Date(2026, month, 1));
       expect(label).toMatch(/^[A-Z][a-z]+$/);
     }
+  });
+});
+
+describe('入力の検証メッセージ（Zod）', () => {
+  /**
+   * スキーマは辞書のキーを持つ。**キーを打ち間違えると画面に
+   * `recipe.validation.titleRequired` がそのまま出る**ので、
+   * 実際に解決できることを確かめる。
+   */
+  // 必須項目はすべて渡す。抜けがあると Zod 既定の "Required" が混ざり、
+  // **自分たちが書いたメッセージを検査できなくなる**
+  const emptyRecipe = {
+    title: '',
+    titleReading: '',
+    description: '',
+    ingredients: [],
+    steps: [],
+    tags: [],
+  };
+  const longFields = {
+    ...emptyRecipe,
+    title: 'あ'.repeat(101),
+    ingredients: [{ groupLabel: '', name: 'あ'.repeat(51), amount: '', note: '' }],
+    steps: [{ body: 'あ'.repeat(501) }],
+  };
+  const emptyRows = {
+    ...emptyRecipe,
+    title: 'テスト',
+    ingredients: [{ groupLabel: '', name: '', amount: '', note: '' }],
+    steps: [{ body: '' }],
+  };
+
+  it('スキーマのメッセージはすべて辞書のキーで、両ロケールで解決できる', () => {
+    const messages = [emptyRecipe, longFields, emptyRows].flatMap((input) => {
+      const result = recipeFormSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      return (result as z.SafeParseError<unknown>).error.issues.map((issue) => issue.message);
+    });
+    // 8 種類すべてを踏むこと（踏まないと検査したことにならない）
+    expect(new Set(messages).size).toBe(8);
+
+    for (const locale of ['ja', 'en'] as const) {
+      setLocale(locale);
+      for (const message of messages) {
+        const resolved = tDynamic(message);
+        // 引けなかった場合 tDynamic はキーをそのまま返す
+        expect(resolved).not.toBe(message);
+        expect(resolved).not.toContain('missing');
+      }
+    }
+  });
+
+  it('辞書に無い文字列はそのまま返す（ライブラリ既定のメッセージを壊さない）', () => {
+    expect(tDynamic('Expected string, received number')).toBe('Expected string, received number');
+    expect(tDynamic(undefined)).toBeUndefined();
   });
 });
 

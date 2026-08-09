@@ -120,6 +120,40 @@ const backup = {
     title: '保存済みバックアップ',
     empty: 'バックアップはまだありません',
   },
+
+  /**
+   * ファイルの検証で出る失敗。**C 階層**（意味が多少ずれても、
+   * ユーザーの取れる行動は「別のファイルを試す／問い合わせる」で変わらない）。
+   * ただし英語ロケールで日本語を出さないために辞書へは載せる。
+   */
+  invalid: {
+    notNative: 'バックアップ・復元はネイティブアプリでのみ利用できます',
+    noStorage: 'ファイル保存領域を取得できませんでした',
+    format: 'バックアップ形式が不正です',
+    unsupportedFormat: '対応していないバックアップ形式です',
+    exportedAt: 'バックアップ日時が不正です',
+    tables: 'バックアップテーブルが不正です',
+    tableRows: '{{table}} のバックアップ内容が不正です',
+    photoEntry: '写真バックアップ情報が不正です',
+    photoPath: '写真バックアップのパスが不正です',
+    photoId: '写真バックアップのIDが不正です',
+    photoFileName: '写真バックアップのファイル名が不正です',
+    photoOriginalPath: '写真バックアップの元パスが不正です',
+    recipePhotoEntry: 'レシピ写真バックアップ情報が不正です',
+    recipePhotoKind: 'レシピ写真バックアップの種別が不正です',
+    recipePhotoPath: 'レシピ写真バックアップのパスが不正です',
+    recipePhotoId: 'レシピ写真バックアップのIDが不正です',
+    recipePhotoFileName: 'レシピ写真バックアップのファイル名が不正です',
+    recipePhotoOriginalPath: 'レシピ写真バックアップの元パスが不正です',
+    migrationFormat: '対応していない移行バックアップ形式です',
+    migrationExportedAt: '移行バックアップ日時が不正です',
+    migrationData: '移行バックアップのデータが不正です',
+    photoList: '写真バックアップ一覧が不正です',
+    recipePhotoList: 'レシピ写真バックアップ一覧が不正です',
+    base64: 'Base64 データが不正です',
+    manifestMissing: '移行バックアップの manifest が見つかりません',
+    nothingToRestore: '復元できるバックアップがありません',
+  },
 };
 
 export default backup;

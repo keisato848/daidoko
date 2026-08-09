@@ -1,6 +1,30 @@
 import type ja from '../ja/recipe';
 
 const recipe: typeof ja = {
+  validation: {
+    ingredientNameRequired: 'An ingredient name is required',
+    ingredientNameTooLong: 'Use 50 characters or fewer',
+    stepRequired: 'A step is required',
+    stepTooLong: 'Use 500 characters or fewer',
+    titleRequired: 'A recipe name is required',
+    titleTooLong: 'Use 100 characters or fewer',
+    ingredientsRequired: 'Add at least one ingredient',
+    stepsRequired: 'Add at least one step',
+  },
+
+  form: {
+    titleLabel: 'Recipe name',
+    titlePlaceholder: 'e.g. Beef stew',
+    readingLabel: 'Reading',
+    readingPlaceholder: 'e.g. beef stew',
+    descriptionLabel: 'Description',
+    descriptionPlaceholder: 'A short description (optional)',
+    minutesSuffix: 'min',
+    photoSection: 'Photo',
+    addIngredient: '＋ Add ingredient',
+    addStep: '＋ Add step',
+  },
+
   detail: {
     loading: 'Loading recipe',
     notFoundTitle: 'Recipe not found',
@@ -209,6 +233,13 @@ const recipe: typeof ja = {
     commentPlaceholder: 'e.g. Mapo tofu at Chen’s — extra numbing',
     commentCancel: 'Cancel',
     commentConfirm: 'Create recipe',
+
+    noImage: 'No image selected',
+    labelSummary: 'Recipe created with AI',
+    evidenceSummary: 'Created from a photo with AI',
+    fallback: "We couldn't reach the AI, so we drafted something simple on your device",
+    fallbackWithReason:
+      "We couldn't reach the AI, so we drafted something simple on your device: {{reason}}",
   },
 
   cook: {

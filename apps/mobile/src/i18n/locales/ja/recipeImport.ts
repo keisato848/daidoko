@@ -66,6 +66,12 @@ const recipeImport = {
       'カメラ文字認識は Android アプリで先行対応中です。\n\nWeb ブラウザからお使いの場合は、手動入力をご利用ください。',
     manualLabel: '代わりに手動入力する',
     manualAction: '手動で入力する',
+
+    appliedToForm: '画像内の文字を読み取り、入力フォームに反映しました',
+    readButUnconvertible: '画像内の文字は読めましたが、レシピ入力形式に変換できませんでした',
+    tooLittleText: '画像内の文字量が少ないため、画像ラベルから下書きしました',
+    skipped: '画像内テキストの読み取りをスキップしました',
+    skippedWithReason: '画像内テキストの読み取りをスキップしました: {{reason}}',
   },
 
   /** レシピサイトの URL から取り込み。 */

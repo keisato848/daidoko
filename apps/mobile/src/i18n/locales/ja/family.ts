@@ -41,6 +41,21 @@ const family = {
 
   saveFailed: '保存に失敗しました',
   saveFailedTitle: '確認してください',
+
+  /** 既定のグループ名（初回に作られる）。 */
+  defaultGroupName: 'わたしの台所',
+
+  /** 入力の検証。数値は文に埋めず {{max}} で渡す（§3-4）。 */
+  validation: {
+    displayNameTooLong: '表示名は32文字以内で入力してください',
+    groupNameRequired: 'グループ名を入力してください',
+    groupNameTooLong: 'グループ名は40文字以内で入力してください',
+    memberNameRequired: 'メンバー名を入力してください',
+    memberNameTooLong: 'メンバー名は32文字以内で入力してください',
+    cannotRemoveOwner: 'オーナーは削除できません',
+    inviteCodeRequired: '招待コードを入力してください',
+    inviteCodeNotFound: '招待コードが見つかりません',
+  },
 };
 
 export default family;

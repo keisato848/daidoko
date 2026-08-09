@@ -122,7 +122,7 @@ export async function runRecipePhotoAgent(
   input: RecipePhotoAgentInput,
   dependencies: RecipePhotoAgentDependencies = {},
 ): Promise<AgentResult<RecipePhotoAgentOutput>> {
-  if (!input.imageUri.trim()) return errorResult('画像が選択されていません');
+  if (!input.imageUri.trim()) return errorResult(t('recipe.photo.noImage'));
 
   const preprocessImage = dependencies.preprocessImage ?? defaultPreprocessImage;
   const visionWarnings: string[] = [];
@@ -149,11 +149,11 @@ export async function runRecipePhotoAgent(
           draft: vision.draft,
           confidence: vision.confidence,
           labels: [],
-          labelSummary: 'AIでレシピ作成',
+          labelSummary: t('recipe.photo.labelSummary'),
           warnings: vision.warnings,
           imageUri: input.imageUri,
           ...(visionImageUri !== input.imageUri && { processedImageUri: visionImageUri }),
-          evidenceSummary: 'AIで写真から作成',
+          evidenceSummary: t('recipe.photo.evidenceSummary'),
           source: 'cloud',
         },
       };
@@ -162,11 +162,7 @@ export async function runRecipePhotoAgent(
       // error instead of falling back to a misleading on-device heuristic draft.
       const kind = (error as { kind?: string } | null)?.kind;
       if (kind === 'not_a_dish') {
-        return errorResult(
-          error instanceof Error
-            ? error.message
-            : '写真から料理を認識できませんでした。料理がはっきり写った写真でお試しください。',
-        );
+        return errorResult(error instanceof Error ? error.message : t('error.notADish'));
       }
       // Transient / other failures: degrade gracefully to the on-device path.
       // 端末内フォールバックも失敗したときに本当の原因を出せるよう、理由を控えておく。
@@ -176,8 +172,8 @@ export async function runRecipePhotoAgent(
       };
       visionWarnings.push(
         error instanceof Error
-          ? `AIにつながらなかったので、端末内でかんたんに下書きしました: ${error.message}`
-          : 'AIにつながらなかったので、端末内でかんたんに下書きしました',
+          ? t('recipe.photo.fallbackWithReason', { reason: error.message })
+          : t('recipe.photo.fallback'),
       );
     }
   }
@@ -226,21 +222,21 @@ export async function runRecipePhotoAgent(
                   ...warnings,
                   ...recognized.warnings,
                   ...parsed.warnings,
-                  '画像内の文字を読み取り、入力フォームに反映しました',
+                  t('recipeImport.ocr.appliedToForm'),
                   ...labelInferred.warnings,
                 ],
               },
             };
           }
-          warnings.push('画像内の文字は読めましたが、レシピ入力形式に変換できませんでした');
+          warnings.push(t('recipeImport.ocr.readButUnconvertible'));
         } else if (recognized.rawText.trim()) {
-          warnings.push('画像内の文字量が少ないため、画像ラベルから下書きしました');
+          warnings.push(t('recipeImport.ocr.tooLittleText'));
         }
       } catch (error) {
         warnings.push(
           error instanceof Error
-            ? `画像内テキストの読み取りをスキップしました: ${error.message}`
-            : '画像内テキストの読み取りをスキップしました',
+            ? t('recipeImport.ocr.skippedWithReason', { reason: error.message })
+            : t('recipeImport.ocr.skipped'),
         );
       }
     }

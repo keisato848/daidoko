@@ -57,6 +57,12 @@ const recipeImport: typeof ja = {
       'Camera text recognition is available first in the Android app.\n\nIn a web browser, please enter the recipe by hand.',
     manualLabel: 'Enter it by hand instead',
     manualAction: 'Enter by hand',
+
+    appliedToForm: 'Read the text in the image and filled in the form',
+    readButUnconvertible: "We read the text but couldn't turn it into a recipe",
+    tooLittleText: 'There was little text in the image, so we drafted from image labels instead',
+    skipped: 'Skipped reading text from the image',
+    skippedWithReason: 'Skipped reading text from the image: {{reason}}',
   },
 
   url: {

@@ -38,6 +38,19 @@ const family: typeof ja = {
 
   saveFailed: 'Saving failed',
   saveFailedTitle: 'Please check',
+
+  defaultGroupName: 'My kitchen',
+
+  validation: {
+    displayNameTooLong: 'Display names can be up to 32 characters',
+    groupNameRequired: 'Enter a group name',
+    groupNameTooLong: 'Group names can be up to 40 characters',
+    memberNameRequired: 'Enter a member name',
+    memberNameTooLong: 'Member names can be up to 32 characters',
+    cannotRemoveOwner: "The owner can't be removed",
+    inviteCodeRequired: 'Enter an invite code',
+    inviteCodeNotFound: 'That invite code was not found',
+  },
 };
 
 export default family;

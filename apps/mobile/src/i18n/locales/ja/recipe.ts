@@ -4,6 +4,36 @@
 import type { CriticalMessage, CriticalPluralMessage, PluralMessage } from '../../types';
 
 const recipe = {
+  /**
+   * 入力の検証（Zod）。**スキーマにはここのキーを入れておき**、
+   * 画面に出す直前に tDynamic() で引く（スキーマ定義時に訳すと
+   * import 時のロケールで固定されるため）。
+   */
+  validation: {
+    ingredientNameRequired: '材料名は必須です',
+    ingredientNameTooLong: '50文字以内で入力してください',
+    stepRequired: '手順は必須です',
+    stepTooLong: '500文字以内で入力してください',
+    titleRequired: 'レシピ名は必須です',
+    titleTooLong: '100文字以内で入力してください',
+    ingredientsRequired: '材料を1つ以上追加してください',
+    stepsRequired: '手順を1つ以上追加してください',
+  },
+
+  /** レシピ入力フォーム（新規・編集・取り込みの確認で共通）。 */
+  form: {
+    titleLabel: 'レシピ名',
+    titlePlaceholder: '例: 肉じゃが',
+    readingLabel: '読みがな',
+    readingPlaceholder: '例: にくじゃが',
+    descriptionLabel: '説明',
+    descriptionPlaceholder: 'レシピの簡単な説明（任意）',
+    minutesSuffix: '分',
+    photoSection: '写真',
+    addIngredient: '＋ 材料を追加',
+    addStep: '＋ 手順を追加',
+  },
+
   /** S05 レシピ詳細。 */
   detail: {
     loading: 'レシピを読み込んでいます',
@@ -217,6 +247,12 @@ const recipe = {
     commentPlaceholder: '例: ○○屋の麻婆豆腐。しびれ強め',
     commentCancel: 'やめる',
     commentConfirm: 'レシピをつくる',
+
+    noImage: '画像が選択されていません',
+    labelSummary: 'AIでレシピ作成',
+    evidenceSummary: 'AIで写真から作成',
+    fallback: 'AIにつながらなかったので、端末内でかんたんに下書きしました',
+    fallbackWithReason: 'AIにつながらなかったので、端末内でかんたんに下書きしました: {{reason}}',
   },
 
   /** S06 料理中モード。 */
