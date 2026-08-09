@@ -25,6 +25,7 @@ import {
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
+import { t, tCount } from '../../../src/i18n';
 import {
   createClientImageLabeler,
   isClientImageLabelingAvailable,
@@ -64,11 +65,11 @@ type Phase = 'select' | 'processing' | 'preview';
 // サーバー推論にフォールバックする。web だけは手動入力へ誘導する。
 const isNative = Platform.OS !== 'web';
 
-const CONFIDENCE_LABEL: Record<RecipePhotoAgentOutput['confidence'], string> = {
-  high: 'バッチリ読み取れました',
-  medium: 'だいたい読み取れました',
-  low: 'ざっくり読み取りました',
-};
+function confidenceLabel(confidence: RecipePhotoAgentOutput['confidence']): string {
+  if (confidence === 'high') return t('recipe.photo.confidence.high');
+  if (confidence === 'medium') return t('recipe.photo.confidence.medium');
+  return t('recipe.photo.confidence.low');
+}
 
 export default function ImportPhotoScreen() {
   const router = useRouter();
@@ -153,7 +154,7 @@ export default function ImportPhotoScreen() {
       );
 
       if (!result.ok || !result.data) {
-        setErrorMsg(result.error?.message ?? '写真からレシピをつくれませんでした');
+        setErrorMsg(result.error?.message ?? t('error.photoRecipeFailed'));
         setPhase('select');
         return;
       }
@@ -168,7 +169,7 @@ export default function ImportPhotoScreen() {
       }
       // Surface confidence + caveats as a dismissible toast rather than a
       // cramped header banner over the form.
-      const toast = [CONFIDENCE_LABEL[result.data.confidence], ...result.data.warnings]
+      const toast = [confidenceLabel(result.data.confidence), ...result.data.warnings]
         .filter(Boolean)
         .join(' / ');
       setToastMessage(toast);
@@ -195,7 +196,7 @@ export default function ImportPhotoScreen() {
         setPendingPhoto(photo);
       } catch (error) {
         if (error instanceof PhotoCaptureCancelledError) return;
-        setErrorMsg(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
+        setErrorMsg(error instanceof Error ? error.message : t('error.photoRecipeFailed'));
       }
     },
     [freemium, router],
@@ -211,7 +212,7 @@ export default function ImportPhotoScreen() {
     try {
       await inferPhoto(photo, { allowCloudInference: true });
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : '写真からレシピをつくれませんでした');
+      setErrorMsg(error instanceof Error ? error.message : t('error.photoRecipeFailed'));
       setPhase('select');
     }
   }, [pendingPhoto, inferPhoto]);
@@ -266,9 +267,7 @@ export default function ImportPhotoScreen() {
       }
 
       setToastMessage(
-        logKind === 'eaten_out'
-          ? 'レシピを保存し、再現したいに追加しました'
-          : 'レシピを保存しました',
+        logKind === 'eaten_out' ? t('recipe.photo.savedAndPinned') : t('recipe.photo.saved'),
       );
       // 一覧ではなく、いま作ったレシピへ着地する（探させない）
       setTimeout(() => router.replace(`/(tabs)/recipes/${recipeId}`), 1500);
@@ -284,8 +283,8 @@ export default function ImportPhotoScreen() {
           <View style={styles.placeToggle}>
             {(
               [
-                ['eaten_out', 'お店で食べた'],
-                ['cooked', '家で作った'],
+                ['eaten_out', t('log.kind.eatenOut')],
+                ['cooked', t('log.kind.cooked')],
               ] as const
             ).map(([value, label]) => (
               <Pressable
@@ -308,7 +307,7 @@ export default function ImportPhotoScreen() {
               style={styles.placeInput}
               value={placeName}
               onChangeText={setPlaceName}
-              placeholder="お店の名前（任意）"
+              placeholder={t('recipe.photo.placeNamePlaceholder')}
               placeholderTextColor={Colors.muted}
               maxLength={60}
             />
@@ -323,8 +322,8 @@ export default function ImportPhotoScreen() {
           }
           onSubmit={handleSave}
           onCancel={() => setPhase('select')}
-          title="できたレシピを確認・編集"
-          submitLabel="保存"
+          title={t('recipe.photo.formTitle')}
+          submitLabel={t('common.save')}
         />
         <Toast
           message={toastMessage ?? ''}
@@ -336,7 +335,9 @@ export default function ImportPhotoScreen() {
     );
   }
 
-  const unlimitedLabel = freemium?.isByok ? '自分のAIキー・使い放題' : 'プレミアム・使い放題';
+  const unlimitedLabel = freemium?.isByok
+    ? t('recipe.photo.unlimitedByok')
+    : t('recipe.photo.unlimitedPremium');
 
   return (
     <View style={styles.container}>
@@ -344,7 +345,7 @@ export default function ImportPhotoScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>写真からレシピ</Text>
+        <Text style={styles.headerTitle}>{t('recipe.photo.tabLabel')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -355,11 +356,8 @@ export default function ImportPhotoScreen() {
 
         {isNative ? (
           <>
-            <Text style={styles.title}>写真からレシピをつくろう</Text>
-            <Text style={styles.description}>
-              料理の写真をえらぶだけで、材料・分量・手順をAIが考えてレシピの下書きをつくります。
-              お店の名前や味の感想をひとこと添えると、より近い仕上がりになります。
-            </Text>
+            <Text style={styles.title}>{t('recipe.photo.title')}</Text>
+            <Text style={styles.description}>{t('recipe.photo.description')}</Text>
 
             {freemium &&
               (freemium.isPremium || freemium.isByok ? (
@@ -367,7 +365,7 @@ export default function ImportPhotoScreen() {
               ) : (
                 <Pressable onPress={() => router.push('/recipes/paywall')} hitSlop={8}>
                   <Text style={styles.quotaText}>
-                    今日の無料作成：あと {freemium.remaining} 回 ・ 使い放題にする
+                    {tCount('recipe.photo.quotaRemaining', freemium.remaining)}
                   </Text>
                 </Pressable>
               ))}
@@ -377,65 +375,57 @@ export default function ImportPhotoScreen() {
             )}
 
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
-            <Text style={styles.disclosureText}>
-              写真は解析のためサーバー（AI 提供元）に送信されます。保存はされません。
-            </Text>
+            <Text style={styles.disclosureText}>{t('recipe.photo.disclosure')}</Text>
             {!providerReady && (
-              <Text style={styles.noticeText}>
-                インターネットにつながっていると、写真からレシピをつくれます
-              </Text>
+              <Text style={styles.noticeText}>{t('recipe.photo.offlineNotice')}</Text>
             )}
 
             {phase === 'processing' ? (
               <View style={styles.processingBox}>
                 <ActivityIndicator size="large" color={Colors.gold} />
-                <Text style={styles.processingText}>写真からレシピをつくっています...</Text>
+                <Text style={styles.processingText}>{t('recipe.photo.processing')}</Text>
               </View>
             ) : (
               <View style={styles.actionGrid}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="カメラで撮影"
+                  accessibilityLabel={t('common.takePhoto')}
                   style={styles.primaryButton}
                   onPress={() => handleRead('camera')}
                 >
                   <Camera size={18} color={Colors.bg} />
-                  <Text style={styles.primaryButtonText}>カメラで撮影</Text>
+                  <Text style={styles.primaryButtonText}>{t('common.takePhoto')}</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="ギャラリーから選ぶ"
+                  accessibilityLabel={t('common.pickFromGallery')}
                   style={styles.secondaryButton}
                   onPress={() => handleRead('gallery')}
                 >
                   <ImageIcon size={18} color={Colors.gold} />
-                  <Text style={styles.secondaryButtonText}>ギャラリーから選ぶ</Text>
+                  <Text style={styles.secondaryButtonText}>{t('common.pickFromGallery')}</Text>
                 </Pressable>
               </View>
             )}
           </>
         ) : (
           <>
-            <Text style={styles.title}>写真からのレシピづくりはアプリでつかえます</Text>
-            <Text style={styles.description}>
-              写真からの下書き作成はスマホアプリ（iOS / Android）でお使いいただけます。
-              {'\n\n'}
-              Web ブラウザからお使いの場合は、手動入力をご利用ください。
-            </Text>
+            <Text style={styles.title}>{t('recipe.photo.webTitle')}</Text>
+            <Text style={styles.description}>{t('recipe.photo.webDescription')}</Text>
           </>
         )}
 
         <View style={styles.divider} />
 
-        <Text style={styles.altLabel}>代わりに手動入力する</Text>
+        <Text style={styles.altLabel}>{t('recipe.photo.manualLabel')}</Text>
         <Pressable style={styles.manualButton} onPress={handleManual}>
           <PenLine size={18} color={Colors.bg} />
-          <Text style={styles.manualButtonText}>手動で入力する</Text>
+          <Text style={styles.manualButtonText}>{t('recipe.photo.manualAction')}</Text>
         </Pressable>
         {capturedPhoto && phase !== 'processing' && (
           <Pressable style={styles.retryButton} onPress={() => setCapturedPhoto(null)}>
             <RotateCcw size={14} color={Colors.muted} />
-            <Text style={styles.retryButtonText}>画像をクリア</Text>
+            <Text style={styles.retryButtonText}>{t('recipe.photo.clearImage')}</Text>
           </Pressable>
         )}
       </ScrollView>
@@ -451,15 +441,13 @@ export default function ImportPhotoScreen() {
             {pendingPhoto && (
               <Image source={{ uri: pendingPhoto.localPath }} style={styles.modalImage} />
             )}
-            <Text style={styles.modalTitle}>ひとことコメント（任意）</Text>
-            <Text style={styles.modalHint}>
-              お店の名前や味の感想を書くと、より近いレシピになります。
-            </Text>
+            <Text style={styles.modalTitle}>{t('recipe.photo.commentTitle')}</Text>
+            <Text style={styles.modalHint}>{t('recipe.photo.commentHint')}</Text>
             <TextInput
               style={styles.modalInput}
               value={notes}
               onChangeText={setNotes}
-              placeholder="例: ○○屋の麻婆豆腐。しびれ強め"
+              placeholder={t('recipe.photo.commentPlaceholder')}
               placeholderTextColor={Colors.muted}
               maxLength={1000}
               multiline
@@ -467,10 +455,10 @@ export default function ImportPhotoScreen() {
             />
             <View style={styles.modalButtons}>
               <Pressable style={styles.modalCancelButton} onPress={handleCancelComment}>
-                <Text style={styles.modalCancelText}>やめる</Text>
+                <Text style={styles.modalCancelText}>{t('recipe.photo.commentCancel')}</Text>
               </Pressable>
               <Pressable style={styles.modalConfirmButton} onPress={handleConfirmComment}>
-                <Text style={styles.modalConfirmText}>レシピをつくる</Text>
+                <Text style={styles.modalConfirmText}>{t('recipe.photo.commentConfirm')}</Text>
               </Pressable>
             </View>
           </View>

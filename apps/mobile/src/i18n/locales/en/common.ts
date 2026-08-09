@@ -22,6 +22,7 @@ const common: typeof ja = {
   takePhoto: 'Take a photo',
   pickFromGallery: 'Choose from library',
   deletePhoto: 'Remove photo',
+  photoAddFailed: "We couldn't add that photo",
 
   all: 'All',
   unknown: 'Unknown',

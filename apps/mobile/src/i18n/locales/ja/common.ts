@@ -29,6 +29,7 @@ const common = {
   takePhoto: 'カメラで撮影',
   pickFromGallery: 'ギャラリーから選ぶ',
   deletePhoto: '写真を削除',
+  photoAddFailed: '写真を追加できませんでした',
 
   all: 'すべて',
   unknown: '不明',

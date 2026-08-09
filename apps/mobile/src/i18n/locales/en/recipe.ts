@@ -136,7 +136,98 @@ const recipe: typeof ja = {
     },
   },
 
+  photo: {
+    title: 'Turn a photo into a recipe',
+    tabLabel: 'Photo to recipe',
+    description:
+      'Pick a photo of a dish and AI works out the ingredients, amounts and steps as a draft recipe. Add the restaurant name or a note about the taste and it lands closer to the original.',
+    processing: 'Creating a recipe from your photo…',
+
+    confidence: {
+      high: 'Read it clearly',
+      medium: 'Read most of it',
+      low: 'Rough reading',
+    },
+
+    disclosure: {
+      text: 'Your photo is sent to our server (and the AI provider) for analysis. It is not stored.',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    },
+
+    offlineNotice: 'Connect to the internet to create recipes from photos',
+
+    quotaRemaining: {
+      one: '{{count}} free creation left today · go unlimited',
+      other: '{{count}} free creations left today · go unlimited',
+    },
+    unlimitedByok: 'Your own AI key — unlimited',
+    unlimitedPremium: 'Premium — unlimited',
+
+    placeNamePlaceholder: 'Restaurant name (optional)',
+    formTitle: 'Check and edit your recipe',
+
+    savedAndPinned: 'Recipe saved and added to “Want to recreate”',
+    saved: 'Recipe saved',
+
+    webTitle: 'Photo recipes work in the app',
+    webDescription:
+      'Creating a draft from a photo is available in the mobile app (iOS / Android).\n\nIn a web browser, please enter the recipe by hand.',
+    manualLabel: 'Enter it by hand instead',
+    manualAction: 'Enter by hand',
+    clearImage: 'Clear image',
+
+    commentTitle: 'Add a note (optional)',
+    commentHint: 'Mention the restaurant or how it tasted and the recipe lands closer.',
+    commentPlaceholder: 'e.g. Mapo tofu at Chen’s — extra numbing',
+    commentCancel: 'Cancel',
+    commentConfirm: 'Create recipe',
+  },
+
   refine: {
+    title: 'Get closer to the restaurant taste',
+    summaryLabel: 'What the AI changed',
+    diffMeta: 'Recipe details',
+    badge: {
+      added: 'Added',
+      removed: 'Removed',
+      changed: 'Changed',
+    },
+
+    caution: {
+      text: 'These are AI adjustments, and ingredients may have been added. If you have food allergies, check every ingredient before saving.',
+      intent:
+        'MUST warn that the AI MAY HAVE ADDED ingredients, and MUST tell the user to check every ' +
+        'ingredient before saving. The app does NOT detect allergens — this sentence is the only ' +
+        'warning. MUST NOT be softened to a generic "AI-generated" note.',
+    },
+
+    noticeNoChange:
+      'Nothing in the recipe changed. Being more specific about the taste often helps.',
+
+    feedbackLabel: 'How did it turn out?',
+    feedbackPlaceholder: 'Much sweeter than the restaurant’s, and not thick enough…',
+    feedbackHint:
+      'The more you say about the taste (sweet, spicy, rich, bland), the better it can adjust.',
+
+    photoLabel: 'Photo of what you cooked (optional)',
+    photoHint: 'Browning, thickness and colour come across far better in a photo than in words.',
+    targetLabel: 'Using the restaurant photo as the target',
+    targetHint: 'Taken automatically from your “Ate out” record',
+
+    retry: 'Start over',
+    saveThis: 'Save these changes',
+    processing: 'AI is adjusting…',
+    start: 'Adjust with AI',
+    updated: 'Recipe updated',
+
+    notFound: 'Recipe not found',
+    genericFailed: "We couldn't adjust the recipe. Please try again.",
+    saveFailedTitle: "Couldn't save",
+    saveFailedBody: "We couldn't save the recipe",
+
     diffGuarantee: {
       text: 'Anything not listed here is unchanged. Please review before saving.',
       intent:

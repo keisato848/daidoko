@@ -142,7 +142,104 @@ const recipe = {
     },
   },
 
+  /** S12 写真からレシピ（主役の入口）。 */
+  photo: {
+    title: '写真からレシピをつくろう',
+    tabLabel: '写真からレシピ',
+    description:
+      '料理の写真をえらぶだけで、材料・分量・手順をAIが考えてレシピの下書きをつくります。お店の名前や味の感想をひとこと添えると、より近い仕上がりになります。',
+    processing: '写真からレシピをつくっています...',
+
+    confidence: {
+      high: 'バッチリ読み取れました',
+      medium: 'だいたい読み取れました',
+      low: 'ざっくり読み取りました',
+    },
+
+    /** 送信先の開示。**書かないと不当な収集になる**ので A 階層。 */
+    disclosure: {
+      text: '写真は解析のためサーバー（AI 提供元）に送信されます。保存はされません。',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    } satisfies CriticalMessage,
+
+    offlineNotice: 'インターネットにつながっていると、写真からレシピをつくれます',
+
+    quotaRemaining: {
+      one: '今日の無料作成：あと {{count}} 回 ・ 使い放題にする',
+      other: '今日の無料作成：あと {{count}} 回 ・ 使い放題にする',
+    } satisfies PluralMessage,
+    unlimitedByok: '自分のAIキー・使い放題',
+    unlimitedPremium: 'プレミアム・使い放題',
+
+    placeNamePlaceholder: 'お店の名前（任意）',
+    formTitle: 'できたレシピを確認・編集',
+
+    savedAndPinned: 'レシピを保存し、再現したいに追加しました',
+    saved: 'レシピを保存しました',
+
+    webTitle: '写真からのレシピづくりはアプリでつかえます',
+    webDescription:
+      '写真からの下書き作成はスマホアプリ（iOS / Android）でお使いいただけます。\n\nWeb ブラウザからお使いの場合は、手動入力をご利用ください。',
+    manualLabel: '代わりに手動入力する',
+    manualAction: '手動で入力する',
+    clearImage: '画像をクリア',
+
+    commentTitle: 'ひとことコメント（任意）',
+    commentHint: 'お店の名前や味の感想を書くと、より近いレシピになります。',
+    commentPlaceholder: '例: ○○屋の麻婆豆腐。しびれ強め',
+    commentCancel: 'やめる',
+    commentConfirm: 'レシピをつくる',
+  },
+
   refine: {
+    /** 差分の見出し・バッジ。 */
+    title: 'お店の味に近づける',
+    summaryLabel: 'AI が直したところ',
+    diffMeta: 'レシピ情報',
+    badge: {
+      added: '追加',
+      removed: '削除',
+      changed: '変更',
+    },
+
+    /**
+     * R2 の注意書き。**AI が材料を増やすことがある経路**なので、
+     * 写真レシピより強い確認を求める。
+     */
+    caution: {
+      text: 'AIが調整した内容です。材料が追加されることがあります。アレルギーのある方は、保存前に材料をすべてご確認ください。',
+      intent:
+        'MUST warn that the AI MAY HAVE ADDED ingredients, and MUST tell the user to check every ' +
+        'ingredient before saving. The app does NOT detect allergens — this sentence is the only ' +
+        'warning. MUST NOT be softened to a generic "AI-generated" note.',
+    } satisfies CriticalMessage,
+
+    noticeNoChange:
+      'レシピに変更はありませんでした。感想をもう少し具体的に書くと直せることがあります。',
+
+    feedbackLabel: '作ってみてどうだった？',
+    feedbackPlaceholder: 'お店のよりかなり甘かった。とろみも足りない気がする...',
+    feedbackHint: '味の方向（甘い・辛い・濃い・薄い）を書くほど直しやすくなります。',
+
+    photoLabel: '作った料理の写真（任意）',
+    photoHint: '焼き色・とろみ・色の濃さは、言葉より写真の方が正確に伝わります。',
+    targetLabel: 'お店の写真を目標にします',
+    targetHint: '「お店で食べた」記録から自動で添えます',
+
+    retry: 'やり直す',
+    saveThis: 'この内容で保存',
+    processing: 'AIが調整中...',
+    start: 'AIで近づける',
+    updated: 'レシピを更新しました',
+
+    notFound: 'レシピが見つかりませんでした',
+    genericFailed: 'レシピを調整できませんでした。もう一度お試しください。',
+    saveFailedTitle: '保存できませんでした',
+    saveFailedBody: 'レシピを保存できませんでした',
+
     /**
      * R2 の差分プレビューの保証文。**AI が黙って書き換えないことの保証**であり、
      * 弱まると説明が嘘になる（§6-2）。
