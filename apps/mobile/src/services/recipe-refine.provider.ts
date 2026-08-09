@@ -18,6 +18,7 @@ import { getUserApiKey } from './byok.service';
 import { VisionInferenceError, type VisionErrorKind } from './vision-recipe.provider';
 import type { RecipeFormData } from '../validation/recipe.schema';
 import { t } from '../i18n';
+import { requestLocale, withOutputLanguage } from './ai-output-locale';
 
 const TIMEOUT_MS = 35_000;
 
@@ -331,7 +332,7 @@ async function refineViaByok(
   apiKey: string,
 ): Promise<RefineResult> {
   const body = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    systemInstruction: { parts: [{ text: withOutputLanguage(SYSTEM_PROMPT) }] },
     contents: [
       {
         role: 'user',
@@ -437,6 +438,7 @@ async function refineViaServer(
         recipe,
         feedback: feedback.trim(),
         ...(images.length > 0 && { images }),
+        locale: requestLocale(),
       }),
       signal: controller.signal,
     });

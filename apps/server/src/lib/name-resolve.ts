@@ -1,3 +1,4 @@
+import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
 /**
  * Managed name resolution — messy pantry/receipt names → canonical ingredient
  * names via Gemini (text, batched). Mirrors the mobile BYOK provider prompt.
@@ -35,7 +36,7 @@ export interface ResolvedName {
 }
 
 export interface NameResolver {
-  resolve(names: string[]): Promise<ResolvedName[]>;
+  resolve(names: string[], outputLocale?: OutputLocale): Promise<ResolvedName[]>;
 }
 
 function parseResolved(raw: unknown): ResolvedName[] {
@@ -64,10 +65,15 @@ export class GeminiNameResolver implements NameResolver {
     this.model = opts?.model?.trim() || process.env['GEMINI_MODEL']?.trim() || 'gemini-2.5-flash';
   }
 
-  async resolve(names: string[]): Promise<ResolvedName[]> {
+  async resolve(
+    names: string[],
+    outputLocale: OutputLocale = DEFAULT_OUTPUT_LOCALE,
+  ): Promise<ResolvedName[]> {
     if (names.length === 0) return [];
     const body = {
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      systemInstruction: {
+        parts: [{ text: withOutputLanguage(SYSTEM_PROMPT, outputLocale) }],
+      },
       contents: [{ role: 'user', parts: [{ text: JSON.stringify(names) }] }],
       generationConfig: {
         responseMimeType: 'application/json',

@@ -1,3 +1,4 @@
+import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
 /**
  * Recipe refinement — adjust an existing recipe from the cook's feedback.
  *
@@ -40,6 +41,8 @@ export interface RefineRecipeInput {
   recipe: RefineRecipeSnapshot;
   feedback: string;
   images?: RefineImage[];
+  /** 出力言語。省略時は ja（既存の呼び出しは挙動が変わらない）。 */
+  outputLocale?: OutputLocale;
 }
 
 /** Raw, unvalidated model output. The agent validates/normalizes it. */
@@ -234,7 +237,13 @@ export class GeminiRecipeRefineProvider implements RecipeRefineProvider {
     ].join('\n');
 
     const body = {
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      systemInstruction: {
+        parts: [
+          {
+            text: withOutputLanguage(SYSTEM_PROMPT, input.outputLocale ?? DEFAULT_OUTPUT_LOCALE),
+          },
+        ],
+      },
       contents: [
         {
           role: 'user',

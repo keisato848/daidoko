@@ -6,6 +6,7 @@
  */
 import { API_V1, GEMINI_MODEL } from '../config';
 import { getUserApiKey } from './byok.service';
+import { requestLocale, withOutputLanguage } from './ai-output-locale';
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
@@ -50,7 +51,7 @@ function parseResolved(raw: unknown): ResolvedName[] {
 
 async function resolveViaByok(names: string[], apiKey: string): Promise<ResolvedName[]> {
   const body = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    systemInstruction: { parts: [{ text: withOutputLanguage(SYSTEM_PROMPT) }] },
     contents: [{ role: 'user', parts: [{ text: JSON.stringify(names) }] }],
     generationConfig: {
       responseMimeType: 'application/json',
@@ -86,7 +87,7 @@ async function resolveViaServer(names: string[]): Promise<ResolvedName[]> {
   const res = await fetch(`${API_V1}/resolve/names`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ names }),
+    body: JSON.stringify({ names, locale: requestLocale() }),
   });
   if (!res.ok) throw new Error(`Server name-resolve failed: ${res.status}`);
   const json = (await res.json()) as { items?: unknown };
