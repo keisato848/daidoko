@@ -18,6 +18,8 @@ import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from '
 
 import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
+import { t, tCount } from '../../src/i18n';
+import { formatDateTime } from '../../src/i18n/format';
 import {
   AUTO_SNAPSHOT_KEEP,
   chooseSafBackupDirectory,
@@ -43,18 +45,21 @@ function formatSize(bytes: number): string {
 }
 
 function formatDate(value: string | null): string {
-  if (!value) return '日時不明';
+  if (!value) return t('backup.unknownDate');
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  return formatDateTime(date);
 }
 
 /** 最後の外部退避の表示（未実施 / N日前）。30日超は警告扱い。 */
 function describeLastExport(iso: string | null): { text: string; warn: boolean } {
-  if (!iso) return { text: '外部への退避はまだ実施されていません', warn: true };
+  if (!iso) return { text: t('backup.lastExport.never'), warn: true };
   const elapsedDays = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (elapsedDays <= 0) return { text: '最後の外部退避: 今日', warn: false };
-  return { text: `最後の外部退避: ${elapsedDays}日前`, warn: elapsedDays > 30 };
+  if (elapsedDays <= 0) return { text: t('backup.lastExport.today'), warn: false };
+  return {
+    text: tCount('backup.lastExport.daysAgo', elapsedDays),
+    warn: elapsedDays > 30,
+  };
 }
 
 export default function BackupScreen() {
@@ -85,8 +90,7 @@ export default function BackupScreen() {
   useFocusEffect(
     useCallback(() => {
       void refresh().catch((error) => {
-        const message =
-          error instanceof Error ? error.message : 'バックアップ一覧を取得できませんでした';
+        const message = error instanceof Error ? error.message : t('backup.listFailed');
         setToastMessage(message);
       });
     }, [refresh]),
@@ -97,10 +101,10 @@ export default function BackupScreen() {
     try {
       const result = await createLocalBackup();
       await refresh();
-      setToastMessage(`バックアップを作成しました (${formatSize(result.sizeBytes)})`);
+      setToastMessage(t('backup.create.done', { size: formatSize(result.sizeBytes) }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'バックアップ作成に失敗しました';
-      Alert.alert('バックアップできませんでした', message);
+      const message = error instanceof Error ? error.message : t('backup.create.failed');
+      Alert.alert(t('backup.create.failedTitle'), message);
     } finally {
       setBusy(false);
     }
@@ -108,28 +112,28 @@ export default function BackupScreen() {
 
   const handleRestore = useCallback(() => {
     if (!latest) {
-      Alert.alert('復元できません', 'バックアップがまだありません。');
+      Alert.alert(t('backup.restore.unavailableTitle'), t('backup.restore.noBackup'));
       return;
     }
 
     Alert.alert(
-      '最新バックアップから復元',
-      `${formatDate(latest.exportedAt)} のバックアップで現在の端末内データを置き換えます。よろしいですか？`,
+      t('backup.restore.title'),
+      t('backup.restore.confirm', { date: formatDate(latest.exportedAt) }),
       [
-        { text: 'キャンセル', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '復元する',
+          text: t('backup.restore.confirmAction'),
           style: 'destructive',
           onPress: () => {
             setBusy(true);
             void restoreLatestLocalBackup()
               .then((result) => {
-                setToastMessage(`復元しました: ${result.fileName}`);
+                setToastMessage(t('backup.restore.done', { name: result.fileName }));
                 return refresh();
               })
               .catch((error) => {
-                const message = error instanceof Error ? error.message : '復元に失敗しました';
-                Alert.alert('復元できませんでした', message);
+                const message = error instanceof Error ? error.message : t('backup.restore.failed');
+                Alert.alert(t('backup.restore.failedTitle'), message);
               })
               .finally(() => setBusy(false));
           },
@@ -146,18 +150,21 @@ export default function BackupScreen() {
       let exportedNote = '';
       try {
         if (await exportFileToSafDirectory(result.uri, result.fileName, 'application/zip')) {
-          exportedNote = ' / 保存先フォルダへ書き出し済み';
+          exportedNote = t('backup.migration.exportedNote');
         }
       } catch {
-        exportedNote = ' / 保存先フォルダへの書き出しに失敗（保存先を再選択してください）';
+        exportedNote = t('backup.migration.exportFailedNote');
       }
       await refresh();
       setToastMessage(
-        `移行ファイルを作成しました (${formatSize(result.sizeBytes)} / 写真${result.photoCount}枚)${exportedNote}`,
+        tCount('backup.migration.created', result.photoCount, {
+          size: formatSize(result.sizeBytes),
+          note: exportedNote,
+        }),
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : '移行ファイル作成に失敗しました';
-      Alert.alert('移行ファイルを作成できませんでした', message);
+      const message = error instanceof Error ? error.message : t('backup.migration.createFailed');
+      Alert.alert(t('backup.migration.createFailedTitle'), message);
     } finally {
       setBusy(false);
     }
@@ -165,19 +172,19 @@ export default function BackupScreen() {
 
   const handleShareMigration = useCallback(async () => {
     if (!latestMigration) {
-      Alert.alert('共有できません', '移行ファイルがまだありません。');
+      Alert.alert(t('backup.share.unavailableTitle'), t('backup.share.noFile'));
       return;
     }
 
     try {
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        Alert.alert('共有できません', 'この端末では共有シートを利用できません。');
+        Alert.alert(t('backup.share.unavailableTitle'), t('backup.share.notSupported'));
         return;
       }
 
       await Sharing.shareAsync(latestMigration.uri, {
-        dialogTitle: 'だいどこの移行バックアップを共有',
+        dialogTitle: t('backup.share.dialogTitle'),
         mimeType: 'application/zip',
         UTI: 'public.zip',
       });
@@ -185,8 +192,8 @@ export default function BackupScreen() {
       await markBackupExported();
       await refresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : '移行ファイル共有に失敗しました';
-      Alert.alert('共有できませんでした', message);
+      const message = error instanceof Error ? error.message : t('backup.share.failed');
+      Alert.alert(t('backup.share.failedTitle'), message);
     }
   }, [latestMigration, refresh]);
 
@@ -195,18 +202,18 @@ export default function BackupScreen() {
       const directoryUri = await chooseSafBackupDirectory();
       if (directoryUri) {
         await refresh();
-        setToastMessage('保存先フォルダを設定しました（以後の自動スナップショットも書き出します）');
+        setToastMessage(t('backup.saf.set'));
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : '保存先を選択できませんでした';
-      Alert.alert('保存先を選択できませんでした', message);
+      const message = error instanceof Error ? error.message : t('backup.saf.chooseFailed');
+      Alert.alert(t('backup.saf.chooseFailed'), message);
     }
   }, [refresh]);
 
   const handleClearSafDirectory = useCallback(async () => {
     await clearSafBackupDirectory();
     await refresh();
-    setToastMessage('保存先フォルダを解除しました');
+    setToastMessage(t('backup.saf.cleared'));
   }, [refresh]);
 
   const handleImportMigration = useCallback(async () => {
@@ -225,25 +232,24 @@ export default function BackupScreen() {
 
       const asset = picked.assets[0];
       Alert.alert(
-        '移行ファイルから復元',
-        `${asset.name} で現在の端末内データを置き換えます。よろしいですか？`,
+        t('backup.migration.importTitle'),
+        t('backup.migration.importConfirm', { name: asset.name }),
         [
-          { text: 'キャンセル', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           {
-            text: '復元する',
+            text: t('backup.restore.confirmAction'),
             style: 'destructive',
             onPress: () => {
               setBusy(true);
               void restoreMigrationBackupPackage(asset.uri)
                 .then((result) => {
-                  setToastMessage(
-                    `移行ファイルから復元しました (写真${result.restoredPhotoCount}枚)`,
-                  );
+                  setToastMessage(tCount('backup.migration.imported', result.restoredPhotoCount));
                   return refresh();
                 })
                 .catch((error) => {
-                  const message = error instanceof Error ? error.message : '復元に失敗しました';
-                  Alert.alert('復元できませんでした', message);
+                  const message =
+                    error instanceof Error ? error.message : t('backup.restore.failed');
+                  Alert.alert(t('backup.restore.failedTitle'), message);
                 })
                 .finally(() => setBusy(false));
             },
@@ -251,8 +257,8 @@ export default function BackupScreen() {
         ],
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : '移行ファイルを選択できませんでした';
-      Alert.alert('移行ファイルを選択できませんでした', message);
+      const message = error instanceof Error ? error.message : t('backup.migration.pickFailed');
+      Alert.alert(t('backup.migration.pickFailed'), message);
     }
   }, [refresh]);
 
@@ -262,25 +268,22 @@ export default function BackupScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <ChevronLeft size={20} color={Colors.goldDim} />
         </Pressable>
-        <Text style={styles.headerTitle}>バックアップ・復元</Text>
+        <Text style={styles.headerTitle}>{t('backup.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>最新バックアップ</Text>
+          <Text style={styles.summaryLabel}>{t('backup.summary.latestLabel')}</Text>
           <Text style={styles.summaryTitle}>
-            {latest ? formatDate(latest.exportedAt) : '未作成'}
+            {latest ? formatDate(latest.exportedAt) : t('backup.summary.none')}
           </Text>
           <Text style={styles.summaryMeta}>
             {latest
               ? `${latest.fileName} / ${formatSize(latest.sizeBytes)}`
-              : `週1回自動で作成し、最新${AUTO_SNAPSHOT_KEEP}件を保持します`}
+              : tCount('backup.summary.autoNote', AUTO_SNAPSHOT_KEEP)}
           </Text>
-          <Text style={styles.summaryNote}>
-            端末内（アプリ領域）に保存します — アンインストールで消えるため、大切なデータは下の
-            移行ファイルの共有か保存先フォルダへの書き出しで外部にも退避してください
-          </Text>
+          <Text style={styles.summaryNote}>{t('backup.summary.localNote')}</Text>
         </View>
 
         <View style={styles.actionGroup}>
@@ -291,7 +294,7 @@ export default function BackupScreen() {
           >
             <DatabaseBackup size={18} color={Colors.bg} />
             <Text style={styles.primaryButtonText}>
-              {busy ? '処理中...' : 'バックアップを作成'}
+              {busy ? t('backup.busy') : t('backup.create.action')}
             </Text>
           </Pressable>
           <Pressable
@@ -300,19 +303,19 @@ export default function BackupScreen() {
             disabled={!latest || busy}
           >
             <RotateCcw size={18} color={Colors.gold} />
-            <Text style={styles.secondaryButtonText}>最新バックアップから復元</Text>
+            <Text style={styles.secondaryButtonText}>{t('backup.restore.action')}</Text>
           </Pressable>
         </View>
 
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>機種変更バックアップ</Text>
+          <Text style={styles.summaryLabel}>{t('backup.migration.label')}</Text>
           <Text style={styles.summaryTitle}>
-            {latestMigration ? formatDate(latestMigration.exportedAt) : '未作成'}
+            {latestMigration ? formatDate(latestMigration.exportedAt) : t('backup.summary.none')}
           </Text>
           <Text style={styles.summaryMeta}>
             {latestMigration
               ? `${latestMigration.fileName} / ${formatSize(latestMigration.sizeBytes)}`
-              : 'すべての写真（調理記録・表紙・手順）を含む移行ファイルを作成します'}
+              : t('backup.migration.note')}
           </Text>
           <Text style={[styles.summaryNote, lastExport.warn && styles.summaryNoteWarn]}>
             {lastExport.text}
@@ -326,7 +329,7 @@ export default function BackupScreen() {
             disabled={busy}
           >
             <Download size={18} color={Colors.bg} />
-            <Text style={styles.primaryButtonText}>移行ファイルを作成</Text>
+            <Text style={styles.primaryButtonText}>{t('backup.migration.createAction')}</Text>
           </Pressable>
           <Pressable
             style={[styles.secondaryButton, (!latestMigration || busy) && styles.buttonDisabled]}
@@ -334,7 +337,7 @@ export default function BackupScreen() {
             disabled={!latestMigration || busy}
           >
             <Share2 size={18} color={Colors.gold} />
-            <Text style={styles.secondaryButtonText}>最新移行ファイルを共有</Text>
+            <Text style={styles.secondaryButtonText}>{t('backup.migration.shareAction')}</Text>
           </Pressable>
           <Pressable
             style={[styles.secondaryButton, busy && styles.buttonDisabled]}
@@ -342,18 +345,17 @@ export default function BackupScreen() {
             disabled={busy}
           >
             <Upload size={18} color={Colors.gold} />
-            <Text style={styles.secondaryButtonText}>移行ファイルから復元</Text>
+            <Text style={styles.secondaryButtonText}>{t('backup.migration.importAction')}</Text>
           </Pressable>
         </View>
 
         {Platform.OS === 'android' ? (
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>外部の保存先フォルダ</Text>
-            <Text style={styles.summaryTitle}>{safDirectory ? '設定済み' : '未設定'}</Text>
-            <Text style={styles.summaryMeta}>
-              Google ドライブ等のフォルダを選ぶと、移行ファイルと週次の自動スナップショットを
-              自動で書き出します（アンインストールしても残ります）
+            <Text style={styles.summaryLabel}>{t('backup.saf.label')}</Text>
+            <Text style={styles.summaryTitle}>
+              {safDirectory ? t('backup.saf.configured') : t('backup.saf.notConfigured')}
             </Text>
+            <Text style={styles.summaryMeta}>{t('backup.saf.note')}</Text>
             <View style={styles.safButtonRow}>
               <Pressable
                 style={[styles.secondaryButton, styles.safButton, busy && styles.buttonDisabled]}
@@ -362,7 +364,7 @@ export default function BackupScreen() {
               >
                 <FolderOutput size={18} color={Colors.gold} />
                 <Text style={styles.secondaryButtonText}>
-                  {safDirectory ? '保存先を変更' : '保存先フォルダを選ぶ'}
+                  {safDirectory ? t('backup.saf.change') : t('backup.saf.choose')}
                 </Text>
               </Pressable>
               {safDirectory != null && (
@@ -371,25 +373,23 @@ export default function BackupScreen() {
                   onPress={handleClearSafDirectory}
                   disabled={busy}
                 >
-                  <Text style={styles.secondaryButtonText}>解除</Text>
+                  <Text style={styles.secondaryButtonText}>{t('backup.saf.clear')}</Text>
                 </Pressable>
               )}
             </View>
           </View>
         ) : (
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>iCloud バックアップ</Text>
-            <Text style={styles.summaryMeta}>
-              iOS では端末の iCloud バックアップにアプリのデータ（レシピ・写真）が自動で含まれます
-            </Text>
+            <Text style={styles.summaryLabel}>{t('backup.icloud.label')}</Text>
+            <Text style={styles.summaryMeta}>{t('backup.icloud.note')}</Text>
           </View>
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>保存済みバックアップ</Text>
+          <Text style={styles.sectionTitle}>{t('backup.saved.title')}</Text>
           {backups.length === 0 ? (
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>バックアップはまだありません</Text>
+              <Text style={styles.emptyText}>{t('backup.saved.empty')}</Text>
             </View>
           ) : (
             backups.map((backup) => (

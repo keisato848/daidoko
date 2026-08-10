@@ -1,5 +1,6 @@
 import { diffRecipes, onlyChanged } from '../recipeDiff';
 import type { RecipeFormData } from '../../validation/recipe.schema';
+import { setLocale, SUPPORTED_LOCALES, t } from '../../i18n';
 
 function recipe(overrides: Partial<RecipeFormData> = {}): RecipeFormData {
   return {
@@ -108,7 +109,11 @@ describe('diffRecipes', () => {
     const rows = onlyChanged(diff.steps);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ kind: 'changed', label: '手順 2', after: '弱火で5分煮る' });
+    expect(rows[0]).toMatchObject({
+      kind: 'changed',
+      label: t('recipe.revisions.stepLabel', { number: 2 }),
+      after: '弱火で5分煮る',
+    });
   });
 
   it('手順が増えたら added', () => {
@@ -116,7 +121,12 @@ describe('diffRecipes', () => {
       steps: [{ body: '豆腐を切る' }, { body: '炒めて煮る' }, { body: '花椒をふる' }],
     });
     const rows = onlyChanged(diffRecipes(recipe(), after).steps);
-    expect(rows).toEqual([expect.objectContaining({ kind: 'added', label: '手順 3' })]);
+    expect(rows).toEqual([
+      expect.objectContaining({
+        kind: 'added',
+        label: t('recipe.revisions.stepLabel', { number: 3 }),
+      }),
+    ]);
   });
 
   it('料理名・人数・時間の変更は meta に出る', () => {
@@ -124,10 +134,36 @@ describe('diffRecipes', () => {
     const diff = diffRecipes(recipe(), after);
 
     expect(diff.meta).toContainEqual(
-      expect.objectContaining({ label: '料理名', before: '麻婆豆腐', after: '麻婆茄子' }),
+      expect.objectContaining({
+        label: t('recipe.revisions.metaTitle'),
+        before: '麻婆豆腐',
+        after: '麻婆茄子',
+      }),
     );
     expect(diff.meta).toContainEqual(
-      expect.objectContaining({ label: '人数', before: '2', after: '4' }),
+      expect.objectContaining({ label: t('common.servings'), before: '2', after: '4' }),
     );
+  });
+
+  /**
+   * 差分の見出しは**ロケールで変わる**。日本語のまま英語画面に出ていないか、
+   * どのロケールでも見出しが空になっていないかを確かめる。
+   */
+  describe.each(SUPPORTED_LOCALES)('%s: 見出しがロケールに追従する', (locale) => {
+    beforeEach(() => setLocale(locale));
+    afterEach(() => setLocale('ja'));
+
+    it('meta と steps の見出しが空でなく、en では日本語を含まない', () => {
+      const diff = diffRecipes(recipe(), recipe({ title: '麻婆茄子', servings: 4 }));
+      const labels = [
+        ...diff.meta.map((row) => row.label),
+        t('recipe.revisions.stepLabel', { number: 1 }),
+      ];
+      expect(labels.length).toBeGreaterThan(0);
+      for (const label of labels) {
+        expect(label.trim()).not.toBe('');
+        if (locale === 'en') expect(label).not.toMatch(/[ぁ-んァ-ヶ一-龯]/);
+      }
+    });
   });
 });

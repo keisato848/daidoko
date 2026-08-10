@@ -1,9 +1,12 @@
+import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
 /**
  * Meal-consumption Vision — infer which ingredients a meal photo used up, so the
  * pantry can be decremented. Provider abstraction (default Gemini Flash). The
  * result is a best-effort, experimental estimate (see docs/買い物リスト・在庫設計.md §5.7).
  */
 export interface MealVisionInput {
+  /** 出力言語。省略時は ja（既存の呼び出しは挙動が変わらない）。 */
+  outputLocale?: OutputLocale;
   imageBase64: string;
   mimeType: string;
 }
@@ -72,7 +75,13 @@ export class GeminiMealVisionProvider implements MealVisionProvider {
 
   async infer(input: MealVisionInput): Promise<MealVisionRaw> {
     const body = {
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      systemInstruction: {
+        parts: [
+          {
+            text: withOutputLanguage(SYSTEM_PROMPT, input.outputLocale ?? DEFAULT_OUTPUT_LOCALE),
+          },
+        ],
+      },
       contents: [
         {
           role: 'user',

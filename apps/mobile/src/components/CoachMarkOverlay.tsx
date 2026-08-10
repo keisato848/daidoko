@@ -6,6 +6,7 @@
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
+import { t } from '../i18n';
 
 export interface CoachMarkStep {
   key: string;
@@ -103,16 +104,22 @@ export function CoachMarkOverlay({
             </Text>
             <View style={styles.buttons}>
               {!isLast && (
-                <Pressable onPress={onSkip} hitSlop={8} accessibilityLabel="ガイドをスキップ">
-                  <Text style={styles.skipText}>スキップ</Text>
+                <Pressable
+                  onPress={onSkip}
+                  hitSlop={8}
+                  accessibilityLabel={t('ui.coach.skipLabel')}
+                >
+                  <Text style={styles.skipText}>{t('ui.coach.skip')}</Text>
                 </Pressable>
               )}
               <Pressable
                 style={styles.nextButton}
                 onPress={onNext}
-                accessibilityLabel={isLast ? 'ガイドを閉じる' : '次のガイドへ'}
+                accessibilityLabel={isLast ? t('ui.coach.closeLabel') : t('ui.coach.nextLabel')}
               >
-                <Text style={styles.nextText}>{isLast ? 'はじめる' : '次へ'}</Text>
+                <Text style={styles.nextText}>
+                  {isLast ? t('ui.coach.start') : t('ui.coach.next')}
+                </Text>
               </Pressable>
             </View>
           </View>

@@ -3,6 +3,7 @@
  * Validates URL, calls server /api/v1/import/url, returns RecipeDraft
  */
 import { API_V1 } from '../config';
+import { t } from '../i18n';
 
 export interface RecipeDraft {
   title: string;
@@ -36,10 +37,10 @@ const TIMEOUT_MS = 15_000;
 
 function validateUrl(url: string): string | null {
   const trimmed = url.trim();
-  if (!trimmed) return 'URLを入力してください';
+  if (!trimmed) return t('recipeImport.url.required');
   if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://'))
-    return 'URLはhttpまたはhttpsで始めてください';
-  if (trimmed.length > 2048) return 'URLが長すぎます';
+    return t('recipeImport.url.mustBeHttp');
+  if (trimmed.length > 2048) return t('recipeImport.url.tooLong');
   return null;
 }
 
@@ -69,7 +70,7 @@ export async function runImportAgent(url: string, signal?: AbortSignal): Promise
         ok: false,
         error: {
           code: 'FETCH_FAILED',
-          message: `サーバーエラー (${res.status})`,
+          message: t('ai.error.serverError', { status: res.status }),
           retryable: res.status >= 500,
         },
       };
@@ -84,7 +85,7 @@ export async function runImportAgent(url: string, signal?: AbortSignal): Promise
           ok: false,
           error: {
             code: 'FETCH_FAILED',
-            message: 'リクエストがタイムアウトしました',
+            message: t('ai.error.timeout'),
             retryable: true,
           },
         };
@@ -94,7 +95,7 @@ export async function runImportAgent(url: string, signal?: AbortSignal): Promise
           ok: false,
           error: {
             code: 'NETWORK_UNAVAILABLE',
-            message: 'インターネット接続を確認してください',
+            message: t('error.offline'),
             retryable: true,
           },
         };
@@ -102,7 +103,7 @@ export async function runImportAgent(url: string, signal?: AbortSignal): Promise
     }
     return {
       ok: false,
-      error: { code: 'UNKNOWN', message: '予期しないエラーが発生しました', retryable: false },
+      error: { code: 'UNKNOWN', message: t('error.generic'), retryable: false },
     };
   } finally {
     clearTimeout(timer);

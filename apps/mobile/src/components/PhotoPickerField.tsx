@@ -12,6 +12,7 @@ import { Colors } from '../constants/theme';
 import { expoImagePickerPhotoCaptureAdapter } from '../services/expo-photo-capture.adapter';
 import { capturePhoto, type PhotoCaptureSource } from '../services/photo-capture.service';
 import { persistRecipePhoto } from '../services/photo-storage.service';
+import { t } from '../i18n';
 
 interface PhotoPickerFieldProps {
   /** Stored photo path (undefined = none) */
@@ -54,7 +55,7 @@ export function PhotoPickerField({ value, onChange, variant }: PhotoPickerFieldP
             style={styles.removeBadge}
             onPress={() => onChange(undefined)}
             hitSlop={8}
-            accessibilityLabel="写真を削除"
+            accessibilityLabel={t('common.deletePhoto')}
           >
             <X size={14} color={Colors.paper} />
           </Pressable>
@@ -68,18 +69,20 @@ export function PhotoPickerField({ value, onChange, variant }: PhotoPickerFieldP
             <Pressable
               style={styles.pickButton}
               onPress={() => handlePick('camera')}
-              accessibilityLabel="写真を撮影"
+              accessibilityLabel={t('ui.photo.captureLabel')}
             >
               <Camera size={15} color={Colors.goldDim} />
-              <Text style={styles.pickButtonText}>{value ? '撮り直す' : '撮影'}</Text>
+              <Text style={styles.pickButtonText}>
+                {value ? t('ui.photo.retake') : t('ui.photo.capture')}
+              </Text>
             </Pressable>
             <Pressable
               style={styles.pickButton}
               onPress={() => handlePick('gallery')}
-              accessibilityLabel="ギャラリーから選ぶ"
+              accessibilityLabel={t('common.pickFromGallery')}
             >
               <ImageIcon size={15} color={Colors.goldDim} />
-              <Text style={styles.pickButtonText}>ギャラリー</Text>
+              <Text style={styles.pickButtonText}>{t('ui.photo.gallery')}</Text>
             </Pressable>
           </>
         )}

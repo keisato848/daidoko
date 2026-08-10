@@ -20,6 +20,7 @@ import {
 
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
+import { t, tCount } from '../../../../src/i18n';
 import { createCookingLog } from '../../../../src/services/cooking-log.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
 import {
@@ -54,6 +55,16 @@ const starStyles = StyleSheet.create({
   starFilled: { color: Colors.gold },
 });
 
+/** 星の数に対する言葉。0（未評価）のときは何も出さない。 */
+function ratingLabel(rating: number): string {
+  if (rating === 1) return t('log.form.rating.star1');
+  if (rating === 2) return t('log.form.rating.star2');
+  if (rating === 3) return t('log.form.rating.star3');
+  if (rating === 4) return t('log.form.rating.star4');
+  if (rating === 5) return t('log.form.rating.star5');
+  return '';
+}
+
 export default function CookingLogScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -66,7 +77,10 @@ export default function CookingLogScreen() {
   const handleAddPhoto = useCallback(
     async (source: PhotoCaptureSource) => {
       if (photos.length >= MAX_COOKING_LOG_PHOTOS) {
-        Alert.alert('写真を追加できません', `写真は${MAX_COOKING_LOG_PHOTOS}枚まで追加できます。`);
+        Alert.alert(
+          t('log.form.photoLimitTitle'),
+          tCount('log.form.photoLimit', MAX_COOKING_LOG_PHOTOS),
+        );
         return;
       }
 
@@ -75,8 +89,8 @@ export default function CookingLogScreen() {
         setPhotos((current) => [...current, photo].slice(0, MAX_COOKING_LOG_PHOTOS));
       } catch (error) {
         if (error instanceof PhotoCaptureCancelledError) return;
-        const message = error instanceof Error ? error.message : '写真を追加できませんでした';
-        Alert.alert('写真を追加できませんでした', message);
+        const message = error instanceof Error ? error.message : t('common.photoAddFailed');
+        Alert.alert(t('common.photoAddFailed'), message);
       }
     },
     [photos.length],
@@ -107,29 +121,29 @@ export default function CookingLogScreen() {
       const trimmedMemo = memo.trim();
       if (id && trimmedMemo) {
         setTimeout(() => {
-          Alert.alert(
-            'レシピに反映しますか？',
-            'いま書いた感想をもとに、AI がレシピをお店の味に近づけます。',
-            [
-              { text: 'あとで', style: 'cancel', onPress: () => router.push('/(tabs)') },
-              {
-                text: '近づける',
-                onPress: () =>
-                  router.replace({
-                    pathname: '/(tabs)/recipes/[id]/refine',
-                    params: { id, feedback: trimmedMemo },
-                  }),
-              },
-            ],
-          );
+          Alert.alert(t('log.form.refinePromptTitle'), t('log.form.refinePromptBody'), [
+            {
+              text: t('log.form.refineLater'),
+              style: 'cancel',
+              onPress: () => router.push('/(tabs)'),
+            },
+            {
+              text: t('log.form.refineNow'),
+              onPress: () =>
+                router.replace({
+                  pathname: '/(tabs)/recipes/[id]/refine',
+                  params: { id, feedback: trimmedMemo },
+                }),
+            },
+          ]);
         }, 1200);
         return;
       }
       setTimeout(() => router.push('/(tabs)'), 1500);
     } catch (error) {
       await cleanupStoredCookingPhotos(persistedPhotos);
-      const message = error instanceof Error ? error.message : '記録を保存できませんでした';
-      Alert.alert('保存できませんでした', message);
+      const message = error instanceof Error ? error.message : t('log.form.saveFailedBody');
+      Alert.alert(t('log.form.saveFailedTitle'), message);
     } finally {
       setSaving(false);
     }
@@ -143,9 +157,9 @@ export default function CookingLogScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>調理を記録する</Text>
+        <Text style={styles.headerTitle}>{t('log.form.title')}</Text>
         <Pressable onPress={handleSkip} hitSlop={12}>
-          <Text style={styles.skipText}>スキップ</Text>
+          <Text style={styles.skipText}>{t('log.form.skip')}</Text>
         </Pressable>
       </View>
 
@@ -153,13 +167,13 @@ export default function CookingLogScreen() {
         {/* Completion message */}
         <View style={styles.completionBanner}>
           <Text style={styles.completionEmoji}>🎉</Text>
-          <Text style={styles.completionText}>お疲れさまでした！</Text>
-          <Text style={styles.completionSub}>今日の料理を記録しておきましょう</Text>
+          <Text style={styles.completionText}>{t('log.form.congrats')}</Text>
+          <Text style={styles.completionSub}>{t('log.form.congratsSub')}</Text>
         </View>
 
         {/* Photos */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>写真</Text>
+          <Text style={styles.sectionLabel}>{t('log.form.photoSection')}</Text>
           {photos.length > 0 && (
             <View style={styles.photoGrid}>
               {photos.map((photo, index) => (
@@ -170,7 +184,7 @@ export default function CookingLogScreen() {
                     onPress={() => handleRemovePhoto(index)}
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel="写真を削除"
+                    accessibilityLabel={t('common.deletePhoto')}
                   >
                     <Trash2 size={13} color={Colors.bg} />
                   </Pressable>
@@ -184,46 +198,42 @@ export default function CookingLogScreen() {
               onPress={() => handleAddPhoto('camera')}
               disabled={saving}
               accessibilityRole="button"
-              accessibilityLabel="カメラで写真を追加"
+              accessibilityLabel={t('log.form.addFromCamera')}
             >
               <Camera color={Colors.gold} size={18} />
-              <Text style={styles.photoAddText}>カメラで撮影</Text>
+              <Text style={styles.photoAddText}>{t('common.takePhoto')}</Text>
             </Pressable>
             <Pressable
               style={[styles.photoAddButton, saving && styles.photoAddButtonDisabled]}
               onPress={() => handleAddPhoto('gallery')}
               disabled={saving}
               accessibilityRole="button"
-              accessibilityLabel="ギャラリーから写真を追加"
+              accessibilityLabel={t('log.form.addFromGallery')}
             >
               <ImageIcon color={Colors.gold} size={18} />
-              <Text style={styles.photoAddText}>ギャラリーから選ぶ</Text>
+              <Text style={styles.photoAddText}>{t('common.pickFromGallery')}</Text>
             </Pressable>
           </View>
           <Text style={styles.photoHint}>
-            {photos.length} / {MAX_COOKING_LOG_PHOTOS} 枚
+            {t('log.form.photoCount', { current: photos.length, max: MAX_COOKING_LOG_PHOTOS })}
           </Text>
         </View>
 
         {/* Rating */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>評価</Text>
+          <Text style={styles.sectionLabel}>{t('log.form.ratingSection')}</Text>
           <StarRow value={rating} onChange={setRating} />
-          {rating > 0 && (
-            <Text style={styles.ratingHint}>
-              {['', '改善の余地あり', 'まあまあ', '良かった', 'とても良かった', '最高！'][rating]}
-            </Text>
-          )}
+          {rating > 0 && <Text style={styles.ratingHint}>{ratingLabel(rating)}</Text>}
         </View>
 
         {/* Memo */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>メモ（任意）</Text>
+          <Text style={styles.sectionLabel}>{t('log.form.memoSection')}</Text>
           <TextInput
             style={styles.memoInput}
             value={memo}
             onChangeText={setMemo}
-            placeholder="アレンジ・気づき・次回への覚書..."
+            placeholder={t('log.form.memoPlaceholder')}
             placeholderTextColor={Colors.muted}
             multiline
             numberOfLines={4}
@@ -240,11 +250,17 @@ export default function CookingLogScreen() {
           onPress={handleSave}
           disabled={saving}
         >
-          <Text style={styles.saveButtonText}>{saving ? '保存中...' : '記録する'}</Text>
+          <Text style={styles.saveButtonText}>
+            {saving ? t('common.saving') : t('log.form.submit')}
+          </Text>
         </Pressable>
       </View>
 
-      <Toast message="記録しました！" visible={showToast} onDismiss={() => setShowToast(false)} />
+      <Toast
+        message={t('log.form.saved')}
+        visible={showToast}
+        onDismiss={() => setShowToast(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

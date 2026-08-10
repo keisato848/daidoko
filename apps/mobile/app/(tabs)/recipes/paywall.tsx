@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { Colors } from '../../../src/constants/theme';
+import { t, tCount } from '../../../src/i18n';
 import { getAdRewardProvider } from '../../../src/services/ad-reward.service';
 import { getEntitlementProvider } from '../../../src/services/entitlement.service';
 import { EntitlementUnavailableError } from '../../../src/services/entitlement.types';
@@ -26,11 +27,14 @@ import {
   grantAdBonus,
 } from '../../../src/services/usage.service';
 
-const BENEFITS = [
-  '写真からのレシピづくりが使い放題',
-  '回数の上限を気にせず、思いついたときにすぐ',
-  'これからふえる便利な機能もぜんぶ',
-];
+// **定数に文言を焼き付けない。** import 時のロケールで固定される
+const BENEFIT_KEYS = ['unlimited', 'noWorry', 'future'] as const;
+
+function benefitText(key: (typeof BENEFIT_KEYS)[number]): string {
+  if (key === 'unlimited') return t('paywall.benefit.unlimited');
+  if (key === 'noWorry') return t('paywall.benefit.noWorry');
+  return t('paywall.benefit.future');
+}
 
 export default function PaywallScreen() {
   const router = useRouter();
@@ -75,14 +79,11 @@ export default function PaywallScreen() {
       if (rewarded) {
         const newBalance = await grantAdBonus();
         setTokenBalance(newBalance);
-        Alert.alert(
-          'ありがとうございます',
-          `写真からのレシピづくりが 1 回ぶん貯まりました（残り ${newBalance} 回ぶん）。\n無料枠がなくなった日にいつでも使えます。`,
-        );
+        Alert.alert(t('paywall.thanksTitle'), tCount('paywall.adGranted', newBalance));
         router.back();
       }
     } catch {
-      Alert.alert('お知らせ', '広告を読み込めませんでした。時間をおいてお試しください。');
+      Alert.alert(t('paywall.noticeTitle'), t('paywall.adFailed'));
     } finally {
       setBusy(false);
     }
@@ -93,19 +94,14 @@ export default function PaywallScreen() {
     try {
       const outcome = await getEntitlementProvider().purchasePremium();
       if (outcome.success) {
-        Alert.alert(
-          'ありがとうございます',
-          'プレミアムになりました。写真からのレシピづくりを使い放題でお楽しみください。',
-        );
+        Alert.alert(t('paywall.thanksTitle'), t('paywall.subscribed'));
         router.back();
       }
       // cancelled === true: the user backed out — stay quietly on the paywall.
     } catch (error) {
       const message =
-        error instanceof EntitlementUnavailableError
-          ? error.message
-          : '購入を完了できませんでした。時間をおいてお試しください。';
-      Alert.alert('お知らせ', message);
+        error instanceof EntitlementUnavailableError ? error.message : t('paywall.purchaseFailed');
+      Alert.alert(t('paywall.noticeTitle'), message);
     } finally {
       setBusy(false);
     }
@@ -116,13 +112,13 @@ export default function PaywallScreen() {
     try {
       const restored = await getEntitlementProvider().restore();
       if (restored) {
-        Alert.alert('復元しました', 'プレミアムが有効になりました。');
+        Alert.alert(t('paywall.restoredTitle'), t('paywall.restoredBody'));
         router.back();
       } else {
-        Alert.alert('お知らせ', '復元できる購入が見つかりませんでした。');
+        Alert.alert(t('paywall.noticeTitle'), t('paywall.nothingToRestore'));
       }
     } catch {
-      Alert.alert('お知らせ', '購入の復元に失敗しました。時間をおいてお試しください。');
+      Alert.alert(t('paywall.noticeTitle'), t('paywall.restoreFailed'));
     } finally {
       setBusy(false);
     }
@@ -131,7 +127,11 @@ export default function PaywallScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel={t('common.close')}
+        >
           <X size={20} color={Colors.muted} />
         </Pressable>
         <View style={styles.headerSpacer} />
@@ -141,17 +141,14 @@ export default function PaywallScreen() {
         <View style={styles.crownWrap}>
           <Crown size={40} color={Colors.gold} />
         </View>
-        <Text style={styles.title}>DAIDOKO プレミアム</Text>
-        <Text style={styles.subtitle}>
-          無料で使えるAI写真レシピは1日{FREE_DAILY_LIMIT}回まで。{'\n'}
-          プレミアムなら、回数を気にせず使えます。
-        </Text>
+        <Text style={styles.title}>{t('paywall.title')}</Text>
+        <Text style={styles.subtitle}>{tCount('paywall.subtitle', FREE_DAILY_LIMIT)}</Text>
 
         <View style={styles.benefits}>
-          {BENEFITS.map((benefit) => (
-            <View key={benefit} style={styles.benefitRow}>
+          {BENEFIT_KEYS.map((key) => (
+            <View key={key} style={styles.benefitRow}>
               <Check size={18} color={Colors.gold} />
-              <Text style={styles.benefitText}>{benefit}</Text>
+              <Text style={styles.benefitText}>{benefitText(key)}</Text>
             </View>
           ))}
         </View>
@@ -161,9 +158,9 @@ export default function PaywallScreen() {
             <ActivityIndicator color={Colors.gold} />
           ) : (
             <>
-              <Text style={styles.priceValue}>{price ?? '月額サブスク'}</Text>
+              <Text style={styles.priceValue}>{price ?? t('paywall.priceFallback')}</Text>
               <Text style={styles.priceUnit}>
-                {price ? '/ 月（いつでも解約可能）' : 'いつでも解約可能'}
+                {price ? t('paywall.priceUnit') : t('paywall.priceUnitFallback')}
               </Text>
             </>
           )}
@@ -178,13 +175,13 @@ export default function PaywallScreen() {
           {busy ? (
             <ActivityIndicator color={Colors.bg} />
           ) : (
-            <Text style={styles.subscribeText}>プレミアムを始める</Text>
+            <Text style={styles.subscribeText}>{t('paywall.subscribe')}</Text>
           )}
         </Pressable>
 
         {canWatchAd && (
           <>
-            <Text style={styles.orText}>または</Text>
+            <Text style={styles.orText}>{t('paywall.or')}</Text>
             <Pressable
               accessibilityRole="button"
               style={[styles.adButton, busy && styles.buttonDisabled]}
@@ -192,15 +189,13 @@ export default function PaywallScreen() {
               disabled={busy}
             >
               <Gift size={18} color={Colors.gold} />
-              <Text style={styles.adButtonText}>広告を見て 1 回ぶん貯める</Text>
+              <Text style={styles.adButtonText}>{t('paywall.watchAd')}</Text>
             </Pressable>
-            <Text style={styles.tokenHint}>
-              貯めた回数はなくなりません。無料枠がなくなった日にいつでも使えます。
-            </Text>
+            <Text style={styles.tokenHint}>{t('paywall.tokenHint')}</Text>
           </>
         )}
         {tokenBalance > 0 && (
-          <Text style={styles.tokenBalance}>ためた回数: 残り{tokenBalance}回ぶん</Text>
+          <Text style={styles.tokenBalance}>{tCount('paywall.tokenBalance', tokenBalance)}</Text>
         )}
 
         <Pressable
@@ -209,12 +204,10 @@ export default function PaywallScreen() {
           onPress={handleRestore}
           disabled={busy}
         >
-          <Text style={styles.restoreText}>購入を復元する</Text>
+          <Text style={styles.restoreText}>{t('paywall.restore')}</Text>
         </Pressable>
 
-        <Text style={styles.terms}>
-          サブスクリプションは購入時に課金され、解約しない限り自動更新されます。解約はストアのアカウント設定からいつでも行えます。
-        </Text>
+        <Text style={styles.terms}>{t('paywall.terms')}</Text>
       </ScrollView>
     </View>
   );

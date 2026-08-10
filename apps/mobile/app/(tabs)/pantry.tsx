@@ -12,6 +12,7 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { Colors } from '../../src/constants/theme';
+import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { checkAndNotifyLowStock } from '../../src/services/low-stock.service';
 import { ensureNotificationPermission } from '../../src/services/notification.service';
@@ -99,56 +100,60 @@ export default function PantryScreen() {
   const coach = useCoachMarks('pantry', [
     {
       key: 'inputs',
-      title: '在庫のいれ方いろいろ',
-      text: 'バーコードの「スキャン」、「レシート」の読み取りで素早く登録。「食べた」は食事の写真から使った分を減らします。',
+      title: t('pantry.coach.addTitle'),
+      text: t('pantry.coach.addText'),
       ref: actionsRef,
     },
     {
       key: 'bell',
-      title: '残量通知',
-      text: '品目のベルから「残りいくつ以下で通知するか」を設定すると、少なくなったときにお知らせします。',
+      title: t('pantry.coach.notifyTitle'),
+      text: t('pantry.coach.notifyText'),
     },
     {
       key: 'cookable',
-      title: 'この在庫で作れるレシピ',
-      text: '在庫と各レシピの材料を照合して、いま作れるレシピを充足率順に表示します。',
+      title: t('pantry.coach.cookableTitle'),
+      text: t('pantry.coach.cookableText'),
     },
   ]);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel={t('common.close')}
+        >
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>在庫</Text>
+        <Text style={styles.headerTitle}>{t('pantry.title')}</Text>
         <View ref={actionsRef} collapsable={false} style={styles.headerActions}>
           <Pressable
             onPress={() => router.push('/(tabs)/consume-meal')}
             hitSlop={8}
-            accessibilityLabel="食べた分を在庫から減らす"
+            accessibilityLabel={t('pantry.action.consumeMealLabel')}
             style={styles.headerScan}
           >
             <Utensils size={18} color={Colors.gold} />
-            <Text style={styles.headerScanText}>食べた</Text>
+            <Text style={styles.headerScanText}>{t('pantry.action.consumeMeal')}</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/(tabs)/receipt')}
             hitSlop={8}
-            accessibilityLabel="レシートから追加"
+            accessibilityLabel={t('pantry.action.receiptLabel')}
             style={styles.headerScan}
           >
             <Receipt size={18} color={Colors.gold} />
-            <Text style={styles.headerScanText}>レシート</Text>
+            <Text style={styles.headerScanText}>{t('pantry.action.receipt')}</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/(tabs)/scan-barcode')}
             hitSlop={8}
-            accessibilityLabel="バーコードでスキャン"
+            accessibilityLabel={t('pantry.action.scanLabel')}
             style={styles.headerScan}
           >
             <ScanLine size={18} color={Colors.gold} />
-            <Text style={styles.headerScanText}>スキャン</Text>
+            <Text style={styles.headerScanText}>{t('pantry.action.scan')}</Text>
           </Pressable>
           <HelpButton onPress={coach.show} size={16} />
         </View>
@@ -159,7 +164,7 @@ export default function PantryScreen() {
           style={styles.nameInput}
           value={name}
           onChangeText={setName}
-          placeholder="食材を追加（例: 玉ねぎ）"
+          placeholder={t('pantry.addPlaceholder')}
           placeholderTextColor={Colors.muted}
           maxLength={50}
         />
@@ -167,7 +172,7 @@ export default function PantryScreen() {
           style={styles.qtyInput}
           value={qty}
           onChangeText={setQty}
-          placeholder="数"
+          placeholder={t('pantry.quantityLabel')}
           placeholderTextColor={Colors.muted}
           keyboardType="numeric"
           maxLength={6}
@@ -176,7 +181,7 @@ export default function PantryScreen() {
           style={styles.unitInput}
           value={unit}
           onChangeText={setUnit}
-          placeholder="単位"
+          placeholder={t('pantry.unitLabel')}
           placeholderTextColor={Colors.muted}
           maxLength={6}
         />
@@ -184,7 +189,7 @@ export default function PantryScreen() {
           style={[styles.addButton, !name.trim() && styles.addButtonDisabled]}
           onPress={handleAdd}
           disabled={!name.trim()}
-          accessibilityLabel="追加"
+          accessibilityLabel={t('common.add')}
         >
           <Plus size={20} color={Colors.bg} />
         </Pressable>
@@ -193,7 +198,7 @@ export default function PantryScreen() {
       {items.length > 0 && (
         <Pressable style={styles.cookableButton} onPress={() => router.push('/(tabs)/cookable')}>
           <ChefHat size={16} color={Colors.gold} />
-          <Text style={styles.cookableText}>この在庫で作れるレシピ</Text>
+          <Text style={styles.cookableText}>{t('pantry.action.cookable')}</Text>
         </Pressable>
       )}
 
@@ -201,18 +206,19 @@ export default function PantryScreen() {
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <Text style={styles.empty}>在庫は空です。{'\n'}食材を追加してください。</Text>
-        }
+        ListEmptyComponent={<Text style={styles.empty}>{t('pantry.empty')}</Text>}
         renderItem={({ item }) => (
           <View style={styles.rowWrap}>
             <View style={styles.row}>
               <View style={styles.rowText}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <View style={styles.badgeRow}>
-                  {isLow(item) && <Text style={styles.lowBadge}>残りわずか</Text>}
+                  {isLow(item) && <Text style={styles.lowBadge}>{t('pantry.lowStockBadge')}</Text>}
                   {item.lowStockThreshold != null && (
-                    <Text style={styles.thresholdBadge}>通知 ≤{item.lowStockThreshold}</Text>
+                    <Text style={styles.thresholdBadge}>
+                      {t('pantry.thresholdBadge')}
+                      {item.lowStockThreshold}
+                    </Text>
                   )}
                 </View>
               </View>
@@ -220,7 +226,7 @@ export default function PantryScreen() {
                 <Pressable
                   onPress={() => handleAdjust(item, -1)}
                   hitSlop={8}
-                  accessibilityLabel="減らす"
+                  accessibilityLabel={t('pantry.action.decrease')}
                 >
                   <Minus size={16} color={Colors.goldDim} />
                 </Pressable>
@@ -231,7 +237,7 @@ export default function PantryScreen() {
                 <Pressable
                   onPress={() => handleAdjust(item, 1)}
                   hitSlop={8}
-                  accessibilityLabel="増やす"
+                  accessibilityLabel={t('pantry.action.increase')}
                 >
                   <Plus size={16} color={Colors.goldDim} />
                 </Pressable>
@@ -239,7 +245,7 @@ export default function PantryScreen() {
               <Pressable
                 onPress={() => handleToggleThresholdEdit(item)}
                 hitSlop={8}
-                accessibilityLabel="残量通知のしきい値を設定"
+                accessibilityLabel={t('pantry.thresholdSet')}
               >
                 <Bell
                   size={16}
@@ -249,19 +255,19 @@ export default function PantryScreen() {
               <Pressable
                 onPress={() => handleRemove(item.id)}
                 hitSlop={10}
-                accessibilityLabel="削除"
+                accessibilityLabel={t('common.delete')}
               >
                 <X size={16} color={Colors.muted} />
               </Pressable>
             </View>
             {thresholdEditId === item.id && (
               <View style={styles.thresholdEditor}>
-                <Text style={styles.thresholdLabel}>残りいくつ以下で通知する？</Text>
+                <Text style={styles.thresholdLabel}>{t('pantry.thresholdTitle')}</Text>
                 <TextInput
                   style={styles.thresholdInput}
                   value={thresholdInput}
                   onChangeText={setThresholdInput}
-                  placeholder="例: 1"
+                  placeholder={t('pantry.thresholdPlaceholder')}
                   placeholderTextColor={Colors.muted}
                   keyboardType="numeric"
                   maxLength={6}
@@ -270,10 +276,10 @@ export default function PantryScreen() {
                 <Pressable
                   style={styles.thresholdSave}
                   onPress={() => handleSaveThreshold(item)}
-                  accessibilityLabel="しきい値を保存"
+                  accessibilityLabel={t('pantry.thresholdSaveLabel')}
                 >
                   <Text style={styles.thresholdSaveText}>
-                    {thresholdInput.trim() ? '保存' : 'クリア'}
+                    {thresholdInput.trim() ? t('common.save') : t('pantry.thresholdClear')}
                   </Text>
                 </Pressable>
               </View>

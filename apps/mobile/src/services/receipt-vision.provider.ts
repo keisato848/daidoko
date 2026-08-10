@@ -8,6 +8,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_V1, GEMINI_MODEL } from '../config';
 import { getUserApiKey } from './byok.service';
+import { requestLocale, withOutputLanguage } from './ai-output-locale';
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
@@ -77,7 +78,7 @@ async function inferViaByok(
   apiKey: string,
 ): Promise<ReceiptInference> {
   const body = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    systemInstruction: { parts: [{ text: withOutputLanguage(SYSTEM_PROMPT) }] },
     contents: [
       {
         role: 'user',
@@ -121,7 +122,7 @@ async function inferViaServer(base64: string, mimeType: string): Promise<Receipt
   const res = await fetch(`${API_V1}/infer/receipt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64: base64, mimeType }),
+    body: JSON.stringify({ imageBase64: base64, mimeType, locale: requestLocale() }),
   });
   if (!res.ok) throw new Error(`server receipt infer failed: ${res.status}`);
   const json = (await res.json()) as {

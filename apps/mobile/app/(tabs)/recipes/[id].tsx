@@ -36,6 +36,7 @@ import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
 import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
+import { t, tCount } from '../../../src/i18n';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
 import { addMissingRecipeIngredientsToList } from '../../../src/services/shopping-list.service';
 import {
@@ -48,26 +49,18 @@ import type { MemoItem, RecipeDetail, TimelineEntry } from '../../../src/service
 import { formatProfileDisplayName } from '../../../src/utils/profile';
 import { formatRecipeShareText } from '../../../src/utils/recipeShareText';
 import { scaleAmount, servingRatio } from '../../../src/utils/shoppingScale';
+import { getRecipeEmoji } from '../../../src/utils/recipeEmoji';
 
 type TabKey = 'ingredients' | 'steps' | 'memo' | 'history';
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: 'ingredients', label: '材料' },
-  { key: 'steps', label: '手順' },
-  { key: 'memo', label: 'メモ' },
-  { key: 'history', label: '履歴' },
-];
+// **ラベルは定数に焼き付けない。** import 時のロケールで固定される
+const TAB_KEYS: readonly TabKey[] = ['ingredients', 'steps', 'memo', 'history'];
 
-function getEmoji(title: string): string {
-  const map: Record<string, string> = {
-    肉じゃが: '🍲',
-    味噌汁: '🍜',
-    唐揚げ: '🍗',
-    炊き込みご飯: '🍚',
-    豚汁: '🫕',
-    ハンバーグ: '🍔',
-  };
-  return map[title] ?? '🍽️';
+function tabLabel(key: TabKey): string {
+  if (key === 'ingredients') return t('recipe.detail.tab.ingredients');
+  if (key === 'steps') return t('recipe.detail.tab.steps');
+  if (key === 'memo') return t('recipe.detail.tab.memo');
+  return t('recipe.detail.tab.history');
 }
 
 function formatDate(isoDate: string): string {
@@ -137,14 +130,14 @@ export default function RecipeDetailScreen() {
     [
       {
         key: 'cook',
-        title: '調理開始',
-        text: '全画面で手順を1つずつ表示します。タイマー・画面スリープ防止つきで料理に集中できます。',
+        title: t('recipe.detail.coach.cookTitle'),
+        text: t('recipe.detail.coach.cookText'),
         ref: cookRef,
       },
       {
         key: 'logShortcut',
-        title: '作ったら記録して、味を近づける',
-        text: '評価・メモ・写真をここから記録できます。感想を書くと、右上のメニューの「お店の味に近づける」でレシピを調整できます。',
+        title: t('recipe.detail.coach.logTitle'),
+        text: t('recipe.detail.coach.logText'),
         ref: logShortcutRef,
       },
     ],
@@ -156,7 +149,7 @@ export default function RecipeDetailScreen() {
   const goToTab = useCallback(
     (key: TabKey) => {
       setTab(key);
-      const index = TABS.findIndex((t) => t.key === key);
+      const index = TAB_KEYS.indexOf(key);
       pagerRef.current?.scrollTo({ x: index * pageWidth, animated: true });
     },
     [pageWidth],
@@ -165,7 +158,7 @@ export default function RecipeDetailScreen() {
   const handlePagerScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       if (pageWidth <= 0) return;
-      const key = TABS[Math.round(event.nativeEvent.contentOffset.x / pageWidth)]?.key;
+      const key = TAB_KEYS[Math.round(event.nativeEvent.contentOffset.x / pageWidth)];
       if (key) setTab(key);
     },
     [pageWidth],
@@ -178,7 +171,7 @@ export default function RecipeDetailScreen() {
     currentTabRef.current = tab;
   }, [tab]);
   useEffect(() => {
-    const index = TABS.findIndex((t) => t.key === currentTabRef.current);
+    const index = TAB_KEYS.indexOf(currentTabRef.current);
     pagerRef.current?.scrollTo({ x: index * pageWidth, animated: false });
   }, [pageWidth]);
 
@@ -201,17 +194,17 @@ export default function RecipeDetailScreen() {
 
   const handleDelete = () => {
     if (!id) return;
-    Alert.alert('レシピを削除', 'このレシピを削除しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
+    Alert.alert(t('recipe.detail.deleteTitle'), t('recipe.detail.deleteConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '削除',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           try {
             await deleteRecipe(id);
             router.replace('/(tabs)/recipes');
           } catch {
-            Alert.alert('削除に失敗しました', '時間をおいて再度お試しください。');
+            Alert.alert(t('recipe.detail.deleteFailedTitle'), t('recipe.detail.deleteFailedBody'));
           }
         },
       },
@@ -222,15 +215,17 @@ export default function RecipeDetailScreen() {
     if (!recipe) return;
     const added = await addMissingRecipeIngredientsToList(recipe.id);
     Alert.alert(
-      '買い物リスト',
-      added > 0 ? `足りない${added}件を買い物リストに追加しました` : 'すべて在庫にあります',
+      t('recipe.detail.shoppingTitle'),
+      added > 0
+        ? tCount('recipe.detail.shoppingAdded', added)
+        : t('recipe.detail.shoppingNothingMissing'),
     );
   };
 
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <Loading message="レシピを読み込んでいます" />
+        <Loading message={t('recipe.detail.loading')} />
       </View>
     );
   }
@@ -240,9 +235,9 @@ export default function RecipeDetailScreen() {
       <View style={styles.container}>
         <EmptyState
           icon="📖"
-          title="レシピが見つかりません"
-          message="削除されたか、参照できないレシピです。"
-          actionLabel="レシピ一覧へ戻る"
+          title={t('recipe.detail.notFoundTitle')}
+          message={t('recipe.detail.notFoundMessage')}
+          actionLabel={t('recipe.detail.backToList')}
           onAction={() => router.replace('/(tabs)/recipes')}
         />
       </View>
@@ -264,11 +259,11 @@ export default function RecipeDetailScreen() {
             resizeMode="cover"
           />
         ) : (
-          <Text style={styles.heroEmoji}>{getEmoji(recipe.title)}</Text>
+          <Text style={styles.heroEmoji}>{getRecipeEmoji(recipe.title)}</Text>
         )}
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={20} color={Colors.paper} />
-          <Text style={styles.backText}>戻る</Text>
+          <Text style={styles.backText}>{t('common.back')}</Text>
         </Pressable>
         <Pressable
           ref={menuRef}
@@ -276,7 +271,7 @@ export default function RecipeDetailScreen() {
           style={styles.menuButton}
           onPress={() => setShowMenu(!showMenu)}
           hitSlop={12}
-          accessibilityLabel="メニュー（編集・お店の味に近づける・版履歴）"
+          accessibilityLabel={t('recipe.detail.menuLabel')}
         >
           <View style={styles.heroButton}>
             <MoreVertical size={20} color={Colors.paper} />
@@ -289,7 +284,9 @@ export default function RecipeDetailScreen() {
           style={styles.pinButton}
           onPress={() => void handleTogglePin()}
           hitSlop={12}
-          accessibilityLabel={recipe.pinnedAt != null ? '再現したいから外す' : '再現したいに追加'}
+          accessibilityLabel={
+            recipe.pinnedAt != null ? t('recipe.detail.pinRemove') : t('recipe.detail.pinAdd')
+          }
         >
           <View style={styles.heroButton}>
             <Bookmark
@@ -310,7 +307,7 @@ export default function RecipeDetailScreen() {
               router.push(`/(tabs)/recipes/${id}/refine`);
             }}
           >
-            <Text style={styles.menuItemText}>お店の味に近づける</Text>
+            <Text style={styles.menuItemText}>{t('recipe.detail.menu.refine')}</Text>
           </Pressable>
           <Pressable
             style={styles.menuItem}
@@ -319,7 +316,7 @@ export default function RecipeDetailScreen() {
               router.push(`/recipes/${id}/edit`);
             }}
           >
-            <Text style={styles.menuItemText}>編集</Text>
+            <Text style={styles.menuItemText}>{t('recipe.detail.menu.edit')}</Text>
           </Pressable>
           <Pressable
             style={styles.menuItem}
@@ -328,7 +325,7 @@ export default function RecipeDetailScreen() {
               void handleShare();
             }}
           >
-            <Text style={styles.menuItemText}>共有</Text>
+            <Text style={styles.menuItemText}>{t('recipe.detail.menu.share')}</Text>
           </Pressable>
           <Pressable
             style={styles.menuItem}
@@ -337,7 +334,7 @@ export default function RecipeDetailScreen() {
               router.push(`/(tabs)/recipes/${id}/revisions`);
             }}
           >
-            <Text style={styles.menuItemText}>版履歴</Text>
+            <Text style={styles.menuItemText}>{t('recipe.detail.menu.revisions')}</Text>
           </Pressable>
           <Pressable
             style={styles.menuItem}
@@ -346,7 +343,9 @@ export default function RecipeDetailScreen() {
               handleDelete();
             }}
           >
-            <Text style={[styles.menuItemText, styles.menuItemDestructive]}>削除</Text>
+            <Text style={[styles.menuItemText, styles.menuItemDestructive]}>
+              {t('common.delete')}
+            </Text>
           </Pressable>
         </View>
       )}
@@ -355,9 +354,15 @@ export default function RecipeDetailScreen() {
         <Text style={styles.title}>{recipe.title}</Text>
         <View style={styles.metaRow}>
           {recipe.rating != null && <Stars rating={recipe.rating} size={13} />}
-          {recipe.servings != null && <Text style={styles.metaText}>👥 {recipe.servings}人前</Text>}
+          {recipe.servings != null && (
+            <Text style={styles.metaText}>
+              👥 {tCount('recipe.detail.servingsValue', recipe.servings)}
+            </Text>
+          )}
           {recipe.cookTimeMin != null && (
-            <Text style={styles.metaText}>⏱ {recipe.cookTimeMin}分</Text>
+            <Text style={styles.metaText}>
+              ⏱ {tCount('recipe.detail.cookTimeValue', recipe.cookTimeMin)}
+            </Text>
           )}
         </View>
         {recipe.tags.length > 0 && (
@@ -370,7 +375,7 @@ export default function RecipeDetailScreen() {
       </View>
 
       <View style={styles.tabBar}>
-        {TABS.map(({ key, label }) => (
+        {TAB_KEYS.map((key) => (
           <Pressable
             key={key}
             style={styles.tabItem}
@@ -378,7 +383,9 @@ export default function RecipeDetailScreen() {
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === key }}
           >
-            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>{label}</Text>
+            <Text style={[styles.tabText, tab === key && styles.tabTextActive]}>
+              {tabLabel(key)}
+            </Text>
             {tab === key && <View style={styles.tabUnderline} />}
           </Pressable>
         ))}
@@ -398,10 +405,10 @@ export default function RecipeDetailScreen() {
             {recipe.servings != null && (
               <View style={styles.servingsRow}>
                 <NumberStepper
-                  label="人数"
+                  label={t('common.servings')}
                   value={targetServings ?? recipe.servings}
                   onChange={setTargetServings}
-                  suffix="人前"
+                  suffix={t('recipe.detail.servingsSuffix')}
                   min={1}
                 />
               </View>
@@ -429,7 +436,7 @@ export default function RecipeDetailScreen() {
               onPress={handleAddMissingToList}
             >
               <ShoppingCart size={16} color={Colors.gold} />
-              <Text style={styles.addToListText}>足りない材料を買い物リストに追加</Text>
+              <Text style={styles.addToListText}>{t('recipe.detail.addMissingLabel')}</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -455,8 +462,8 @@ export default function RecipeDetailScreen() {
                       <Text style={styles.timerText}>
                         ⏱{' '}
                         {step.timerSec >= 60
-                          ? `${Math.floor(step.timerSec / 60)}分`
-                          : `${step.timerSec}秒`}
+                          ? tCount('recipe.detail.stepTimerMinutes', Math.floor(step.timerSec / 60))
+                          : tCount('recipe.detail.stepTimerSeconds', step.timerSec)}
                       </Text>
                     </View>
                   )}
@@ -479,7 +486,7 @@ export default function RecipeDetailScreen() {
             </View>
           ) : (
             <View style={styles.memoContainer}>
-              <Text style={styles.memoPlaceholder}>メモはまだありません</Text>
+              <Text style={styles.memoPlaceholder}>{t('recipe.detail.emptyMemo')}</Text>
             </View>
           )}
         </ScrollView>
@@ -488,10 +495,8 @@ export default function RecipeDetailScreen() {
           <View>
             {cookingLogs.length === 0 ? (
               <View style={styles.memoContainer}>
-                <Text style={styles.memoPlaceholder}>まだ調理記録がありません</Text>
-                <Text style={styles.historyHint}>
-                  調理完了後に「記録する」で評価・メモを残せます
-                </Text>
+                <Text style={styles.memoPlaceholder}>{t('recipe.detail.emptyHistory')}</Text>
+                <Text style={styles.historyHint}>{t('recipe.detail.emptyHistoryHint')}</Text>
               </View>
             ) : (
               cookingLogs.map((log) => {
@@ -525,7 +530,7 @@ export default function RecipeDetailScreen() {
           scaleTo={0.97}
           onPress={handleAddMissingToList}
           accessibilityRole="button"
-          accessibilityLabel="足りない材料を買い物リストに追加"
+          accessibilityLabel={t('recipe.detail.addMissingLabel')}
         >
           <ShoppingCart size={18} color={Colors.gold} />
         </PressableScale>
@@ -536,7 +541,7 @@ export default function RecipeDetailScreen() {
             onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/cook`)}
           >
             <Text style={styles.ctaText} numberOfLines={1}>
-              調理開始
+              {t('recipe.detail.startCooking')}
             </Text>
           </PressableScale>
         </View>
@@ -546,7 +551,7 @@ export default function RecipeDetailScreen() {
             scaleTo={0.97}
             onPress={() => router.push(`/(tabs)/recipes/${recipe.id}/log`)}
             accessibilityRole="button"
-            accessibilityLabel="作った記録をつける"
+            accessibilityLabel={t('recipe.detail.logShortcut')}
           >
             <ClipboardCheck size={18} color={Colors.gold} />
           </PressableScale>

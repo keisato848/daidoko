@@ -12,6 +12,15 @@ const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const androidDir = join(rootDir, 'apps', 'mobile', 'android');
 const options = parseArgs(process.argv.slice(2));
 
+// **Expo パッケージの版が SDK とずれていないか。** ずれたまま組むと、ビルドも
+// インストールも成功するのに**起動直後に NoSuchMethodError で落ちる**（JS 側の
+// テストは native を読まないので全部通ってしまう）。
+//
+// 実例: expo-localization を `^57.0.1`（遥かに新しい SDK 用）で入れてしまい、
+// expo-modules-core 3.0.30 に無い getDirectConverter を呼んで即クラッシュした。
+// `expo install --check` はこのリポジトリの tooling では動かないので自前で見る。
+assertExpoSdkVersions();
+
 // config plugin / app.json の変更は prebuild しないと android/ に反映されない
 // （注入がサイレント no-op になり EAS ビルド全滅の実績あり）。陳腐化を検知して警告する。
 if (!options.prebuild) {
@@ -126,11 +135,77 @@ if (!summary.ok) {
 console.log(`Android build OK: ${summary.artifact}`);
 
 /**
- * app.json / plugins/ の最終更新が android/ の生成物より新しければ、その一覧を返す。
+ * `apps/mobile/package.json` の Expo パッケージが、SDK の想定版と揃っているか。
+ *
+ * 揃っていないと、**ビルドは通るのに起動直後に落ちる**。しかも JS のテストは
+ * native を読まないので全部緑のまま。CI では絶対に捕まらないため、ここで止める。
+ */
+function assertExpoSdkVersions() {
+  let bundled;
+  try {
+    bundled = JSON.parse(
+      readFileSync(join(rootDir, 'node_modules', 'expo', 'bundledNativeModules.json'), 'utf8'),
+    );
+  } catch {
+    console.warn('[WARN] expo/bundledNativeModules.json を読めないため、版の検査を飛ばします。');
+    return;
+  }
+  const pkg = JSON.parse(readFileSync(join(rootDir, 'apps', 'mobile', 'package.json'), 'utf8'));
+  const declared = { ...pkg.dependencies, ...pkg.devDependencies };
+  const mismatched = [];
+
+  // メジャーだけ見る。SDK の想定は `~17.0.9` のような範囲で、パッチ差は
+  // 問題にならないが**メジャー違いは native の API が違う**
+  const major = (version) =>
+    String(version)
+      .replace(/^[~^>=<\s]+/, '')
+      .split('.')[0];
+
+  for (const [name, want] of Object.entries(bundled)) {
+    if (!(name in declared)) continue;
+
+    // **宣言と実際の両方を見る。** 実際（node_modules）だけだと、宣言がずれたまま
+    // ローカルに古い版が残っている状態を見逃し、EAS の新規インストールで初めて壊れる。
+    // 宣言だけだと、手で node_modules を触った状態を見逃す。
+    if (major(declared[name]) !== major(want)) {
+      mismatched.push(`${name}: 宣言 ${declared[name]} / SDK 想定 ${want}`);
+      continue;
+    }
+    let installed;
+    try {
+      installed = JSON.parse(
+        readFileSync(join(rootDir, 'node_modules', name, 'package.json'), 'utf8'),
+      ).version;
+    } catch {
+      continue; // 未インストール（省略可能な peer など）は対象外
+    }
+    if (major(installed) !== major(want)) {
+      mismatched.push(`${name}: 実際 ${installed} / SDK 想定 ${want}`);
+    }
+  }
+
+  if (mismatched.length > 0) {
+    console.error(
+      `[FAIL] Expo パッケージの版が SDK とずれています（${mismatched.length} 件）:\n` +
+        mismatched.map((line) => `       - ${line}`).join('\n') +
+        '\n       このまま組むと、インストールは成功するのに起動直後に落ちます。\n' +
+        '       apps/mobile/package.json を SDK 想定の版に直し、リポジトリルートで pnpm install してください。',
+    );
+    process.exit(1);
+  }
+}
+
+/**
+ * app.json / plugins/ / package.json の最終更新が android/ の生成物より新しければ、その一覧を返す。
  * android/ が未生成（初回）の場合は prebuild が必須なので全ソースを返す。
  */
 function detectPrebuildStaleness() {
-  const sources = [join(rootDir, 'apps', 'mobile', 'app.json')];
+  // package.json も見る。**ネイティブモジュールの追加・削除は app.json に出ない**ので、
+  // ここを見ないと prebuild が要ることに気づけない
+  const sources = [
+    join(rootDir, 'apps', 'mobile', 'app.json'),
+    join(rootDir, 'apps', 'mobile', 'package.json'),
+  ];
   const pluginsDir = join(rootDir, 'apps', 'mobile', 'plugins');
   try {
     for (const name of readdirSync(pluginsDir)) sources.push(join(pluginsDir, name));

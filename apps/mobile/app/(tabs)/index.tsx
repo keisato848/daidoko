@@ -36,6 +36,8 @@ import { PressableScale } from '../../src/components/PressableScale';
 import { Stars } from '../../src/components/Stars';
 import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
+import { t, tCount } from '../../src/i18n';
+import { formatMonthDay, formatMonthLabel } from '../../src/i18n/format';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
 import { getWantToCookRecipes } from '../../src/services/recipe.service';
 import { getTimeline } from '../../src/services/timeline.service';
@@ -51,15 +53,28 @@ import { computeMonthlyStats } from '../../src/utils/timelineStats';
 
 type FilterTab = 'week' | 'month' | 'all';
 
-const FILTER_LABELS: Record<FilterTab, string> = {
-  week: '今週',
-  month: '今月',
-  all: 'すべて',
-};
+const FILTER_TABS: readonly FilterTab[] = ['week', 'month', 'all'];
+
+// **モジュール定数にしない。** import 時のロケールで文言が固定され、
+// 起動時の言語判定より前に読まれると日本語のまま残る
+function filterLabel(tab: FilterTab): string {
+  if (tab === 'week') return t('home.filter.week');
+  if (tab === 'month') return t('home.filter.month');
+  return t('home.filter.all');
+}
+
+/**
+ * 空のときの見出し。**`${期間}の記録がありません` のようにラベルを差し込まない。**
+ * 日本語は「の」で繋がるが、英語は "Week's records not found" になって壊れる。
+ */
+function emptyTitle(filter: FilterTab): string {
+  if (filter === 'all') return t('home.empty.allTitle');
+  if (filter === 'week') return t('home.empty.weekTitle');
+  return t('home.empty.monthTitle');
+}
 
 function formatDate(isoDate: string): string {
-  const d = new Date(isoDate);
-  return `${String(d.getMonth() + 1).padStart(2, '0')}月${String(d.getDate()).padStart(2, '0')}日`;
+  return formatMonthDay(new Date(isoDate));
 }
 
 function getFilterDate(filter: FilterTab): Date | null {
@@ -95,14 +110,14 @@ export default function HomeScreen() {
     [
       {
         key: 'fab',
-        title: '記録もレシピもここから',
-        text: '作った料理の記録や、レシピの追加（手入力・URL取り込み・写真からAI作成）は「＋」から始めます。',
+        title: t('home.coach.fabTitle'),
+        text: t('home.coach.fabText'),
         ref: fabRef,
       },
       {
         key: 'cart',
-        title: '買い物リストと在庫',
-        text: '買い物リスト・家の在庫・レシート読み取り・「この在庫で作れるレシピ」はこのカートから。',
+        title: t('home.coach.cartTitle'),
+        text: t('home.coach.cartText'),
         ref: cartRef,
       },
     ],
@@ -126,7 +141,7 @@ export default function HomeScreen() {
   }, [allEntries, filter]);
 
   const monthlyStats = useMemo(() => computeMonthlyStats(allEntries), [allEntries]);
-  const monthLabel = `${new Date().getMonth() + 1}月`;
+  const monthLabel = formatMonthLabel(new Date());
 
   useFocusEffect(
     useCallback(() => {
@@ -171,22 +186,18 @@ export default function HomeScreen() {
     const count = selectedIds.size;
     if (count === 0) return;
 
-    Alert.alert(
-      '調理ログを削除',
-      `${count}件の調理ログを削除しますか？この操作は取り消せません。`,
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: '削除',
-          style: 'destructive',
-          onPress: async () => {
-            await Promise.all([...selectedIds].map((id) => deleteCookingLog(id)));
-            exitSelectMode();
-            await loadTimeline();
-          },
+    Alert.alert(t('home.delete.title'), tCount('home.delete.confirm', count), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          await Promise.all([...selectedIds].map((id) => deleteCookingLog(id)));
+          exitSelectMode();
+          await loadTimeline();
         },
-      ],
-    );
+      },
+    ]);
   }, [selectedIds, exitSelectMode, loadTimeline]);
 
   const renderItem = ({ item, index }: { item: TimelineEntry; index: number }) => {
@@ -240,7 +251,7 @@ export default function HomeScreen() {
                   <View style={styles.eatenOutBadge}>
                     <Store size={10} color={Colors.goldDim} />
                     <Text style={styles.eatenOutText} numberOfLines={1}>
-                      {item.placeName ? item.placeName : 'お店で食べた'}
+                      {item.placeName ? item.placeName : t('log.kind.eatenOut')}
                     </Text>
                   </View>
                 )}
@@ -264,18 +275,18 @@ export default function HomeScreen() {
           <Pressable style={styles.selectCancelBtn} onPress={exitSelectMode}>
             <X size={18} color={Colors.paper} />
           </Pressable>
-          <Text style={styles.selectCount}>{selectedIds.size}件選択中</Text>
+          <Text style={styles.selectCount}>{tCount('home.select.count', selectedIds.size)}</Text>
           <Pressable style={styles.selectAllBtn} onPress={handleSelectAll}>
-            <Text style={styles.selectAllText}>すべて選択</Text>
+            <Text style={styles.selectAllText}>{t('home.select.all')}</Text>
           </Pressable>
         </View>
       ) : (
         <View style={styles.filterBar}>
           <View style={styles.tabs}>
-            {(Object.keys(FILTER_LABELS) as FilterTab[]).map((key) => (
+            {FILTER_TABS.map((key) => (
               <Pressable key={key} onPress={() => setFilter(key)}>
                 <Text style={[styles.tab, filter === key ? styles.tabActive : styles.tabInactive]}>
-                  {FILTER_LABELS[key]}
+                  {filterLabel(key)}
                 </Text>
                 {filter === key && <View style={styles.tabIndicator} />}
               </Pressable>
@@ -288,19 +299,19 @@ export default function HomeScreen() {
               style={styles.headerAction}
               onPress={() => router.push('/calendar')}
               hitSlop={8}
-              accessibilityLabel="カレンダー"
+              accessibilityLabel={t('home.action.calendar')}
             >
               <CalendarDays size={18} color={Colors.goldDim} />
-              <Text style={styles.headerActionLabel}>暦</Text>
+              <Text style={styles.headerActionLabel}>{t('home.action.calendarLabel')}</Text>
             </Pressable>
             <Pressable
               style={styles.headerAction}
               onPress={() => router.push('/gallery')}
               hitSlop={8}
-              accessibilityLabel="ギャラリー"
+              accessibilityLabel={t('home.action.gallery')}
             >
               <LayoutGrid size={18} color={Colors.goldDim} />
-              <Text style={styles.headerActionLabel}>写真</Text>
+              <Text style={styles.headerActionLabel}>{t('home.action.galleryLabel')}</Text>
             </Pressable>
             <Pressable
               ref={cartRef}
@@ -308,21 +319,21 @@ export default function HomeScreen() {
               style={styles.headerAction}
               onPress={() => router.push('/(tabs)/shopping')}
               hitSlop={8}
-              accessibilityLabel="買い物リスト"
+              accessibilityLabel={t('home.action.shopping')}
             >
               <ShoppingCart size={18} color={Colors.goldDim} />
-              <Text style={styles.headerActionLabel}>買物</Text>
+              <Text style={styles.headerActionLabel}>{t('home.action.shoppingLabel')}</Text>
             </Pressable>
             <View style={styles.headerAction}>
               <HelpButton onPress={coach.show} size={18} />
-              <Text style={styles.headerActionLabel}>使い方</Text>
+              <Text style={styles.headerActionLabel}>{t('home.action.helpLabel')}</Text>
             </View>
           </View>
         </View>
       )}
 
       {loading ? (
-        <Loading message="調理記録を読み込んでいます" />
+        <Loading message={t('home.loading')} />
       ) : (
         <FlatList
           data={entries}
@@ -341,17 +352,15 @@ export default function HomeScreen() {
                   <View style={styles.bonusCard}>
                     <View style={styles.bonusTextWrap}>
                       <Text style={styles.bonusTitle}>
-                        AIレシピ {LAUNCH_BONUS_TOKENS} 回分をプレゼントしました
+                        {tCount('home.bonus.title', LAUNCH_BONUS_TOKENS)}
                       </Text>
-                      <Text style={styles.bonusBody}>
-                        お店で食べた料理を撮ると、家で作れるレシピになります。
-                      </Text>
+                      <Text style={styles.bonusBody}>{t('home.bonus.body')}</Text>
                     </View>
                     <Pressable
                       onPress={dismissBonus}
                       hitSlop={10}
                       accessibilityRole="button"
-                      accessibilityLabel="閉じる"
+                      accessibilityLabel={t('common.close')}
                     >
                       <X size={16} color={Colors.goldDim} />
                     </Pressable>
@@ -365,10 +374,10 @@ export default function HomeScreen() {
                   scaleTo={0.98}
                   onPress={() => router.push('/(tabs)/recipes/import-photo')}
                   accessibilityRole="button"
-                  accessibilityLabel="お店の料理を撮る"
+                  accessibilityLabel={t('home.capture')}
                 >
                   <Camera size={20} color={Colors.bg} />
-                  <Text style={styles.captureText}>お店の料理を撮る</Text>
+                  <Text style={styles.captureText}>{t('home.capture')}</Text>
                 </PressableScale>
 
                 {wantList.length > 0 && (
@@ -376,7 +385,7 @@ export default function HomeScreen() {
                     <View style={styles.wantHeader}>
                       <Bookmark size={13} color={Colors.goldDim} fill={Colors.goldDim} />
                       {/* 主役が再現ループになったので「再現したい」。データは pinned_at のまま */}
-                      <Text style={styles.wantTitle}>再現したい</Text>
+                      <Text style={styles.wantTitle}>{t('home.wantTitle')}</Text>
                     </View>
                     <ScrollView
                       horizontal
@@ -417,17 +426,11 @@ export default function HomeScreen() {
               // 🏪 はコンビニに見えて「お店で食べた味」と合わない（実機で確認）。
               // 提灯なら外で食べる店の記号として通じる
               icon={filter === 'all' ? '🏮' : '🗓'}
-              title={
-                filter === 'all'
-                  ? 'お店で食べたあの味、撮っておきませんか'
-                  : `${FILTER_LABELS[filter]}の記録がありません`
-              }
+              title={emptyTitle(filter)}
               message={
-                filter === 'all'
-                  ? '写真を1枚撮るだけで、AIが家で作れるレシピにします。作ったあとの感想で、お店の味に近づけていけます。'
-                  : '別の期間を選ぶか、新しく記録を追加してみましょう。'
+                filter === 'all' ? t('home.empty.allMessage') : t('home.empty.filteredMessage')
               }
-              actionLabel={filter === 'all' ? 'お店の料理を撮る' : undefined}
+              actionLabel={filter === 'all' ? t('home.capture') : undefined}
               onAction={
                 filter === 'all' ? () => router.push('/(tabs)/recipes/import-photo') : undefined
               }
@@ -451,7 +454,7 @@ export default function HomeScreen() {
             <Text
               style={[styles.actionBtnText, selectedIds.size === 0 && styles.actionBtnTextDisabled]}
             >
-              削除
+              {t('common.delete')}
             </Text>
           </Pressable>
         </View>

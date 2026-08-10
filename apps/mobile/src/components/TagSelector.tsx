@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
+import { t } from '../i18n';
 
 interface TagSelectorProps {
   selectedTags: string[];
@@ -28,7 +29,7 @@ export function TagSelector({ selectedTags, availableTags, onToggle, onAdd }: Ta
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>タグ</Text>
+      <Text style={styles.label}>{t('ui.tag.section')}</Text>
       <View style={styles.chips}>
         {availableTags.map((tag) => {
           const isSelected = selectedTags.includes(tag);
@@ -60,7 +61,7 @@ export function TagSelector({ selectedTags, availableTags, onToggle, onAdd }: Ta
           value={newTag}
           onChangeText={setNewTag}
           onSubmitEditing={handleAdd}
-          placeholder="新しいタグを追加"
+          placeholder={t('ui.tag.addPlaceholder')}
           placeholderTextColor={Colors.muted}
           returnKeyType="done"
         />
@@ -69,7 +70,7 @@ export function TagSelector({ selectedTags, availableTags, onToggle, onAdd }: Ta
           onPress={handleAdd}
           disabled={!newTag.trim()}
         >
-          <Text style={styles.addButtonText}>追加</Text>
+          <Text style={styles.addButtonText}>{t('common.add')}</Text>
         </Pressable>
       </View>
     </View>

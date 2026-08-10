@@ -1,6 +1,8 @@
+import { t } from '../i18n';
 /**
  * ImagePreprocess service — adapter boundary for OCR image preparation.
  */
+
 export type ImageQualityWarningCode = 'IMAGE_TOO_SMALL' | 'IMAGE_TOO_LARGE';
 
 export interface ImageQualityWarning {
@@ -40,10 +42,10 @@ function buildWarnings(
 ): ImageQualityWarning[] {
   const warnings: ImageQualityWarning[] = [];
   if (Math.min(info.width, info.height) < options.minShortEdge) {
-    warnings.push({ code: 'IMAGE_TOO_SMALL', message: '画像が小さすぎます' });
+    warnings.push({ code: 'IMAGE_TOO_SMALL', message: t('error.imageTooSmall') });
   }
   if (info.fileSizeBytes != null && info.fileSizeBytes > options.maxFileSizeBytes) {
-    warnings.push({ code: 'IMAGE_TOO_LARGE', message: '画像サイズが大きすぎます' });
+    warnings.push({ code: 'IMAGE_TOO_LARGE', message: t('error.imageTooLarge') });
   }
   return warnings;
 }

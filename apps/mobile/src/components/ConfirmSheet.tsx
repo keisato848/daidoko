@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
 import { BottomSheet } from './BottomSheet';
+import { t } from '../i18n';
 
 interface ConfirmSheetProps {
   visible: boolean;
@@ -22,7 +23,7 @@ export function ConfirmSheet({
   onConfirm,
   title,
   message,
-  confirmLabel = '確認',
+  confirmLabel = t('ui.confirm.title'),
   destructive = true,
 }: ConfirmSheetProps) {
   return (
@@ -30,7 +31,7 @@ export function ConfirmSheet({
       <Text style={styles.message}>{message}</Text>
       <View style={styles.buttons}>
         <Pressable style={styles.cancelButton} onPress={onClose}>
-          <Text style={styles.cancelText}>キャンセル</Text>
+          <Text style={styles.cancelText}>{t('common.cancel')}</Text>
         </Pressable>
         <Pressable
           style={[styles.confirmButton, destructive && styles.destructiveButton]}

@@ -4,6 +4,7 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
+import { t } from '../i18n';
 
 interface IngredientRowProps {
   name: string;
@@ -33,7 +34,7 @@ export function IngredientRow({
           style={styles.groupInput}
           value={groupLabel}
           onChangeText={onChangeGroup}
-          placeholder="グループ（例: A 調味料）"
+          placeholder={t('ui.ingredient.groupPlaceholder')}
           placeholderTextColor={Colors.muted}
         />
       )}
@@ -42,14 +43,14 @@ export function IngredientRow({
           style={[styles.input, styles.nameInput]}
           value={name}
           onChangeText={onChangeName}
-          placeholder="材料名"
+          placeholder={t('ui.ingredient.namePlaceholder')}
           placeholderTextColor={Colors.muted}
         />
         <TextInput
           style={[styles.input, styles.amountInput]}
           value={amount}
           onChangeText={onChangeAmount}
-          placeholder="分量"
+          placeholder={t('ui.ingredient.amountPlaceholder')}
           placeholderTextColor={Colors.muted}
         />
         <Pressable style={styles.removeButton} onPress={onRemove} hitSlop={8}>

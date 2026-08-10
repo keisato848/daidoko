@@ -21,6 +21,7 @@ import { runOcrAgent, type OcrAgentOutput } from '../../../src/agents/ocr.agent'
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
+import { t } from '../../../src/i18n';
 import { createRecipe } from '../../../src/services/recipe.service';
 import { createOcrSource } from '../../../src/services/source.service';
 import {
@@ -42,11 +43,11 @@ type Phase = 'select' | 'processing' | 'preview';
 
 const isAndroid = Platform.OS === 'android';
 
-const CONFIDENCE_LABEL: Record<OcrAgentOutput['confidence'], string> = {
-  high: '読み取り精度: 高',
-  medium: '読み取り精度: 中',
-  low: '読み取り精度: 低',
-};
+function accuracyLabel(confidence: OcrAgentOutput['confidence']): string {
+  if (confidence === 'high') return t('recipeImport.ocr.accuracy.high');
+  if (confidence === 'medium') return t('recipeImport.ocr.accuracy.medium');
+  return t('recipeImport.ocr.accuracy.low');
+}
 
 export default function ImportOcrScreen() {
   const router = useRouter();
@@ -105,7 +106,7 @@ export default function ImportOcrScreen() {
       );
 
       if (!result.ok || !result.data) {
-        setErrorMsg(result.error?.message ?? 'OCR 処理に失敗しました');
+        setErrorMsg(result.error?.message ?? t('recipeImport.ocr.failed'));
         setPhase('select');
         return;
       }
@@ -130,7 +131,7 @@ export default function ImportOcrScreen() {
           setPhase('select');
           return;
         }
-        setErrorMsg(error instanceof Error ? error.message : 'OCR 処理に失敗しました');
+        setErrorMsg(error instanceof Error ? error.message : t('recipeImport.ocr.failed'));
         setPhase('select');
       }
     },
@@ -145,7 +146,7 @@ export default function ImportOcrScreen() {
         capturedAt: capturedPhoto?.takenAt,
       });
       await createRecipe({ ...data, sourceId });
-      setToastMessage('レシピを保存しました');
+      setToastMessage(t('recipeImport.saved'));
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
     [capturedPhoto?.takenAt, ocrResult, router],
@@ -158,7 +159,7 @@ export default function ImportOcrScreen() {
           <View style={styles.sourceBanner}>
             <Camera size={12} color={Colors.goldDim} />
             <Text style={styles.sourceName}>
-              {[CONFIDENCE_LABEL[ocrResult.confidence], ...ocrResult.warnings]
+              {[accuracyLabel(ocrResult.confidence), ...ocrResult.warnings]
                 .filter(Boolean)
                 .join(' / ')}
             </Text>
@@ -168,8 +169,8 @@ export default function ImportOcrScreen() {
           initialValues={ocrResult?.draft}
           onSubmit={handleSave}
           onCancel={() => setPhase('select')}
-          title="読み取り結果を確認・編集"
-          submitLabel="保存"
+          title={t('recipeImport.ocr.formTitle')}
+          submitLabel={t('common.save')}
         />
         <Toast
           message={toastMessage ?? ''}
@@ -186,7 +187,7 @@ export default function ImportOcrScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>文字入り画像から読み取り</Text>
+        <Text style={styles.headerTitle}>{t('recipeImport.ocr.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -197,10 +198,8 @@ export default function ImportOcrScreen() {
 
         {isAndroid ? (
           <>
-            <Text style={styles.title}>文字入り画像を読み取り</Text>
-            <Text style={styles.description}>
-              レシピ本・手書きメモ・切り抜きの文字を端末内で読み取り、材料・手順の下書きを作成します。
-            </Text>
+            <Text style={styles.title}>{t('recipeImport.ocr.heading')}</Text>
+            <Text style={styles.description}>{t('recipeImport.ocr.lead')}</Text>
 
             {capturedPhoto && (
               <Image source={{ uri: capturedPhoto.localPath }} style={styles.previewImage} />
@@ -208,63 +207,57 @@ export default function ImportOcrScreen() {
 
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
             {!providerReady && (
-              <Text style={styles.noticeText}>
-                このビルドでは Android OCR provider を初期化できませんでした
-              </Text>
+              <Text style={styles.noticeText}>{t('recipeImport.ocr.providerUnavailable')}</Text>
             )}
 
             {phase === 'processing' ? (
               <View style={styles.processingBox}>
                 <ActivityIndicator size="large" color={Colors.gold} />
-                <Text style={styles.processingText}>端末内で読み取っています...</Text>
+                <Text style={styles.processingText}>{t('recipeImport.ocr.reading')}</Text>
               </View>
             ) : (
               <View style={styles.actionGrid}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="カメラで撮影"
+                  accessibilityLabel={t('common.takePhoto')}
                   style={[styles.primaryButton, !providerReady && styles.buttonDisabled]}
                   onPress={() => handleRead('camera')}
                   disabled={!providerReady}
                 >
                   <Camera size={18} color={Colors.bg} />
-                  <Text style={styles.primaryButtonText}>カメラで撮影</Text>
+                  <Text style={styles.primaryButtonText}>{t('common.takePhoto')}</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="ギャラリーから選ぶ"
+                  accessibilityLabel={t('common.pickFromGallery')}
                   style={[styles.secondaryButton, !providerReady && styles.buttonDisabled]}
                   onPress={() => handleRead('gallery')}
                   disabled={!providerReady}
                 >
                   <ImageIcon size={18} color={Colors.gold} />
-                  <Text style={styles.secondaryButtonText}>ギャラリーから選ぶ</Text>
+                  <Text style={styles.secondaryButtonText}>{t('common.pickFromGallery')}</Text>
                 </Pressable>
               </View>
             )}
           </>
         ) : (
           <>
-            <Text style={styles.title}>文字読み取りはネイティブアプリ専用です</Text>
-            <Text style={styles.description}>
-              カメラ文字認識は Android アプリで先行対応中です。
-              {'\n\n'}
-              Web ブラウザからお使いの場合は、手動入力をご利用ください。
-            </Text>
+            <Text style={styles.title}>{t('recipeImport.ocr.webTitle')}</Text>
+            <Text style={styles.description}>{t('recipeImport.ocr.webDescription')}</Text>
           </>
         )}
 
         <View style={styles.divider} />
 
-        <Text style={styles.altLabel}>代わりに手動入力する</Text>
+        <Text style={styles.altLabel}>{t('recipeImport.ocr.manualLabel')}</Text>
         <Pressable style={styles.manualButton} onPress={handleManual}>
           <PenLine size={18} color={Colors.bg} />
-          <Text style={styles.manualButtonText}>手動で入力する</Text>
+          <Text style={styles.manualButtonText}>{t('recipeImport.ocr.manualAction')}</Text>
         </Pressable>
         {capturedPhoto && phase !== 'processing' && (
           <Pressable style={styles.retryButton} onPress={() => setCapturedPhoto(null)}>
             <RotateCcw size={14} color={Colors.muted} />
-            <Text style={styles.retryButtonText}>画像をクリア</Text>
+            <Text style={styles.retryButtonText}>{t('recipeImport.ocr.clearImage')}</Text>
           </Pressable>
         )}
       </ScrollView>

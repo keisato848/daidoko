@@ -17,6 +17,7 @@ import {
   type PremiumOffering,
   type PurchaseOutcome,
 } from './entitlement.types';
+import { t } from '../i18n';
 
 function hasPremium(info: CustomerInfo): boolean {
   return info.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
@@ -54,7 +55,7 @@ export class RevenueCatEntitlementProvider implements EntitlementProvider {
 
   async purchasePremium(): Promise<PurchaseOutcome> {
     const pkg = this.cachedPackage ?? (await this.loadCurrentPackage());
-    if (!pkg) throw new EntitlementUnavailableError('購入できる商品が見つかりませんでした');
+    if (!pkg) throw new EntitlementUnavailableError(t('ads.noProducts'));
     try {
       const { customerInfo } = await Purchases.purchasePackage(pkg);
       return { success: hasPremium(customerInfo) };

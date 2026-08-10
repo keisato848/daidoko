@@ -10,6 +10,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
+import { t } from '../../../src/i18n';
 import { type RecipeDraft, runImportAgent } from '../../../src/agents/import.agent';
 import { createRecipe } from '../../../src/services/recipe.service';
 import { applyAutoStepTimers } from '../../../src/utils/stepTimer';
@@ -59,7 +60,7 @@ export default function ImportUrlScreen() {
       setDraft(result.data);
       setPhase('preview');
     } else {
-      setErrorMsg(result.error?.message ?? '取り込みに失敗しました');
+      setErrorMsg(result.error?.message ?? t('recipeImport.url.failed'));
       setPhase('input');
     }
     abortRef.current = null;
@@ -87,12 +88,12 @@ export default function ImportUrlScreen() {
           <Pressable onPress={handleCancel} hitSlop={12}>
             <X size={20} color={Colors.muted} />
           </Pressable>
-          <Text style={styles.headerTitle}>URLから取り込み</Text>
+          <Text style={styles.headerTitle}>{t('recipeImport.url.title')}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
         <View style={styles.inputSection}>
-          <Text style={styles.inputLabel}>レシピページのURLを貼り付けてください</Text>
+          <Text style={styles.inputLabel}>{t('recipeImport.url.heading')}</Text>
           <View style={styles.inputRow}>
             <Globe size={16} color={Colors.muted} />
             <TextInput
@@ -114,15 +115,13 @@ export default function ImportUrlScreen() {
           </View>
           {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
-          <Text style={styles.supportedNote}>
-            対応サイト: クラシル・デリッシュキッチン・Nadia など JSON-LD 対応のレシピサイト
-          </Text>
+          <Text style={styles.supportedNote}>{t('recipeImport.url.supportedSites')}</Text>
         </View>
 
         {phase === 'fetching' ? (
           <View style={styles.loadingArea}>
             <ActivityIndicator size="large" color={Colors.gold} />
-            <Text style={styles.loadingText}>レシピを取り込んでいます...</Text>
+            <Text style={styles.loadingText}>{t('recipeImport.url.importing')}</Text>
           </View>
         ) : (
           <View style={styles.actions}>
@@ -131,7 +130,7 @@ export default function ImportUrlScreen() {
               onPress={handleFetch}
               disabled={!url.trim()}
             >
-              <Text style={styles.fetchButtonText}>取り込む</Text>
+              <Text style={styles.fetchButtonText}>{t('recipeImport.url.submit')}</Text>
             </Pressable>
           </View>
         )}
@@ -145,18 +144,20 @@ export default function ImportUrlScreen() {
       {draft?.sourceName && (
         <View style={styles.sourceBanner}>
           <Globe size={12} color={Colors.goldDim} />
-          <Text style={styles.sourceName}>取り込み元: {draft.sourceName}</Text>
+          <Text style={styles.sourceName}>
+            {t('recipeImport.url.sourceLabel')} {draft.sourceName}
+          </Text>
         </View>
       )}
       <RecipeForm
         initialValues={draft ? draftToFormData(draft) : undefined}
         onSubmit={handleSave}
         onCancel={() => setPhase('input')}
-        title="レシピを確認・編集"
-        submitLabel="保存"
+        title={t('recipeImport.formTitle')}
+        submitLabel={t('common.save')}
       />
       <Toast
-        message="レシピを保存しました！"
+        message={t('recipeImport.url.saved')}
         visible={showToast}
         onDismiss={() => setShowToast(false)}
       />

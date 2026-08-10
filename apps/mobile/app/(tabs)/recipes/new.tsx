@@ -7,6 +7,7 @@ import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
 import { RecipeForm } from '../../../src/components/RecipeForm';
+import { t } from '../../../src/i18n';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
 import { useRecipeDraft } from '../../../src/hooks/useRecipeDraft';
@@ -57,11 +58,11 @@ export default function NewRecipeScreen() {
         initialValues={draft as RecipeFormData | undefined}
         onSubmit={handleSubmit}
         onCancel={() => router.back()}
-        title="レシピ作成"
+        title={t('recipe.form.createTitle')}
         onFormChange={saveDraft}
       />
       <Toast
-        message="レシピを保存しました"
+        message={t('recipe.form.saved')}
         visible={showToast}
         onDismiss={() => setShowToast(false)}
       />

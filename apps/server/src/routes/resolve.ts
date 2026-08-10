@@ -10,11 +10,14 @@ import { z } from 'zod';
 
 import { GeminiNameResolver, ResolveConfigError, type NameResolver } from '../lib/name-resolve.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
+import { parseOutputLocale } from '../lib/output-locale.js';
 
 const resolveRouter = new Hono();
 
 const namesSchema = z.object({
   names: z.array(z.string().min(1).max(80)).min(1).max(50),
+  /** 端末の言語。正規化後の食材名の言語を決める。省略時は ja。 */
+  locale: z.enum(['ja', 'en']).optional(),
 });
 
 let providerOverride: NameResolver | null = null;
@@ -36,7 +39,7 @@ resolveRouter.post('/names', zValidator('json', namesSchema), async (c) => {
     return c.json({ items: [] });
   }
 
-  const { names } = c.req.valid('json');
+  const { names, locale } = c.req.valid('json');
 
   let provider: NameResolver;
   try {
@@ -47,7 +50,7 @@ resolveRouter.post('/names', zValidator('json', namesSchema), async (c) => {
   }
 
   try {
-    const items = await provider.resolve(names);
+    const items = await provider.resolve(names, parseOutputLocale(locale));
     return c.json({ items });
   } catch {
     return c.json({ items: [] });

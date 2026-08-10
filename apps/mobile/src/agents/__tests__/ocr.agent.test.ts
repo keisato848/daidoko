@@ -2,6 +2,7 @@ import { AgentBridge } from '@daidoko/shared';
 
 import { registerOcrAgent, runOcrAgent } from '../ocr.agent';
 import type { OcrRecognitionResult } from '../../services/ocr.service';
+import { t } from '../../i18n';
 
 function recognition(rawText: string): OcrRecognitionResult {
   return { rawText, blocks: [], confidence: 'high', warnings: [] };
@@ -53,7 +54,7 @@ describe('OCR-AGT-02 runOcrAgent errors', () => {
       ok: false,
       error: {
         code: 'OCR_FAILED',
-        message: 'クライアントOCR providerが設定されていません',
+        message: t('recipeImport.ocr.providerNotConfigured'),
         retryable: true,
       },
     });

@@ -15,6 +15,7 @@ import {
   type PremiumOffering,
   type PurchaseOutcome,
 } from './entitlement.types';
+import { t } from '../i18n';
 
 const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -30,9 +31,7 @@ export class StubEntitlementProvider implements EntitlementProvider {
     return null;
   }
   async purchasePremium(): Promise<PurchaseOutcome> {
-    throw new EntitlementUnavailableError(
-      'プレミアムはまだご利用いただけません。アプリの更新をお待ちください。',
-    );
+    throw new EntitlementUnavailableError(t('ads.premiumUnavailable'));
   }
   async restore(): Promise<boolean> {
     return false;

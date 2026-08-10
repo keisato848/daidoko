@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { RecipeForm } from '../../../src/components/RecipeForm';
+import { t } from '../../../src/i18n';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
 import { getRecipeDetail, updateRecipe } from '../../../src/services/recipe.service';
@@ -94,11 +95,11 @@ export default function EditRecipeScreen() {
         initialValues={initialValues}
         onSubmit={handleSubmit}
         onCancel={() => router.back()}
-        submitLabel="更新"
-        title="レシピ編集"
+        submitLabel={t('recipe.form.update')}
+        title={t('recipe.form.editTitle')}
       />
       <Toast
-        message="レシピを更新しました"
+        message={t('recipe.form.updated')}
         visible={showToast}
         onDismiss={() => setShowToast(false)}
       />

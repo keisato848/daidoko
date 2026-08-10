@@ -14,12 +14,13 @@ import type {
   FamilyRole,
   JoinFamilyResult,
 } from './types';
+import { t } from '../i18n';
 
 export const CURRENT_USER_ID = 'user-kei';
 export const CURRENT_FAMILY_ID = 'family-001';
 
 const DEFAULT_USER_NAME = '';
-const DEFAULT_FAMILY_NAME = 'わたしの台所';
+const DEFAULT_FAMILY_NAME = t('family.defaultGroupName');
 const DEFAULT_INVITE_CODE = 'DK0001';
 const INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -141,7 +142,7 @@ export async function getFamilyMembers(): Promise<FamilyMember[]> {
   return rows.map((row) => ({
     id: row.id,
     userId: row.userId,
-    displayName: row.displayName ?? '不明',
+    displayName: row.displayName ?? t('common.unknown'),
     avatarUrl: row.avatarUrl,
     role: row.role === 'owner' ? 'owner' : 'member',
     joinedAt: row.joinedAt,
@@ -151,7 +152,7 @@ export async function getFamilyMembers(): Promise<FamilyMember[]> {
 
 export async function updateCurrentUserDisplayName(displayName: string): Promise<CurrentUser> {
   const trimmed = displayName.trim();
-  if (trimmed.length > 32) throw new RangeError('表示名は32文字以内で入力してください');
+  if (trimmed.length > 32) throw new RangeError(t('family.validation.displayNameTooLong'));
 
   if (!isNativePlatform) {
     mockCurrentUser = { ...mockCurrentUser, displayName: trimmed };
@@ -171,8 +172,8 @@ export async function updateCurrentUserDisplayName(displayName: string): Promise
 
 export async function updateCurrentFamilyName(name: string): Promise<CurrentFamily> {
   const trimmed = name.trim();
-  if (!trimmed) throw new RangeError('グループ名を入力してください');
-  if (trimmed.length > 40) throw new RangeError('グループ名は40文字以内で入力してください');
+  if (!trimmed) throw new RangeError(t('family.validation.groupNameRequired'));
+  if (trimmed.length > 40) throw new RangeError(t('family.validation.groupNameTooLong'));
 
   if (!isNativePlatform) {
     mockCurrentFamily = { ...mockCurrentFamily, name: trimmed };
@@ -192,8 +193,8 @@ export async function addFamilyMember(
   role: FamilyRole = 'member',
 ): Promise<FamilyMember> {
   const trimmed = displayName.trim();
-  if (!trimmed) throw new RangeError('メンバー名を入力してください');
-  if (trimmed.length > 32) throw new RangeError('メンバー名は32文字以内で入力してください');
+  if (!trimmed) throw new RangeError(t('family.validation.memberNameRequired'));
+  if (trimmed.length > 32) throw new RangeError(t('family.validation.memberNameTooLong'));
 
   const memberRole: FamilyRole = role === 'owner' ? 'owner' : 'member';
   const userId = generateId();
@@ -246,7 +247,7 @@ export async function removeFamilyMember(memberId: string): Promise<void> {
   if (!isNativePlatform) {
     const target = mockMembers.find((member) => member.id === memberId);
     if (!target) return;
-    if (target.role === 'owner') throw new Error('オーナーは削除できません');
+    if (target.role === 'owner') throw new Error(t('family.validation.cannotRemoveOwner'));
     mockMembers = mockMembers.filter((member) => member.id !== memberId);
     mockCurrentFamily = { ...mockCurrentFamily, memberCount: mockMembers.length };
     return;
@@ -259,7 +260,7 @@ export async function removeFamilyMember(memberId: string): Promise<void> {
     .where(eq(schema.familyMembers.id, memberId))
     .limit(1);
   if (rows.length === 0) return;
-  if (rows[0].role === 'owner') throw new Error('オーナーは削除できません');
+  if (rows[0].role === 'owner') throw new Error(t('family.validation.cannotRemoveOwner'));
 
   await db.delete(schema.familyMembers).where(eq(schema.familyMembers.id, memberId));
 }
@@ -293,11 +294,11 @@ export async function rotateCurrentFamilyInviteCode(): Promise<CurrentFamily> {
 
 export async function joinFamilyByInviteCode(rawCode: string): Promise<JoinFamilyResult> {
   const inviteCode = normalizeInviteCode(rawCode);
-  if (!inviteCode) throw new RangeError('招待コードを入力してください');
+  if (!inviteCode) throw new RangeError(t('family.validation.inviteCodeRequired'));
 
   if (!isNativePlatform) {
     if (inviteCode !== mockCurrentFamily.inviteCode) {
-      throw new Error('招待コードが見つかりません');
+      throw new Error(t('family.validation.inviteCodeNotFound'));
     }
     return {
       status: 'already-member',
@@ -311,7 +312,7 @@ export async function joinFamilyByInviteCode(rawCode: string): Promise<JoinFamil
     .from(schema.families)
     .where(eq(schema.families.inviteCode, inviteCode))
     .limit(1);
-  if (familyRows.length === 0) throw new Error('招待コードが見つかりません');
+  if (familyRows.length === 0) throw new Error(t('family.validation.inviteCodeNotFound'));
 
   const existingMember = await db
     .select({ id: schema.familyMembers.id })

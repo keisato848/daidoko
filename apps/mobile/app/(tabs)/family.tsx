@@ -18,6 +18,7 @@ import {
 
 import { Avatar } from '../../src/components/Avatar';
 import { Colors } from '../../src/constants/theme';
+import { t, tCount } from '../../src/i18n';
 import {
   addFamilyMember,
   getCurrentFamily,
@@ -35,7 +36,7 @@ import type { CurrentFamily, CurrentUser, FamilyMember } from '../../src/service
 import { formatProfileDisplayName } from '../../src/utils/profile';
 
 function roleLabel(role: FamilyMember['role']): string {
-  return role === 'owner' ? 'オーナー' : 'メンバー';
+  return role === 'owner' ? t('family.role.owner') : t('family.role.member');
 }
 
 export default function FamilyScreen() {
@@ -75,8 +76,8 @@ export default function FamilyScreen() {
         await action();
         await refresh();
       } catch (error) {
-        const message = error instanceof Error ? error.message : '保存に失敗しました';
-        Alert.alert('確認してください', message);
+        const message = error instanceof Error ? error.message : t('family.saveFailed');
+        Alert.alert(t('family.saveFailedTitle'), message);
       } finally {
         setSaving(false);
       }
@@ -103,10 +104,10 @@ export default function FamilyScreen() {
   };
 
   const handleRemoveMember = (member: FamilyMember) => {
-    Alert.alert('メンバーを削除', `${member.displayName} をグループから削除しますか？`, [
-      { text: 'キャンセル', style: 'cancel' },
+    Alert.alert(t('family.removeTitle'), t('family.removeConfirm', { name: member.displayName }), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '削除',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
           void runAction(async () => removeFamilyMember(member.id));
@@ -123,10 +124,10 @@ export default function FamilyScreen() {
 
   const handleShareCode = async () => {
     await Share.share({
-      message: `だいどこの家族グループ「${family.name}」に招待します。\n招待コード: ${family.inviteCode}\nhttps://daidoko.app/join`,
-      title: 'だいどこ 招待コード',
+      message: t('family.shareMessage', { name: family.name, code: family.inviteCode }),
+      title: t('family.shareTitle'),
     }).catch(() => {
-      Alert.alert('招待コード', family.inviteCode);
+      Alert.alert(t('family.inviteSection'), family.inviteCode);
     });
   };
 
@@ -135,9 +136,12 @@ export default function FamilyScreen() {
       const result = await joinFamilyByInviteCode(joinCode);
       setJoinCode('');
       if (result.status === 'already-member') {
-        Alert.alert('参加済み', `${result.family.name} に参加しています。`);
+        Alert.alert(
+          t('family.alreadyMemberTitle'),
+          t('family.alreadyMemberBody', { name: result.family.name }),
+        );
       } else {
-        Alert.alert('参加しました', `${result.family.name} に参加しました。`);
+        Alert.alert(t('family.joinedTitle'), t('family.joinedBody', { name: result.family.name }));
       }
     });
   };
@@ -153,7 +157,7 @@ export default function FamilyScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <ChevronLeft size={20} color={Colors.goldDim} />
         </Pressable>
-        <Text style={styles.headerTitle}>家族グループ</Text>
+        <Text style={styles.headerTitle}>{t('family.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -164,17 +168,17 @@ export default function FamilyScreen() {
           </View>
           <View style={styles.groupInfo}>
             <Text style={styles.groupName}>{family.name}</Text>
-            <Text style={styles.groupMeta}>{family.memberCount}人のメンバー</Text>
+            <Text style={styles.groupMeta}>{tCount('family.memberCount', family.memberCount)}</Text>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>プロフィール</Text>
+          <Text style={styles.sectionTitle}>{t('family.profileSection')}</Text>
           <TextInput
             style={styles.input}
             value={displayName}
             onChangeText={setDisplayName}
-            placeholder="表示名を入力"
+            placeholder={t('family.displayNamePlaceholder')}
             placeholderTextColor={Colors.muted}
             maxLength={32}
           />
@@ -182,7 +186,7 @@ export default function FamilyScreen() {
             style={styles.input}
             value={familyName}
             onChangeText={setFamilyName}
-            placeholder="グループ名"
+            placeholder={t('family.groupNamePlaceholder')}
             placeholderTextColor={Colors.muted}
             maxLength={40}
           />
@@ -191,19 +195,19 @@ export default function FamilyScreen() {
             onPress={handleSaveProfile}
             disabled={!hasProfileChanges || saving}
           >
-            <Text style={styles.primaryButtonText}>保存</Text>
+            <Text style={styles.primaryButtonText}>{t('common.save')}</Text>
           </Pressable>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>メンバー</Text>
+          <Text style={styles.sectionTitle}>{t('family.membersSection')}</Text>
           {members.map((member) => (
             <View key={member.id} style={styles.memberRow}>
               <Avatar name={formatProfileDisplayName(member.displayName)} size={36} />
               <View style={styles.memberInfo}>
                 <Text style={styles.memberName} numberOfLines={1}>
                   {formatProfileDisplayName(member.displayName)}
-                  {member.isCurrentUser && <Text style={styles.memberYou}> (あなた)</Text>}
+                  {member.isCurrentUser && <Text style={styles.memberYou}>{t('family.you')}</Text>}
                 </Text>
                 <Text style={styles.memberRole}>{roleLabel(member.role)}</Text>
               </View>
@@ -219,7 +223,7 @@ export default function FamilyScreen() {
               style={[styles.input, styles.inlineInput]}
               value={newMemberName}
               onChangeText={setNewMemberName}
-              placeholder="メンバー名"
+              placeholder={t('family.memberNamePlaceholder')}
               placeholderTextColor={Colors.muted}
               maxLength={32}
             />
@@ -234,14 +238,14 @@ export default function FamilyScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>招待コード</Text>
+          <Text style={styles.sectionTitle}>{t('family.inviteSection')}</Text>
           <View style={styles.inviteCodeBox}>
             <Text style={styles.inviteCode}>{family.inviteCode}</Text>
           </View>
           <View style={styles.buttonRow}>
             <Pressable style={styles.secondaryButton} onPress={handleShareCode} disabled={saving}>
               <Copy size={14} color={Colors.gold} />
-              <Text style={styles.secondaryButtonText}>共有</Text>
+              <Text style={styles.secondaryButtonText}>{t('family.share')}</Text>
             </Pressable>
             <Pressable
               style={styles.secondaryButton}
@@ -249,19 +253,19 @@ export default function FamilyScreen() {
               disabled={saving}
             >
               <RefreshCw size={14} color={Colors.gold} />
-              <Text style={styles.secondaryButtonText}>更新</Text>
+              <Text style={styles.secondaryButtonText}>{t('family.rotate')}</Text>
             </Pressable>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>コードで参加</Text>
+          <Text style={styles.sectionTitle}>{t('family.joinSection')}</Text>
           <View style={styles.inlineForm}>
             <TextInput
               style={[styles.input, styles.inlineInput]}
               value={joinCode}
               onChangeText={(value) => setJoinCode(value.toUpperCase())}
-              placeholder="招待コード"
+              placeholder={t('family.joinPlaceholder')}
               placeholderTextColor={Colors.muted}
               autoCapitalize="characters"
               maxLength={12}

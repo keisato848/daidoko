@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { getDb, getExpoDb, isNativePlatform } from '../db/client';
 import { rebuildFts } from '../db/migrate';
 import { getAppMeta, setAppMeta } from './app-meta.service';
+import { t } from '../i18n';
 
 const BACKUP_FORMAT = 'daidoko.local-backup';
 const BACKUP_SCHEMA_VERSION = 1;
@@ -265,13 +266,13 @@ export interface MigrationBackupRestoreResult extends BackupOperationResult {
 
 function assertNative(): void {
   if (!isNativePlatform) {
-    throw new Error('バックアップ・復元はネイティブアプリでのみ利用できます');
+    throw new Error(t('backup.invalid.notNative'));
   }
 }
 
 function getBackupDirectory(): string {
   if (!FileSystem.documentDirectory) {
-    throw new Error('ファイル保存領域を取得できませんでした');
+    throw new Error(t('backup.invalid.noStorage'));
   }
   return `${FileSystem.documentDirectory}${BACKUP_DIRECTORY_NAME}/`;
 }
@@ -378,21 +379,21 @@ function isBackupRow(value: unknown): value is BackupRow {
 function parseJsonObject(text: string): Record<string, unknown> {
   const parsed: unknown = JSON.parse(text);
   if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('バックアップ形式が不正です');
+    throw new Error(t('backup.invalid.format'));
   }
   return parsed as Record<string, unknown>;
 }
 
 function parseLocalBackupPayloadObject(parsed: Record<string, unknown>): LocalBackupPayload {
   if (parsed.format !== BACKUP_FORMAT || parsed.schemaVersion !== BACKUP_SCHEMA_VERSION) {
-    throw new Error('対応していないバックアップ形式です');
+    throw new Error(t('backup.invalid.unsupportedFormat'));
   }
   if (typeof parsed.exportedAt !== 'string') {
-    throw new Error('バックアップ日時が不正です');
+    throw new Error(t('backup.invalid.exportedAt'));
   }
   const rawTables = parsed.tables;
   if (rawTables == null || typeof rawTables !== 'object' || Array.isArray(rawTables)) {
-    throw new Error('バックアップテーブルが不正です');
+    throw new Error(t('backup.invalid.tables'));
   }
 
   const tables = createEmptyBackupTables();
@@ -402,7 +403,7 @@ function parseLocalBackupPayloadObject(parsed: Record<string, unknown>): LocalBa
     // 省略可のテーブルはキーが無ければ 0 件（旧アプリが書き出したファイルの復元）
     if (rows === undefined && isOptionalTable(table)) continue;
     if (!Array.isArray(rows) || !rows.every(isBackupRow)) {
-      throw new Error(`${table.name} のバックアップ内容が不正です`);
+      throw new Error(t('backup.invalid.tableRows', { table: table.name }));
     }
     tables[table.name] = rows;
   }
@@ -428,52 +429,52 @@ function assertString(value: unknown, message: string): string {
 
 function parseMigrationPhotoEntry(value: unknown): MigrationPhotoManifestEntry {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('写真バックアップ情報が不正です');
+    throw new Error(t('backup.invalid.photoEntry'));
   }
   const entry = value as Record<string, unknown>;
-  const archivePath = assertString(entry.archivePath, '写真バックアップのパスが不正です');
+  const archivePath = assertString(entry.archivePath, t('backup.invalid.photoPath'));
   if (
     !archivePath.startsWith(`${MIGRATION_PHOTO_DIRECTORY_NAME}/`) ||
     archivePath.includes('..') ||
     archivePath.includes('\\')
   ) {
-    throw new Error('写真バックアップのパスが不正です');
+    throw new Error(t('backup.invalid.photoPath'));
   }
 
   return {
-    id: assertString(entry.id, '写真バックアップのIDが不正です'),
+    id: assertString(entry.id, t('backup.invalid.photoId')),
     archivePath,
-    fileName: assertString(entry.fileName, '写真バックアップのファイル名が不正です'),
-    originalLocalPath: assertString(entry.originalLocalPath, '写真バックアップの元パスが不正です'),
+    fileName: assertString(entry.fileName, t('backup.invalid.photoFileName')),
+    originalLocalPath: assertString(entry.originalLocalPath, t('backup.invalid.photoOriginalPath')),
   };
 }
 
 function parseMigrationRecipePhotoEntry(value: unknown): MigrationRecipePhotoManifestEntry {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('レシピ写真バックアップ情報が不正です');
+    throw new Error(t('backup.invalid.recipePhotoEntry'));
   }
   const entry = value as Record<string, unknown>;
   const ownerType = entry.ownerType;
   if (ownerType !== 'recipe-cover' && ownerType !== 'step') {
-    throw new Error('レシピ写真バックアップの種別が不正です');
+    throw new Error(t('backup.invalid.recipePhotoKind'));
   }
-  const archivePath = assertString(entry.archivePath, 'レシピ写真バックアップのパスが不正です');
+  const archivePath = assertString(entry.archivePath, t('backup.invalid.recipePhotoPath'));
   if (
     !archivePath.startsWith(`${MIGRATION_RECIPE_PHOTO_DIRECTORY_NAME}/`) ||
     archivePath.includes('..') ||
     archivePath.includes('\\')
   ) {
-    throw new Error('レシピ写真バックアップのパスが不正です');
+    throw new Error(t('backup.invalid.recipePhotoPath'));
   }
 
   return {
     ownerType,
-    ownerId: assertString(entry.ownerId, 'レシピ写真バックアップのIDが不正です'),
+    ownerId: assertString(entry.ownerId, t('backup.invalid.recipePhotoId')),
     archivePath,
-    fileName: assertString(entry.fileName, 'レシピ写真バックアップのファイル名が不正です'),
+    fileName: assertString(entry.fileName, t('backup.invalid.recipePhotoFileName')),
     originalLocalPath: assertString(
       entry.originalLocalPath,
-      'レシピ写真バックアップの元パスが不正です',
+      t('backup.invalid.recipePhotoOriginalPath'),
     ),
   };
 }
@@ -484,21 +485,21 @@ export function parseMigrationBackupManifest(text: string): MigrationBackupManif
     parsed.format !== MIGRATION_BACKUP_FORMAT ||
     parsed.schemaVersion !== MIGRATION_BACKUP_SCHEMA_VERSION
   ) {
-    throw new Error('対応していない移行バックアップ形式です');
+    throw new Error(t('backup.invalid.migrationFormat'));
   }
-  const exportedAt = assertString(parsed.exportedAt, '移行バックアップ日時が不正です');
+  const exportedAt = assertString(parsed.exportedAt, t('backup.invalid.migrationExportedAt'));
   const rawBackup = parsed.backup;
   if (rawBackup == null || typeof rawBackup !== 'object' || Array.isArray(rawBackup)) {
-    throw new Error('移行バックアップのデータが不正です');
+    throw new Error(t('backup.invalid.migrationData'));
   }
   const rawPhotos = parsed.photos;
   if (!Array.isArray(rawPhotos)) {
-    throw new Error('写真バックアップ一覧が不正です');
+    throw new Error(t('backup.invalid.photoList'));
   }
   // recipePhotos は省略可（旧形式 ZIP との互換）
   const rawRecipePhotos = parsed.recipePhotos;
   if (rawRecipePhotos != null && !Array.isArray(rawRecipePhotos)) {
-    throw new Error('レシピ写真バックアップ一覧が不正です');
+    throw new Error(t('backup.invalid.recipePhotoList'));
   }
 
   return {
@@ -522,7 +523,7 @@ export function pickLatestBackup(files: BackupFileSummary[]): BackupFileSummary 
 function base64CharToValue(character: string): number {
   const value = BASE64_ALPHABET.indexOf(character);
   if (value < 0) {
-    throw new Error('Base64 データが不正です');
+    throw new Error(t('backup.invalid.base64'));
   }
   return value;
 }
@@ -531,7 +532,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
   const normalized = base64.replace(/\s/g, '');
   if (normalized.length === 0) return new Uint8Array();
   if (normalized.length % 4 === 1) {
-    throw new Error('Base64 データが不正です');
+    throw new Error(t('backup.invalid.base64'));
   }
   const padding = normalized.endsWith('==') ? 2 : normalized.endsWith('=') ? 1 : 0;
   const bytes = new Uint8Array(Math.floor((normalized.length * 3) / 4) - padding);
@@ -609,7 +610,7 @@ export function createMigrationRecipePhotoArchivePath(
 
 function getRequiredDocumentDirectory(): string {
   if (!FileSystem.documentDirectory) {
-    throw new Error('ファイル保存領域を取得できませんでした');
+    throw new Error(t('backup.invalid.noStorage'));
   }
   return FileSystem.documentDirectory;
 }
@@ -915,7 +916,7 @@ export async function restoreMigrationBackupPackage(
   const entries = unzipSync(base64ToUint8Array(raw));
   const manifestEntry = entries[MIGRATION_MANIFEST_FILE_NAME];
   if (!manifestEntry) {
-    throw new Error('移行バックアップの manifest が見つかりません');
+    throw new Error(t('backup.invalid.manifestMissing'));
   }
 
   const manifest = parseMigrationBackupManifest(strFromU8(manifestEntry));
@@ -986,7 +987,7 @@ export async function restoreMigrationBackupPackage(
 export async function restoreLatestLocalBackup(): Promise<BackupOperationResult> {
   const latest = pickLatestBackup(await listLocalBackups());
   if (!latest) {
-    throw new Error('復元できるバックアップがありません');
+    throw new Error(t('backup.invalid.nothingToRestore'));
   }
   return restoreLocalBackup(latest.uri);
 }

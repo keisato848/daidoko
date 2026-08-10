@@ -10,6 +10,7 @@
  *
  * 使い方:
  *   tsx scripts/vision-eval.ts run --set <dir> --variant v1 [--model ...] [--with name|cross|menu]
+ *                                    [--locale ja|en]
  *   tsx scripts/vision-eval.ts summarize --file <生成された md>
  *
  * 評価セット: <dir>/manifest.json ＋ 画像。**リポジトリにコミットしないこと**（個人の外食履歴）。
@@ -17,6 +18,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { parseOutputLocale } from '../src/lib/output-locale.js';
 import {
   GeminiVisionRecipeProvider,
   type PromptVariant,
@@ -188,6 +190,9 @@ async function runEval(args: Map<string, string>): Promise<void> {
   if (variant !== 'v0' && variant !== 'v1') fail('--variant は v0 か v1 を指定してください');
 
   const model = args.get('model');
+  // 出力言語。**英語版を出す前に、日本語と同じ合格ラインを満たすか測る**ため
+  // （`docs/多言語対応設計.md` §7）。既定は ja で、従来の測定と比較できる。
+  const outputLocale = parseOutputLocale(args.get('locale') ?? 'ja');
   const withOptions = new Set<WithOption>(
     (args.get('with') ?? '')
       .split(',')
@@ -220,6 +225,7 @@ async function runEval(args: Map<string, string>): Promise<void> {
   const label = [
     variant,
     model ?? 'default',
+    ...(outputLocale !== 'ja' ? [outputLocale] : []),
     ...(thinkingBudget !== undefined ? [`think${thinkingBudget}`] : []),
     ...[...withOptions].sort(),
   ].join('-');
@@ -260,6 +266,7 @@ async function runEval(args: Map<string, string>): Promise<void> {
         ...(context ? { context } : {}),
         ...(extraImages.length > 0 ? { extraImages } : {}),
         ...(thinkingBudget !== undefined ? { thinkingBudget } : {}),
+        outputLocale,
       });
       const cost = costJpy(raw.usage, modelId, jpyPerUsd);
       outcomes.push({

@@ -5,6 +5,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Colors, Typography } from '../constants/theme';
+import { tCount } from '../i18n';
 import type { MonthlyStats as MonthlyStatsData } from '../utils/timelineStats';
 
 interface MonthlyStatsProps {
@@ -19,12 +20,12 @@ export function MonthlyStats({ stats, monthLabel }: MonthlyStatsProps) {
       <View style={styles.metrics}>
         <View style={styles.metric}>
           <Text style={styles.value}>{stats.count}</Text>
-          <Text style={styles.unit}>回</Text>
+          <Text style={styles.unit}>{tCount('ui.stats.cookUnit', stats.count)}</Text>
         </View>
         <View style={styles.divider} />
         <View style={styles.metric}>
           <Text style={styles.value}>{stats.dishes}</Text>
-          <Text style={styles.unit}>品</Text>
+          <Text style={styles.unit}>{tCount('ui.stats.dishUnit', stats.dishes)}</Text>
         </View>
         {stats.avgRating != null && (
           <>

@@ -6,6 +6,7 @@ import { shouldHideSeedCookingLog } from '../db/sampleData';
 import { getMockTimeline } from '../db/mock';
 import type { TimelineEntry } from './types';
 import { groupPhotosByLogId } from './photo.utils';
+import { t } from '../i18n';
 
 export async function getTimeline(): Promise<TimelineEntry[]> {
   if (!isNativePlatform) {
@@ -64,8 +65,8 @@ export async function getTimeline(): Promise<TimelineEntry[]> {
     .map((l) => ({
       id: l.id,
       recipeId: l.recipeStatus === 'archived' ? null : l.recipeId,
-      recipeTitle: l.recipeTitle ?? 'フリー記録',
-      userName: l.userName ?? '不明',
+      recipeTitle: l.recipeTitle ?? t('log.freeform'),
+      userName: l.userName ?? t('common.unknown'),
       cookedAt: l.cookedAt,
       servings: l.servings,
       rating: l.rating,

@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { LICENSE_ITEMS } from '../../src/constants/licenses';
 import { Colors } from '../../src/constants/theme';
+import { t } from '../../src/i18n';
 
 export default function LicensesScreen() {
   const router = useRouter();
@@ -17,17 +18,14 @@ export default function LicensesScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <ChevronLeft size={20} color={Colors.goldDim} />
         </Pressable>
-        <Text style={styles.headerTitle}>ライセンス情報</Text>
+        <Text style={styles.headerTitle}>{t('ui.licenses.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.summaryBox}>
-          <Text style={styles.summaryTitle}>オープンソースライセンス</Text>
-          <Text style={styles.summaryText}>
-            だいどこは以下の OSS
-            パッケージを利用しています。各パッケージの著作権表示と完全なライセンス本文は配布元のパッケージに従います。
-          </Text>
+          <Text style={styles.summaryTitle}>{t('ui.licenses.heading')}</Text>
+          <Text style={styles.summaryText}>{t('ui.licenses.body')}</Text>
         </View>
 
         {LICENSE_ITEMS.map((item) => (

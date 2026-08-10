@@ -12,6 +12,7 @@ import { Avatar } from '../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { Colors } from '../../src/constants/theme';
+import { t, tCount } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { resetCoachMarks } from '../../src/services/coach-marks.service';
 import {
@@ -42,7 +43,6 @@ interface SettingSection {
 }
 
 const APP_VERSION_LABEL = `v${Constants.expoConfig?.version ?? '1.1.0'}`;
-const FUTURE_STATUS_LABEL = '今後追加予定';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -83,29 +83,25 @@ export default function SettingsScreen() {
   }, []);
 
   // Plan row content depends on premium state (avoid nested ternaries).
-  let planLabel = 'プレミアムにする';
-  let planSubtitle = '読み込み中…';
+  let planLabel = t('settings.plan.upgrade');
+  let planSubtitle = t('settings.plan.loading');
   let planOnPress = () => router.push('/recipes/paywall');
   if (freemium) {
     if (freemium.isPremium) {
-      planLabel = 'プレミアム';
-      planSubtitle = 'プレミアム・使い放題';
-      planOnPress = () =>
-        Alert.alert(
-          'プレミアム',
-          'プレミアムをご利用中です。解約はストアの定期購入設定からいつでも行えます。',
-        );
+      planLabel = t('settings.plan.premium');
+      planSubtitle = t('settings.plan.premiumSubtitle');
+      planOnPress = () => Alert.alert(t('settings.plan.premium'), t('settings.plan.premiumBody'));
     } else if (freemium.isByok) {
-      planLabel = '自分のAIキー';
-      planSubtitle = '自分のキーで使い放題';
+      planLabel = t('settings.plan.byok');
+      planSubtitle = t('settings.plan.byokSubtitle');
       planOnPress = () => router.push('/(tabs)/ai-key');
     } else {
-      planSubtitle = `無料・今日あと ${freemium.remaining} 回`;
+      planSubtitle = tCount('settings.plan.freeRemaining', freemium.remaining);
     }
   }
 
   const showComingSoon = () => {
-    Alert.alert('準備中', 'この機能は今後のバージョンで追加予定です。');
+    Alert.alert(t('settings.comingSoonTitle'), t('settings.comingSoonBody'));
   };
 
   // 初回利用ガイド（コーチマーク）
@@ -114,38 +110,38 @@ export default function SettingsScreen() {
   const coach = useCoachMarks('settings', [
     {
       key: 'plan',
-      title: 'AI機能とプラン',
-      text: 'AI機能（写真レシピ・食材の名寄せ・食事写真）には1日の無料枠があります。「自分のAIキーを使う」にGeminiキーを設定すると無制限になります。',
+      title: t('settings.coach.planTitle'),
+      text: t('settings.coach.planText'),
       ref: planRef,
     },
     {
       key: 'backup',
-      title: 'データを守る',
-      text: 'データは端末内に保存されます。「バックアップ・復元」でファイルに書き出し・復元ができます。',
+      title: t('settings.coach.backupTitle'),
+      text: t('settings.coach.backupText'),
       ref: backupRef,
     },
     {
       key: 'guide',
-      title: '使い方ガイド',
-      text: '各画面の「?」でその画面の案内を再生できます。「使い方ガイドを再表示」を押すと全画面の案内をもう一度見られます。',
+      title: t('settings.coach.guideTitle'),
+      text: t('settings.coach.guideText'),
     },
   ]);
 
   const sections: SettingSection[] = [
     {
-      title: 'お店の味を再現',
+      title: t('settings.reproduce.sectionTitle'),
       items: [
         {
           id: 'launch-camera',
-          label: 'アプリを開いたらすぐ撮影',
-          subtitle: '店を出た直後に、起動から1アクションで撮れます',
+          label: t('settings.reproduce.launchCamera'),
+          subtitle: t('settings.reproduce.launchCameraSubtitle'),
           enabled: true,
           toggle: { value: launchCamera, onValueChange: handleToggleLaunchCamera },
         },
       ],
     },
     {
-      title: 'プラン',
+      title: t('settings.plan.sectionTitle'),
       items: [
         {
           id: 'plan',
@@ -156,8 +152,10 @@ export default function SettingsScreen() {
         },
         {
           id: 'byok',
-          label: '自分のAIキーを使う',
-          subtitle: freemium?.isByok ? '設定済み（無制限）' : 'Gemini キーで無制限に',
+          label: t('settings.byok.label'),
+          subtitle: freemium?.isByok
+            ? t('settings.byok.configured')
+            : t('settings.byok.notConfigured'),
           enabled: true,
           onPress: () => router.push('/(tabs)/ai-key'),
         },
@@ -165,16 +163,16 @@ export default function SettingsScreen() {
           ? [
               {
                 id: 'ad-privacy',
-                label: '広告のプライバシー設定',
-                subtitle: '広告表示に関する同意を変更',
+                label: t('settings.adPrivacy.label'),
+                subtitle: t('settings.adPrivacy.subtitle'),
                 enabled: true,
                 onPress: () => {
                   void getAdRewardProvider()
                     .showPrivacyOptionsForm()
                     .catch(() => {
                       Alert.alert(
-                        'お知らせ',
-                        '設定画面を表示できませんでした。時間をおいてお試しください。',
+                        t('settings.adPrivacy.failedTitle'),
+                        t('settings.adPrivacy.failedBody'),
                       );
                     });
                 },
@@ -184,11 +182,11 @@ export default function SettingsScreen() {
       ],
     },
     {
-      title: 'アカウント',
+      title: t('settings.account.sectionTitle'),
       items: [
         {
           id: 'profile',
-          label: 'プロフィール編集',
+          label: t('settings.account.profile'),
           subtitle: userDisplayName,
           enabled: true,
           onPress: () => router.push('/(tabs)/family'),
@@ -196,74 +194,79 @@ export default function SettingsScreen() {
       ],
     },
     {
-      title: '家族',
+      title: t('settings.family.sectionTitle'),
       items: [
         {
           id: 'family',
-          label: '家族グループ',
-          subtitle: `${family.name}（${family.memberCount}人）`,
+          label: t('settings.family.group'),
+          subtitle: tCount('settings.family.groupSubtitle', family.memberCount, {
+            name: family.name,
+          }),
           enabled: true,
           onPress: () => router.push('/(tabs)/family'),
         },
         {
           id: 'invite',
-          label: '家族を招待',
+          label: t('settings.family.invite'),
           enabled: true,
           onPress: () => router.push('/(tabs)/family'),
         },
       ],
     },
     {
-      title: 'データ',
+      title: t('settings.data.sectionTitle'),
       items: [
         {
           id: 'backup',
-          label: 'バックアップ・復元',
-          subtitle: '端末内にバックアップを作成・復元',
+          label: t('settings.data.backup'),
+          subtitle: t('settings.data.backupSubtitle'),
           enabled: true,
           onPress: () => router.push('/(tabs)/backup'),
         },
         {
           id: 'sync',
-          label: 'クラウド同期',
-          subtitle: '現在は端末内のみ保存されます',
-          statusLabel: FUTURE_STATUS_LABEL,
+          label: t('settings.data.sync'),
+          subtitle: t('settings.data.syncSubtitle'),
+          statusLabel: t('settings.comingSoonStatus'),
           enabled: false,
           onPress: showComingSoon,
         },
         {
           id: 'name-aliases',
-          label: '名寄せ辞書',
-          subtitle: 'AIが覚えた食材名の対応を確認・修正',
+          label: t('settings.data.nameAliases'),
+          subtitle: t('settings.data.nameAliasesSubtitle'),
           enabled: true,
           onPress: () => router.push('/(tabs)/name-aliases'),
         },
       ],
     },
     {
-      title: 'アプリ',
+      title: t('settings.app.sectionTitle'),
       items: [
         {
           id: 'coach-marks',
-          label: '使い方ガイドを再表示',
-          subtitle: '各画面の操作案内をもう一度表示します',
+          label: t('settings.app.replayCoachMarks'),
+          subtitle: t('settings.app.replayCoachMarksSubtitle'),
           enabled: true,
           onPress: () => {
             void resetCoachMarks().then(() => {
-              Alert.alert('使い方ガイド', '各画面を開くと操作案内が再表示されます。');
+              Alert.alert(
+                t('settings.app.coachMarksResetTitle'),
+                t('settings.app.coachMarksResetBody'),
+              );
             });
           },
         },
         {
           id: 'version',
-          label: 'バージョン',
+          label: t('settings.app.version'),
           subtitle: APP_VERSION_LABEL,
           enabled: true,
         },
         {
           id: 'licenses',
-          label: 'ライセンス情報',
-          subtitle: '利用している OSS ライセンスを表示',
+          label: t('settings.app.licenses'),
+          subtitle: t('settings.app.licensesSubtitle'),
           enabled: true,
           onPress: () => router.push('/(tabs)/licenses'),
         },
@@ -274,7 +277,7 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headerBar}>
-        <Text style={styles.headerTitle}>設定</Text>
+        <Text style={styles.headerTitle}>{t('settings.title')}</Text>
         <HelpButton onPress={coach.show} />
       </View>
 

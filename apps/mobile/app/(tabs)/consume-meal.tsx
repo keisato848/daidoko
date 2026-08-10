@@ -11,6 +11,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Loading } from '../../src/components/Loading';
 import { Colors } from '../../src/constants/theme';
+import { t, tCount } from '../../src/i18n';
 import { expoImagePickerPhotoCaptureAdapter } from '../../src/services/expo-photo-capture.adapter';
 import { applyConsumption, inferMealConsumption } from '../../src/services/meal-consume.service';
 import {
@@ -71,8 +72,8 @@ export default function ConsumeMealScreen() {
         if (result.matches.length === 0) {
           setErrorMsg(
             result.dish
-              ? `「${result.dish}」と推定しましたが、在庫に該当する食材がありませんでした。`
-              : '料理を認識できませんでした。明るく正面から撮り直してください。',
+              ? t('pantry.consumeMeal.noMatch', { dish: result.dish })
+              : t('pantry.consumeMeal.notRecognized'),
           );
           setPhase('error');
           return;
@@ -93,7 +94,7 @@ export default function ConsumeMealScreen() {
           setPhase('select');
           return;
         }
-        setErrorMsg(error instanceof Error ? error.message : '解析に失敗しました');
+        setErrorMsg(error instanceof Error ? error.message : t('pantry.consumeMeal.failed'));
         setPhase('error');
       }
     },
@@ -111,34 +112,38 @@ export default function ConsumeMealScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="閉じる">
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          accessibilityLabel={t('common.close')}
+        >
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>食べた分を在庫から</Text>
+        <Text style={styles.headerTitle}>{t('pantry.consumeMeal.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      {phase === 'processing' && <Loading message="食事を解析しています" />}
+      {phase === 'processing' && <Loading message={t('pantry.consumeMeal.analyzing')} />}
 
       {(phase === 'select' || phase === 'error') && (
         <View style={styles.selectArea}>
           {phase === 'error' && errorMsg ? (
             <Text style={styles.errorText}>{errorMsg}</Text>
           ) : (
-            <Text style={styles.hint}>
-              食事の写真を撮ると、使った食材を推定して在庫を減らせます（実験的）。
-            </Text>
+            <Text style={styles.hint}>{t('pantry.consumeMeal.lead')}</Text>
           )}
           <Pressable style={styles.bigButton} onPress={() => handlePick('camera')}>
             <Camera size={20} color={Colors.bg} />
-            <Text style={styles.bigButtonText}>食事を撮影</Text>
+            <Text style={styles.bigButtonText}>{t('pantry.consumeMeal.capture')}</Text>
           </Pressable>
           <Pressable style={styles.bigButtonOutline} onPress={() => handlePick('gallery')}>
             <ImageIcon size={20} color={Colors.gold} />
-            <Text style={styles.bigButtonOutlineText}>ギャラリーから選ぶ</Text>
+            <Text style={styles.bigButtonOutlineText}>{t('common.pickFromGallery')}</Text>
           </Pressable>
           {freemium && !freemium.isPremium && !freemium.isByok && (
-            <Text style={styles.quota}>今日の無料解析: 残り {freemium.remaining} 回</Text>
+            <Text style={styles.quota}>
+              {tCount('pantry.consumeMeal.quotaRemaining', freemium.remaining)}
+            </Text>
           )}
         </View>
       )}
@@ -146,8 +151,9 @@ export default function ConsumeMealScreen() {
       {phase === 'review' && (
         <>
           <Text style={styles.reviewHint}>
-            {dish ? `「${dish}」` : 'この食事'}で使った食材のうち、在庫にあるものです。
-            {'\n'}減らすものを選んで確定してください。
+            {dish
+              ? t('pantry.consumeMeal.resultWithDish', { dish })
+              : t('pantry.consumeMeal.resultWithoutDish')}
           </Text>
           <FlatList
             data={matches}
@@ -176,14 +182,16 @@ export default function ConsumeMealScreen() {
           />
           <View style={styles.footer}>
             <Pressable style={styles.linkButton} onPress={() => setPhase('select')}>
-              <Text style={styles.linkText}>やり直す</Text>
+              <Text style={styles.linkText}>{t('pantry.consumeMeal.retry')}</Text>
             </Pressable>
             <Pressable
               style={[styles.applyButton, selectedCount === 0 && styles.applyDisabled]}
               onPress={handleApply}
               disabled={selectedCount === 0}
             >
-              <Text style={styles.applyText}>在庫を減らす（{selectedCount}）</Text>
+              <Text style={styles.applyText}>
+                {tCount('pantry.consumeMeal.confirm', selectedCount)}
+              </Text>
             </Pressable>
           </View>
         </>

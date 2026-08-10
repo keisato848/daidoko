@@ -31,6 +31,7 @@ import {
 } from '../lib/recipe-refine.js';
 import { runRecipeRefineAgent } from '../agents/recipe-refine.agent.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
+import { parseOutputLocale } from '../lib/output-locale.js';
 
 const inferRouter = new Hono();
 
@@ -41,6 +42,11 @@ const inferPhotoSchema = z.object({
   imageBase64: z.string().min(1, '画像が空です').max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
   context: z.string().max(1000, '補足テキストが長すぎます').optional(),
+  /**
+   * 端末の言語。**AI が返すレシピの言語**を決める。省略時は ja。
+   * これが無いと、英語の画面に日本語のレシピが返ってくる。
+   */
+  locale: z.enum(['ja', 'en']).optional(),
 });
 
 // Lazily construct the provider so the route module imports without an API key
@@ -74,7 +80,7 @@ inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
     });
   }
 
-  const { imageBase64, mimeType, context } = c.req.valid('json');
+  const { imageBase64, mimeType, context, locale } = c.req.valid('json');
 
   let provider: VisionRecipeProvider;
   try {
@@ -90,7 +96,12 @@ inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
   }
 
   const result = await runPhotoInferAgent(
-    { imageBase64, mimeType, ...(context !== undefined && { context }) },
+    {
+      imageBase64,
+      mimeType,
+      ...(context !== undefined && { context }),
+      outputLocale: parseOutputLocale(locale),
+    },
     provider,
   );
   // Always 200 — errors are in the response body (AgentResult pattern).
@@ -102,6 +113,8 @@ inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
 const inferMealSchema = z.object({
   imageBase64: z.string().min(1, '画像が空です').max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  /** 端末の言語。AI が返す文言の言語を決める。省略時は ja。 */
+  locale: z.enum(['ja', 'en']).optional(),
 });
 
 let mealProviderOverride: MealVisionProvider | null = null;
@@ -126,7 +139,7 @@ inferRouter.post('/meal', zValidator('json', inferMealSchema), async (c) => {
     });
   }
 
-  const { imageBase64, mimeType } = c.req.valid('json');
+  const { imageBase64, mimeType, locale } = c.req.valid('json');
 
   let provider: MealVisionProvider;
   try {
@@ -142,7 +155,11 @@ inferRouter.post('/meal', zValidator('json', inferMealSchema), async (c) => {
   }
 
   try {
-    const data = await provider.infer({ imageBase64, mimeType });
+    const data = await provider.infer({
+      imageBase64,
+      mimeType,
+      outputLocale: parseOutputLocale(locale),
+    });
     return c.json({ ok: true, data });
   } catch (err) {
     const retryable = err instanceof MealVisionRequestError;
@@ -162,6 +179,8 @@ inferRouter.post('/meal', zValidator('json', inferMealSchema), async (c) => {
 const inferReceiptSchema = z.object({
   imageBase64: z.string().min(1, '画像が空です').max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  /** 端末の言語。AI が返す文言の言語を決める。省略時は ja。 */
+  locale: z.enum(['ja', 'en']).optional(),
 });
 
 let receiptProviderOverride: ReceiptVisionProvider | null = null;
@@ -186,7 +205,7 @@ inferRouter.post('/receipt', zValidator('json', inferReceiptSchema), async (c) =
     });
   }
 
-  const { imageBase64, mimeType } = c.req.valid('json');
+  const { imageBase64, mimeType, locale } = c.req.valid('json');
 
   let provider: ReceiptVisionProvider;
   try {
@@ -202,7 +221,11 @@ inferRouter.post('/receipt', zValidator('json', inferReceiptSchema), async (c) =
   }
 
   try {
-    const data = await provider.infer({ imageBase64, mimeType });
+    const data = await provider.infer({
+      imageBase64,
+      mimeType,
+      outputLocale: parseOutputLocale(locale),
+    });
     return c.json({ ok: true, data });
   } catch (err) {
     const retryable = err instanceof ReceiptVisionRequestError;
@@ -249,6 +272,8 @@ const inferRefineSchema = z.object({
   feedback: z.string().min(1, '感想が空です').max(1000, '感想が長すぎます'),
   // 任意。cooked / target の 2 枚まで（設計上それ以上は意味を持たない）
   images: z.array(refineImageSchema).max(2).optional(),
+  /** 端末の言語。AI が返す文言の言語を決める。省略時は ja。 */
+  locale: z.enum(['ja', 'en']).optional(),
 });
 
 let refineProviderOverride: RecipeRefineProvider | null = null;
@@ -283,7 +308,7 @@ inferRouter.post('/refine', zValidator('json', inferRefineSchema), async (c) => 
     });
   }
 
-  const { recipe, feedback, images } = c.req.valid('json');
+  const { recipe, feedback, images, locale } = c.req.valid('json');
 
   let provider: RecipeRefineProvider;
   try {
@@ -316,7 +341,12 @@ inferRouter.post('/refine', zValidator('json', inferRefineSchema), async (c) => 
   };
 
   const result = await runRecipeRefineAgent(
-    { recipe: snapshot, feedback, ...(images !== undefined && { images }) },
+    {
+      recipe: snapshot,
+      feedback,
+      ...(images !== undefined && { images }),
+      outputLocale: parseOutputLocale(locale),
+    },
     provider,
   );
   // Always 200 — errors are in the response body (AgentResult pattern).

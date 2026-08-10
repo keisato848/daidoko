@@ -31,6 +31,7 @@ function normalizeLine(value: string): string {
     .replace(/[\t　]+/g, ' ')
     .replace(/\s+([:：])/g, '$1')
     .replace(
+      // i18n-ignore 日本語の見出しを拾う正規表現。訳す対象ではない
       /([（(【\[])?\s*(材料|食材|具材|作り方|つくり方|手順|工程|メモ|ポイント)\s*([）)】\]])?\s*[:：]?$/u,
       '$2',
     )

@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 
 import { Loading } from '../../../../src/components/Loading';
+import { t } from '../../../../src/i18n';
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../../src/services/cooking-log.service';
@@ -96,7 +97,11 @@ function DiffSection({ title, rows }: { title: string; rows: DiffRow[] }) {
         <View key={`${row.label}-${index}`} style={styles.diffRow}>
           <View style={styles.diffLabelRow}>
             <Text style={[styles.diffBadge, styles[`badge_${row.kind}`]]}>
-              {row.kind === 'added' ? '追加' : row.kind === 'removed' ? '削除' : '変更'}
+              {row.kind === 'added'
+                ? t('recipe.refine.badge.added')
+                : row.kind === 'removed'
+                  ? t('recipe.refine.badge.removed')
+                  : t('recipe.refine.badge.changed')}
             </Text>
             <Text style={styles.diffLabel}>{row.label}</Text>
           </View>
@@ -163,8 +168,8 @@ export default function RefineRecipeScreen() {
     } catch (error) {
       if (error instanceof PhotoCaptureCancelledError) return;
       Alert.alert(
-        '写真を追加できませんでした',
-        error instanceof Error ? error.message : '写真を追加できませんでした',
+        t('common.photoAddFailed'),
+        error instanceof Error ? error.message : t('common.photoAddFailed'),
       );
     }
   }, []);
@@ -199,9 +204,7 @@ export default function RefineRecipeScreen() {
       setPhase('preview');
     } catch (error) {
       setErrorMsg(
-        error instanceof VisionInferenceError
-          ? error.message
-          : 'レシピを調整できませんでした。もう一度お試しください。',
+        error instanceof VisionInferenceError ? error.message : t('recipe.refine.genericFailed'),
       );
       setPhase('input');
     }
@@ -235,8 +238,8 @@ export default function RefineRecipeScreen() {
       setTimeout(() => router.replace(`/(tabs)/recipes/${recipe.id}`), 1200);
     } catch (error) {
       Alert.alert(
-        '保存できませんでした',
-        error instanceof Error ? error.message : 'レシピを保存できませんでした',
+        t('recipe.refine.saveFailedTitle'),
+        error instanceof Error ? error.message : t('recipe.refine.saveFailedBody'),
       );
       setPhase('preview');
     }
@@ -247,7 +250,7 @@ export default function RefineRecipeScreen() {
   if (!recipe) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>レシピが見つかりませんでした</Text>
+        <Text style={styles.errorText}>{t('recipe.refine.notFound')}</Text>
       </View>
     );
   }
@@ -263,9 +266,9 @@ export default function RefineRecipeScreen() {
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={8}>
           <ChevronLeft size={20} color={Colors.goldDim} />
-          <Text style={styles.backText}>戻る</Text>
+          <Text style={styles.backText}>{t('common.back')}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>お店の味に近づける</Text>
+        <Text style={styles.headerTitle}>{t('recipe.refine.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -275,44 +278,37 @@ export default function RefineRecipeScreen() {
         {phase === 'preview' && diff ? (
           <>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>AI が直したところ</Text>
+              <Text style={styles.summaryLabel}>{t('recipe.refine.summaryLabel')}</Text>
               <Text style={styles.summaryText}>{changeSummary}</Text>
             </View>
 
             {diff.hasChanges ? (
               <>
-                <DiffSection title="レシピ情報" rows={diff.meta} />
-                <DiffSection title="材料" rows={changedIngredients} />
-                <DiffSection title="手順" rows={changedSteps} />
-                <Text style={styles.diffHint}>
-                  ここに出ていない材料・手順は変わっていません。内容を確認してから保存してください。
-                </Text>
+                <DiffSection title={t('recipe.refine.diffMeta')} rows={diff.meta} />
+                <DiffSection title={t('common.ingredients')} rows={changedIngredients} />
+                <DiffSection title={t('common.steps')} rows={changedSteps} />
+                <Text style={styles.diffHint}>{t('recipe.refine.diffGuarantee')}</Text>
                 {/* AI が材料を「増やす」ことがある経路なので、写真レシピより強く注意を出す。
                     アレルゲンの検出・警告は行わない方針（docs/privacy-policy.md §7） */}
                 <View style={styles.cautionCard}>
-                  <Text style={styles.cautionText}>
-                    AIが調整した内容です。材料が追加されることがあります。アレルギーのある方は、
-                    保存前に材料をすべてご確認ください。
-                  </Text>
+                  <Text style={styles.cautionText}>{t('recipe.refine.caution')}</Text>
                 </View>
               </>
             ) : (
               <View style={styles.noticeCard}>
-                <Text style={styles.noticeText}>
-                  レシピに変更はありませんでした。感想をもう少し具体的に書くと直せることがあります。
-                </Text>
+                <Text style={styles.noticeText}>{t('recipe.refine.noticeNoChange')}</Text>
               </View>
             )}
           </>
         ) : (
           <>
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>作ってみてどうだった？</Text>
+              <Text style={styles.sectionLabel}>{t('recipe.refine.feedbackLabel')}</Text>
               <TextInput
                 style={styles.feedbackInput}
                 value={feedback}
                 onChangeText={setFeedback}
-                placeholder="お店のよりかなり甘かった。とろみも足りない気がする..."
+                placeholder={t('recipe.refine.feedbackPlaceholder')}
                 placeholderTextColor={Colors.muted}
                 multiline
                 textAlignVertical="top"
@@ -320,16 +316,12 @@ export default function RefineRecipeScreen() {
                 editable={phase === 'input'}
               />
               <Text style={styles.charCount}>{feedback.length} / 1000</Text>
-              <Text style={styles.sectionHint}>
-                味の方向（甘い・辛い・濃い・薄い）を書くほど直しやすくなります。
-              </Text>
+              <Text style={styles.sectionHint}>{t('recipe.refine.feedbackHint')}</Text>
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>作った料理の写真（任意）</Text>
-              <Text style={styles.sectionHint}>
-                焼き色・とろみ・色の濃さは、言葉より写真の方が正確に伝わります。
-              </Text>
+              <Text style={styles.sectionLabel}>{t('recipe.refine.photoLabel')}</Text>
+              <Text style={styles.sectionHint}>{t('recipe.refine.photoHint')}</Text>
               {cookedPhoto ? (
                 <View style={styles.photoPreviewWrap}>
                   <Image source={{ uri: cookedPhoto.localPath }} style={styles.photoPreview} />
@@ -338,7 +330,7 @@ export default function RefineRecipeScreen() {
                     onPress={() => setCookedPhoto(null)}
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel="写真を削除"
+                    accessibilityLabel={t('common.deletePhoto')}
                   >
                     <Trash2 size={13} color={Colors.bg} />
                   </Pressable>
@@ -351,7 +343,7 @@ export default function RefineRecipeScreen() {
                     disabled={phase !== 'input'}
                   >
                     <Camera color={Colors.gold} size={18} />
-                    <Text style={styles.photoAddText}>カメラで撮影</Text>
+                    <Text style={styles.photoAddText}>{t('common.takePhoto')}</Text>
                   </Pressable>
                   <Pressable
                     style={styles.photoAddButton}
@@ -359,7 +351,7 @@ export default function RefineRecipeScreen() {
                     disabled={phase !== 'input'}
                   >
                     <ImageIcon color={Colors.gold} size={18} />
-                    <Text style={styles.photoAddText}>ギャラリーから選ぶ</Text>
+                    <Text style={styles.photoAddText}>{t('common.pickFromGallery')}</Text>
                   </Pressable>
                 </View>
               )}
@@ -371,9 +363,9 @@ export default function RefineRecipeScreen() {
                 <View style={styles.targetTextWrap}>
                   <View style={styles.targetLabelRow}>
                     <Store size={13} color={Colors.gold} />
-                    <Text style={styles.targetLabel}>お店の写真を目標にします</Text>
+                    <Text style={styles.targetLabel}>{t('recipe.refine.targetLabel')}</Text>
                   </View>
-                  <Text style={styles.targetHint}>「お店で食べた」記録から自動で添えます</Text>
+                  <Text style={styles.targetHint}>{t('recipe.refine.targetHint')}</Text>
                 </View>
               </View>
             )}
@@ -398,14 +390,14 @@ export default function RefineRecipeScreen() {
                 setRefined(null);
               }}
             >
-              <Text style={styles.secondaryButtonText}>やり直す</Text>
+              <Text style={styles.secondaryButtonText}>{t('recipe.refine.retry')}</Text>
             </Pressable>
             <Pressable
               style={[styles.primaryButton, !diff?.hasChanges && styles.primaryButtonDisabled]}
               onPress={handleSave}
               disabled={!diff?.hasChanges}
             >
-              <Text style={styles.primaryButtonText}>この内容で保存</Text>
+              <Text style={styles.primaryButtonText}>{t('recipe.refine.saveThis')}</Text>
             </Pressable>
           </View>
         ) : (
@@ -418,14 +410,14 @@ export default function RefineRecipeScreen() {
             disabled={phase !== 'input' || !feedback.trim()}
           >
             <Text style={styles.primaryButtonText}>
-              {phase === 'processing' ? 'AIが調整中...' : 'AIで近づける'}
+              {phase === 'processing' ? t('recipe.refine.processing') : t('recipe.refine.start')}
             </Text>
           </Pressable>
         )}
       </View>
 
       <Toast
-        message="レシピを更新しました"
+        message={t('recipe.refine.updated')}
         visible={showToast}
         onDismiss={() => setShowToast(false)}
       />

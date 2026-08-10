@@ -22,6 +22,7 @@ import {
   seedTags,
   seedUsers,
 } from './seed';
+import { t } from '../i18n';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
@@ -31,7 +32,10 @@ const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
 const DEFAULT_MEMBER_ID = 'member-family-001-user-kei';
 const DEFAULT_USER_NAME = '';
-const DEFAULT_FAMILY_NAME = 'わたしの台所';
+// 既定のグループ名。**書き込む時点のロケール**で入れる（あとで変更もできる）
+function defaultFamilyName(): string {
+  return t('family.defaultGroupName');
+}
 const DEFAULT_INVITE_CODE = 'DK0001';
 
 const SAMPLE_DATA_VERSION = '3'; // v3: recipe-7 をスクランブルエッグトースト（モルディブの朝食写真）に差し替え
@@ -357,7 +361,7 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
     .insert(schema.families)
     .values({
       id: DEFAULT_FAMILY_ID,
-      name: DEFAULT_FAMILY_NAME,
+      name: defaultFamilyName(),
       inviteCode: DEFAULT_INVITE_CODE,
       ownerId: DEFAULT_USER_ID,
       createdAt: now,
@@ -377,6 +381,8 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
       .where(
         and(
           eq(schema.users.id, DEFAULT_USER_ID),
+          // i18n-ignore 旧サンプルの掃除。DB に入っている過去の値と比べるので訳さない
+          // eslint-disable-next-line no-restricted-syntax
           inArray(schema.users.displayName, ['恵', 'あなた']),
         ),
       );
@@ -385,8 +391,10 @@ export async function ensureLocalIdentity(database: DB): Promise<void> {
   if (existingMembers.length === 0 && !isSampleDataEnabled()) {
     await database
       .update(schema.families)
-      .set({ name: DEFAULT_FAMILY_NAME, inviteCode: DEFAULT_INVITE_CODE, updatedAt: now })
+      .set({ name: defaultFamilyName(), inviteCode: DEFAULT_INVITE_CODE, updatedAt: now })
       .where(
+        // i18n-ignore 旧サンプルの掃除。DB に入っている過去の値と比べるので訳さない
+        // eslint-disable-next-line no-restricted-syntax
         and(eq(schema.families.id, DEFAULT_FAMILY_ID), eq(schema.families.name, '佐藤家の台所')),
       );
   }

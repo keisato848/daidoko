@@ -9,6 +9,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
+import { t } from '../../src/i18n';
 import {
   deleteAlias,
   getAliasEntries,
@@ -60,13 +61,11 @@ export default function NameAliasesScreen() {
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <ChevronLeft size={20} color={Colors.goldDim} />
         </Pressable>
-        <Text style={styles.headerTitle}>名寄せ辞書</Text>
+        <Text style={styles.headerTitle}>{t('pantry.aliases.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      <Text style={styles.description}>
-        AIが「表記ゆれ→正規名」として覚えた対応を一覧できます。間違って覚えたものは、鉛筆マークで正しい名前に直すか、×で削除してください（削除すると次回また自動で判定されます）。
-      </Text>
+      <Text style={styles.description}>{t('pantry.aliases.lead')}</Text>
 
       <FlatList
         data={entries}
@@ -74,8 +73,9 @@ export default function NameAliasesScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            まだ何も覚えていません。{'\n'}
-            レシート読み取りや食材の名寄せを使うと、ここに記録されます。
+            {t('pantry.aliases.emptyTitle')}
+            {'\n'}
+            {t('pantry.aliases.emptyBody')}
           </Text>
         }
         renderItem={({ item }) => (
@@ -89,14 +89,18 @@ export default function NameAliasesScreen() {
               <Pressable
                 onPress={() => handleToggleEdit(item)}
                 hitSlop={8}
-                accessibilityLabel={`${item.sourceNormalized}の正規名を編集`}
+                accessibilityLabel={t('pantry.aliases.editLabel', {
+                  name: item.sourceNormalized,
+                })}
               >
                 <Pencil size={16} color={editId === item.id ? Colors.gold : Colors.muted} />
               </Pressable>
               <Pressable
                 onPress={() => handleDelete(item.id)}
                 hitSlop={10}
-                accessibilityLabel={`${item.sourceNormalized}を削除`}
+                accessibilityLabel={t('pantry.aliases.deleteLabel', {
+                  name: item.sourceNormalized,
+                })}
               >
                 <X size={16} color={Colors.muted} />
               </Pressable>
@@ -107,7 +111,7 @@ export default function NameAliasesScreen() {
                   style={styles.editInput}
                   value={editInput}
                   onChangeText={setEditInput}
-                  placeholder="正しい名前"
+                  placeholder={t('pantry.aliases.canonicalLabel')}
                   placeholderTextColor={Colors.muted}
                   maxLength={50}
                   autoFocus
@@ -115,9 +119,9 @@ export default function NameAliasesScreen() {
                 <Pressable
                   style={styles.editSave}
                   onPress={() => handleSave(item)}
-                  accessibilityLabel="正規名を保存"
+                  accessibilityLabel={t('pantry.aliases.saveLabel')}
                 >
-                  <Text style={styles.editSaveText}>保存</Text>
+                  <Text style={styles.editSaveText}>{t('common.save')}</Text>
                 </Pressable>
               </View>
             )}

@@ -12,13 +12,15 @@ import { Loading } from '../src/components/Loading';
 import { PressableScale } from '../src/components/PressableScale';
 import { Stars } from '../src/components/Stars';
 import { Colors, Typography } from '../src/constants/theme';
+import { t, tCount } from '../src/i18n';
+import { formatYearMonth } from '../src/i18n/format';
 import { getTimeline } from '../src/services/timeline.service';
 import type { TimelineEntry } from '../src/services/types';
 import {
   buildMonthMatrix,
   groupEntriesByDay,
   localDayKey,
-  WEEKDAY_LABELS,
+  weekdayLabels,
 } from '../src/utils/calendar';
 import { formatProfileDisplayName } from '../src/utils/profile';
 
@@ -54,7 +56,7 @@ export default function CalendarScreen() {
     });
   };
 
-  const monthLabel = `${cursor.year}年${cursor.month + 1}月`;
+  const monthLabel = formatYearMonth(new Date(cursor.year, cursor.month, 1));
 
   if (loading) {
     return (
@@ -63,10 +65,10 @@ export default function CalendarScreen() {
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <X size={20} color={Colors.muted} />
           </Pressable>
-          <Text style={styles.headerTitle}>カレンダー</Text>
+          <Text style={styles.headerTitle}>{t('ui.calendar.title')}</Text>
           <View style={styles.headerSpacer} />
         </View>
-        <Loading message="調理記録を読み込んでいます" />
+        <Loading message={t('ui.calendar.loading')} />
       </View>
     );
   }
@@ -77,22 +79,30 @@ export default function CalendarScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>カレンダー</Text>
+        <Text style={styles.headerTitle}>{t('ui.calendar.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.monthBar}>
-        <Pressable onPress={() => goMonth(-1)} hitSlop={12} accessibilityLabel="前の月">
+        <Pressable
+          onPress={() => goMonth(-1)}
+          hitSlop={12}
+          accessibilityLabel={t('ui.calendar.prevMonth')}
+        >
           <ChevronLeft size={22} color={Colors.gold} />
         </Pressable>
         <Text style={styles.monthLabel}>{monthLabel}</Text>
-        <Pressable onPress={() => goMonth(1)} hitSlop={12} accessibilityLabel="次の月">
+        <Pressable
+          onPress={() => goMonth(1)}
+          hitSlop={12}
+          accessibilityLabel={t('ui.calendar.nextMonth')}
+        >
           <ChevronRight size={22} color={Colors.gold} />
         </Pressable>
       </View>
 
       <View style={styles.weekHeader}>
-        {WEEKDAY_LABELS.map((w) => (
+        {weekdayLabels().map((w) => (
           <Text key={w} style={styles.weekHeaderCell}>
             {w}
           </Text>
@@ -132,12 +142,14 @@ export default function CalendarScreen() {
 
       <View style={styles.dayHeader}>
         <Text style={styles.dayHeaderText}>{selectedKey.replace(/-/g, '/')}</Text>
-        <Text style={styles.dayHeaderCount}>{selectedLogs.length}件</Text>
+        <Text style={styles.dayHeaderCount}>
+          {tCount('ui.calendar.logCount', selectedLogs.length)}
+        </Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.logList}>
         {selectedLogs.length === 0 ? (
-          <Text style={styles.emptyDay}>この日の調理記録はありません</Text>
+          <Text style={styles.emptyDay}>{t('ui.calendar.empty')}</Text>
         ) : (
           selectedLogs.map((log) => {
             const userName = formatProfileDisplayName(log.userName);
