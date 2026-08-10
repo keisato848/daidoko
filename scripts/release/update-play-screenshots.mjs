@@ -1,12 +1,13 @@
 /**
- * Google Play のスマホ用スクリーンショット（ja-JP / phoneScreenshots）を
- * docs/store/google-play/phone-screenshots/ の内容で差し替える。
+ * Google Play のスマホ用スクリーンショット（phoneScreenshots）を
+ * docs/store/google-play/phone-screenshots<-locale>/ の内容で差し替える。
  *
  * - 表示順 = ORDER 配列（README.md の表と一致させる）
  * - 既存を全削除してから順番にアップロード（アップロード順が表示順になる）
  * - 認証は lib/play-api.mjs（サービスアカウント）
+ * - **1 回の実行で 1 言語だけ**（Play の edit は同時に 1 つしか開けない）
  *
- * 使い方: node scripts/release/update-play-screenshots.mjs [--dry-run]
+ * 使い方: node scripts/release/update-play-screenshots.mjs [--lang ja-JP|en-US] [--dry-run]
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,22 +16,51 @@ import { fileURLToPath } from 'node:url';
 import { createEditsClient, getAccessToken } from './lib/play-api.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const SHOTS_DIR = path.join(ROOT, 'docs/store/google-play/phone-screenshots');
-const LANG = 'ja-JP';
+
+/** 言語ごとの取得先ディレクトリ。日本語は既存パスのまま（履歴を壊さない）。 */
+const SHOTS_DIR_BY_LANG = {
+  'ja-JP': 'docs/store/google-play/phone-screenshots',
+  'en-US': 'docs/store/google-play/phone-screenshots-en',
+};
+
+const langIndex = process.argv.indexOf('--lang');
+const LANG = langIndex === -1 ? 'ja-JP' : process.argv[langIndex + 1];
+if (!(LANG in SHOTS_DIR_BY_LANG)) {
+  throw new Error(
+    `--lang は ${Object.keys(SHOTS_DIR_BY_LANG).join(' / ')} のいずれか（受領: ${LANG}）`,
+  );
+}
+const SHOTS_DIR = path.join(ROOT, SHOTS_DIR_BY_LANG[LANG]);
 const IMAGE_TYPE = 'phoneScreenshots';
 const DRY_RUN = process.argv.includes('--dry-run');
 
-/** アップロード順（= Play の表示順）。README.md の表と同期すること。 */
-const ORDER = [
-  '10-recipe-detail-photo.png',
-  '07-photo-to-recipe.png',
-  '08-photo-recipe-result.png',
-  '01-home-timeline.png',
-  '02-recipe-library.png',
-  '03-recipe-detail.png',
-  '04-cooking-mode.png',
-  '06-family-group.png',
-];
+/**
+ * アップロード順（= Play の表示順）。各ディレクトリの README.md の表と同期すること。
+ * en-US に 08（AI 結果画面）が無いのは、あれが手動撮影のショットで英語版をまだ
+ * 撮っていないため。枚数が違っても Play の要件（2〜8 枚）は満たす。
+ */
+const ORDER_BY_LANG = {
+  'ja-JP': [
+    '10-recipe-detail-photo.png',
+    '07-photo-to-recipe.png',
+    '08-photo-recipe-result.png',
+    '01-home-timeline.png',
+    '02-recipe-library.png',
+    '03-recipe-detail.png',
+    '04-cooking-mode.png',
+    '06-family-group.png',
+  ],
+  'en-US': [
+    '10-recipe-detail-photo.png',
+    '07-photo-to-recipe.png',
+    '01-home-timeline.png',
+    '02-recipe-library.png',
+    '03-recipe-detail.png',
+    '04-cooking-mode.png',
+    '06-family-group.png',
+  ],
+};
+const ORDER = ORDER_BY_LANG[LANG];
 
 // ─── 検証（存在・PNG・寸法・8枚以内） ────────────────────────────────────────
 if (ORDER.length > 8) throw new Error(`Play のスマホスクショは最大8枚（現在 ${ORDER.length}）`);

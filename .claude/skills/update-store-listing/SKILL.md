@@ -1,6 +1,6 @@
 ---
 name: update-store-listing
-description: Google Play ストア掲載（ja-JP のアプリ名・説明文・スマホ用スクリーンショット・アイコン・フィーチャーグラフィック・タグ）を CLI で更新する。listing-ja.md / phone-screenshots/ / generate-icons.mjs / generate-play-promos.mjs を単一ソースとして androidpublisher API で反映。スクショはエミュレータから機械的に再取得できる。
+description: Google Play ストア掲載（ja-JP / en-US のアプリ名・説明文・スマホ用スクリーンショット・アイコン・フィーチャーグラフィック・タグ）を CLI で更新する。listing-ja.md / listing-en.md / phone-screenshots{,-en}/ / generate-icons.mjs / generate-play-promos.mjs を単一ソースとして androidpublisher API で反映。スクショはエミュレータから言語ごとに機械的に再取得できる。
 ---
 
 # Play ストア掲載の CLI 更新
@@ -9,16 +9,19 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 
 ## アプリ名・説明文（短い説明・詳しい説明）
 
-1. `docs/store/google-play/listing-ja.md` の「## アプリ名」（30字以内・ASO のためキーワードを含める）
-   「## 短い説明」（80字以内）「## 詳しい説明」（4000字以内・プレーンテキスト、■/・で整形）を編集
+1. `docs/store/google-play/listing-ja.md` / `listing-en.md` の「## アプリ名」（30字以内・ASO のため
+   キーワードを含める）「## 短い説明」（80字以内）「## 詳しい説明」（4000字以内・プレーンテキスト、
+   ■/・で整形）を編集。**英語版は日本語の訳ではなく、その言語で通る文面を書く**
 2. **公開文面なので必ずユーザーに文面を提示して承認を得る**
-3. ドライラン: `node scripts/release/update-play-listing.mjs --dry-run`（文字数チェック＋内容表示）
-4. 反映: `node scripts/release/update-play-listing.mjs`
+3. 掲載のある言語の確認（読み取りのみ）: `node scripts/release/list-play-listings.mjs`
+4. ドライラン: `node scripts/release/update-play-listing.mjs --lang ja-JP --dry-run`
+5. 反映: `node scripts/release/update-play-listing.mjs --lang ja-JP`
+   （**Play の edit は同時に 1 つだけ**なので言語ごとに実行を分ける）
    - 動画は Play 側の現行値を自動維持
    - 認証キー: `C:\secure\play-service-account.json`（`PLAY_SERVICE_ACCOUNT_KEY` で上書き可・値は出力しない）
    - `COMMITTED edit: <id>` が出れば完了
    - **API の commit は即時成功するが公開ページへの伝播は数分〜数時間かかる**（Console 管理画面は即時反映）
-5. listing-ja.md の変更を PR で develop にマージ（リポジトリ記録と Play の同期を保つ）
+6. listing-ja.md の変更を PR で develop にマージ（リポジトリ記録と Play の同期を保つ）
 
 ## アプリのアイコン（ストア掲載用・アプリ本体とは独立）
 
@@ -34,8 +37,9 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
 
 ## スクリーンショット（スマホ用・機械的に再取得）
 
-単一ソース = `docs/store/google-play/phone-screenshots/`（表示順は README.md の表 =
-`update-play-screenshots.mjs` の ORDER 配列。変えるときは両方更新）。
+単一ソース = `docs/store/google-play/phone-screenshots/`（英語は `-en` 付きの別ディレクトリ。
+表示順は README.md の表 = `update-play-screenshots.mjs` の ORDER 配列。変えるときは両方更新）。
+**言語ごとにスクショを入れないと、その言語の掲載は日本語の画面のまま出る。**
 
 1. ストアショット用リリース APK をビルド（サンプルデータ有効＋コーチマーク無効。エミュレータは x86_64）:
    `EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 node scripts/agent/build-android.mjs --arch x86_64`
@@ -48,9 +52,14 @@ description: Google Play ストア掲載（ja-JP のアプリ名・説明文・�
    - ステータスバーは SystemUI デモモードで固定（09:00・電池100%・通知なし）
    - `manual` 指定のショット（AI 結果画面など）はスキップして既存ファイルを維持
    - 部分再取得: `--shots 01,04` / 対象レシピ変更: `--recipe recipe-3`
+   - 英語版: `--locale en-US --out docs/store/google-play/phone-screenshots-en`
+     （アプリ単位の言語を一時的に切り替える。終了時に端末既定へ自動で戻る。
+     **サンプルデータも英語になる** — `src/db/seed.en.ts`。初回起動でシードするので
+     wipe 済みの端末に入れてから撮ること）
 5. **スクショはストア公開物 — 画像をユーザーに提示して承認を得る**
-6. ドライラン: `node scripts/release/update-play-screenshots.mjs --dry-run`（枚数・寸法検証）
-7. 反映: `node scripts/release/update-play-screenshots.mjs`（既存全削除→順番にアップロード→commit）
+6. ドライラン: `node scripts/release/update-play-screenshots.mjs --lang ja-JP --dry-run`（枚数・寸法検証）
+7. 反映: `node scripts/release/update-play-screenshots.mjs --lang ja-JP`（既存全削除→順番にアップロード→commit）
+   → 英語も入れるなら続けて `--lang en-US`（**edit は同時に 1 つだけ**なので言語ごとに実行）
 8. PNG の変更を PR で develop にマージ
 
 ## フィーチャーグラフィック（1024x500）
