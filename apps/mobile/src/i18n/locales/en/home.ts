@@ -1,9 +1,12 @@
 import type ja from '../ja/home';
 
 const home: typeof ja = {
+  // **短く保つ。** ヘッダーは3つのタブと4つのアイコンを1行に収める。
+  // "This week"/"This month" だと選択中の下線が Calendar の下まで伸び、
+  // Calendar が選ばれているように見えた（Pixel 9a・実機で確認）
   filter: {
-    week: 'This week',
-    month: 'This month',
+    week: 'Week',
+    month: 'Month',
     all: 'All',
   },
 
