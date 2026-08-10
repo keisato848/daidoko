@@ -408,7 +408,7 @@ export default function RecipeDetailScreen() {
                   label={t('common.servings')}
                   value={targetServings ?? recipe.servings}
                   onChange={setTargetServings}
-                  suffix={t('recipe.detail.servingsSuffix')}
+                  suffix={tCount('recipe.detail.servingsUnit', targetServings ?? recipe.servings)}
                   min={1}
                 />
               </View>

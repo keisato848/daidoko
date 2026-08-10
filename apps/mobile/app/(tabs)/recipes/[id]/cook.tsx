@@ -12,7 +12,7 @@ import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } fr
 import { NumberStepper } from '../../../../src/components/NumberStepper';
 import { TimerWidget } from '../../../../src/components/TimerWidget';
 import { Colors } from '../../../../src/constants/theme';
-import { t } from '../../../../src/i18n';
+import { t, tCount } from '../../../../src/i18n';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { getRecipeDetail } from '../../../../src/services/recipe.service';
 import { useTimerStore } from '../../../../src/stores/timer.store';
@@ -244,7 +244,7 @@ export default function CookingModeScreen() {
                   label={t('common.servings')}
                   value={targetServings ?? servings}
                   onChange={setTargetServings}
-                  suffix={t('recipe.detail.servingsSuffix')}
+                  suffix={tCount('recipe.detail.servingsUnit', targetServings ?? servings)}
                   min={1}
                 />
               </View>

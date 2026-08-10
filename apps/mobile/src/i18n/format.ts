@@ -67,3 +67,15 @@ export function formatYearMonth(date: Date): string {
   if (getLocale() === 'en') return `${MONTH_LONG_EN[date.getMonth()]} ${date.getFullYear()}`;
   return `${date.getFullYear()}年${date.getMonth() + 1}月`;
 }
+
+/**
+ * 数値と単位をつなぐ。ja: `4人前` / en: `4 servings`
+ *
+ * 空白の有無は言語の組版の決まりであって訳ではないので、辞書ではなくここで決める
+ * （単位ごとに空白入りの訳を用意すると、空白が消えても誰も気づけない）。
+ * 実機の英語表示が「4servings」になっていたのが発端。
+ */
+export function formatValueWithUnit(value: number, unit: string | undefined): string {
+  if (unit === undefined || unit === '') return String(value);
+  return getLocale() === 'ja' ? `${value}${unit}` : `${value} ${unit}`;
+}

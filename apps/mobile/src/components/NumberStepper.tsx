@@ -4,6 +4,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
+import { formatValueWithUnit } from '../i18n/format';
 
 interface NumberStepperProps {
   label: string;
@@ -47,7 +48,7 @@ export function NumberStepper({
         >
           <Text style={[styles.buttonText, value == null && styles.buttonTextDisabled]}>−</Text>
         </Pressable>
-        <Text style={styles.value}>{value != null ? `${value}${suffix ?? ''}` : '−'}</Text>
+        <Text style={styles.value}>{value != null ? formatValueWithUnit(value, suffix) : '−'}</Text>
         <Pressable style={styles.button} onPress={increment}>
           <Text style={styles.buttonText}>＋</Text>
         </Pressable>

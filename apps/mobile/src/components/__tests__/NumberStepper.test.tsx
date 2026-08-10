@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 
 import { NumberStepper } from '../NumberStepper';
+import { setLocale } from '../../i18n';
 
 describe('NumberStepper', () => {
   it('ラベルを表示する', () => {
@@ -19,6 +20,33 @@ describe('NumberStepper', () => {
     render(<NumberStepper label="人数" value={4} onChange={jest.fn()} suffix="人前" />);
     // getByText with exact:false to handle any whitespace variation
     expect(screen.getByText('4人前', { exact: false })).toBeTruthy();
+  });
+
+  it('日本語は数値と単位を詰め、英語は空ける', () => {
+    // 実機の英語表示で「4servings」とくっついていたのがきっかけ。
+    // 区切りは i18n/format.ts の formatValueWithUnit が言語ごとに決める。
+    render(<NumberStepper label="人数" value={4} onChange={jest.fn()} suffix="人前" />);
+    expect(screen.getByText('4人前')).toBeTruthy();
+
+    setLocale('en');
+    try {
+      screen.rerender(
+        <NumberStepper label="Servings" value={4} onChange={jest.fn()} suffix="servings" />,
+      );
+      expect(screen.getByText('4 servings')).toBeTruthy();
+    } finally {
+      setLocale('ja');
+    }
+  });
+
+  it('suffix が無いときは数値だけ（余計な空白を足さない）', () => {
+    setLocale('en');
+    try {
+      render(<NumberStepper label="Servings" value={4} onChange={jest.fn()} />);
+      expect(screen.getByText('4')).toBeTruthy();
+    } finally {
+      setLocale('ja');
+    }
   });
 
   it('＋ ボタンで onChange が呼ばれる', () => {
