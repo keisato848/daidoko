@@ -38,7 +38,10 @@ import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { t, tCount } from '../../../src/i18n';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
-import { addMissingRecipeIngredientsToList } from '../../../src/services/shopping-list.service';
+import {
+  addMissingRecipeIngredientsToList,
+  describeAddMissingResult,
+} from '../../../src/services/shopping-list.service';
 import {
   deleteRecipe,
   getMemosForRecipe,
@@ -219,13 +222,20 @@ export default function RecipeDetailScreen() {
 
   const handleAddMissingToList = async () => {
     if (!recipe) return;
-    const added = await addMissingRecipeIngredientsToList(recipe.id);
-    Alert.alert(
-      t('recipe.detail.shoppingTitle'),
-      added > 0
-        ? tCount('recipe.detail.shoppingAdded', added)
-        : t('recipe.detail.shoppingNothingMissing'),
-    );
+    const outcome = describeAddMissingResult(await addMissingRecipeIngredientsToList(recipe.id));
+    let message: string;
+    if (outcome.kind === 'added') {
+      const head = tCount('recipe.detail.shoppingAdded', outcome.added);
+      message =
+        outcome.alreadyOnList > 0
+          ? `${head}\n${tCount('recipe.detail.shoppingAlreadyOnList', outcome.alreadyOnList)}`
+          : head;
+    } else if (outcome.kind === 'all-on-list') {
+      message = t('recipe.detail.shoppingAllOnList');
+    } else {
+      message = t('recipe.detail.shoppingNothingMissing');
+    }
+    Alert.alert(t('recipe.detail.shoppingTitle'), message);
   };
 
   if (isLoading) {

@@ -143,28 +143,73 @@ export async function addRecipeIngredientsToList(recipeId: string): Promise<numb
 }
 
 /**
- * Add only the recipe's ingredients NOT currently in the pantry (足りない材料).
- * With an empty pantry this equals addRecipeIngredientsToList. Returns count added.
+ * 「足りない材料」を買い物リストへ入れたときの内訳。
+ *
+ * **「在庫にある」と「もう買い物リストに入っている」を分けて数える。**
+ * まとめて 0 件として返していたため、リストに入れたまま（＝まだ買っていない）
+ * 材料しかないときに「すべて在庫にあります」と出て、持っていない材料を
+ * 持っていることにしてしまっていた。
  */
-export async function addMissingRecipeIngredientsToList(recipeId: string): Promise<number> {
-  if (!isNativePlatform) return 0;
+export interface AddMissingIngredientsResult {
+  /** 今回リストへ追加した数 */
+  added: number;
+  /** 在庫にあるので追加しなかった数 */
+  alreadyInPantry: number;
+  /** すでにリストに入っている（未購入）ので追加しなかった数 */
+  alreadyOnList: number;
+}
+
+/** 追加結果をどう伝えるか。画面はこれを見て文言を選ぶ。 */
+export type AddMissingOutcome =
+  | { kind: 'added'; added: number; alreadyOnList: number }
+  | { kind: 'all-on-list' }
+  | { kind: 'nothing-missing' };
+
+/**
+ * 「何も追加しなかった」理由を分ける純関数。
+ *
+ * **リストに入れたまま（未購入）を「在庫にある」と言ってはいけない。**
+ * 持っていない材料を持っていることにしてしまい、買い忘れに直結する。
+ */
+export function describeAddMissingResult(result: AddMissingIngredientsResult): AddMissingOutcome {
+  if (result.added > 0) {
+    return { kind: 'added', added: result.added, alreadyOnList: result.alreadyOnList };
+  }
+  if (result.alreadyOnList > 0) return { kind: 'all-on-list' };
+  return { kind: 'nothing-missing' };
+}
+
+/**
+ * Add only the recipe's ingredients NOT currently in the pantry (足りない材料).
+ * With an empty pantry this equals addRecipeIngredientsToList.
+ */
+export async function addMissingRecipeIngredientsToList(
+  recipeId: string,
+): Promise<AddMissingIngredientsResult> {
+  const empty: AddMissingIngredientsResult = { added: 0, alreadyInPantry: 0, alreadyOnList: 0 };
+  if (!isNativePlatform) return empty;
   const detail = await getRecipeDetail(recipeId);
-  if (!detail) return 0;
+  if (!detail) return empty;
 
   const { getInStockNormalizedNames } = await import('./pantry.service');
   const { getAliasMap } = await import('./name-alias.service');
   const [pantryNames, aliases] = await Promise.all([getInStockNormalizedNames(), getAliasMap()]);
 
-  let added = 0;
+  const result: AddMissingIngredientsResult = { added: 0, alreadyInPantry: 0, alreadyOnList: 0 };
   for (const ingredient of detail.ingredients) {
-    if (isInStock(ingredient.name, pantryNames, aliases)) continue;
-    const result = await addShoppingItem(ingredient.name, ingredient.amount ?? undefined, {
+    if (isInStock(ingredient.name, pantryNames, aliases)) {
+      result.alreadyInPantry += 1;
+      continue;
+    }
+    const inserted = await addShoppingItem(ingredient.name, ingredient.amount ?? undefined, {
       source: 'recipe',
       recipeId,
     });
-    if (result) added += 1;
+    // addShoppingItem が null を返すのは「同じ名前が未購入で並んでいる」ときだけ
+    if (inserted) result.added += 1;
+    else result.alreadyOnList += 1;
   }
-  return added;
+  return result;
 }
 
 export async function removeShoppingItem(id: string): Promise<void> {

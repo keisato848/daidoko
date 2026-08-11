@@ -92,6 +92,11 @@ const recipe: typeof ja = {
       other: 'Added {{count}} missing items to your shopping list',
     },
     shoppingNothingMissing: 'You already have everything',
+    shoppingAllOnList: 'The missing ingredients are already on your shopping list (not bought yet)',
+    shoppingAlreadyOnList: {
+      one: '{{count}} was already on the list',
+      other: '{{count}} were already on the list',
+    },
     addMissingLabel: 'Add missing ingredients to the shopping list',
 
     emptyMemo: 'No notes yet',
