@@ -5,16 +5,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { Colors } from '../constants/theme';
 import { t, tCount, tDynamic } from '../i18n';
 import { getTagsForFamily } from '../services/tag.service';
@@ -106,10 +99,7 @@ export function RecipeForm({
   );
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoider style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={onCancel} hitSlop={12}>
@@ -267,7 +257,7 @@ export function RecipeForm({
           />
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoider>
   );
 }
 

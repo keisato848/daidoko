@@ -8,6 +8,7 @@ import { ChevronLeft, Pencil, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import {
@@ -56,7 +57,7 @@ export default function NameAliasesScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <ChevronLeft size={20} color={Colors.goldDim} />
@@ -128,7 +129,7 @@ export default function NameAliasesScreen() {
           </View>
         )}
       />
-    </View>
+    </KeyboardAvoider>
   );
 }
 

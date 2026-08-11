@@ -92,6 +92,11 @@ const recipe: typeof ja = {
       other: 'Added {{count}} missing items to your shopping list',
     },
     shoppingNothingMissing: 'You already have everything',
+    shoppingAllOnList: 'The missing ingredients are already on your shopping list (not bought yet)',
+    shoppingAlreadyOnList: {
+      one: '{{count}} was already on the list',
+      other: '{{count}} were already on the list',
+    },
     addMissingLabel: 'Add missing ingredients to the shopping list',
 
     emptyMemo: 'No notes yet',
@@ -173,6 +178,8 @@ const recipe: typeof ja = {
     subheading: 'Choose how to add it',
     method: {
       photo: 'From a photo',
+      consult: 'Talk it through',
+      consultDescription: 'Say what you feel like making and turn it into a draft',
       photoDescription: 'Turn a dish you ate out into a draft recipe',
       url: 'Import from a URL',
       urlDescription: 'Paste a link to a recipe page',

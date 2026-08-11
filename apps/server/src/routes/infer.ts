@@ -32,6 +32,14 @@ import {
 import { runRecipeRefineAgent } from '../agents/recipe-refine.agent.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
 import { parseOutputLocale, parseUnitSystem } from '../lib/output-locale.js';
+import {
+  ConsultConfigError,
+  GeminiRecipeConsultProvider,
+  MAX_CONSULT_MESSAGES,
+  type ConsultDraft,
+  type RecipeConsultProvider,
+} from '../lib/recipe-consult.js';
+import { runRecipeConsultAgent } from '../agents/recipe-consult.agent.js';
 
 const inferRouter = new Hono();
 
@@ -370,6 +378,123 @@ inferRouter.post('/refine', zValidator('json', inferRefineSchema), async (c) => 
       recipe: snapshot,
       feedback,
       ...(images !== undefined && { images }),
+      outputLocale: parseOutputLocale(locale),
+      unitSystem: parseUnitSystem(unitSystem),
+    },
+    provider,
+  );
+  // Always 200 — errors are in the response body (AgentResult pattern).
+  return c.json(result);
+});
+
+// ─── 相談してレシピを作る ────────────────────────────────────────────────────
+
+const consultIngredientSchema = z.object({
+  groupLabel: z.string().max(30).optional(),
+  name: z.string().min(1).max(50),
+  amount: z.string().max(30).optional(),
+  note: z.string().max(100).optional(),
+});
+
+const consultDraftSchema = z.object({
+  title: z.string().min(1).max(100),
+  titleReading: z.string().max(100).optional(),
+  description: z.string().max(500).optional(),
+  servings: z.number().int().min(1).max(99).optional(),
+  cookTimeMin: z.number().int().min(1).max(999).optional(),
+  ingredients: z.array(consultIngredientSchema).max(100),
+  steps: z.array(z.object({ body: z.string().min(1).max(500) })).max(50),
+  tags: z.array(z.string().max(30)).max(10).optional(),
+});
+
+const inferConsultSchema = z.object({
+  /** 会話。最後がいちばん新しい発言。上限を超えるぶんはサーバーで頭から落とす */
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        text: z.string().min(1, '発言が空です').max(2000, '発言が長すぎます'),
+      }),
+    )
+    .min(1, '相談する内容がありません')
+    .max(MAX_CONSULT_MESSAGES * 2),
+  /** いま手元にある下書き（2 回目以降） */
+  draft: consultDraftSchema.nullish(),
+  /** 手元の在庫。**任意** — 利用者が「在庫を考慮する」を選んだときだけ送られる */
+  pantry: z.array(z.string().min(1).max(50)).max(200).optional(),
+  locale: z.enum(['ja', 'en']).optional(),
+  unitSystem: z.enum(['metric', 'imperial']).optional(),
+});
+
+let consultProviderOverride: RecipeConsultProvider | null = null;
+
+export function setConsultProviderForTesting(provider: RecipeConsultProvider | null): void {
+  consultProviderOverride = provider;
+}
+
+function resolveConsultProvider(): RecipeConsultProvider {
+  return consultProviderOverride ?? new GeminiRecipeConsultProvider();
+}
+
+inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) => {
+  const clientId =
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous';
+  // 写真レシピと同じ枠を消費する（AI 呼び出しであることに変わりはない）
+  const rate = checkRateLimit(clientId);
+  if (!rate.allowed) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'RATE_LIMITED',
+        message:
+          rate.scope === 'global'
+            ? '本日の利用上限に達しました。時間をおいてお試しください。'
+            : '本日の利用上限に達しました。',
+        retryable: false,
+      },
+    });
+  }
+
+  const { messages, draft, pantry, locale, unitSystem } = c.req.valid('json');
+
+  let provider: RecipeConsultProvider;
+  try {
+    provider = resolveConsultProvider();
+  } catch (err) {
+    if (err instanceof ConsultConfigError) {
+      return c.json({
+        ok: false,
+        error: { code: 'AI_API_UNAVAILABLE', message: 'AI 推論が利用できません', retryable: false },
+      });
+    }
+    throw err;
+  }
+
+  const snapshot: ConsultDraft | null = draft
+    ? {
+        title: draft.title,
+        ...(draft.titleReading !== undefined && { titleReading: draft.titleReading }),
+        ...(draft.description !== undefined && { description: draft.description }),
+        ...(draft.servings !== undefined && { servings: draft.servings }),
+        ...(draft.cookTimeMin !== undefined && { cookTimeMin: draft.cookTimeMin }),
+        ingredients: draft.ingredients.map((ing) => ({
+          name: ing.name,
+          ...(ing.groupLabel !== undefined && { groupLabel: ing.groupLabel }),
+          ...(ing.amount !== undefined && { amount: ing.amount }),
+          ...(ing.note !== undefined && { note: ing.note }),
+        })),
+        steps: draft.steps,
+        ...(draft.tags !== undefined && { tags: draft.tags }),
+      }
+    : null;
+
+  const result = await runRecipeConsultAgent(
+    {
+      messages,
+      draft: snapshot,
+      ...(pantry !== undefined && { pantry }),
       outputLocale: parseOutputLocale(locale),
       unitSystem: parseUnitSystem(unitSystem),
     },

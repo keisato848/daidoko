@@ -103,7 +103,14 @@ const recipe = {
       one: '足りない{{count}}件を買い物リストに追加しました',
       other: '足りない{{count}}件を買い物リストに追加しました',
     } satisfies PluralMessage,
+    // 「在庫にある」と「もう買い物リストに入っている（未購入）」は別物。
+    // 一緒にすると、持っていない材料を持っていることにしてしまう
     shoppingNothingMissing: 'すべて在庫にあります',
+    shoppingAllOnList: '足りない材料は、すでに買い物リストに入っています（未購入）',
+    shoppingAlreadyOnList: {
+      one: '{{count}}件はすでにリストにありました',
+      other: '{{count}}件はすでにリストにありました',
+    } satisfies PluralMessage,
     addMissingLabel: '足りない材料を買い物リストに追加',
 
     emptyMemo: 'メモはまだありません',
@@ -187,6 +194,8 @@ const recipe = {
     subheading: '追加方法を選んでください',
     method: {
       photo: '写真からレシピ',
+      consult: '相談してつくる',
+      consultDescription: '作りたいものを話しながら、レシピの下書きにします',
       photoDescription: 'お店で食べた料理も、写真から下書きに',
       url: 'URLから取り込み',
       urlDescription: 'レシピサイトのURLを貼り付け',

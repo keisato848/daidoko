@@ -71,6 +71,7 @@ module.exports = [
       // AI プロンプト本体。モデルへの指示であって画面には出ない
       'apps/mobile/src/services/vision-recipe.provider.ts',
       'apps/mobile/src/services/recipe-refine.provider.ts',
+      'apps/mobile/src/services/recipe-consult.provider.ts',
       'apps/mobile/src/services/meal-vision.provider.ts',
       'apps/mobile/src/services/receipt-vision.provider.ts',
       'apps/mobile/src/services/name-resolve.provider.ts',

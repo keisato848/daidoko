@@ -9,6 +9,7 @@ import { Clipboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } f
 
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
+import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
 import { createRecipe } from '../../../src/services/recipe.service';
@@ -97,7 +98,7 @@ export default function ImportTextScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
@@ -146,7 +147,7 @@ export default function ImportTextScreen() {
         visible={toastMessage != null}
         onDismiss={() => setToastMessage(null)}
       />
-    </View>
+    </KeyboardAvoider>
   );
 }
 
