@@ -1,4 +1,11 @@
-import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
+import {
+  DEFAULT_OUTPUT_LOCALE,
+  DEFAULT_UNIT_SYSTEM,
+  withOutputLanguage,
+  withUnitSystem,
+  type OutputLocale,
+  type OutputUnitSystem,
+} from './output-locale.js';
 /**
  * Vision recipe inference — infer an editable recipe draft from a dish photo.
  *
@@ -21,6 +28,7 @@ export interface VisionRecipeInput {
    * 省略時は ja（既存の呼び出しは挙動が変わらない）。
    */
   outputLocale?: OutputLocale;
+  unitSystem?: OutputUnitSystem;
   /**
    * 追加の写真（断面・メニュー等）。**評価ハーネス専用**で、本番の
    * `POST /api/v1/infer/photo` は単数の画像しか受け取らない。
@@ -175,9 +183,11 @@ const SYSTEM_PROMPT_V1 = [
 export function buildSystemPrompt(
   variant: PromptVariant,
   outputLocale: OutputLocale = DEFAULT_OUTPUT_LOCALE,
+  unitSystem: OutputUnitSystem = DEFAULT_UNIT_SYSTEM,
 ): string {
   const base = variant === 'v1' ? SYSTEM_PROMPT_V1 : SYSTEM_PROMPT_V0;
-  return withOutputLanguage(base, outputLocale);
+  // 単位の指示は言語の指示より後ろ（言語側にも単位の言及があるため）
+  return withUnitSystem(withOutputLanguage(base, outputLocale), unitSystem);
 }
 
 // Gemini structured-output schema (OpenAPI subset). Mirrors the shared
@@ -315,7 +325,7 @@ export class GeminiVisionRecipeProvider implements VisionRecipeProvider {
 
     const body = {
       systemInstruction: {
-        parts: [{ text: buildSystemPrompt(this.variant, input.outputLocale) }],
+        parts: [{ text: buildSystemPrompt(this.variant, input.outputLocale, input.unitSystem) }],
       },
       contents: [
         {
