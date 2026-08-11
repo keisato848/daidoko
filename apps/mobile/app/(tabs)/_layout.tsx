@@ -7,7 +7,7 @@ import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 
 /** レシピスタックのうち、タブバーを隠す画面（全画面で集中させたいもの）。 */
-const FULLSCREEN_CHILD_ROUTES = ['import-photo'];
+const FULLSCREEN_CHILD_ROUTES = ['import-photo', 'consult'];
 
 export default function TabLayout() {
   return (
@@ -72,6 +72,7 @@ export default function TabLayout() {
       <Tabs.Screen name="consume-meal" options={{ href: null }} />
       <Tabs.Screen name="name-aliases" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-photo" options={{ href: null }} />
+      <Tabs.Screen name="recipes/consult" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-ocr" options={{ href: null }} />
     </Tabs>
   );

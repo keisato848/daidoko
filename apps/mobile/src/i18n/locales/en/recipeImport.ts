@@ -83,6 +83,7 @@ const recipeImport: typeof ja = {
     usePantryOn: 'Your pantry is sent along',
     usePantryOff: 'Your pantry is not sent',
     draftReady: 'The draft is ready',
+    draftInProgress: 'Draft so far',
     openDraft: 'Review and save the draft',
     emptyReply: "That did not come through. Tell me in a few words what you'd like to make.",
     confirmTitle: 'Check and save the draft',

@@ -95,6 +95,8 @@ const recipeImport = {
     usePantryOn: '手元の在庫を一緒に送ります',
     usePantryOff: '在庫は送りません',
     draftReady: '下書きができました',
+    // ready はモデルの自己申告で当てにならないことがある。どちらでもカードは開ける
+    draftInProgress: '相談中の下書き',
     openDraft: '下書きを確認して保存',
     emptyReply: 'うまく聞き取れませんでした。作りたいものを、ひとことで教えてください。',
     confirmTitle: '下書きを確認・保存',

@@ -191,7 +191,9 @@ export default function ConsultScreen() {
         {draft && (
           <Pressable style={styles.draftCard} onPress={() => setPhase('confirm')}>
             <Text style={styles.draftLabel}>
-              {ready ? t('recipeImport.consult.draftReady') : draft.title}
+              {ready
+                ? t('recipeImport.consult.draftReady')
+                : t('recipeImport.consult.draftInProgress')}
             </Text>
             <Text style={styles.draftTitle}>{draft.title}</Text>
             <Text style={styles.draftAction}>{t('recipeImport.consult.openDraft')}</Text>
@@ -248,7 +250,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    // ステータスバーに重ならないよう、import-photo と同じ余白を取る
+    paddingTop: 54,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
