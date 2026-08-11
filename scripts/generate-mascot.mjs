@@ -2,11 +2,12 @@
  * 相談相手のマスコット「おたま」を生成する。
  * 出力: apps/mobile/assets/mascot/
  *
- * ホーランドロップのうさぎ＋コック帽、モカ色。**背景は透過**にする
+ * ホーランドロップのうさぎ＋コック帽。**白とモカのミックス**で、背景は透過にする
  * （吹き出しの上・空状態の上のどちらにも置くため）。
  *
  * 意匠の決めどころ:
- * - 垂れ耳は**頭頂から下へ、あごより下まで**。横に張ると猿に見える
+ * - 垂れ耳は**右だけ定義して左は左右反転**。左右で式を分けると必ず崩れる。
+ *   付け根は頭の輪郭の内側に置き、耳を先に描いて頭で隠す（浮いて見えるのを防ぐ）
  * - コック帽は幅より**高さ**を出す。平たいとパンに見える
  * - 判断は必ず 40px（吹き出し横のアバター実寸）まで縮めてから
  *   — 細い線やほおの陰は縮小で最初に消える
@@ -20,6 +21,8 @@ const BG = '#0A0805';
 const MOCHA = '#B08968';
 const MOCHA_DARK = '#8B6A4F';
 const CREAM = '#E6D6BE';
+// 白×モカのミックス（ホーランドロップによくある柄）
+const WHITE = '#F3ECE0';
 const HAT = '#EFE6D4';
 const OUT = 'apps/mobile/assets/mascot';
 
@@ -51,28 +54,53 @@ function chefHat(cx, topY, w, h) {
       rx="${bandH * 0.45}" fill="${HAT}"/>`;
 }
 
+/**
+ * 垂れ耳。**右耳だけ定義し、左は左右反転で作る**（左右で式を分けると必ず崩れる）。
+ * 付け根は頭の輪郭の内側に置き、耳を先に描いて頭で隠す。
+ * 形は「付け根が細く、途中でふくらみ、先が丸い」— ホーランドロップの実物に近い。
+ */
+function lopEarRight() {
+  return `
+    <path d="M 58 40
+             C 74 39, 87 53, 85 68
+             C 84 82, 75 91, 67 88
+             C 60 85, 57 68, 57 50 Z" fill="${MOCHA}"/>
+    <path d="M 61 46
+             C 72 47, 80 57, 79 68
+             C 78 78, 72 84, 67 82
+             C 62 80, 60 66, 60 53 Z" fill="${MOCHA_DARK}" opacity="0.5"/>`;
+}
+
+function lopEars() {
+  return `
+    ${lopEarRight()}
+    <g transform="translate(100 0) scale(-1 1)">${lopEarRight()}</g>`;
+}
+
+/**
+ * 顔。上半分がモカ、下半分と口まわりが白、額から鼻へ細いブレーズ。
+ * ブレーズがあると顔の中心が決まり、40px でも顔だと分かる。
+ */
+function face() {
+  return `
+    <ellipse cx="50" cy="56" rx="23" ry="21.5" fill="${MOCHA}"/>
+    <path d="M 27 56 A 23 21.5 0 0 0 73 56 L 73 58 A 23 21.5 0 0 1 27 58 Z" fill="${WHITE}"/>
+    <ellipse cx="50" cy="66" rx="18" ry="13" fill="${WHITE}"/>
+    <path d="M 50 34 Q 57 46, 55 62 L 45 62 Q 43 46, 50 34 Z" fill="${WHITE}"/>
+    <ellipse cx="34" cy="61" rx="4.2" ry="2.8" fill="${MOCHA_DARK}" opacity="0.35"/>
+    <ellipse cx="66" cy="61" rx="4.2" ry="2.8" fill="${MOCHA_DARK}" opacity="0.35"/>
+    <ellipse cx="40" cy="53" rx="3.9" ry="4.7" fill="${BG}"/>
+    <ellipse cx="60" cy="53" rx="3.9" ry="4.7" fill="${BG}"/>
+    ${noseAndMouth(50, 62)}`;
+}
+
 function buildMascotSvg(size) {
   const s = size / 100;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
   <g transform="scale(${s})">
-    <!-- 垂れ耳。回転の中心は耳の付け根（頭頂）に置き、先が外へ広がるようにする -->
-    <g transform="rotate(-20 23 39)">
-      <ellipse cx="23" cy="70" rx="11" ry="30" fill="${MOCHA}"/>
-      <ellipse cx="23" cy="72" rx="5.5" ry="20" fill="${MOCHA_DARK}"/>
-    </g>
-    <g transform="rotate(20 77 39)">
-      <ellipse cx="77" cy="70" rx="11" ry="30" fill="${MOCHA}"/>
-      <ellipse cx="77" cy="72" rx="5.5" ry="20" fill="${MOCHA_DARK}"/>
-    </g>
+    ${lopEars()}
     <g transform="rotate(-8 50 26)">${chefHat(50, 8, 34, 28)}</g>
-    <ellipse cx="50" cy="56" rx="23" ry="21.5" fill="${MOCHA}"/>
-    <ellipse cx="50" cy="65" rx="14.5" ry="10.5" fill="${CREAM}"/>
-    <!-- ほお。40px では消えるが、大きく出す場面で効く -->
-    <ellipse cx="34" cy="61" rx="4.2" ry="2.8" fill="${MOCHA_DARK}" opacity="0.5"/>
-    <ellipse cx="66" cy="61" rx="4.2" ry="2.8" fill="${MOCHA_DARK}" opacity="0.5"/>
-    <ellipse cx="40" cy="53" rx="3.9" ry="4.7" fill="${BG}"/>
-    <ellipse cx="60" cy="53" rx="3.9" ry="4.7" fill="${BG}"/>
-    ${noseAndMouth(50, 61)}
+    ${face()}
   </g>
 </svg>`;
 }
