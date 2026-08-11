@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -229,13 +230,44 @@ function detectPrebuildStaleness() {
   return stale;
 }
 
-/** EXPO_PUBLIC_* の組が前回ビルドと異なれば JS バンドルのキャッシュ生成物を破棄する */
+/**
+ * `apps/mobile/assets/` 配下の画像の指紋。
+ *
+ * **同じファイル名のまま中身だけ差し替えると Gradle が気づかない。**
+ * マスコットの画像を描き直したのに端末の表示が旧画像のまま（ピクセル一致）で、
+ * 「反映されていない」と分かるまで数往復した。中身のハッシュを見る。
+ */
+function assetsFingerprint() {
+  const assetsDir = join(rootDir, 'apps', 'mobile', 'assets');
+  const entries = [];
+  const walk = (dir) => {
+    let items;
+    try {
+      items = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const item of items.sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = join(dir, item.name);
+      if (item.isDirectory()) walk(full);
+      else entries.push(`${full}:${createHash('sha1').update(readFileSync(full)).digest('hex')}`);
+    }
+  };
+  walk(assetsDir);
+  return entries.join('|');
+}
+
+/**
+ * EXPO_PUBLIC_* か画像アセットが前回ビルドと異なれば JS バンドルのキャッシュ生成物を破棄する。
+ * どちらもファイル名が変わらないまま中身だけ変わるため、Gradle の入力判定をすり抜ける。
+ */
 function invalidateJsBundleIfPublicEnvChanged() {
-  const fingerprint = JSON.stringify(
+  const fingerprint = JSON.stringify([
     Object.entries(process.env)
       .filter(([key]) => key.startsWith('EXPO_PUBLIC_'))
       .sort(([a], [b]) => a.localeCompare(b)),
-  );
+    createHash('sha1').update(assetsFingerprint()).digest('hex'),
+  ]);
   const buildDir = join(androidDir, 'app', 'build');
   const fingerprintPath = join(buildDir, 'expo-public-env.fingerprint');
 
@@ -249,7 +281,7 @@ function invalidateJsBundleIfPublicEnvChanged() {
 
   if (previous != null) {
     console.warn(
-      '[INFO] EXPO_PUBLIC_* が前回ビルドから変化しました — JS バンドルキャッシュを破棄して再生成します。',
+      '[INFO] EXPO_PUBLIC_* か画像アセットが前回ビルドから変化しました — JS バンドルキャッシュを破棄して再生成します。',
     );
   }
   for (const dir of [

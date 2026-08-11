@@ -61,14 +61,14 @@ function chefHat(cx, topY, w, h) {
  */
 function lopEarRight() {
   return `
-    <path d="M 58 40
-             C 74 39, 87 53, 85 68
-             C 84 82, 75 91, 67 88
-             C 60 85, 57 68, 57 50 Z" fill="${MOCHA}"/>
-    <path d="M 61 46
-             C 72 47, 80 57, 79 68
-             C 78 78, 72 84, 67 82
-             C 62 80, 60 66, 60 53 Z" fill="${MOCHA_DARK}" opacity="0.5"/>`;
+    <path d="M 60 46
+             C 80 44, 92 58, 90 74
+             C 88 90, 77 100, 67 96
+             C 60 93, 57 76, 58 56 Z" fill="${MOCHA}"/>
+    <path d="M 65 53
+             C 78 53, 84 63, 83 75
+             C 82 86, 76 92, 70 89
+             C 65 86, 63 72, 63 59 Z" fill="${MOCHA_DARK}" opacity="0.45"/>`;
 }
 
 function lopEars() {
@@ -83,8 +83,8 @@ function lopEars() {
  */
 function face() {
   return `
-    <ellipse cx="50" cy="56" rx="23" ry="21.5" fill="${MOCHA}"/>
-    <path d="M 27 56 A 23 21.5 0 0 0 73 56 L 73 58 A 23 21.5 0 0 1 27 58 Z" fill="${WHITE}"/>
+    <ellipse cx="50" cy="56" rx="21" ry="20" fill="${MOCHA}"/>
+    <path d="M 29 56 A 21 20 0 0 0 71 56 L 71 58 A 21 20 0 0 1 29 58 Z" fill="${WHITE}"/>
     <ellipse cx="50" cy="66" rx="18" ry="13" fill="${WHITE}"/>
     <path d="M 50 34 Q 57 46, 55 62 L 45 62 Q 43 46, 50 34 Z" fill="${WHITE}"/>
     <ellipse cx="34" cy="61" rx="4.2" ry="2.8" fill="${MOCHA_DARK}" opacity="0.35"/>
