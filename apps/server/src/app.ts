@@ -9,6 +9,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
+import gardenRouter from './routes/garden.js';
 import importRouter from './routes/import.js';
 import inferRouter from './routes/infer.js';
 import resolveRouter from './routes/resolve.js';
@@ -35,6 +36,8 @@ app.get('/health', (c) => c.json({ status: 'ok', ts: new Date().toISOString() })
 app.route('/api/v1/import', importRouter);
 app.route('/api/v1/infer', inferRouter);
 app.route('/api/v1/resolve', resolveRouter);
+// さいえん手帳（家庭菜園アプリ）の相乗りルート。プロンプトはレシピ系と独立
+app.route('/api/v1/garden', gardenRouter);
 
 // ─── 404 / Error ─────────────────────────────────────────────────────────────
 
