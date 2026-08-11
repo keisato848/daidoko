@@ -15,19 +15,29 @@ node scripts/release/capture-store-screenshots.mjs \
   一度きりなので、**データを消した端末に入れてから**撮ること（`-wipe-data` でエミュを起動し直す）
 - 反映: `node scripts/release/update-play-screenshots.mjs --lang en-US`（下表の順に upload）
 
-| 順  | ファイル                     | 内容                                    |
-| --- | ---------------------------- | --------------------------------------- |
-| 1   | `10-recipe-detail-photo.png` | 料理写真つきレシピ詳細（ヒーロー）      |
-| 2   | `07-photo-to-recipe.png`     | 写真からレシピ（導線・AI の仕組み説明） |
-| 3   | `01-home-timeline.png`       | ホーム（家族の調理タイムライン）        |
-| 4   | `02-recipe-library.png`      | レシピ蔵書庫（一覧・検索）              |
-| 5   | `03-recipe-detail.png`       | レシピ詳細                              |
-| 6   | `04-cooking-mode.png`        | 料理中モード                            |
-| 7   | `06-family-group.png`        | 家族グループ                            |
+| 順  | ファイル                     | 内容                                     |
+| --- | ---------------------------- | ---------------------------------------- |
+| 1   | `10-recipe-detail-photo.png` | 料理写真つきレシピ詳細（ヒーロー）       |
+| 2   | `07-photo-to-recipe.png`     | 写真からレシピ（導線・AI の仕組み説明）  |
+| 3   | `08-photo-recipe-result.png` | 写真からつくったレシピの編集可能な下書き |
+| 4   | `01-home-timeline.png`       | ホーム（家族の調理タイムライン）         |
+| 5   | `02-recipe-library.png`      | レシピ蔵書庫（一覧・検索）               |
+| 6   | `03-recipe-detail.png`       | レシピ詳細                               |
+| 7   | `04-cooking-mode.png`        | 料理中モード                             |
+| 8   | `06-family-group.png`        | 家族グループ                             |
 
-日本語版にある `08-photo-recipe-result.png`（AI 結果画面）は手動撮影のショットで、
-英語版はまだ撮っていないため 7 枚（Play の下限 2 枚・上限 8 枚は満たす）。
-順番は日本語版と揃えている（1〜2 枚目で推し機能を見せる — ASO 監査 2026-07-14）。
+順番は日本語版と揃えている（1〜3 枚目で推し機能を見せる — ASO 監査 2026-07-14）。
+
+`08-photo-recipe-result.png` は自動化できない（AI を実際に走らせる必要がある）。撮り方:
+
+1. サンプルデータ入りビルドを wipe 済みのエミュレータに入れ、`--locale en-US` 相当に
+   （`cmd locale set-app-locales com.daidoko.app --locales en-US`）
+2. `adb push apps/mobile/assets/seed-photos/scrambled-egg.jpg /sdcard/Pictures/`（**PowerShell から**。
+   Git Bash は /sdcard のパスを壊す）→ MEDIA_SCANNER_SCAN_FILE をブロードキャスト
+3. `daidoko://recipes/import-photo` → Choose from library → 写真を選ぶ → Create recipe
+4. SystemUI デモモードでステータスバーを固定してから撮る（capture スクリプトと同じ設定）
+
+**Gemini の推論を 1 回消費する**（`INFER_GLOBAL_DAILY_LIMIT` の枠を使う）。
 
 `10-recipe-detail-photo.png` は表紙写真のある recipe-7 を開いて撮る:
 

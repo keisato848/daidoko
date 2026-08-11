@@ -34,11 +34,7 @@ const SHOTS_DIR = path.join(ROOT, SHOTS_DIR_BY_LANG[LANG]);
 const IMAGE_TYPE = 'phoneScreenshots';
 const DRY_RUN = process.argv.includes('--dry-run');
 
-/**
- * アップロード順（= Play の表示順）。各ディレクトリの README.md の表と同期すること。
- * en-US に 08（AI 結果画面）が無いのは、あれが手動撮影のショットで英語版をまだ
- * 撮っていないため。枚数が違っても Play の要件（2〜8 枚）は満たす。
- */
+/** アップロード順（= Play の表示順）。各ディレクトリの README.md の表と同期すること。 */
 const ORDER_BY_LANG = {
   'ja-JP': [
     '10-recipe-detail-photo.png',
@@ -53,6 +49,7 @@ const ORDER_BY_LANG = {
   'en-US': [
     '10-recipe-detail-photo.png',
     '07-photo-to-recipe.png',
+    '08-photo-recipe-result.png',
     '01-home-timeline.png',
     '02-recipe-library.png',
     '03-recipe-detail.png',
