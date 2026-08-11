@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Camera,
   LayoutGrid,
+  MessagesSquare,
   ShoppingCart,
   Store,
   Trash2,
@@ -26,7 +27,6 @@ import {
   View,
 } from 'react-native';
 
-import mascot from '../../assets/mascot/otama.png';
 import { Avatar } from '../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
@@ -382,7 +382,7 @@ export default function HomeScreen() {
                 </PressableScale>
 
                 {/* もう 1 本の入口。撮るのは「料理が目の前にある」とき、
-                    おたまは「まだ料理が無い」とき。主役を薄めないよう、
+                    相談は「まだ料理が無い」とき。主役を薄めないよう、
                     こちらは輪郭だけの控えめな見た目にする */}
                 <PressableScale
                   style={styles.consultButton}
@@ -391,7 +391,7 @@ export default function HomeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={t('home.consult')}
                 >
-                  <Image source={mascot} style={styles.consultMascot} resizeMode="contain" />
+                  <MessagesSquare size={18} color={Colors.paperDim} />
                   <Text style={styles.consultText}>{t('home.consult')}</Text>
                 </PressableScale>
 
@@ -618,7 +618,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
   },
-  consultMascot: { width: 26, height: 26 },
   consultText: {
     fontSize: 14,
     fontWeight: '600',

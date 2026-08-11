@@ -53,7 +53,7 @@ const home: typeof ja = {
     body: 'Photograph a dish you ate out, and it becomes a recipe you can cook at home.',
   },
 
-  consult: 'Ask Otama',
+  consult: 'Plan it with AI',
   capture: 'Photograph a dish you ate out',
 
   wantTitle: 'Want to recreate',
