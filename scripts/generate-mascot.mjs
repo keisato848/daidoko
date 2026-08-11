@@ -81,6 +81,22 @@ function lopEars() {
  * 顔。上半分がモカ、下半分と口まわりが白、額から鼻へ細いブレーズ。
  * ブレーズがあると顔の中心が決まり、40px でも顔だと分かる。
  */
+/**
+ * 目。**黒目だけだと表情が出ない。** ハイライト（白い点）と、
+ * まぶた側の陰を足すと生きた目に見える。
+ * 目は大きめにする（小さいと 40px でただの点になる）。
+ */
+function eyes() {
+  const highlight = (cx, cy) => `
+    <circle cx="${cx + 1.6}" cy="${cy - 1.9}" r="1.75" fill="${WHITE}"/>
+    <circle cx="${cx - 1.5}" cy="${cy + 1.9}" r="0.85" fill="${WHITE}" opacity="0.75"/>`;
+  return `
+    <ellipse cx="40" cy="53" rx="4.6" ry="5.6" fill="${BG}"/>
+    <ellipse cx="60" cy="53" rx="4.6" ry="5.6" fill="${BG}"/>
+    ${highlight(40, 53)}
+    ${highlight(60, 53)}`;
+}
+
 function face() {
   return `
     <ellipse cx="50" cy="56" rx="21" ry="20" fill="${MOCHA}"/>
@@ -89,8 +105,7 @@ function face() {
     <path d="M 50 34 Q 57 46, 55 62 L 45 62 Q 43 46, 50 34 Z" fill="${WHITE}"/>
     <ellipse cx="34" cy="61" rx="4.2" ry="2.8" fill="${MOCHA_DARK}" opacity="0.35"/>
     <ellipse cx="66" cy="61" rx="4.2" ry="2.8" fill="${MOCHA_DARK}" opacity="0.35"/>
-    <ellipse cx="40" cy="53" rx="3.9" ry="4.7" fill="${BG}"/>
-    <ellipse cx="60" cy="53" rx="3.9" ry="4.7" fill="${BG}"/>
+    ${eyes()}
     ${noseAndMouth(50, 62)}`;
 }
 
