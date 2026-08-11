@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +24,7 @@ import {
 } from 'react-native';
 
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
+import mascot from '../../../assets/mascot/otama.png';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
@@ -37,6 +39,19 @@ import { getFreemiumStatus, recordCloudInference } from '../../../src/services/u
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
 type Phase = 'chat' | 'confirm';
+
+/**
+ * おたまの発言。**アバターを添えて誰が話しているかを見せる**。
+ * これが無いと、ただの AI アシスタントとの会話と区別がつかない。
+ */
+function AssistantRow({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={styles.assistantRow}>
+      <Image source={mascot} style={styles.avatar} resizeMode="contain" />
+      <View style={[styles.bubble, styles.bubbleAssistant]}>{children}</View>
+    </View>
+  );
+}
 
 export default function ConsultScreen() {
   const router = useRouter();
@@ -150,36 +165,37 @@ export default function ConsultScreen() {
       <ScrollView ref={scrollRef} contentContainerStyle={styles.thread}>
         {messages.length === 0 && (
           <View style={styles.intro}>
+            <Image source={mascot} style={styles.introMascot} resizeMode="contain" />
             <Text style={styles.introHeading}>{t('recipeImport.consult.heading')}</Text>
             <Text style={styles.introLead}>{t('recipeImport.consult.lead')}</Text>
           </View>
         )}
 
         {messages.length === 0 ? (
-          <View style={[styles.bubble, styles.bubbleAssistant]}>
+          <AssistantRow>
             <Text style={styles.bubbleText}>{t('recipeImport.consult.firstMessage')}</Text>
-          </View>
+          </AssistantRow>
         ) : null}
 
-        {messages.map((message, index) => (
-          <View
-            key={`${index}-${message.role}`}
-            style={[
-              styles.bubble,
-              message.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant,
-            ]}
-          >
-            <Text style={message.role === 'user' ? styles.bubbleTextUser : styles.bubbleText}>
-              {message.text}
-            </Text>
-          </View>
-        ))}
+        {messages.map((message, index) =>
+          message.role === 'user' ? (
+            <View key={`${index}-user`} style={[styles.bubble, styles.bubbleUser]}>
+              <Text style={styles.bubbleTextUser}>{message.text}</Text>
+            </View>
+          ) : (
+            <AssistantRow key={`${index}-assistant`}>
+              <Text style={styles.bubbleText}>{message.text}</Text>
+            </AssistantRow>
+          ),
+        )}
 
         {busy && (
-          <View style={[styles.bubble, styles.bubbleAssistant, styles.thinking]}>
-            <ActivityIndicator size="small" color={Colors.gold} />
-            <Text style={styles.thinkingText}>{t('recipeImport.consult.thinking')}</Text>
-          </View>
+          <AssistantRow>
+            <View style={styles.thinking}>
+              <ActivityIndicator size="small" color={Colors.gold} />
+              <Text style={styles.thinkingText}>{t('recipeImport.consult.thinking')}</Text>
+            </View>
+          </AssistantRow>
         )}
 
         {errorMsg && <Text style={styles.error}>{errorMsg}</Text>}
@@ -255,11 +271,20 @@ const styles = StyleSheet.create({
   headerButton: { padding: 4 },
   headerTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
   thread: { padding: 16, gap: 12, paddingBottom: 24 },
-  intro: { marginBottom: 4 },
-  introHeading: { fontSize: 20, fontWeight: '700', color: Colors.paper, marginBottom: 6 },
-  introLead: { fontSize: 14, lineHeight: 21, color: Colors.paperDim },
+  intro: { marginBottom: 4, alignItems: 'center' },
+  introMascot: { width: 120, height: 120, marginBottom: 8 },
+  assistantRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '92%' },
+  avatar: { width: 36, height: 36, marginBottom: 2 },
+  introHeading: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.paper,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  introLead: { fontSize: 14, lineHeight: 21, color: Colors.paperDim, textAlign: 'center' },
   bubble: { maxWidth: '88%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
-  bubbleAssistant: { alignSelf: 'flex-start', backgroundColor: Colors.bgInput },
+  bubbleAssistant: { alignSelf: 'flex-start', backgroundColor: Colors.bgInput, flexShrink: 1 },
   bubbleUser: { alignSelf: 'flex-end', backgroundColor: Colors.gold },
   bubbleText: { fontSize: 15, lineHeight: 22, color: Colors.paper },
   bubbleTextUser: { fontSize: 15, lineHeight: 22, color: Colors.bg },
