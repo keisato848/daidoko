@@ -10,6 +10,7 @@
  * - テキスト/URL/AI写真の取り込み: パース結果に自動セット（確認フォームで修正できるため）
  * - 料理中モード: timerSec 未設定でも検出値でタイマーボタンを表示（DB には保存しない）
  */
+import { getLocale } from '../i18n';
 
 export interface StepTimerCandidate {
   /** タイマー秒数 */
@@ -129,17 +130,25 @@ export function extractPrimaryStepTimer(body: string): StepTimerCandidate | null
   return extractStepTimers(body)[0] ?? null;
 }
 
-/** 秒数の表示ラベル（600→「10分」/ 5400→「1時間30分」/ 90→「1分30秒」） */
+/**
+ * 秒数の表示ラベル。
+ * ja: 600→「10分」/ 5400→「1時間30分」/ 90→「1分30秒」
+ * en: 600→"10 min" / 5400→"1 hr 30 min" / 90→"1 min 30 sec"
+ *
+ * 画面に出る文字なのに書式が日本語固定で、英語表示の料理中モードで
+ * 「30分 Start timer」と混ざっていた（実機で発見）。
+ */
 export function formatStepTimerLabel(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
+  const isJa = getLocale() === 'ja';
   const parts: string[] = [];
-  if (hours > 0) parts.push(`${hours}時間`);
-  if (minutes > 0) parts.push(`${minutes}分`);
-  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}秒`);
+  if (hours > 0) parts.push(isJa ? `${hours}時間` : `${hours} hr`);
+  if (minutes > 0) parts.push(isJa ? `${minutes}分` : `${minutes} min`);
+  if (seconds > 0 || parts.length === 0) parts.push(isJa ? `${seconds}秒` : `${seconds} sec`);
   // 「1時間0分30秒」のような冗長表示は起きない（0 の部位は積まない）
-  return parts.join('');
+  return parts.join(isJa ? '' : ' ');
 }
 
 /**

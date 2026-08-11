@@ -123,6 +123,29 @@ describe('IMG-RECIPE-AGT-03 Vision LLM primary path', () => {
     expect(result.data?.source).toBe('on-device');
   });
 
+  it('英語表示では、中身が日本語の画像ラベル下書きを返さない', async () => {
+    // 画像ラベルの下書きは日本語の料理名→日本語の材料・手順という辞書に頼っている。
+    // 英語で返すと下書きが丸ごと日本語になるので、失敗として扱う。
+    setLocale('en');
+    try {
+      const result = await runRecipePhotoAgent(
+        { imageUri: 'file:///tmp/curry.jpg', allowCloudInference: true },
+        {
+          labelImage: async () => [label('Food', 0.9), label('Curry', 0.8)],
+          inferRecipeFromVision: async () => {
+            throw new Error('network down');
+          },
+        },
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.message).toBeDefined();
+      expect(result.error?.message).not.toMatch(/[ぁ-んァ-ヶ一-龯]/);
+    } finally {
+      setLocale('ja');
+    }
+  });
+
   it('surfaces a not-a-dish error instead of falling back', async () => {
     const labelImage = jest.fn(async () => [label('Plant', 0.9)]);
     const notADish = Object.assign(new Error('写真から料理を認識できませんでした。'), {

@@ -1,5 +1,6 @@
 import type { RecipeFormData } from '../validation/recipe.schema';
 import type { ClientImageLabel } from './client-image-label.provider';
+import { t } from '../i18n';
 
 export type PhotoRecipeConfidence = 'high' | 'medium' | 'low';
 
@@ -189,10 +190,10 @@ export function inferRecipeFromPhotoLabels(labels: ClientImageLabel[]): RecipePh
     steps: GENERIC_STEPS,
   };
   const labelSummary = summarizeLabels(sortedLabels);
-  const warnings = ['写真だけでは分量・加熱時間・隠れた調味料を確定できません'];
+  const warnings = [t('recipeImport.ocr.labelUncertain')];
 
-  if (!profile) warnings.push('料理名を特定できなかったため、汎用の下書きにしました');
-  if (labelSummary) warnings.push(`画像ラベル: ${labelSummary}`);
+  if (!profile) warnings.push(t('recipeImport.ocr.labelGenericDraft'));
+  if (labelSummary) warnings.push(t('recipeImport.ocr.labelSummary', { labels: labelSummary }));
 
   return {
     draft: {

@@ -66,6 +66,10 @@ const recipeImport: typeof ja = {
     skippedWithReason: 'Skipped reading text from the image: {{reason}}',
     tooLittleTextRetry: 'There was too little text. Try a sharper image.',
     missingRequiredFields: "We couldn't read the fields a recipe needs",
+
+    labelUncertain: "A photo alone can't pin down amounts, cooking times or hidden seasonings",
+    labelGenericDraft: "We couldn't identify the dish, so this is a generic draft",
+    labelSummary: 'Image labels: {{labels}}',
   },
 
   url: {

@@ -76,6 +76,11 @@ const recipeImport = {
     skippedWithReason: '画像内テキストの読み取りをスキップしました: {{reason}}',
     tooLittleTextRetry: 'テキストが少なすぎます。より鮮明な画像で試してください。',
     missingRequiredFields: 'レシピとして必要な項目を読み取れませんでした',
+
+    // 端末内の画像ラベル推定（クラウド推論が使えないときの控え）が付ける注意書き
+    labelUncertain: '写真だけでは分量・加熱時間・隠れた調味料を確定できません',
+    labelGenericDraft: '料理名を特定できなかったため、汎用の下書きにしました',
+    labelSummary: '画像ラベル: {{labels}}',
   },
 
   /** レシピサイトの URL から取り込み。 */
