@@ -72,6 +72,28 @@ const recipeImport: typeof ja = {
     labelSummary: 'Image labels: {{labels}}',
   },
 
+  consult: {
+    title: 'Talk it through',
+    heading: 'Work out what to cook, together',
+    lead: 'Tell it what you feel like making. It asks about servings and time, and turns the answer into a draft recipe.',
+    placeholder: 'e.g. something with chicken breast I can make with my kids',
+    send: 'Send',
+    thinking: 'Thinking…',
+    usePantry: 'Use what I have',
+    usePantryOn: 'Your pantry is sent along',
+    usePantryOff: 'Your pantry is not sent',
+    draftReady: 'The draft is ready',
+    openDraft: 'Review and save the draft',
+    emptyReply: "That did not come through. Tell me in a few words what you'd like to make.",
+    confirmTitle: 'Check and save the draft',
+    restart: 'Start over',
+    restartConfirm: 'Clear this conversation and the draft, and start over?',
+    disclaimer:
+      'This cannot tell you whether a dish contains allergens. Always check the ingredients yourself.',
+    firstMessage:
+      'What shall we make? Something rough is fine — "a light noodle dish", "chicken breast I need to use up".',
+  },
+
   url: {
     title: 'Import from a URL',
     heading: 'Paste the link to a recipe page',

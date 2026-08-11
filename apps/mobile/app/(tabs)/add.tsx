@@ -3,7 +3,14 @@
  * Entry point for manual, text, URL, photo inference, and OCR-based recipe creation.
  */
 import { useRouter } from 'expo-router';
-import { Camera, FileText, Globe, Image as ImageIcon, PenLine } from 'lucide-react-native';
+import {
+  Camera,
+  FileText,
+  Globe,
+  Image as ImageIcon,
+  MessagesSquare,
+  PenLine,
+} from 'lucide-react-native';
 import { useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
@@ -14,7 +21,7 @@ import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 
-type MethodId = 'photo' | 'url' | 'text' | 'ocr' | 'manual';
+type MethodId = 'photo' | 'consult' | 'url' | 'text' | 'ocr' | 'manual';
 
 interface MethodOption {
   id: MethodId;
@@ -33,6 +40,12 @@ const METHODS: MethodOption[] = [
   {
     id: 'photo',
     icon: <Camera size={24} color={Colors.gold} />,
+    enabled: true,
+  },
+  {
+    // 写真の次。写真は「目の前に料理がある」とき、相談は「まだ料理が無い」とき
+    id: 'consult',
+    icon: <MessagesSquare size={24} color={Colors.gold} />,
     enabled: true,
   },
   {
@@ -60,6 +73,7 @@ const METHODS: MethodOption[] = [
 
 function methodLabel(id: MethodId): string {
   if (id === 'photo') return t('recipe.add.method.photo');
+  if (id === 'consult') return t('recipe.add.method.consult');
   if (id === 'url') return t('recipe.add.method.url');
   if (id === 'text') return t('recipe.add.method.text');
   if (id === 'ocr') return t('recipe.add.method.ocr');
@@ -68,6 +82,7 @@ function methodLabel(id: MethodId): string {
 
 function methodDescription(id: MethodId): string {
   if (id === 'photo') return t('recipe.add.method.photoDescription');
+  if (id === 'consult') return t('recipe.add.method.consultDescription');
   if (id === 'url') return t('recipe.add.method.urlDescription');
   if (id === 'text') return t('recipe.add.method.textDescription');
   if (id === 'ocr') return t('recipe.add.method.ocrDescription');
@@ -109,6 +124,8 @@ export default function AddScreen() {
       router.push('/recipes/import-url');
     } else if (method.id === 'photo') {
       router.push('/recipes/import-photo');
+    } else if (method.id === 'consult') {
+      router.push('/recipes/consult');
     } else if (method.id === 'ocr') {
       router.push('/recipes/import-ocr');
     }
