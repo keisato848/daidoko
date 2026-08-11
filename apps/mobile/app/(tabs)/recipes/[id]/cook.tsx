@@ -16,8 +16,13 @@ import { t, tCount } from '../../../../src/i18n';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { getRecipeDetail } from '../../../../src/services/recipe.service';
 import { useTimerStore } from '../../../../src/stores/timer.store';
+import { useUnitSystemStore } from '../../../../src/stores/unitSystem.store';
 import { scaleAmount, servingRatio } from '../../../../src/utils/shoppingScale';
 import { extractPrimaryStepTimer, formatStepTimerLabel } from '../../../../src/utils/stepTimer';
+import {
+  convertAmountForDisplay,
+  convertTemperaturesForDisplay,
+} from '../../../../src/utils/unitSystem';
 
 function formatMmSs(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -51,6 +56,7 @@ export default function CookingModeScreen() {
   // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
   const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
   const timer = useTimerStore();
+  const unitSystem = useUnitSystemStore((state) => state.system);
 
   // Keep screen awake during cooking
   useKeepAwake();
@@ -180,7 +186,9 @@ export default function CookingModeScreen() {
           <Text style={styles.stepNumberText}>{current.sortOrder}</Text>
         </View>
 
-        <Text style={styles.stepBody}>{current.body}</Text>
+        <Text style={styles.stepBody}>
+          {convertTemperaturesForDisplay(current.body, unitSystem)}
+        </Text>
 
         {current.photoPath && (
           <Image source={{ uri: current.photoPath }} style={styles.stepPhoto} resizeMode="cover" />
@@ -254,9 +262,12 @@ export default function CookingModeScreen() {
                 <View key={i} style={styles.overlayRow}>
                   <Text style={styles.overlayIngName}>{ing.name}</Text>
                   <Text style={styles.overlayIngAmount}>
-                    {scaleAmount(
-                      ing.amount,
-                      servingRatio(servings, targetServings ?? servings ?? 1),
+                    {convertAmountForDisplay(
+                      scaleAmount(
+                        ing.amount,
+                        servingRatio(servings, targetServings ?? servings ?? 1),
+                      ),
+                      unitSystem,
                     )}
                   </Text>
                 </View>

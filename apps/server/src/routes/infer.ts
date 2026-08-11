@@ -31,7 +31,7 @@ import {
 } from '../lib/recipe-refine.js';
 import { runRecipeRefineAgent } from '../agents/recipe-refine.agent.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
-import { parseOutputLocale } from '../lib/output-locale.js';
+import { parseOutputLocale, parseUnitSystem } from '../lib/output-locale.js';
 
 const inferRouter = new Hono();
 
@@ -47,6 +47,12 @@ const inferPhotoSchema = z.object({
    * これが無いと、英語の画面に日本語のレシピが返ってくる。
    */
   locale: z.enum(['ja', 'en']).optional(),
+  /**
+   * 単位系。**AI が書く分量と温度**を決める。省略時は metric。
+   * 言語とは別（英国の利用者は英語だがメートル法）。
+   * 米国の利用者に「180度」を 180°F と読まれると料理が失敗する。
+   */
+  unitSystem: z.enum(['metric', 'imperial']).optional(),
 });
 
 // Lazily construct the provider so the route module imports without an API key
@@ -80,7 +86,7 @@ inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
     });
   }
 
-  const { imageBase64, mimeType, context, locale } = c.req.valid('json');
+  const { imageBase64, mimeType, context, locale, unitSystem } = c.req.valid('json');
 
   let provider: VisionRecipeProvider;
   try {
@@ -101,6 +107,7 @@ inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
       mimeType,
       ...(context !== undefined && { context }),
       outputLocale: parseOutputLocale(locale),
+      unitSystem: parseUnitSystem(unitSystem),
     },
     provider,
   );
@@ -115,6 +122,12 @@ const inferMealSchema = z.object({
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
   /** 端末の言語。AI が返す文言の言語を決める。省略時は ja。 */
   locale: z.enum(['ja', 'en']).optional(),
+  /**
+   * 単位系。**AI が書く分量と温度**を決める。省略時は metric。
+   * 言語とは別（英国の利用者は英語だがメートル法）。
+   * 米国の利用者に「180度」を 180°F と読まれると料理が失敗する。
+   */
+  unitSystem: z.enum(['metric', 'imperial']).optional(),
 });
 
 let mealProviderOverride: MealVisionProvider | null = null;
@@ -181,6 +194,12 @@ const inferReceiptSchema = z.object({
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
   /** 端末の言語。AI が返す文言の言語を決める。省略時は ja。 */
   locale: z.enum(['ja', 'en']).optional(),
+  /**
+   * 単位系。**AI が書く分量と温度**を決める。省略時は metric。
+   * 言語とは別（英国の利用者は英語だがメートル法）。
+   * 米国の利用者に「180度」を 180°F と読まれると料理が失敗する。
+   */
+  unitSystem: z.enum(['metric', 'imperial']).optional(),
 });
 
 let receiptProviderOverride: ReceiptVisionProvider | null = null;
@@ -274,6 +293,12 @@ const inferRefineSchema = z.object({
   images: z.array(refineImageSchema).max(2).optional(),
   /** 端末の言語。AI が返す文言の言語を決める。省略時は ja。 */
   locale: z.enum(['ja', 'en']).optional(),
+  /**
+   * 単位系。**AI が書く分量と温度**を決める。省略時は metric。
+   * 言語とは別（英国の利用者は英語だがメートル法）。
+   * 米国の利用者に「180度」を 180°F と読まれると料理が失敗する。
+   */
+  unitSystem: z.enum(['metric', 'imperial']).optional(),
 });
 
 let refineProviderOverride: RecipeRefineProvider | null = null;
@@ -308,7 +333,7 @@ inferRouter.post('/refine', zValidator('json', inferRefineSchema), async (c) => 
     });
   }
 
-  const { recipe, feedback, images, locale } = c.req.valid('json');
+  const { recipe, feedback, images, locale, unitSystem } = c.req.valid('json');
 
   let provider: RecipeRefineProvider;
   try {
@@ -346,6 +371,7 @@ inferRouter.post('/refine', zValidator('json', inferRefineSchema), async (c) => 
       feedback,
       ...(images !== undefined && { images }),
       outputLocale: parseOutputLocale(locale),
+      unitSystem: parseUnitSystem(unitSystem),
     },
     provider,
   );

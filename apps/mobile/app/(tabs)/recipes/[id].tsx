@@ -49,6 +49,11 @@ import type { MemoItem, RecipeDetail, TimelineEntry } from '../../../src/service
 import { formatProfileDisplayName } from '../../../src/utils/profile';
 import { formatRecipeShareText } from '../../../src/utils/recipeShareText';
 import { scaleAmount, servingRatio } from '../../../src/utils/shoppingScale';
+import { useUnitSystemStore } from '../../../src/stores/unitSystem.store';
+import {
+  convertAmountForDisplay,
+  convertTemperaturesForDisplay,
+} from '../../../src/utils/unitSystem';
 import { getRecipeEmoji } from '../../../src/utils/recipeEmoji';
 
 type TabKey = 'ingredients' | 'steps' | 'memo' | 'history';
@@ -84,6 +89,7 @@ export default function RecipeDetailScreen() {
   const [memos, setMemos] = useState<MemoItem[]>([]);
   // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
   const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
+  const unitSystem = useUnitSystemStore((state) => state.system);
 
   const loadRecipe = useCallback(async () => {
     if (!id) {
@@ -423,7 +429,10 @@ export default function RecipeDetailScreen() {
                   <View style={styles.ingredientRow}>
                     <Text style={styles.ingredientName}>{ing.name}</Text>
                     <Text style={styles.ingredientAmount}>
-                      {scaleAmount(ing.amount, ingredientRatio)}
+                      {convertAmountForDisplay(
+                        scaleAmount(ing.amount, ingredientRatio),
+                        unitSystem,
+                      )}
                     </Text>
                   </View>
                 </View>
@@ -449,7 +458,9 @@ export default function RecipeDetailScreen() {
                   <Text style={styles.stepNumberText}>{step.sortOrder}</Text>
                 </View>
                 <View style={styles.stepContent}>
-                  <Text style={styles.stepBody}>{step.body}</Text>
+                  <Text style={styles.stepBody}>
+                    {convertTemperaturesForDisplay(step.body, unitSystem)}
+                  </Text>
                   {step.photoPath && (
                     <Image
                       source={{ uri: step.photoPath }}

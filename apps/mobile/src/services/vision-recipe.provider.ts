@@ -16,7 +16,12 @@ import { API_V1, GEMINI_MODEL } from '../config';
 import { getUserApiKey } from './byok.service';
 import type { RecipeFormData } from '../validation/recipe.schema';
 import { t } from '../i18n';
-import { requestLocale, withOutputLanguage } from './ai-output-locale';
+import {
+  requestLocale,
+  requestUnitSystem,
+  withOutputLanguage,
+  withUnitSystem,
+} from './ai-output-locale';
 
 const TIMEOUT_MS = 35_000;
 
@@ -292,7 +297,7 @@ async function inferViaByok(
     ? `この料理のレシピを推論してください。\n補足・感想: ${context.trim()}`
     : 'この料理のレシピを推論してください。';
   const body = {
-    systemInstruction: { parts: [{ text: withOutputLanguage(SYSTEM_PROMPT) }] },
+    systemInstruction: { parts: [{ text: withUnitSystem(withOutputLanguage(SYSTEM_PROMPT)) }] },
     contents: [
       {
         role: 'user',
@@ -385,6 +390,7 @@ async function inferViaServer(
         ...(context?.trim() ? { context: context.trim() } : {}),
         // AI が返すレシピの言語。送らないと英語の画面に日本語のレシピが返る
         locale: requestLocale(),
+        unitSystem: requestUnitSystem(),
       }),
       signal: controller.signal,
     });

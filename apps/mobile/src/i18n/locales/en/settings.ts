@@ -35,6 +35,17 @@ const settings: typeof ja = {
     failedBody: "We couldn't open that settings screen. Please try again later.",
   },
 
+  display: {
+    sectionTitle: 'Display',
+    unitSystem: 'Units',
+    unitSystemBody:
+      'Choose how amounts and temperatures are shown. What is stored does not change — only the way it is displayed.',
+    unitMetric: 'Metric',
+    unitImperial: 'US customary',
+    unitMetricSubtitle: 'Shown in g, ml and °C',
+    unitImperialSubtitle: 'Converted to oz, cups and °F',
+  },
+
   reproduce: {
     sectionTitle: 'Recreating restaurant dishes',
     launchCamera: 'Open straight to the camera',

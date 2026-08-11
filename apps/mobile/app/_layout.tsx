@@ -1,3 +1,4 @@
+import { getLocales } from 'expo-localization';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
@@ -21,6 +22,7 @@ import {
   consumeLowStockLaunchTap,
 } from '../src/services/notification.service';
 import { grantLaunchBonusOnce } from '../src/services/usage.service';
+import { loadUnitSystem } from '../src/stores/unitSystem.store';
 import { decideLaunchDestination } from '../src/utils/launchDestination';
 
 // 端末の言語設定を反映する。**描画前に一度だけ**（モジュール読み込み時）行う。
@@ -46,6 +48,8 @@ export default function RootLayout() {
   // + リリース記念ボーナスの一度きり付与（評価とは無関係の無条件配布）
   useEffect(() => {
     if (isReady) {
+      // 単位系は保存値 → 無ければ端末の地域。表示のたびに読むのでストアが持つ
+      loadUnitSystem(getLocales()[0]?.regionCode).catch(() => undefined);
       checkAndNotifyLowStock().catch(() => undefined);
       maybeCreateAutoSnapshot().catch(() => undefined);
       initAppOpenAds().catch(() => undefined);

@@ -1,4 +1,11 @@
-import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
+import {
+  DEFAULT_OUTPUT_LOCALE,
+  DEFAULT_UNIT_SYSTEM,
+  withOutputLanguage,
+  withUnitSystem,
+  type OutputLocale,
+  type OutputUnitSystem,
+} from './output-locale.js';
 /**
  * Recipe refinement — adjust an existing recipe from the cook's feedback.
  *
@@ -43,6 +50,7 @@ export interface RefineRecipeInput {
   images?: RefineImage[];
   /** 出力言語。省略時は ja（既存の呼び出しは挙動が変わらない）。 */
   outputLocale?: OutputLocale;
+  unitSystem?: OutputUnitSystem;
 }
 
 /** Raw, unvalidated model output. The agent validates/normalizes it. */
@@ -240,7 +248,10 @@ export class GeminiRecipeRefineProvider implements RecipeRefineProvider {
       systemInstruction: {
         parts: [
           {
-            text: withOutputLanguage(SYSTEM_PROMPT, input.outputLocale ?? DEFAULT_OUTPUT_LOCALE),
+            text: withUnitSystem(
+              withOutputLanguage(SYSTEM_PROMPT, input.outputLocale ?? DEFAULT_OUTPUT_LOCALE),
+              input.unitSystem ?? DEFAULT_UNIT_SYSTEM,
+            ),
           },
         ],
       },

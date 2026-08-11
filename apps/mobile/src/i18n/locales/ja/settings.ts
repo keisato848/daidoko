@@ -39,6 +39,18 @@ const settings = {
   },
 
   /** R3: 店を出た直後の撮影導線（既定オフ）。 */
+  display: {
+    sectionTitle: '表示',
+    unitSystem: '単位',
+    // 言語とは別。英国の利用者は英語だがメートル法で、言語から決めると必ず外す
+    unitSystemBody:
+      'レシピの分量と温度の見せ方を選びます。保存されている値は変わりません（表示だけを直します）。',
+    unitMetric: 'メートル法',
+    unitImperial: 'ヤード・ポンド法',
+    unitMetricSubtitle: 'g・ml・℃ で表示します',
+    unitImperialSubtitle: 'oz・カップ・℉ に直して表示します',
+  },
+
   reproduce: {
     sectionTitle: 'お店の味を再現',
     launchCamera: 'アプリを開いたらすぐ撮影',

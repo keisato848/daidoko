@@ -24,6 +24,7 @@ import {
 import { getAdRewardProvider } from '../../src/services/ad-reward.service';
 import { isLaunchCameraEnabled, setLaunchCameraEnabled } from '../../src/services/app-meta.service';
 import { getFreemiumStatus, type FreemiumStatus } from '../../src/services/usage.service';
+import { useUnitSystemStore } from '../../src/stores/unitSystem.store';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 
 interface SettingItem {
@@ -75,6 +76,25 @@ export default function SettingsScreen() {
         .catch(() => setLaunchCamera(false));
     }, []),
   );
+
+  const unitSystem = useUnitSystemStore((state) => state.system);
+  const setUnitSystem = useUnitSystemStore((state) => state.setSystem);
+
+  // 2 択なので専用の画面は作らず、その場で選ばせる。
+  // 言語とは別の設定にしてある（英国の利用者は英語だがメートル法）
+  const handlePickUnitSystem = useCallback(() => {
+    Alert.alert(t('settings.display.unitSystem'), t('settings.display.unitSystemBody'), [
+      {
+        text: t('settings.display.unitMetric'),
+        onPress: () => void setUnitSystem('metric').catch(() => undefined),
+      },
+      {
+        text: t('settings.display.unitImperial'),
+        onPress: () => void setUnitSystem('imperial').catch(() => undefined),
+      },
+      { text: t('common.cancel'), style: 'cancel' },
+    ]);
+  }, [setUnitSystem]);
 
   const handleToggleLaunchCamera = useCallback((next: boolean) => {
     // 先に画面へ反映してから保存する（トグルの反応を待たせない）
@@ -128,6 +148,25 @@ export default function SettingsScreen() {
   ]);
 
   const sections: SettingSection[] = [
+    {
+      title: t('settings.display.sectionTitle'),
+      items: [
+        {
+          id: 'unit-system',
+          label: t('settings.display.unitSystem'),
+          subtitle:
+            unitSystem === 'imperial'
+              ? t('settings.display.unitImperialSubtitle')
+              : t('settings.display.unitMetricSubtitle'),
+          statusLabel:
+            unitSystem === 'imperial'
+              ? t('settings.display.unitImperial')
+              : t('settings.display.unitMetric'),
+          enabled: true,
+          onPress: handlePickUnitSystem,
+        },
+      ],
+    },
     {
       title: t('settings.reproduce.sectionTitle'),
       items: [
