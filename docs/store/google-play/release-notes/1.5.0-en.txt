@@ -1,0 +1,5 @@
+DAIDOKO now speaks English. Set your device to English and the app — and the recipes the AI writes from your photos — come out in English.
+
+New app icon: a steaming bowl with a spark, so what the app is for reads at a glance.
+
+Plus a handful of small display fixes.
