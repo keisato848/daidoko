@@ -8,8 +8,6 @@ import { useCallback, useState } from 'react';
 import {
   Alert,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,6 +16,7 @@ import {
   View,
 } from 'react-native';
 
+import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { t, tCount } from '../../../../src/i18n';
@@ -152,10 +151,7 @@ export default function CookingLogScreen() {
   const handleSkip = () => router.push('/(tabs)');
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('log.form.title')}</Text>
         <Pressable onPress={handleSkip} hitSlop={12}>
@@ -261,7 +257,7 @@ export default function CookingLogScreen() {
         visible={showToast}
         onDismiss={() => setShowToast(false)}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAvoider>
   );
 }
 

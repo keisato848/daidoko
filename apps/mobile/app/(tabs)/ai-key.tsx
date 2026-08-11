@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 
 import { InfoTooltip } from '../../src/components/InfoTooltip';
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import {
@@ -84,7 +85,7 @@ export default function AiKeyScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
@@ -159,7 +160,7 @@ export default function AiKeyScreen() {
           />
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 

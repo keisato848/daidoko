@@ -11,6 +11,7 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { Toast } from '../../src/components/Toast';
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
@@ -85,7 +86,7 @@ export default function ShoppingListScreen() {
   ]);
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
@@ -175,7 +176,7 @@ export default function ShoppingListScreen() {
         onNext={coach.next}
         onSkip={coach.skip}
       />
-    </View>
+    </KeyboardAvoider>
   );
 }
 

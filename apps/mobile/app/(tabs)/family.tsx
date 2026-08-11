@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
 import {
@@ -152,7 +153,7 @@ export default function FamilyScreen() {
   const canJoin = joinCode.trim().length > 0 && !saving;
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <ChevronLeft size={20} color={Colors.goldDim} />
@@ -280,7 +281,7 @@ export default function FamilyScreen() {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 

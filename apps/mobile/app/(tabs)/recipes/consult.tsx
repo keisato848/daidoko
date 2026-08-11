@@ -13,8 +13,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,6 +22,7 @@ import {
   View,
 } from 'react-native';
 
+import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
@@ -132,10 +131,7 @@ export default function ConsultScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={8} style={styles.headerButton}>
           <ChevronLeft size={24} color={Colors.gold} />
@@ -239,7 +235,7 @@ export default function ConsultScreen() {
           <Send size={20} color={Colors.bg} />
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAvoider>
   );
 }
 

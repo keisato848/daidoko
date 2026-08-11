@@ -10,8 +10,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +18,7 @@ import {
   View,
 } from 'react-native';
 
+import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { Loading } from '../../../../src/components/Loading';
 import { t } from '../../../../src/i18n';
 import { Toast } from '../../../../src/components/Toast';
@@ -259,10 +258,7 @@ export default function RefineRecipeScreen() {
   const changedSteps = diff ? onlyChanged(diff.steps) : [];
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={8}>
           <ChevronLeft size={20} color={Colors.goldDim} />
@@ -421,7 +417,7 @@ export default function RefineRecipeScreen() {
         visible={showToast}
         onDismiss={() => setShowToast(false)}
       />
-    </KeyboardAvoidingView>
+    </KeyboardAvoider>
   );
 }
 

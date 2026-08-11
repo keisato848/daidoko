@@ -9,6 +9,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
+import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
 import { type RecipeDraft, runImportAgent } from '../../../src/agents/import.agent';
@@ -140,7 +141,7 @@ export default function ImportUrlScreen() {
 
   // ── Phase: preview ──────────────────────────────────────────────────────────
   return (
-    <View style={styles.container}>
+    <KeyboardAvoider style={styles.container}>
       {draft?.sourceName && (
         <View style={styles.sourceBanner}>
           <Globe size={12} color={Colors.goldDim} />
@@ -161,7 +162,7 @@ export default function ImportUrlScreen() {
         visible={showToast}
         onDismiss={() => setShowToast(false)}
       />
-    </View>
+    </KeyboardAvoider>
   );
 }
 
