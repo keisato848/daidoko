@@ -178,8 +178,8 @@ const recipe: typeof ja = {
     subheading: 'Choose how to add it',
     method: {
       photo: 'From a photo',
-      consult: 'Ask Otama',
-      consultDescription: 'Talk it through with Otama, the kitchen rabbit, and get a draft',
+      consult: 'Plan it with AI',
+      consultDescription: 'Say what you feel like making and work it into a draft with AI',
       photoDescription: 'Turn a dish you ate out into a draft recipe',
       url: 'Import from a URL',
       urlDescription: 'Paste a link to a recipe page',

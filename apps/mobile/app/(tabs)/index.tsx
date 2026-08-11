@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Camera,
   LayoutGrid,
+  MessagesSquare,
   ShoppingCart,
   Store,
   Trash2,
@@ -380,6 +381,20 @@ export default function HomeScreen() {
                   <Text style={styles.captureText}>{t('home.capture')}</Text>
                 </PressableScale>
 
+                {/* もう 1 本の入口。撮るのは「料理が目の前にある」とき、
+                    相談は「まだ料理が無い」とき。主役を薄めないよう、
+                    こちらは輪郭だけの控えめな見た目にする */}
+                <PressableScale
+                  style={styles.consultButton}
+                  scaleTo={0.98}
+                  onPress={() => router.push('/(tabs)/recipes/consult')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('home.consult')}
+                >
+                  <MessagesSquare size={18} color={Colors.paperDim} />
+                  <Text style={styles.consultText}>{t('home.consult')}</Text>
+                </PressableScale>
+
                 {wantList.length > 0 && (
                   <View style={styles.wantSection}>
                     <View style={styles.wantHeader}>
@@ -590,6 +605,24 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     marginTop: 14,
     marginBottom: 4,
+  },
+  consultButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingVertical: 11,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  consultText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.paperDim,
+    letterSpacing: 0.5,
   },
   captureText: {
     fontSize: 15,

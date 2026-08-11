@@ -13,7 +13,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,7 +23,6 @@ import {
 } from 'react-native';
 
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
-import mascot from '../../../assets/mascot/otama.png';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
@@ -40,14 +38,10 @@ import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
 type Phase = 'chat' | 'confirm';
 
-/**
- * おたまの発言。**アバターを添えて誰が話しているかを見せる**。
- * これが無いと、ただの AI アシスタントとの会話と区別がつかない。
- */
+/** AI 側の発言。 */
 function AssistantRow({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.assistantRow}>
-      <Image source={mascot} style={styles.avatar} resizeMode="contain" />
       <View style={[styles.bubble, styles.bubbleAssistant]}>{children}</View>
     </View>
   );
@@ -165,7 +159,6 @@ export default function ConsultScreen() {
       <ScrollView ref={scrollRef} contentContainerStyle={styles.thread}>
         {messages.length === 0 && (
           <View style={styles.intro}>
-            <Image source={mascot} style={styles.introMascot} resizeMode="contain" />
             <Text style={styles.introHeading}>{t('recipeImport.consult.heading')}</Text>
             <Text style={styles.introLead}>{t('recipeImport.consult.lead')}</Text>
           </View>
@@ -272,9 +265,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
   thread: { padding: 16, gap: 12, paddingBottom: 24 },
   intro: { marginBottom: 4, alignItems: 'center' },
-  introMascot: { width: 120, height: 120, marginBottom: 8 },
-  assistantRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '92%' },
-  avatar: { width: 36, height: 36, marginBottom: 2 },
+  assistantRow: { flexDirection: 'row', alignItems: 'flex-end', maxWidth: '88%' },
   introHeading: {
     fontSize: 20,
     fontWeight: '700',
