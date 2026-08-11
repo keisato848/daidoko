@@ -194,8 +194,8 @@ const recipe = {
     subheading: '追加方法を選んでください',
     method: {
       photo: '写真からレシピ',
-      consult: '相談してつくる',
-      consultDescription: '作りたいものを話しながら、レシピの下書きにします',
+      consult: 'おたまに相談する',
+      consultDescription: '台所うさぎのおたまと話しながら、レシピの下書きにします',
       photoDescription: 'お店で食べた料理も、写真から下書きに',
       url: 'URLから取り込み',
       urlDescription: 'レシピサイトのURLを貼り付け',

@@ -73,26 +73,26 @@ const recipeImport: typeof ja = {
   },
 
   consult: {
-    title: 'Talk it through',
-    heading: 'Work out what to cook, together',
-    lead: 'Tell it what you feel like making. It asks about servings and time, and turns the answer into a draft recipe.',
+    title: 'Ask Otama',
+    heading: 'Work it out with Otama',
+    lead: 'Otama is the rabbit who lives in this kitchen. Tell her what you feel like making — she asks about servings and time, and turns the answer into a draft recipe.',
     placeholder: 'e.g. something with chicken breast I can make with my kids',
     send: 'Send',
-    thinking: 'Thinking…',
+    thinking: 'Otama is thinking…',
     usePantry: 'Use what I have',
     usePantryOn: 'Your pantry is sent along',
     usePantryOff: 'Your pantry is not sent',
     draftReady: 'The draft is ready',
-    draftInProgress: 'Draft so far',
+    draftInProgress: "Otama's draft",
     openDraft: 'Review and save the draft',
-    emptyReply: "That did not come through. Tell me in a few words what you'd like to make.",
+    emptyReply: "That did not quite come through. Tell me in a few words what you'd like to make.",
     confirmTitle: 'Check and save the draft',
     restart: 'Start over',
-    restartConfirm: 'Clear this conversation and the draft, and start over?',
+    restartConfirm: 'Clear your conversation with Otama and the draft, and start over?',
     disclaimer:
       'This cannot tell you whether a dish contains allergens. Always check the ingredients yourself.',
     firstMessage:
-      'What shall we make? Something rough is fine — "a light noodle dish", "chicken breast I need to use up".',
+      'Hello, I am Otama. What shall we make? Something rough is fine — "a light noodle dish", "chicken breast I need to use up".',
   },
 
   url: {
