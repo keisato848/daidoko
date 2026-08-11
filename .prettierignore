@@ -19,3 +19,6 @@ apps/mobile/ios
 **/*.ico
 **/*.aab
 **/*.apk
+
+# Play のリリースノート原文。Play にそのまま送る素のテキストなので整形しない
+docs/store/google-play/release-notes/

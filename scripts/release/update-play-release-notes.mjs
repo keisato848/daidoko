@@ -1,5 +1,8 @@
 /**
- * 製品版トラックのリリースノート（ja-JP）を設定する。
+ * 製品版トラックのリリースノートを設定する。
+ *
+ * **掲載言語のぶんだけ入れる。** ja-JP しか入れないと、英語の利用者には
+ * 日本語のリリースノートが表示される（掲載文だけ英語にしても意味がない）。
  *
  * `eas submit` は AAB を上げるがリリースノートは設定しない。Play Console を手で開く
  * 代わりに API で入れる。1.4.2 以降この手順を踏んでいる（docs/リリース手順.md）。
@@ -8,7 +11,7 @@
  * 持てず、衝突すると submit が "This Edit has been deleted." で落ちる（1.4.3 で被弾）。
  *
  * 使い方:
- *   node scripts/release/update-play-release-notes.mjs --notes-file <path> [--dry-run]
+ *   node scripts/release/update-play-release-notes.mjs --notes-file <ja.txt> [--notes-file-en <en.txt>] [--dry-run]
  */
 import { readFileSync } from 'node:fs';
 
@@ -20,17 +23,25 @@ if (!options.notesFile) {
   process.exit(1);
 }
 
-const notes = readFileSync(options.notesFile, 'utf8').trim();
-if (!notes) {
-  console.error('リリースノートが空です。');
-  process.exit(1);
+/** Play の上限は 500 文字。超えると PUT が 400 で落ちるので先に止める。 */
+function readNotes(path, label) {
+  const text = readFileSync(path, 'utf8').trim();
+  if (!text) {
+    console.error(`${label} のリリースノートが空です。`);
+    process.exit(1);
+  }
+  if (text.length > 500) {
+    console.error(
+      `${label} のリリースノートが ${text.length} 文字です（Play の上限は 500）。短くしてください。`,
+    );
+    process.exit(1);
+  }
+  return text;
 }
-// Play の上限は 500 文字。超えると PUT が 400 で落ちるので先に止める
-if (notes.length > 500) {
-  console.error(
-    `リリースノートが ${notes.length} 文字です（Play の上限は 500）。短くしてください。`,
-  );
-  process.exit(1);
+
+const releaseNotes = [{ language: 'ja-JP', text: readNotes(options.notesFile, 'ja-JP') }];
+if (options.notesFileEn) {
+  releaseNotes.push({ language: 'en-US', text: readNotes(options.notesFileEn, 'en-US') });
 }
 
 const accessToken = await getAccessToken();
@@ -69,14 +80,18 @@ if (releases.length === 0) {
 const target = releases[releases.length - 1];
 console.log(`対象: versionCodes=${(target.versionCodes ?? []).join(',')} status=${target.status}`);
 console.log('--- 設定するリリースノート ---');
-console.log(notes);
+for (const entry of releaseNotes) {
+  console.log(`[${entry.language}]
+${entry.text}
+`);
+}
 
 if (options.dryRun) {
   console.log('\n--dry-run のため書き込みませんでした。');
   process.exit(0);
 }
 
-target.releaseNotes = [{ language: 'ja-JP', text: notes }];
+target.releaseNotes = releaseNotes;
 await request(`${API_BASE}/edits/${edit.id}/tracks/production`, {
   method: 'PUT',
   body: JSON.stringify({ track: 'production', releases }),
@@ -85,10 +100,13 @@ await edits.commit(edit.id);
 console.log('\nリリースノートを設定しました。');
 
 function parseArgs(argv) {
-  const parsed = { notesFile: null, dryRun: false };
+  const parsed = { notesFile: null, notesFileEn: null, dryRun: false };
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === '--notes-file' && argv[index + 1]) {
       parsed.notesFile = argv[index + 1];
+      index += 1;
+    } else if (argv[index] === '--notes-file-en' && argv[index + 1]) {
+      parsed.notesFileEn = argv[index + 1];
       index += 1;
     } else if (argv[index] === '--dry-run') {
       parsed.dryRun = true;
