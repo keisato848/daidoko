@@ -1,0 +1,23 @@
+{
+  "version": "1.5.0",
+  "versionCode": 10017,
+  "verifiedAt": "2026-08-11T00:49:34.749Z",
+  "device": {
+    "serial": "359971911306313",
+    "model": "SH-RM19s",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10017,
+  "checked": [
+    "日本語表示: 既存の実データ（レシピ・調理記録・再現したい）が 1.4.x から欠落なく表示される",
+    "英語表示 (per-app locale en-US): ホーム/蔵書/詳細/料理中/買い物/写真からレシピ が英語、利用者の入力内容は日本語のまま保持",
+    "人数ステッパーの単複と間隔: 1 serving / 3 servings（以前は 4servings と詰まっていた）",
+    "料理中モードのタイマー: 30 min Start timer（以前は 30分 Start timer と混在）",
+    "新アイコン（湯気の立つ椀＋きらめき）がランチャー/アプリ情報に反映",
+    "サンプルデータが本番構成では非表示（英語シードが製品版に漏れていない）",
+    "アプリ起動広告 #92: 表示・app_meta への記録・6時間キャップの抑止（エミュレータ／Google テストユニット）"
+  ],
+  "screenshot": "screenshots/1.5.0-10017-2026-08-11T00-49-34-749Z.png",
+  "headCommit": "473417e243ac782e708bdc8c41442ee59e5f86c8"
+}
