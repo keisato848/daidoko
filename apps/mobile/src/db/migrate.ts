@@ -22,6 +22,8 @@ import {
   seedTags,
   seedUsers,
 } from './seed';
+import { buildEnglishSeed } from './seed.en';
+import { getLocale } from '../i18n';
 import { t } from '../i18n';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
@@ -490,59 +492,49 @@ export async function seedDatabase(database: DB): Promise<void> {
     return;
   }
 
+  // 英語表示なら文言だけ英語のサンプルに差し替える（ID・構造は同じ）。
+  // 日本語のサンプルのままだと、UI が英語でも画面には日本語のレシピが並ぶ。
+  const sample =
+    getLocale() === 'en'
+      ? buildEnglishSeed()
+      : {
+          users: [...seedUsers],
+          families: [...seedFamilies],
+          recipes: [...seedRecipes],
+          revisions: [...seedRevisions],
+          ingredients: [...seedIngredients],
+          steps: [...seedSteps],
+          tags: [...seedTags],
+          cookingLogs: [...seedCookingLogs],
+          shoppingItems: [...seedShoppingItems],
+        };
+
   // Insert in order to satisfy foreign key constraints
-  await database
-    .insert(schema.users)
-    .values([...seedUsers])
-    .onConflictDoNothing();
+  await database.insert(schema.users).values(sample.users).onConflictDoNothing();
   // migrate() が既定ユーザー（表示名空）を先に作るため、onConflictDoNothing では
   // サンプルの表示名が反映されない。未設定のままの場合だけ見本の名前を補う。
   await database
     .update(schema.users)
-    .set({ displayName: seedUsers[0].displayName })
-    .where(and(eq(schema.users.id, seedUsers[0].id), eq(schema.users.displayName, '')));
-  await database
-    .insert(schema.families)
-    .values([...seedFamilies])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.recipes)
-    .values([...seedRecipes])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.recipeRevisions)
-    .values([...seedRevisions])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.ingredients)
-    .values([...seedIngredients])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.steps)
-    .values([...seedSteps])
-    .onConflictDoNothing();
-  await database
-    .insert(schema.tags)
-    .values([...seedTags])
-    .onConflictDoNothing();
+    .set({ displayName: sample.users[0].displayName })
+    .where(and(eq(schema.users.id, sample.users[0].id), eq(schema.users.displayName, '')));
+  await database.insert(schema.families).values(sample.families).onConflictDoNothing();
+  await database.insert(schema.recipes).values(sample.recipes).onConflictDoNothing();
+  await database.insert(schema.recipeRevisions).values(sample.revisions).onConflictDoNothing();
+  await database.insert(schema.ingredients).values(sample.ingredients).onConflictDoNothing();
+  await database.insert(schema.steps).values(sample.steps).onConflictDoNothing();
+  await database.insert(schema.tags).values(sample.tags).onConflictDoNothing();
   await database
     .insert(schema.recipeTags)
     .values([...seedRecipeTags])
     .onConflictDoNothing();
-  await database
-    .insert(schema.cookingLogs)
-    .values([...seedCookingLogs])
-    .onConflictDoNothing();
+  await database.insert(schema.cookingLogs).values(sample.cookingLogs).onConflictDoNothing();
   if (seedCookingPhotos.length > 0) {
     await database
       .insert(schema.cookingPhotos)
       .values([...seedCookingPhotos])
       .onConflictDoNothing();
   }
-  await database
-    .insert(schema.shoppingItems)
-    .values([...seedShoppingItems])
-    .onConflictDoNothing();
+  await database.insert(schema.shoppingItems).values(sample.shoppingItems).onConflictDoNothing();
   await seedBundledPhotos(database);
 
   // Populate FTS index

@@ -5,7 +5,7 @@
 import type { z } from 'zod';
 
 import { setLocale, t, tCount, tDynamic } from '../index';
-import { formatMonthDay, formatMonthLabel, formatYearMonth } from '../format';
+import { formatMonthDay, formatMonthLabel, formatValueWithUnit, formatYearMonth } from '../format';
 import { recipeFormSchema } from '../../validation/recipe.schema';
 
 afterEach(() => setLocale('ja'));
@@ -85,6 +85,34 @@ describe('日付の書式', () => {
       const label = formatMonthLabel(new Date(2026, month, 1));
       expect(label).toMatch(/^[A-Z][a-z]+$/);
     }
+  });
+});
+
+describe('数値と単位の書式', () => {
+  it('ja は詰め、en は空ける', () => {
+    setLocale('ja');
+    expect(formatValueWithUnit(4, '人前')).toBe('4人前');
+    expect(formatValueWithUnit(30, '分')).toBe('30分');
+
+    setLocale('en');
+    expect(formatValueWithUnit(4, 'servings')).toBe('4 servings');
+    expect(formatValueWithUnit(30, 'min')).toBe('30 min');
+  });
+
+  it('単位が無いときは数値だけ（末尾に空白を残さない）', () => {
+    setLocale('en');
+    expect(formatValueWithUnit(4, undefined)).toBe('4');
+    expect(formatValueWithUnit(4, '')).toBe('4');
+  });
+
+  it('人数の単位は英語で単複が変わる（"1 servings" にしない）', () => {
+    setLocale('ja');
+    expect(formatValueWithUnit(1, tCount('recipe.detail.servingsUnit', 1))).toBe('1人前');
+    expect(formatValueWithUnit(4, tCount('recipe.detail.servingsUnit', 4))).toBe('4人前');
+
+    setLocale('en');
+    expect(formatValueWithUnit(1, tCount('recipe.detail.servingsUnit', 1))).toBe('1 serving');
+    expect(formatValueWithUnit(4, tCount('recipe.detail.servingsUnit', 4))).toBe('4 servings');
   });
 });
 

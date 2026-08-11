@@ -61,7 +61,11 @@ const recipe = {
       one: '{{count}}分',
       other: '{{count}}分',
     } satisfies PluralMessage,
-    servingsSuffix: '人前',
+    // ステッパーの単位。英語は 1 と複数で形が変わる（"1 serving" / "4 servings"）
+    servingsUnit: {
+      one: '人前',
+      other: '人前',
+    } satisfies PluralMessage,
 
     stepTimerMinutes: {
       one: '{{count}}分',

@@ -97,6 +97,8 @@ export function createEditsClient(accessToken) {
   return {
     insert: () => request(`${API_BASE}/edits`, { method: 'POST', body: '{}' }),
     commit: (editId) => request(`${API_BASE}/edits/${editId}:commit`, { method: 'POST' }),
+    /** 掲載のある言語を全部返す。多言語化で「英語版がもう在るか」を見るのに要る。 */
+    listListings: (editId) => request(`${API_BASE}/edits/${editId}/listings`),
     getListing: (editId, lang) => request(`${API_BASE}/edits/${editId}/listings/${lang}`),
     updateListing: (editId, lang, body) =>
       request(`${API_BASE}/edits/${editId}/listings/${lang}`, {

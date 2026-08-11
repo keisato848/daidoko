@@ -4,6 +4,7 @@ import {
   extractStepTimers,
   formatStepTimerLabel,
 } from '../stepTimer';
+import { setLocale } from '../../i18n';
 
 describe('extractStepTimers', () => {
   it('extracts minutes', () => {
@@ -80,12 +81,24 @@ describe('extractStepTimers', () => {
 });
 
 describe('formatStepTimerLabel', () => {
+  afterEach(() => setLocale('ja'));
+
   it('formats common values', () => {
     expect(formatStepTimerLabel(600)).toBe('10分');
     expect(formatStepTimerLabel(5400)).toBe('1時間30分');
     expect(formatStepTimerLabel(90)).toBe('1分30秒');
     expect(formatStepTimerLabel(45)).toBe('45秒');
     expect(formatStepTimerLabel(3600)).toBe('1時間');
+  });
+
+  // 英語表示の料理中モードで「30分 Start timer」と混ざっていた
+  it('英語では単位も英語にし、数値と空ける', () => {
+    setLocale('en');
+    expect(formatStepTimerLabel(600)).toBe('10 min');
+    expect(formatStepTimerLabel(5400)).toBe('1 hr 30 min');
+    expect(formatStepTimerLabel(90)).toBe('1 min 30 sec');
+    expect(formatStepTimerLabel(45)).toBe('45 sec');
+    expect(formatStepTimerLabel(3600)).toBe('1 hr');
   });
 });
 

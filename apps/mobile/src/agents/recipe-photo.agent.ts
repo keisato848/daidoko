@@ -12,7 +12,7 @@ import type { ClientImageLabel } from '../services/client-image-label.provider';
 import { hasEnoughOcrText, parseOcrText, type OcrRecognitionResult } from '../services/ocr.service';
 import type { ParseConfidence, ParsedRecipeText } from '../utils/recipeTextParser';
 import { recipeFormSchema, type RecipeFormData } from '../validation/recipe.schema';
-import { t } from '../i18n';
+import { getLocale, t } from '../i18n';
 
 export interface RecipePhotoAgentInput {
   imageUri: string;
@@ -238,6 +238,15 @@ export async function runRecipePhotoAgent(
             : t('recipeImport.ocr.skipped'),
         );
       }
+    }
+
+    // 画像ラベルだけの下書きは、日本語の料理名から日本語の材料・手順を組み立てる
+    // 辞書に頼っている（recipe-photo-inference.service）。日本語以外の表示で返すと
+    // **中身が丸ごと日本語の下書き**になってしまうので、その言語では出さずに
+    // クラウド側の失敗理由をそのまま返す。OCR で画像内の文字を読めた場合は
+    // 中身が利用者の画像そのものなので、上の分岐でそのまま返している。
+    if (getLocale() !== 'ja') {
+      return errorResult(failureMessage(cloudFailure));
     }
 
     return {

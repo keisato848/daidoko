@@ -51,7 +51,10 @@ const recipe: typeof ja = {
       one: '{{count}} min',
       other: '{{count}} min',
     },
-    servingsSuffix: 'servings',
+    servingsUnit: {
+      one: 'serving',
+      other: 'servings',
+    },
 
     stepTimerMinutes: {
       one: '{{count}} min',

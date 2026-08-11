@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 
 import { Colors } from '../constants/theme';
-import { t, tDynamic } from '../i18n';
+import { t, tCount, tDynamic } from '../i18n';
 import { getTagsForFamily } from '../services/tag.service';
 import { recipeFormSchema, type RecipeFormData } from '../validation/recipe.schema';
 import { FormField } from './FormField';
@@ -161,7 +161,7 @@ export function RecipeForm({
               label={t('common.servings')}
               value={watchedValues.servings}
               onChange={(v) => setValue('servings', v)}
-              suffix={t('recipe.detail.servingsSuffix')}
+              suffix={tCount('recipe.detail.servingsUnit', watchedValues.servings ?? 1)}
             />
             <NumberStepper
               label={t('common.cookTime')}

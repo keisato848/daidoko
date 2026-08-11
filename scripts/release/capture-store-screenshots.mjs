@@ -16,7 +16,11 @@
  *
  * 使い方:
  *   node scripts/release/capture-store-screenshots.mjs [--serial <serial>] [--shots 01,02]
- *     [--out <dir>] [--recipe <id>] [--keep-status-bar]
+ *     [--out <dir>] [--recipe <id>] [--keep-status-bar] [--locale en-US]
+ *
+ * --locale はアプリ単位の言語（Android 13+ の per-app language）を一時的に切り替えてから
+ * 撮る。終了時に必ず端末既定へ戻す。英語掲載用は
+ *   --locale en-US --out docs/store/google-play/phone-screenshots-en
  *
  * manual 指定のショット（AI 実行結果など自動遷移できない画面）はスキップし、
  * 既存ファイルを維持する。
@@ -64,6 +68,7 @@ fs.mkdirSync(outDir, { recursive: true });
 
 console.log(`device: ${serial}`);
 ensureAppInstalled();
+if (args.locale) applyAppLocale(args.locale);
 
 const selected = SHOTS.filter(
   (s) => !args.shots || args.shots.some((prefix) => s.file.startsWith(prefix)),
@@ -86,6 +91,7 @@ try {
   }
 } finally {
   if (!args.keepStatusBar) exitDemoMode();
+  if (args.locale) applyAppLocale(''); // 端末既定に戻す（撮り忘れの言語汚染を残さない）
 }
 
 console.log('\n=== summary ===');
@@ -154,6 +160,22 @@ function dismissAnrIfPresent() {
     sleep(3000);
   }
   console.warn('WARN: ANR dialog may still be visible');
+}
+
+// ─── per-app language（Android 13+） ─────────────────────────────────────────
+
+/**
+ * アプリ単位の言語を切り替える。空文字で端末既定に戻す。
+ * 端末全体のロケールを変えないので、他アプリや端末設定を汚さない。
+ */
+function applyAppLocale(tag) {
+  const res = adb(['shell', 'cmd', 'locale', 'set-app-locales', PACKAGE, '--locales', tag]);
+  if (!res.ok) {
+    throw new Error(
+      `アプリ言語の切り替えに失敗（Android 13+ が必要）: ${res.output.slice(0, 200)}`,
+    );
+  }
+  console.log(tag ? `app locale: ${tag}` : 'app locale: (端末既定に戻した)');
 }
 
 // ─── status bar demo mode ────────────────────────────────────────────────────
@@ -246,6 +268,7 @@ function parseArgs(argv) {
     else if (t === '--out') parsed.out = argv[++i];
     else if (t === '--recipe') parsed.recipe = argv[++i];
     else if (t === '--shots') parsed.shots = argv[++i].split(',').map((s) => s.trim());
+    else if (t === '--locale') parsed.locale = argv[++i];
     else if (t === '--wait') parsed.waitMs = Number(argv[++i]);
     else if (t === '--keep-status-bar') parsed.keepStatusBar = true;
   }

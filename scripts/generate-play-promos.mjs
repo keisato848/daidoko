@@ -10,6 +10,45 @@ const OUTPUT_DIR = 'docs/store/google-play/promotional-screenshots';
 const ICON_PATH = 'apps/mobile/assets/icon.png';
 const GRAPHICS_DIR = 'docs/store/google-play/graphics';
 const FEATURE_GRAPHIC_PATH = `${GRAPHICS_DIR}/feature-graphic.png`;
+const FEATURE_GRAPHIC_PATH_EN = `${GRAPHICS_DIR}/feature-graphic-en.png`;
+
+/**
+ * フィーチャーグラフィックは Play の掲載言語ごとに持てる。英語掲載に日本語の
+ * バナーが出ていては、掲載文だけ英語にしても意味がない。
+ * 見出しは訳ではなく、その言語で通る言い回しにする。
+ */
+const FEATURE_COPY = {
+  ja: {
+    wordmark: '臺所',
+    tagline: 'D A I D O K O',
+    wordmarkFont: 'Yu Mincho, YuMincho, serif',
+    wordmarkSize: 54,
+    headline: ['写真を撮るだけで、', 'レシピが完成。'],
+    headlineFont: 'Yu Mincho, YuMincho, serif',
+    headlineSize: 42,
+    sub: [
+      '料理の写真をAIが解析し、材料・分量・手順を下書き。',
+      '買い物リスト・在庫管理まで、毎日の家庭料理をひとつに整理。',
+    ],
+    subSizes: [23, 21],
+    screenshot: 'docs/store/google-play/phone-screenshots/10-recipe-detail-photo.png',
+  },
+  en: {
+    wordmark: 'DAIDOKO',
+    tagline: '',
+    wordmarkFont: 'Georgia, Times New Roman, serif',
+    wordmarkSize: 44,
+    headline: ['Photograph the dish.', 'The recipe writes itself.'],
+    headlineFont: 'Georgia, Times New Roman, serif',
+    headlineSize: 40,
+    sub: [
+      'AI drafts the ingredients, amounts and steps.',
+      'Shopping list and pantry, all in one place.',
+    ],
+    subSizes: [22, 20],
+    screenshot: 'docs/store/google-play/phone-screenshots-en/10-recipe-detail-photo.png',
+  },
+};
 const FEATURE_GRAPHIC_WIDTH = 1024;
 const FEATURE_GRAPHIC_HEIGHT = 500;
 
@@ -142,7 +181,7 @@ function buildShadowSvg(width, height, radius = 28) {
   `);
 }
 
-function buildFeatureGraphicSvg() {
+function buildFeatureGraphicSvg(copy) {
   return Buffer.from(`
     <svg width="${FEATURE_GRAPHIC_WIDTH}" height="${FEATURE_GRAPHIC_HEIGHT}" viewBox="0 0 ${FEATURE_GRAPHIC_WIDTH} ${FEATURE_GRAPHIC_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -174,12 +213,12 @@ function buildFeatureGraphicSvg() {
       <circle cx="868" cy="420" r="138" fill="#C9A16A" fill-opacity="0.04"/>
       <path d="M176 186 H454" stroke="#C9A16A" stroke-opacity="0.34" stroke-width="2"/>
       <text x="176" y="86" fill="#DCC9A8" font-size="22" font-weight="700" letter-spacing="6" font-family="Yu Gothic UI, Yu Gothic, sans-serif">AI RECIPE FROM A PHOTO</text>
-      <text x="176" y="148" fill="#F0E6D2" font-size="54" font-weight="700" letter-spacing="10" font-family="Yu Mincho, YuMincho, serif">臺所</text>
-      <text x="178" y="178" fill="#A07A44" font-size="18" font-style="italic" letter-spacing="5" font-family="Georgia, Times New Roman, serif">D A I D O K O</text>
-      <text x="88" y="258" fill="#DCC9A8" font-size="42" font-weight="700" letter-spacing="1.5" font-family="Yu Mincho, YuMincho, serif">写真を撮るだけで、</text>
-      <text x="88" y="312" fill="#DCC9A8" font-size="42" font-weight="700" letter-spacing="1.5" font-family="Yu Mincho, YuMincho, serif">レシピが完成。</text>
-      <text x="88" y="370" fill="#DCC9A8" fill-opacity="0.88" font-size="23" font-weight="500" letter-spacing="0.8" font-family="Yu Gothic UI, Yu Gothic, sans-serif">料理の写真をAIが解析し、材料・分量・手順を下書き。</text>
-      <text x="88" y="407" fill="#DCC9A8" fill-opacity="0.76" font-size="21" font-weight="500" letter-spacing="0.6" font-family="Yu Gothic UI, Yu Gothic, sans-serif">買い物リスト・在庫管理まで、毎日の家庭料理をひとつに整理。</text>
+      <text x="176" y="148" fill="#F0E6D2" font-size="${copy.wordmarkSize}" font-weight="700" letter-spacing="10" font-family="${copy.wordmarkFont}">${copy.wordmark}</text>
+      ${copy.tagline ? `<text x="178" y="178" fill="#A07A44" font-size="18" font-style="italic" letter-spacing="5" font-family="Georgia, Times New Roman, serif">${copy.tagline}</text>` : ''}
+      <text x="88" y="258" fill="#DCC9A8" font-size="${copy.headlineSize}" font-weight="700" letter-spacing="1.5" font-family="${copy.headlineFont}">${copy.headline[0]}</text>
+      <text x="88" y="312" fill="#DCC9A8" font-size="${copy.headlineSize}" font-weight="700" letter-spacing="1.5" font-family="${copy.headlineFont}">${copy.headline[1]}</text>
+      <text x="88" y="370" fill="#DCC9A8" fill-opacity="0.88" font-size="${copy.subSizes[0]}" font-weight="500" letter-spacing="0.8" font-family="Yu Gothic UI, Yu Gothic, sans-serif">${copy.sub[0]}</text>
+      <text x="88" y="407" fill="#DCC9A8" fill-opacity="0.76" font-size="${copy.subSizes[1]}" font-weight="500" letter-spacing="0.6" font-family="Yu Gothic UI, Yu Gothic, sans-serif">${copy.sub[1]}</text>
       <rect x="88" y="431" width="188" height="1.5" fill="#C9A16A" fill-opacity="0.42"/>
     </svg>
   `);
@@ -226,11 +265,10 @@ async function renderSlide(slide) {
     .toFile(`${OUTPUT_DIR}/${slide.output}`);
 }
 
-async function renderFeatureGraphic() {
+async function renderFeatureGraphic(copy, outPath) {
   // 推し機能（AI写真レシピ）のヒーロー画像を使う（2026-07 ASO監査でスクショ1枚目と
   // 揃えた方針 — 実写真つきの方が汎用画面より小サムネイルで目を引く）
-  const FEATURE_GRAPHIC_SOURCE =
-    'docs/store/google-play/phone-screenshots/10-recipe-detail-photo.png';
+  const FEATURE_GRAPHIC_SOURCE = copy.screenshot;
   const screenshotWidth = 214;
   const screenshotHeight = 476;
   const screenshotRadius = 24;
@@ -261,20 +299,24 @@ async function renderFeatureGraphic() {
     .toBuffer();
   const screenshotShadow = buildShadowSvg(screenshotWidth, screenshotHeight, screenshotRadius);
 
-  await sharp(buildFeatureGraphicSvg())
+  await sharp(buildFeatureGraphicSvg(copy))
     .composite([
       { input: await sharp(ICON_PATH).resize(72, 72).png().toBuffer(), left: 88, top: 58 },
       { input: screenshotShadow, left: 724, top: 12 },
       { input: roundedScreenshot, left: 740, top: 28 },
     ])
     .png()
-    .toFile(FEATURE_GRAPHIC_PATH);
+    .toFile(outPath);
 }
 
 await mkdir(OUTPUT_DIR, { recursive: true });
 await mkdir(GRAPHICS_DIR, { recursive: true });
-await Promise.all([Promise.all(slides.map(renderSlide)), renderFeatureGraphic()]);
+await Promise.all([
+  Promise.all(slides.map(renderSlide)),
+  renderFeatureGraphic(FEATURE_COPY.ja, FEATURE_GRAPHIC_PATH),
+  renderFeatureGraphic(FEATURE_COPY.en, FEATURE_GRAPHIC_PATH_EN),
+]);
 
 console.log(
-  `Generated ${slides.length} promotional screenshots in ${OUTPUT_DIR} and feature graphic at ${FEATURE_GRAPHIC_PATH}`,
+  `Generated ${slides.length} promotional screenshots in ${OUTPUT_DIR} and feature graphics at ${FEATURE_GRAPHIC_PATH} / ${FEATURE_GRAPHIC_PATH_EN}`,
 );
