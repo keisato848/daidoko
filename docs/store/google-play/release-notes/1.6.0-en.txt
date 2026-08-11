@@ -1,0 +1,5 @@
+New: Plan it with AI. Say what you feel like making and it works the idea into a draft recipe, asking about servings and time as you go. Available from Home and the Add menu.
+
+You can now choose units for amounts and temperatures (metric or US customary) under Settings > Display > Units.
+
+Also fixed: the keyboard covering buttons at the bottom of the screen, and the shopping list telling you an ingredient was in stock when it was only on the list.
