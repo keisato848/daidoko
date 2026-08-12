@@ -17,8 +17,8 @@ const settings: typeof ja = {
     byok: 'Your own AI key',
     byokSubtitle: 'Unlimited with your own key',
     freeRemaining: {
-      one: 'Free — {{count}} left today',
-      other: 'Free — {{count}} left today',
+      one: 'Free — {{count}} left (then one per ad watched)',
+      other: 'Free — {{count}} left (then one per ad watched)',
     },
   },
 

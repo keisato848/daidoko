@@ -20,8 +20,8 @@ const settings = {
     byok: '自分のAIキー',
     byokSubtitle: '自分のキーで使い放題',
     freeRemaining: {
-      one: '無料・今日あと {{count}} 回',
-      other: '無料・今日あと {{count}} 回',
+      one: '無料枠・あと {{count}} 回（以降は広告視聴で1回ずつ）',
+      other: '無料枠・あと {{count}} 回（以降は広告視聴で1回ずつ）',
     } satisfies PluralMessage,
   },
 
