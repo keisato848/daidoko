@@ -56,6 +56,21 @@ export async function getShareBlockReason(recipeId: string): Promise<WebShareBlo
   return shareBlockReasonForSourceTypes(rows.map((r) => r.type));
 }
 
+/** レシピ帖の選択画面用: URL 取り込み由来のレシピ ID を一括で取る（1 クエリ） */
+export async function getUrlImportedRecipeIds(): Promise<Set<string>> {
+  if (!isNativePlatform) return new Set();
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+  const rows = await db
+    .select({ recipeId: schema.recipeRevisions.recipeId })
+    .from(schema.recipeRevisions)
+    .innerJoin(schema.sources, eq(schema.recipeRevisions.sourceId, schema.sources.id))
+    .where(eq(schema.sources.type, 'url'));
+  return new Set(rows.map((r) => r.recipeId));
+}
+
 // ── 共有状態（app_meta） ─────────────────────────────────────────────────────
 
 export async function getWebShare(recipeId: string): Promise<WebShareRecord | null> {
@@ -90,11 +105,11 @@ export interface SharePayload {
   photoMime?: 'image/jpeg';
 }
 
-/** 純粋な組み立て（テスト対象）。attested はここで固定 — 確認ダイアログを通った後にのみ呼ぶ */
-export function buildSharePayload(recipe: RecipeDetail, locale: 'ja' | 'en'): SharePayload {
+/** レシピ 1 件ぶんの本文（単品共有と帖で共通）。純粋（テスト対象） */
+export function buildShareRecipeBody(
+  recipe: RecipeDetail,
+): Omit<SharePayload, 'attested' | 'locale'> {
   return {
-    attested: true,
-    locale,
     title: recipe.title,
     ...(recipe.servings != null ? { servings: recipe.servings } : {}),
     ...(recipe.cookTimeMin != null ? { cookTimeMin: recipe.cookTimeMin } : {}),
@@ -108,6 +123,11 @@ export function buildSharePayload(recipe: RecipeDetail, locale: 'ja' | 'en'): Sh
     steps: recipe.steps.map((step) => ({ body: step.body })),
     tags: recipe.tags,
   };
+}
+
+/** 純粋な組み立て（テスト対象）。attested はここで固定 — 確認ダイアログを通った後にのみ呼ぶ */
+export function buildSharePayload(recipe: RecipeDetail, locale: 'ja' | 'en'): SharePayload {
+  return { attested: true, locale, ...buildShareRecipeBody(recipe) };
 }
 
 /** 表紙（無ければヒーロー）写真を Web 用に縮小して base64 で返す。失敗したら写真なしで進む */
@@ -171,6 +191,97 @@ export async function publishRecipeToWeb(recipe: RecipeDetail): Promise<WebShare
   };
   await setAppMeta(META_PREFIX + recipe.id, JSON.stringify(record));
   return record;
+}
+
+// ── レシピ帖（S2） ──────────────────────────────────────────────────────────
+
+const BOOKS_META_KEY = 'web_share_books';
+
+export interface WebShareBookRecord {
+  slug: string;
+  url: string;
+  deleteToken: string;
+  title: string;
+  recipeCount: number;
+  sharedAt: string;
+}
+
+export async function getWebShareBooks(): Promise<WebShareBookRecord[]> {
+  const raw = await getAppMeta(BOOKS_META_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (b): b is WebShareBookRecord =>
+        typeof b === 'object' && b !== null && 'slug' in b && 'url' in b && 'deleteToken' in b,
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function saveWebShareBooks(books: WebShareBookRecord[]): Promise<void> {
+  await setAppMeta(BOOKS_META_KEY, JSON.stringify(books));
+}
+
+/** 帖を公開する。写真は各レシピの表紙（あれば）を縮小して同送 */
+export async function publishRecipeBookToWeb(
+  title: string,
+  recipes: RecipeDetail[],
+): Promise<WebShareBookRecord> {
+  const recipeBodies = [];
+  for (const recipe of recipes) {
+    const body: Record<string, unknown> = buildShareRecipeBody(recipe);
+    const photoBase64 = await readShareTimePhoto(recipe);
+    if (photoBase64) {
+      body['photoBase64'] = photoBase64;
+      body['photoMime'] = 'image/jpeg';
+    }
+    recipeBodies.push(body);
+  }
+
+  const res = await fetch(`${API_V1}/share/books`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ attested: true, locale: getLocale(), title, recipes: recipeBodies }),
+  });
+  const json = (await res.json().catch(() => null)) as {
+    ok?: boolean;
+    slug?: string;
+    url?: string;
+    deleteToken?: string;
+    error?: { message?: string };
+  } | null;
+  if (!res.ok || !json?.ok || !json.slug || !json.url || !json.deleteToken) {
+    throw new Error(json?.error?.message ?? `book share failed (${res.status})`);
+  }
+
+  const record: WebShareBookRecord = {
+    slug: json.slug,
+    url: json.url,
+    deleteToken: json.deleteToken,
+    title,
+    recipeCount: recipes.length,
+    sharedAt: new Date().toISOString(),
+  };
+  await saveWebShareBooks([record, ...(await getWebShareBooks())]);
+  return record;
+}
+
+/** 帖の共有を取り消す。サーバー 404 でもローカル一覧からは消す */
+export async function revokeWebShareBook(slug: string): Promise<void> {
+  const books = await getWebShareBooks();
+  const record = books.find((b) => b.slug === slug);
+  if (!record) return;
+  const res = await fetch(`${API_V1}/share/books/${slug}`, {
+    method: 'DELETE',
+    headers: { 'x-share-delete-token': record.deleteToken },
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`book revoke failed (${res.status})`);
+  }
+  await saveWebShareBooks(books.filter((b) => b.slug !== slug));
 }
 
 /**

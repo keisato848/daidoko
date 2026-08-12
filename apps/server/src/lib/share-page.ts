@@ -6,7 +6,7 @@
  * - OGP: SNS に貼るとタイトル・説明・写真のカードで展開される
  * - ブランド準拠のダーク配色（docs/brand/ロゴ仕様.md）・UI 表記は DAIDOKO
  */
-import type { SharedRecipeRow } from './share-store.js';
+import type { SharedBookRecipeRow, SharedBookRow, SharedRecipeRow } from './share-store.js';
 
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.daidoko.app';
 
@@ -23,6 +23,10 @@ const STRINGS = {
       'このページは投稿者が共有したレシピです。投稿者が共有を停止すると表示されなくなります。',
     notFound: 'このレシピは見つかりませんでした',
     notFoundBody: 'リンクが間違っているか、投稿者が共有を停止しました。',
+    toc: '収録レシピ',
+    bookCta: 'アプリでレシピ帖をつくる',
+    bookFooter:
+      'このページは投稿者が共有したレシピ帖です。投稿者が共有を停止すると表示されなくなります。',
   },
   en: {
     servings: (n: number) => `Serves ${n}`,
@@ -35,6 +39,10 @@ const STRINGS = {
     footer: 'This recipe was shared by its author. It disappears when the author stops sharing.',
     notFound: 'Recipe not found',
     notFoundBody: 'The link may be wrong, or the author stopped sharing it.',
+    toc: 'Recipes in this book',
+    bookCta: 'Make your own recipe book in the app',
+    bookFooter:
+      'This recipe book was shared by its author. It disappears when the author stops sharing.',
   },
 } as const;
 
@@ -179,6 +187,105 @@ ${photoUrl ? `<meta property="og:image" content="${escapeHtml(photoUrl)}">\n<met
   <a class="cta" href="${PLAY_STORE_URL}">${s.cta}</a>
   <div class="cta-sub">${s.ctaSub}</div>
   <div class="footer">${s.footer}</div>
+</div>
+</body>
+</html>`;
+}
+
+// ── レシピ帖（S2）: 目次 ＋ 全レシピを 1 ページに ────────────────────────────
+
+const BOOK_CSS = `
+  .book-desc { color: #B8A585; font-size: 14px; margin: 6px 0 0; }
+  ol.toc { list-style: none; counter-reset: t; margin: 10px 0 0; }
+  ol.toc li { counter-increment: t; padding: 6px 0; border-bottom: 1px dotted #2E2418; }
+  ol.toc li::before { content: counter(t) '. '; color: #C9A16A; font-family: Georgia, serif;
+                      font-style: italic; }
+  ol.toc a { color: #DCC9A8; text-decoration: none; }
+  section.recipe { margin-top: 44px; padding-top: 8px; border-top: 1px solid #2E2418; }
+  section.recipe h2.rtitle { color: #F0E2C8; font-size: 22px; font-weight: 600;
+                             letter-spacing: 0; border: none; margin: 16px 0 4px; }
+  h3 { color: #C9A16A; font-size: 14px; letter-spacing: 0.15em; margin: 22px 0 8px;
+       padding-bottom: 6px; border-bottom: 1px solid #2E2418; }
+`;
+
+export function renderBookPage(
+  book: SharedBookRow,
+  bookRecipes: SharedBookRecipeRow[],
+  baseUrl: string,
+): string {
+  const locale = book.locale === 'en' ? 'en' : 'ja';
+  const s = STRINGS[locale];
+  const title = escapeHtml(book.title);
+  const ogDescription = escapeHtml(
+    (book.description?.trim() || bookRecipes.map((r) => r.title).join('・')).slice(0, 120),
+  );
+  const firstPhotoIndex = bookRecipes.findIndex((r) => r.photo != null);
+  const ogImage =
+    firstPhotoIndex >= 0 ? `${baseUrl}/b/${book.slug}/photo/${firstPhotoIndex}` : null;
+
+  const toc = bookRecipes
+    .map((r, i) => `<li><a href="#r${i}">${escapeHtml(r.title)}</a></li>`)
+    .join('\n');
+
+  const sections = bookRecipes
+    .map((recipe, i) => {
+      const ingredients = parseJsonArray<SharedIngredient>(recipe.ingredientsJson);
+      const steps = parseJsonArray<{ body: string }>(recipe.stepsJson);
+      const metaParts = [
+        recipe.servings != null ? s.servings(recipe.servings) : null,
+        recipe.cookTimeMin != null ? s.cookTime(recipe.cookTimeMin) : null,
+      ].filter(Boolean);
+      const photoUrl = recipe.photo ? `${baseUrl}/b/${book.slug}/photo/${i}` : null;
+      return `<section class="recipe" id="r${i}">
+  ${photoUrl ? `<img class="photo" src="${escapeHtml(photoUrl)}" alt="${escapeHtml(recipe.title)}">` : ''}
+  <h2 class="rtitle">${escapeHtml(recipe.title)}</h2>
+  ${metaParts.length > 0 ? `<div class="meta">${escapeHtml(metaParts.join(' ・ '))}</div>` : ''}
+  ${
+    ingredients.length > 0
+      ? `<h3>${s.ingredients}</h3>\n<ul class="ings">${renderIngredients(ingredients, locale)}</ul>`
+      : ''
+  }
+  ${
+    steps.length > 0
+      ? `<h3>${s.steps}</h3>\n<ol class="steps">${steps
+          .map((st) => `<li><span>${escapeHtml(st.body)}</span></li>`)
+          .join('\n')}</ol>`
+      : ''
+  }
+  ${
+    recipe.description?.trim()
+      ? `<h3>${s.memo}</h3>\n<p class="memo">${escapeHtml(recipe.description.trim())}</p>`
+      : ''
+  }
+</section>`;
+    })
+    .join('\n');
+
+  return `<!doctype html>
+<html lang="${locale}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${title} | DAIDOKO</title>
+<meta property="og:type" content="article">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${ogDescription}">
+<meta property="og:site_name" content="DAIDOKO">
+${ogImage ? `<meta property="og:image" content="${escapeHtml(ogImage)}">\n<meta name="twitter:card" content="summary_large_image">` : `<meta name="twitter:card" content="summary">`}
+<style>${PAGE_CSS}${BOOK_CSS}</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">DAIDOKO</div>
+  <h1>${title}</h1>
+  ${book.description?.trim() ? `<p class="book-desc">${escapeHtml(book.description.trim())}</p>` : ''}
+  <h2>${s.toc}</h2>
+  <ol class="toc">${toc}</ol>
+  ${sections}
+  <a class="cta" href="${PLAY_STORE_URL}">${s.bookCta}</a>
+  <div class="cta-sub">${s.ctaSub}</div>
+  <div class="footer">${s.bookFooter}</div>
 </div>
 </body>
 </html>`;

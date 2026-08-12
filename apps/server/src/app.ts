@@ -13,7 +13,7 @@ import gardenRouter from './routes/garden.js';
 import importRouter from './routes/import.js';
 import inferRouter from './routes/infer.js';
 import resolveRouter from './routes/resolve.js';
-import { shareApiRouter, sharePageRouter } from './routes/share.js';
+import { bookPageRouter, shareApiRouter, sharePageRouter } from './routes/share.js';
 
 export const app = new Hono();
 
@@ -39,9 +39,10 @@ app.route('/api/v1/infer', inferRouter);
 app.route('/api/v1/resolve', resolveRouter);
 // さいえん手帳（家庭菜園アプリ）の相乗りルート。プロンプトはレシピ系と独立
 app.route('/api/v1/garden', gardenRouter);
-// Web 共有（レシピ共有リンク）。/r/* は人間が見る HTML ページ
+// Web 共有（レシピ共有リンク）。/r/* と /b/* は人間が見る HTML ページ
 app.route('/api/v1/share', shareApiRouter);
 app.route('/r', sharePageRouter);
+app.route('/b', bookPageRouter);
 
 // ─── 404 / Error ─────────────────────────────────────────────────────────────
 

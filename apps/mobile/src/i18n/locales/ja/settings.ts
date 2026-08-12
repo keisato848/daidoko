@@ -20,8 +20,8 @@ const settings = {
     byok: '自分のAIキー',
     byokSubtitle: '自分のキーで使い放題',
     freeRemaining: {
-      one: '無料・今日あと {{count}} 回',
-      other: '無料・今日あと {{count}} 回',
+      one: '無料枠・あと {{count}} 回（以降は広告視聴で1回ずつ）',
+      other: '無料枠・あと {{count}} 回（以降は広告視聴で1回ずつ）',
     } satisfies PluralMessage,
   },
 
@@ -80,6 +80,8 @@ const settings = {
     syncSubtitle: '現在は端末内のみ保存されます',
     nameAliases: '名寄せ辞書',
     nameAliasesSubtitle: 'AIが覚えた食材名の対応を確認・修正',
+    webShares: 'Web共有の管理',
+    webSharesSubtitle: '共有中のレシピ帖の確認・停止',
   },
 
   app: {
@@ -103,6 +105,22 @@ const settings = {
     guideTitle: '使い方ガイド',
     guideText:
       '各画面の「?」でその画面の案内を再生できます。「使い方ガイドを再表示」を押すと全画面の案内をもう一度見られます。',
+  },
+  webShares: {
+    title: 'Web共有の管理',
+    emptyTitle: '共有中のレシピ帖はありません',
+    emptyMessage:
+      'レシピ一覧で長押し→複数選択→「レシピ帖」から、選んだレシピを1つのWebページにまとめて共有できます。',
+    recipeCount: {
+      one: '{{count}}品',
+      other: '{{count}}品',
+    } satisfies PluralMessage,
+    send: 'リンクを送る',
+    stopTitle: 'Web共有を停止',
+    stopConfirm:
+      '共有ページを削除します。リンクを知っている人も見られなくなります。よろしいですか？',
+    stopAction: '停止する',
+    stopFailed: '停止できませんでした。通信環境を確認してもう一度お試しください。',
   },
 };
 
