@@ -28,9 +28,10 @@ import {
   currentDayKey,
   deriveFreemiumStatus,
   hasPendingLaunchBonusAnnouncement,
-  FREE_DAILY_LIMIT,
+  FREE_LIFETIME_LIMIT,
   getAdWatchedToday,
   getDailyUsage,
+  getLifetimeFreeUsed,
   getFreemiumStatus,
   getTokenBalance,
   grantAdBonus,
@@ -82,7 +83,7 @@ describe('usage.service', () => {
     });
 
     it('supports a zero base limit (ads become the only free path)', () => {
-      // EXPO_PUBLIC_FREE_DAILY_LIMIT=0 のビルド（広告フロー検証にも使う）
+      // EXPO_PUBLIC_FREE_LIFETIME_LIMIT=0 のビルド（広告フロー検証にも使う）
       const status = deriveFreemiumStatus(false, 0, 0, true, false, 0);
       expect(status).toMatchObject({ remaining: 0, canInfer: false, canWatchAdForMore: true });
       const withToken = deriveFreemiumStatus(false, 0, 1, true, false, 0);
@@ -111,7 +112,7 @@ describe('usage.service', () => {
   describe('getFreemiumStatus', () => {
     it('reflects the device-local count for free users', async () => {
       const status = await getFreemiumStatus();
-      expect(status).toMatchObject({ isPremium: false, used: 0, remaining: FREE_DAILY_LIMIT });
+      expect(status).toMatchObject({ isPremium: false, used: 0, remaining: FREE_LIFETIME_LIMIT });
     });
 
     it('reports unlimited for premium users', async () => {
@@ -132,30 +133,38 @@ describe('usage.service', () => {
   describe('recordCloudInference', () => {
     it('counts a use for free users', async () => {
       await recordCloudInference();
-      expect(await getDailyUsage()).toBe(1);
+      expect(await getLifetimeFreeUsed()).toBe(1);
     });
 
     it('does not count for premium users', async () => {
       mockPremium = true;
       await recordCloudInference();
-      expect(await getDailyUsage()).toBe(0);
+      expect(await getLifetimeFreeUsed()).toBe(0);
     });
 
     it('does not count for BYOK users', async () => {
       mockByok = true;
       await recordCloudInference();
-      expect(await getDailyUsage()).toBe(0);
+      expect(await getLifetimeFreeUsed()).toBe(0);
     });
 
-    it('spends a banked token once the daily free allowance is used up', async () => {
-      await recordCloudInference(); // spends the 1 free daily use
-      expect(await getDailyUsage()).toBe(FREE_DAILY_LIMIT);
+    it('spends a banked token once the lifetime free allowance is used up', async () => {
+      await recordCloudInference(); // spends the single lifetime free use
+      expect(await getLifetimeFreeUsed()).toBe(FREE_LIFETIME_LIMIT);
       await grantAdBonus(); // bank 1 token
       expect(await getTokenBalance()).toBe(1);
 
       await recordCloudInference(); // free allowance already used → spends the token
-      expect(await getDailyUsage()).toBe(FREE_DAILY_LIMIT); // daily counter untouched
+      expect(await getLifetimeFreeUsed()).toBe(FREE_LIFETIME_LIMIT); // lifetime counter untouched
       expect(await getTokenBalance()).toBe(0);
+    });
+
+    it('無料枠は日付が変わっても復活しない（初回1回のみ）', async () => {
+      await recordCloudInference();
+      // 日付キーに依存しない生涯カウンタなので、翌日でも remaining は 0 のまま
+      const status = await getFreemiumStatus();
+      expect(status.remaining).toBe(0);
+      expect(status.canInfer).toBe(false);
     });
   });
 
@@ -259,7 +268,7 @@ describe('usage.service', () => {
           0,
           true,
           false,
-          FREE_DAILY_LIMIT,
+          FREE_LIFETIME_LIMIT,
           AD_BONUS_DAILY_LIMIT,
           AD_BONUS_DAILY_LIMIT,
         ).canWatchAdForMore,

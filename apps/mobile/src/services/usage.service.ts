@@ -1,14 +1,15 @@
 /**
- * Freemium usage service — device-local daily quota for AI photo-recipes.
+ * Freemium usage service — device-local quota for AI photo-recipes.
  *
- * Free tier = FREE_DAILY_LIMIT successful cloud inferences per calendar day,
- * counted in app_meta (key per YYYY-MM-DD, auto-resets daily). A free user who
- * is out of uses can watch a rewarded ad to earn a token — tokens are banked
- * indefinitely (no expiry) in a persistent balance and spent whenever the free
- * daily quota runs out. Watching ads to earn tokens is still capped at
- * AD_BONUS_DAILY_LIMIT per day (an earn-rate limiter, not a use-it-today rule).
- * Premium (RevenueCat) bypasses the quota. The server's global cap remains the
- * real cost ceiling. See docs/フリーミアム設計.md.
+ * 無料枠は**初回の FREE_LIFETIME_LIMIT 回だけ**（既定 1・日次リセットなし。
+ * 2026-08-12 に「毎日1回」から変更 — ユーザー判断）。使い切ったら、
+ * リワード広告を見るたびに 1 回ぶんのトークンが貯まる。トークンは無期限で、
+ * 視聴は 1 日 AD_BONUS_DAILY_LIMIT 回まで（獲得レートの上限であって当日消費の
+ * 縛りではない）。Premium (RevenueCat) bypasses the quota. The server's global
+ * cap remains the real cost ceiling. See docs/フリーミアム設計.md.
+ *
+ * 既存ユーザーへの移行: 日次キーの履歴は数え直さない（生涯カウンタは 0 から）。
+ * 更新後に 1 回だけ無料枠が復活するが、害はなく実装が単純。
  */
 import { FREE_DAILY_LIMIT_CONFIG } from '../config';
 import { isAdRewardAvailable } from './ad-reward.service';
@@ -16,12 +17,14 @@ import { getAppMeta, setAppMeta } from './app-meta.service';
 import { hasUserApiKey } from './byok.service';
 import { isPremium } from './entitlement.service';
 
-/** Free AI photo-recipes allowed per calendar day (build-time configurable, default 1). */
-export const FREE_DAILY_LIMIT = FREE_DAILY_LIMIT_CONFIG;
+/** 無料の AI レシピ作成の**生涯**回数（build-time configurable, default 1）。 */
+export const FREE_LIFETIME_LIMIT = FREE_DAILY_LIMIT_CONFIG;
 /** Max rewarded-ad watches (token grants) per day. Earn-rate limiter only — banked tokens never expire. */
 export const AD_BONUS_DAILY_LIMIT = 3;
 
 const USAGE_KEY_PREFIX = 'ai_photo_recipe_usage:';
+/** 生涯の無料枠消費数。日付キーを持たない = リセットされない。 */
+const LIFETIME_FREE_KEY = 'ai_photo_recipe_free_lifetime_used';
 const AD_WATCH_KEY_PREFIX = 'ai_photo_recipe_ad_watch:';
 const TOKEN_BALANCE_KEY = 'ai_photo_recipe_token_balance';
 const LAUNCH_BONUS_KEY = 'launch_bonus_2026_07';
@@ -57,7 +60,7 @@ export function currentDayKey(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
-export function remainingFree(used: number, limit: number = FREE_DAILY_LIMIT): number {
+export function remainingFree(used: number, limit: number = FREE_LIFETIME_LIMIT): number {
   return Math.max(0, limit - used);
 }
 
@@ -68,7 +71,7 @@ export function deriveFreemiumStatus(
   tokenBalance = 0,
   adAvailable = false,
   byok = false,
-  baseLimit: number = FREE_DAILY_LIMIT,
+  baseLimit: number = FREE_LIFETIME_LIMIT,
   bonusLimit: number = AD_BONUS_DAILY_LIMIT,
   adWatchedToday = 0,
 ): FreemiumStatus {
@@ -115,6 +118,15 @@ export async function incrementDailyUsage(date: Date = new Date()): Promise<numb
   const next = (await getDailyUsage(date)) + 1;
   await setAppMeta(USAGE_KEY_PREFIX + currentDayKey(date), String(next));
   return next;
+}
+
+/** 生涯の無料枠をいくつ使ったか（リセットされない）。 */
+export async function getLifetimeFreeUsed(): Promise<number> {
+  return readCount(LIFETIME_FREE_KEY);
+}
+
+async function incrementLifetimeFreeUsed(): Promise<void> {
+  await setAppMeta(LIFETIME_FREE_KEY, String((await getLifetimeFreeUsed()) + 1));
 }
 
 /** How many rewarded ads have been watched today (earn-rate gate; resets daily). */
@@ -188,7 +200,7 @@ export async function spendToken(): Promise<number> {
 export async function getFreemiumStatus(): Promise<FreemiumStatus> {
   const [premium, used, tokenBalance, adWatchedToday, byok] = await Promise.all([
     isPremium(),
-    getDailyUsage(),
+    getLifetimeFreeUsed(),
     getTokenBalance(),
     getAdWatchedToday(),
     hasUserApiKey(),
@@ -199,7 +211,7 @@ export async function getFreemiumStatus(): Promise<FreemiumStatus> {
     tokenBalance,
     isAdRewardAvailable(),
     byok,
-    FREE_DAILY_LIMIT,
+    FREE_LIFETIME_LIMIT,
     AD_BONUS_DAILY_LIMIT,
     adWatchedToday,
   );
@@ -214,9 +226,9 @@ export async function getFreemiumStatus(): Promise<FreemiumStatus> {
 export async function recordCloudInference(): Promise<void> {
   if (await isPremium()) return;
   if (await hasUserApiKey()) return;
-  const used = await getDailyUsage();
-  if (used < FREE_DAILY_LIMIT) {
-    await incrementDailyUsage();
+  const used = await getLifetimeFreeUsed();
+  if (used < FREE_LIFETIME_LIMIT) {
+    await incrementLifetimeFreeUsed();
   } else {
     await spendToken();
   }

@@ -12,6 +12,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Loading } from '../../src/components/Loading';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
+import { ensureInferenceCredit } from '../../src/services/inference-gate.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../src/services/expo-photo-capture.adapter';
 import { applyConsumption, inferMealConsumption } from '../../src/services/meal-consume.service';
 import {
@@ -55,11 +56,14 @@ export default function ConsumeMealScreen() {
 
   const handlePick = useCallback(
     async (source: PhotoCaptureSource) => {
-      const status = freemium ?? (await getFreemiumStatus().catch(() => null));
-      if (status && !status.canInfer) {
+      // 枠切れなら、その場で広告視聴を持ちかけてそのまま続行する（2026-08-12）。
+      // ペイウォールは広告を出せないとき（視聴上限・no-fill）の逃げ道
+      const gate = await ensureInferenceCredit();
+      if (gate === 'paywall') {
         router.push('/recipes/paywall');
         return;
       }
+      if (gate !== 'ready') return;
       setErrorMsg(null);
       setPhase('processing');
       try {
@@ -98,7 +102,7 @@ export default function ConsumeMealScreen() {
         setPhase('error');
       }
     },
-    [freemium, router],
+    [router],
   );
 
   const handleApply = useCallback(async () => {

@@ -10,6 +10,12 @@ const ai: typeof ja = {
       'MUST NOT be softened into a generic "powered by AI" note.',
   },
 
+  adGate: {
+    title: 'Out of free uses',
+    body: 'Watch a short ad to unlock one more AI recipe.',
+    watch: 'Watch ad',
+  },
+
   error: {
     apiKey: {
       text: 'Check your API key — it may be invalid or lack permission.',

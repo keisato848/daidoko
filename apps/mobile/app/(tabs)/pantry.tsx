@@ -9,6 +9,7 @@ import { Bell, ChefHat, Minus, Plus, Receipt, ScanLine, Utensils, X } from 'luci
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AdBanner } from '../../src/components/AdBanner';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
@@ -289,6 +290,7 @@ export default function PantryScreen() {
         )}
       />
 
+      <AdBanner />
       <CoachMarkOverlay
         visible={coach.visible}
         step={coach.step}

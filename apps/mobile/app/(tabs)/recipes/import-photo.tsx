@@ -26,6 +26,7 @@ import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
 import { t, tCount } from '../../../src/i18n';
+import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import {
   createClientImageLabeler,
   isClientImageLabelingAvailable,
@@ -181,12 +182,14 @@ export default function ImportPhotoScreen() {
     async (source: PhotoCaptureSource) => {
       setErrorMsg(null);
 
-      // Freemium gate: free users past the daily limit go to the paywall.
-      const status = freemium ?? (await getFreemiumStatus().catch(() => null));
-      if (status && !status.canInfer) {
+      // 枠切れなら、その場で広告視聴を持ちかけてそのまま続行する（2026-08-12）。
+      // ペイウォールは広告を出せないとき（視聴上限・no-fill）の逃げ道
+      const gate = await ensureInferenceCredit();
+      if (gate === 'paywall') {
         router.push('/recipes/paywall');
         return;
       }
+      if (gate !== 'ready') return;
 
       try {
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
@@ -199,7 +202,7 @@ export default function ImportPhotoScreen() {
         setErrorMsg(error instanceof Error ? error.message : t('error.photoRecipeFailed'));
       }
     },
-    [freemium, router],
+    [router],
   );
 
   // Confirm the popup comment and start inference on the pending photo.

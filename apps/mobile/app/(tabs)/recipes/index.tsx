@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 
 import { BottomSheet } from '../../../src/components/BottomSheet';
+import { AdBanner } from '../../../src/components/AdBanner';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../../src/components/HelpButton';
 import { EmptyState } from '../../../src/components/EmptyState';
@@ -413,6 +414,7 @@ export default function RecipeListScreen() {
         </Pressable>
       )}
 
+      <AdBanner />
       <CoachMarkOverlay
         visible={coach.visible}
         step={coach.step}

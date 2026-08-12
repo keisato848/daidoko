@@ -90,8 +90,12 @@ export function evaluateAppOpenAdGate(input: AppOpenAdGateInput): AppOpenAdGateR
 
 // ユニット ID 未設定なら完全オフ（本番ビルドにテストユニットが紛れ込む事故を防ぐ。
 // 実機検証ではテスト ID を EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID に明示的に渡す）。
+// iOS も広告を出す方針（2026-08-12）。ID は config がプラットフォームごとに解決するので、
+// iOS のユニットを作って env を足せば iOS でも有効になる（それまでは自然にオフ）。
 const isEnabled = (): boolean =>
-  Platform.OS === 'android' && ADMOB_ENABLED && ADMOB_APP_OPEN_UNIT_ID !== '';
+  (Platform.OS === 'android' || Platform.OS === 'ios') &&
+  ADMOB_ENABLED &&
+  ADMOB_APP_OPEN_UNIT_ID !== '';
 
 let provider: AppOpenAdProvider | null = null;
 
