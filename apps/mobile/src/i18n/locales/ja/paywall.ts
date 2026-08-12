@@ -9,9 +9,9 @@ import type { CriticalMessage, PluralMessage } from '../../types';
 const paywall = {
   title: 'DAIDOKO プレミアム',
   subtitle: {
-    one: '無料で使えるAI写真レシピは1日{{count}}回まで。\nプレミアムなら、回数を気にせず使えます。',
+    one: '無料のAIレシピ作成は初回{{count}}回まで。以降は広告を見るたびに1回使えます。\nプレミアムなら、回数を気にせず使えます。',
     other:
-      '無料で使えるAI写真レシピは1日{{count}}回まで。\nプレミアムなら、回数を気にせず使えます。',
+      '無料のAIレシピ作成は初回{{count}}回まで。以降は広告を見るたびに1回使えます。\nプレミアムなら、回数を気にせず使えます。',
   } satisfies PluralMessage,
 
   benefit: {
@@ -39,7 +39,7 @@ const paywall = {
   watchAd: '広告を見て 1 回ぶん貯める',
   /** 貯めた回数が**失効しない**ことの説明。当日限りだと誤解させない。 */
   tokenHint: {
-    text: '貯めた回数はなくなりません。無料枠がなくなった日にいつでも使えます。',
+    text: '貯めた回数はなくなりません。いつでも使えます。',
     intent:
       'MUST convey that earned credits DO NOT EXPIRE. They were day-scoped bonuses before and ' +
       'are now permanent tokens; implying they expire would make the reward look worthless.',
@@ -51,9 +51,9 @@ const paywall = {
 
   thanksTitle: 'ありがとうございます',
   adGranted: {
-    one: '写真からのレシピづくりが 1 回ぶん貯まりました（残り {{count}} 回ぶん）。\n無料枠がなくなった日にいつでも使えます。',
+    one: '写真からのレシピづくりが 1 回ぶん貯まりました（残り {{count}} 回ぶん）。\nいつでも使えます。',
     other:
-      '写真からのレシピづくりが 1 回ぶん貯まりました（残り {{count}} 回ぶん）。\n無料枠がなくなった日にいつでも使えます。',
+      '写真からのレシピづくりが 1 回ぶん貯まりました（残り {{count}} 回ぶん）。\nいつでも使えます。',
   } satisfies PluralMessage,
   subscribed: 'プレミアムになりました。写真からのレシピづくりを使い放題でお楽しみください。',
 

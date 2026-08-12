@@ -42,14 +42,22 @@ const AppOpenAd = {
   })),
 };
 
+// バナー（AdBanner コンポーネント用）。描画しないダミー
+const BannerAd = () => null;
+const BannerAdSize = { ANCHORED_ADAPTIVE_BANNER: 'ANCHORED_ADAPTIVE_BANNER' };
+
 module.exports = {
   __esModule: true,
   default: mobileAds,
+  BannerAd,
+  BannerAdSize,
   AdEventType: { LOADED: 'loaded', CLOSED: 'closed', ERROR: 'error' },
   RewardedAdEventType: { LOADED: 'rewarded_loaded', EARNED_REWARD: 'rewarded_earned_reward' },
   TestIds: {
     REWARDED: 'ca-app-pub-3940256099942544/5224354917',
     APP_OPEN: 'ca-app-pub-3940256099942544/9257395921',
+    BANNER: 'ca-app-pub-3940256099942544/6300978111',
+    ADAPTIVE_BANNER: 'ca-app-pub-3940256099942544/9214589741',
   },
   RewardedAd,
   AppOpenAd,

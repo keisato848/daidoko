@@ -8,6 +8,7 @@ import { Plus, X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AdBanner } from '../../src/components/AdBanner';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { Toast } from '../../src/components/Toast';
@@ -168,6 +169,7 @@ export default function ShoppingListScreen() {
         onDismiss={() => setToastVisible(false)}
       />
 
+      <AdBanner />
       <CoachMarkOverlay
         visible={coach.visible}
         step={coach.step}

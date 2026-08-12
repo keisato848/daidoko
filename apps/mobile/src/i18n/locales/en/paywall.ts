@@ -3,14 +3,14 @@ import type ja from '../ja/paywall';
 const paywall: typeof ja = {
   title: 'DAIDOKO Premium',
   subtitle: {
-    one: 'Free AI photo recipes are limited to {{count}} a day.\nWith Premium, use them as much as you like.',
+    one: 'Your first {{count}} AI recipe is free — after that, each ad you watch unlocks one more.\nWith Premium, use them as much as you like.',
     other:
-      'Free AI photo recipes are limited to {{count}} a day.\nWith Premium, use them as much as you like.',
+      'Your first {{count}} AI recipe is free — after that, each ad you watch unlocks one more.\nWith Premium, use them as much as you like.',
   },
 
   benefit: {
     unlimited: 'Unlimited photo recipes',
-    noWorry: 'No daily cap — create one the moment you think of it',
+    noWorry: 'No caps — create one the moment you think of it',
     future: 'Every new feature as it arrives',
   },
 
@@ -31,7 +31,7 @@ const paywall: typeof ja = {
   or: 'or',
   watchAd: 'Watch an ad to earn 1 credit',
   tokenHint: {
-    text: 'Credits you earn never expire. Use them any day your free allowance runs out.',
+    text: 'Credits you earn never expire. Use them whenever you like.',
     intent:
       'MUST convey that earned credits DO NOT EXPIRE. They were day-scoped bonuses before and ' +
       'are now permanent tokens; implying they expire would make the reward look worthless.',
@@ -43,9 +43,8 @@ const paywall: typeof ja = {
 
   thanksTitle: 'Thank you',
   adGranted: {
-    one: "You've earned 1 photo recipe credit ({{count}} left).\nUse it any day your free allowance runs out.",
-    other:
-      "You've earned 1 photo recipe credit ({{count}} left).\nUse it any day your free allowance runs out.",
+    one: "You've earned 1 photo recipe credit ({{count}} left).\nUse it whenever you like.",
+    other: "You've earned 1 photo recipe credit ({{count}} left).\nUse it whenever you like.",
   },
   subscribed: "You're on Premium. Enjoy unlimited photo recipes.",
 

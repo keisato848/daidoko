@@ -21,6 +21,13 @@ const ai = {
       'MUST NOT be softened into a generic "powered by AI" note.',
   } satisfies CriticalMessage,
 
+  /** 枠切れ時に、その場で広告視聴を持ちかけるダイアログ。 */
+  adGate: {
+    title: '無料枠を使い切りました',
+    body: '短い広告を見ると、AIレシピ作成を1回使えます。',
+    watch: '広告を見る',
+  },
+
   error: {
     /** BYOK のキーが無効・権限不足。**待っても直らない**ので、キーを見るよう促す。 */
     apiKey: {

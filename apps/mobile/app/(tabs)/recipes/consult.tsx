@@ -33,7 +33,8 @@ import {
   type ConsultMessage,
 } from '../../../src/services/recipe-consult.provider';
 import { createRecipe } from '../../../src/services/recipe.service';
-import { getFreemiumStatus, recordCloudInference } from '../../../src/services/usage.service';
+import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
+import { recordCloudInference } from '../../../src/services/usage.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
 type Phase = 'chat' | 'confirm';
@@ -70,12 +71,14 @@ export default function ConsultScreen() {
     const text = input.trim();
     if (!text || busy) return;
 
-    // 上限に達しているならペイウォールへ（写真レシピと同じ扱い）
-    const status = await getFreemiumStatus().catch(() => null);
-    if (status && !status.canInfer) {
+    // 枠切れなら、その場で広告視聴を持ちかけてそのまま続行する（2026-08-12）。
+    // ペイウォールは広告を出せないとき（視聴上限・no-fill）の逃げ道
+    const gate = await ensureInferenceCredit();
+    if (gate === 'paywall') {
       router.push('/recipes/paywall');
       return;
     }
+    if (gate !== 'ready') return;
 
     const next: ConsultMessage[] = [...messages, { role: 'user', text }];
     setMessages(next);

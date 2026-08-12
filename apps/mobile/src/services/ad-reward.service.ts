@@ -6,7 +6,7 @@
 import { Platform } from 'react-native';
 
 import { AdMobRewardProvider } from './ad-reward.admob';
-import { ADMOB_ENABLED } from '../config';
+import { ADMOB_ENABLED, ADMOB_REWARDED_UNIT_ID } from '../config';
 import type { AdRewardProvider, RewardedAdResult } from './ad-reward.types';
 
 const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
@@ -29,9 +29,14 @@ export class StubAdRewardProvider implements AdRewardProvider {
 
 let cachedProvider: AdRewardProvider | null = null;
 
-/** Whether real AdMob rewarded ads are wired (env flag + native). */
+/**
+ * Whether real AdMob rewarded ads are wired (env flag + native + unit ID).
+ * **ユニット ID が空なら不成立にする** — admob プロバイダは空をテスト ID に
+ * フォールバックするため、ここで通すと本番ビルドにテスト広告が出る
+ * （iOS のユニットを作る前の iOS ビルドが該当）。
+ */
 export function isAdRewardConfigured(): boolean {
-  return isNative && ADMOB_ENABLED;
+  return isNative && ADMOB_ENABLED && ADMOB_REWARDED_UNIT_ID !== '';
 }
 
 export function getAdRewardProvider(): AdRewardProvider {

@@ -31,10 +31,35 @@ const rawFreeLimit = process.env['EXPO_PUBLIC_FREE_DAILY_LIMIT'];
 const parsedFreeLimit = rawFreeLimit ? Number(rawFreeLimit) : NaN;
 export const FREE_DAILY_LIMIT_CONFIG =
   Number.isInteger(parsedFreeLimit) && parsedFreeLimit >= 0 ? parsedFreeLimit : 1;
-// リワード広告ユニット ID。未設定なら SDK の公式テスト ID（TestIds.REWARDED）を使う。
-export const ADMOB_REWARDED_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID'] ?? '';
-// アプリ起動広告ユニット ID。未設定なら SDK の公式テスト ID（TestIds.APP_OPEN）を使う。
-export const ADMOB_APP_OPEN_UNIT_ID = process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID'] ?? '';
+// ── 広告ユニット ID ─────────────────────────────────────────────────────────
+// AdMob のユニットは**アプリ（=プラットフォーム）ごと**に別物。iOS でも広告を出す方針に
+// なった（2026-08-12）ので、無印 = Android・`_IOS` 付き = iOS として持ち、
+// ここで実行中のプラットフォームのものに解決する。
+//
+// **未設定（空文字）はそのフォーマットを丸ごと無効にする。** admob プロバイダには
+// 「空ならテスト ID」のフォールバックがあるため、ここで空を通してしまうと
+// **本番ビルドにテスト広告が出る**（iOS のユニットを作る前に踏みかけた）。
+// 空かどうかの判定は各サービスの isConfigured 側で行う。
+function platformAdUnit(androidId: string | undefined, iosId: string | undefined): string {
+  return (Platform.OS === 'ios' ? iosId : androidId) ?? '';
+}
+
+// リワード広告ユニット ID。
+export const ADMOB_REWARDED_UNIT_ID = platformAdUnit(
+  process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID'],
+  process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID_IOS'],
+);
+// アプリ起動広告ユニット ID。
+export const ADMOB_APP_OPEN_UNIT_ID = platformAdUnit(
+  process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID'],
+  process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID_IOS'],
+);
+// バナー広告ユニット ID（一覧系画面の下部）。料理中モードには出さない
+// （ストア掲載文で「広告なし」を約束している）。
+export const ADMOB_BANNER_UNIT_ID = platformAdUnit(
+  process.env['EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID'],
+  process.env['EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID_IOS'],
+);
 
 // BYOK（持ち込みキー）で端末から直接呼ぶ Gemini モデル。サーバー側の既定と揃える。
 export const GEMINI_MODEL = process.env['EXPO_PUBLIC_GEMINI_MODEL'] ?? 'gemini-2.5-flash';

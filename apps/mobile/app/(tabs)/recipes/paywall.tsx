@@ -22,7 +22,7 @@ import { getAdRewardProvider } from '../../../src/services/ad-reward.service';
 import { getEntitlementProvider } from '../../../src/services/entitlement.service';
 import { EntitlementUnavailableError } from '../../../src/services/entitlement.types';
 import {
-  FREE_DAILY_LIMIT,
+  FREE_LIFETIME_LIMIT,
   getFreemiumStatus,
   grantAdBonus,
 } from '../../../src/services/usage.service';
@@ -142,7 +142,7 @@ export default function PaywallScreen() {
           <Crown size={40} color={Colors.gold} />
         </View>
         <Text style={styles.title}>{t('paywall.title')}</Text>
-        <Text style={styles.subtitle}>{tCount('paywall.subtitle', FREE_DAILY_LIMIT)}</Text>
+        <Text style={styles.subtitle}>{tCount('paywall.subtitle', FREE_LIFETIME_LIMIT)}</Text>
 
         <View style={styles.benefits}>
           {BENEFIT_KEYS.map((key) => (

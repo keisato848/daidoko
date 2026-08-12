@@ -91,7 +91,7 @@ const settings: typeof ja = {
   coach: {
     planTitle: 'AI features and plans',
     planText:
-      'AI features (photo recipes, ingredient matching, meal photos) have a free daily allowance. Set a Gemini key under “Use your own AI key” to remove the limit.',
+      'AI features (photo recipes, ingredient matching, meal photos) are free once — after that, each ad you watch unlocks one use. Set a Gemini key under “Use your own AI key” to remove the limit.',
     backupTitle: 'Keeping your data safe',
     backupText:
       'Your data lives on this device. Use “Backup & restore” to write it to a file and bring it back.',
