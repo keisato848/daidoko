@@ -49,6 +49,13 @@ import {
   setRecipePinned,
 } from '../../../src/services/recipe.service';
 import type { MemoItem, RecipeDetail, TimelineEntry } from '../../../src/services/types';
+import {
+  getShareBlockReason,
+  getWebShare,
+  publishRecipeToWeb,
+  revokeWebShare,
+  type WebShareRecord,
+} from '../../../src/services/web-share.service';
 import { formatProfileDisplayName } from '../../../src/utils/profile';
 import { formatRecipeShareText } from '../../../src/utils/recipeShareText';
 import { scaleAmount, servingRatio } from '../../../src/utils/shoppingScale';
@@ -90,6 +97,10 @@ export default function RecipeDetailScreen() {
   const pagerRef = useRef<ScrollView>(null);
   const [cookingLogs, setCookingLogs] = useState<TimelineEntry[]>([]);
   const [memos, setMemos] = useState<MemoItem[]>([]);
+  // Web 共有（docs/Web共有設計.md）。判定が終わるまではメニューに出さない
+  const [webShare, setWebShare] = useState<WebShareRecord | null>(null);
+  const [webShareBlocked, setWebShareBlocked] = useState(true);
+  const [webSharePublishing, setWebSharePublishing] = useState(false);
   // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
   const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
   const unitSystem = useUnitSystemStore((state) => state.system);
@@ -115,6 +126,13 @@ export default function RecipeDetailScreen() {
     setMemos(await getMemosForRecipe(id));
   }, [id]);
 
+  const loadWebShareState = useCallback(async () => {
+    if (!id) return;
+    const [blockReason, record] = await Promise.all([getShareBlockReason(id), getWebShare(id)]);
+    setWebShareBlocked(blockReason != null);
+    setWebShare(record);
+  }, [id]);
+
   // 編集モーダルから戻ったときも最新を表示するためフォーカス毎に再取得。
   // メモ・履歴も一緒に取る: スワイプ中は隣のタブが見えるので、
   // タブが切り替わってから読み込むのでは間に合わない
@@ -123,7 +141,8 @@ export default function RecipeDetailScreen() {
       void loadRecipe();
       void loadMemos();
       void loadLogs();
-    }, [loadRecipe, loadMemos, loadLogs]),
+      void loadWebShareState();
+    }, [loadRecipe, loadMemos, loadLogs, loadWebShareState]),
   );
 
   // 初回利用ガイド（コーチマーク）
@@ -199,6 +218,73 @@ export default function RecipeDetailScreen() {
     } catch {
       // 共有シートのキャンセルは無視
     }
+  };
+
+  // Web 共有（アプリなしでも読めるページ。docs/Web共有設計.md）
+  const doWebSharePublish = async () => {
+    if (!recipe || webSharePublishing) return;
+    setWebSharePublishing(true);
+    try {
+      const record = await publishRecipeToWeb(recipe);
+      setWebShare(record);
+      try {
+        await Share.share({ message: `${recipe.title}\n${record.url}` });
+      } catch {
+        // 共有シートのキャンセルは無視（リンクは発行済み — メニューから再共有できる）
+      }
+    } catch {
+      Alert.alert(
+        t('recipe.detail.webShare.failedTitle'),
+        t('recipe.detail.webShare.publishFailedBody'),
+      );
+    } finally {
+      setWebSharePublishing(false);
+    }
+  };
+
+  const handleWebShare = async () => {
+    if (!recipe) return;
+    if (webShare) {
+      // 発行済み — リンクを再共有するだけ
+      try {
+        await Share.share({ message: `${recipe.title}\n${webShare.url}` });
+      } catch {
+        // キャンセルは無視
+      }
+      return;
+    }
+    // 権利面の確認（出所ゲートを通ったレシピにも、テキスト取り込み等の
+    // 出所不明分があるため必ず挟む — docs/Web共有設計.md §2-2）
+    Alert.alert(t('recipe.detail.webShare.attestTitle'), t('recipe.detail.webShare.attestBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('recipe.detail.webShare.attestOk'), onPress: () => void doWebSharePublish() },
+    ]);
+  };
+
+  const handleWebShareStop = () => {
+    if (!id) return;
+    Alert.alert(t('recipe.detail.webShare.stopTitle'), t('recipe.detail.webShare.stopConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('recipe.detail.webShare.stopAction'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await revokeWebShare(id);
+            setWebShare(null);
+            Alert.alert(
+              t('recipe.detail.webShare.stopDoneTitle'),
+              t('recipe.detail.webShare.stopDoneBody'),
+            );
+          } catch {
+            Alert.alert(
+              t('recipe.detail.webShare.failedTitle'),
+              t('recipe.detail.webShare.stopFailedBody'),
+            );
+          }
+        },
+      },
+    ]);
   };
 
   const handleDelete = () => {
@@ -343,6 +429,30 @@ export default function RecipeDetailScreen() {
           >
             <Text style={styles.menuItemText}>{t('recipe.detail.menu.share')}</Text>
           </Pressable>
+          {!webShareBlocked && (
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                void handleWebShare();
+              }}
+            >
+              <Text style={styles.menuItemText}>
+                {webShare ? t('recipe.detail.menu.webShareSend') : t('recipe.detail.menu.webShare')}
+              </Text>
+            </Pressable>
+          )}
+          {!webShareBlocked && webShare && (
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                handleWebShareStop();
+              }}
+            >
+              <Text style={styles.menuItemText}>{t('recipe.detail.menu.webShareStop')}</Text>
+            </Pressable>
+          )}
           <Pressable
             style={styles.menuItem}
             onPress={() => {

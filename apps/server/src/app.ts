@@ -13,6 +13,7 @@ import gardenRouter from './routes/garden.js';
 import importRouter from './routes/import.js';
 import inferRouter from './routes/infer.js';
 import resolveRouter from './routes/resolve.js';
+import { shareApiRouter, sharePageRouter } from './routes/share.js';
 
 export const app = new Hono();
 
@@ -24,7 +25,7 @@ app.use(
   cors({
     origin: ['http://localhost:8081', 'http://localhost:8082', 'http://localhost:19006'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
+    allowHeaders: ['Content-Type', 'Authorization', 'x-share-delete-token'],
   }),
 );
 
@@ -38,6 +39,9 @@ app.route('/api/v1/infer', inferRouter);
 app.route('/api/v1/resolve', resolveRouter);
 // さいえん手帳（家庭菜園アプリ）の相乗りルート。プロンプトはレシピ系と独立
 app.route('/api/v1/garden', gardenRouter);
+// Web 共有（レシピ共有リンク）。/r/* は人間が見る HTML ページ
+app.route('/api/v1/share', shareApiRouter);
+app.route('/r', sharePageRouter);
 
 // ─── 404 / Error ─────────────────────────────────────────────────────────────
 

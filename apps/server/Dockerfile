@@ -7,6 +7,10 @@ RUN corepack enable
 FROM base AS builder
 WORKDIR /app
 
+# better-sqlite3（Web 共有の SQLite）のネイティブビルド用。musl(alpine) 向け
+# プリビルドが無い場合にソースからビルドされる — runner へは成果物だけ渡る
+RUN apk add --no-cache python3 make g++
+
 # Workspace manifests only (cache layer)
 COPY tsconfig.json ./
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
