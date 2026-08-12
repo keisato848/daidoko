@@ -151,6 +151,110 @@ describe('Web 共有', () => {
     }
   });
 
+  describe('レシピ帖（S2）', () => {
+    function bookPayload() {
+      return {
+        attested: true,
+        locale: 'ja',
+        title: 'わが家の定番',
+        description: '家族のいつもの味',
+        recipes: [
+          { ...basePayload(), title: '肉じゃが', attested: undefined, locale: undefined },
+          {
+            title: '卵焼き',
+            ingredients: [{ name: '卵', amount: '3個' }],
+            steps: [{ body: '焼く' }],
+            tags: [],
+            photoBase64: TINY_JPEG_BASE64,
+            photoMime: 'image/jpeg',
+          },
+        ],
+      };
+    }
+
+    async function publishBook(payload: unknown): Promise<Response> {
+      return app.request('/api/v1/share/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }
+
+    it('公開 → /b の URL が返り、ページに目次と全レシピが載る', async () => {
+      const res = await publishBook(bookPayload());
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as { ok: boolean; slug: string; url: string };
+      expect(json.url).toContain(`/b/${json.slug}`);
+
+      const page = await app.request(`/b/${json.slug}`);
+      expect(page.status).toBe(200);
+      expect(page.headers.get('x-robots-tag')).toBe('noindex');
+      const html = await page.text();
+      expect(html).toContain('わが家の定番');
+      expect(html).toContain('収録レシピ'); // 目次
+      expect(html).toContain('肉じゃが');
+      expect(html).toContain('卵焼き');
+      expect(html).toContain('name="robots" content="noindex"');
+    });
+
+    it('attested なしでは公開できない', async () => {
+      expect((await publishBook({ ...bookPayload(), attested: false })).status).toBe(400);
+    });
+
+    it('レシピ 0 件の帖は公開できない', async () => {
+      expect((await publishBook({ ...bookPayload(), recipes: [] })).status).toBe(400);
+    });
+
+    it('写真: 位置つき URL で取得でき、og:image は最初の写真を指す', async () => {
+      const { slug } = (await (await publishBook(bookPayload())).json()) as { slug: string };
+      const html = await (await app.request(`/b/${slug}`)).text();
+      // 1 冊目（肉じゃが）は写真なし → og:image は 2 冊目（index 1）
+      expect(html).toContain(`/b/${slug}/photo/1`);
+      const photo = await app.request(`/b/${slug}/photo/1`);
+      expect(photo.status).toBe(200);
+      expect(photo.headers.get('content-type')).toBe('image/jpeg');
+      expect((await app.request(`/b/${slug}/photo/0`)).status).toBe(404); // 写真なしの位置
+      expect((await app.request(`/b/${slug}/photo/99`)).status).toBe(404);
+    });
+
+    it('取り消し: 誤トークン 403 → 正トークンで帖ごと 404', async () => {
+      const { slug, deleteToken } = (await (await publishBook(bookPayload())).json()) as {
+        slug: string;
+        deleteToken: string;
+      };
+      expect(
+        (
+          await app.request(`/api/v1/share/books/${slug}`, {
+            method: 'DELETE',
+            headers: { 'x-share-delete-token': 'wrong' },
+          })
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await app.request(`/api/v1/share/books/${slug}`, {
+            method: 'DELETE',
+            headers: { 'x-share-delete-token': deleteToken },
+          })
+        ).status,
+      ).toBe(200);
+      expect((await app.request(`/b/${slug}`)).status).toBe(404);
+      expect((await app.request(`/b/${slug}/photo/1`)).status).toBe(404);
+    });
+
+    it('帖のタイトル・レシピ名も HTML エスケープされる', async () => {
+      const payload = bookPayload();
+      payload.title = '<script>x</script>';
+      const first = payload.recipes[0];
+      if (first) first.title = '<img src=x>';
+      const { slug } = (await (await publishBook(payload)).json()) as { slug: string };
+      const html = await (await app.request(`/b/${slug}`)).text();
+      expect(html).not.toContain('<script>x</script>');
+      expect(html).not.toContain('<img src=x>');
+      expect(html).toContain('&lt;script&gt;');
+    });
+  });
+
   it('export: トークン未設定なら 404・設定時は一致ヘッダで全件', async () => {
     expect((await app.request('/api/v1/share/export')).status).toBe(404);
     process.env['SHARE_EXPORT_TOKEN'] = 'test-export-token';

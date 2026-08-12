@@ -159,6 +159,28 @@ const recipe: typeof ja = {
     },
     selectAll: 'Select all',
 
+    bookShare: {
+      action: 'Recipe book',
+      title: 'Share a recipe book on the web',
+      defaultTitle: 'Our recipe book',
+      titlePlaceholder: 'Book name',
+      countNote: {
+        one: 'Bundles the {{count}} selected recipe into one page.',
+        other: 'Bundles the {{count}} selected recipes into one page.',
+      },
+      excludedNote: {
+        one: '({{count}} URL-imported recipe is excluded to respect original sources)',
+        other: '({{count}} URL-imported recipes are excluded to respect original sources)',
+      },
+      attestNote:
+        'Only content you created yourself can be shared. Anyone with the link can view it (no app needed). You can stop sharing anytime from Settings > Web shares.',
+      publish: 'Share',
+      publishing: 'Creating…',
+      failed: 'Could not create the share page. Check your connection and try again.',
+      allExcluded:
+        'All selected recipes were imported from URLs, so they cannot be shared on the web (to respect original sources).',
+    },
+
     deleteTitle: 'Delete recipes',
     deleteConfirm: {
       one: {

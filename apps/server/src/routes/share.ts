@@ -13,8 +13,17 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { renderNotFoundPage, renderSharePage } from '../lib/share-page.js';
-import { createShare, exportAllShares, getActiveShare, revokeShare } from '../lib/share-store.js';
+import { renderBookPage, renderNotFoundPage, renderSharePage } from '../lib/share-page.js';
+import {
+  createBookShare,
+  createShare,
+  exportAllBooks,
+  exportAllShares,
+  getActiveBook,
+  getActiveShare,
+  revokeBookShare,
+  revokeShare,
+} from '../lib/share-store.js';
 
 // ── ベース URL（共有 URL の組み立てと OGP の絶対 URL に使う） ────────────────
 function shareBaseUrl(): string {
@@ -59,10 +68,7 @@ export function resetShareRateLimitForTesting(): void {
 // 写真は長辺 1200px / JPEG q0.7 圧縮後の base64（〜300KB 想定）。余裕を見て 2MB 弾
 const MAX_PHOTO_BASE64_LENGTH = 2_800_000; // ~2MB decoded
 
-const shareRecipeSchema = z.object({
-  /** クライアントの確認ダイアログ（自分で作成した内容）を通った証跡 */
-  attested: z.literal(true),
-  locale: z.enum(['ja', 'en']),
+const shareRecipeBodySchema = z.object({
   title: z.string().trim().min(1).max(200),
   servings: z.number().int().min(1).max(100).optional(),
   cookTimeMin: z.number().int().min(1).max(6000).optional(),
@@ -81,6 +87,21 @@ const shareRecipeSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(30)).max(10),
   photoBase64: z.string().min(1).max(MAX_PHOTO_BASE64_LENGTH).optional(),
   photoMime: z.enum(['image/jpeg', 'image/png', 'image/webp']).optional(),
+});
+
+const shareRecipeSchema = shareRecipeBodySchema.extend({
+  /** クライアントの確認ダイアログ（自分で作成した内容）を通った証跡 */
+  attested: z.literal(true),
+  locale: z.enum(['ja', 'en']),
+});
+
+// レシピ帖（S2）: 複数レシピを 1 ページに。写真込みで重くなるため冊数を絞る
+const shareBookSchema = z.object({
+  attested: z.literal(true),
+  locale: z.enum(['ja', 'en']),
+  title: z.string().trim().min(1).max(100),
+  description: z.string().max(500).optional(),
+  recipes: z.array(shareRecipeBodySchema).min(1).max(20),
 });
 
 function clientIp(headers: { get: (name: string) => string | null | undefined }): string {
@@ -150,12 +171,73 @@ shareApiRouter.delete('/recipes/:slug', (c) => {
   return c.json({ ok: true });
 });
 
+// ── レシピ帖 ─────────────────────────────────────────────────────────────────
+
+function decodePhoto(
+  photoBase64: string | undefined,
+  photoMime: string | undefined,
+): { data: Buffer; mime: string } | undefined {
+  if (!photoBase64 || !photoMime) return undefined;
+  const data = Buffer.from(photoBase64, 'base64');
+  return data.length > 0 ? { data, mime: photoMime } : undefined;
+}
+
+shareApiRouter.post('/books', zValidator('json', shareBookSchema), (c) => {
+  const ip = clientIp({ get: (n) => c.req.header(n) });
+  if (!checkShareRateLimit(`share:${ip}`)) {
+    return c.json(
+      {
+        ok: false,
+        error: { code: 'RATE_LIMITED', message: '本日の共有上限に達しました', retryable: false },
+      },
+      429,
+    );
+  }
+
+  const body = c.req.valid('json');
+  const { slug, deleteToken } = createBookShare({
+    locale: body.locale,
+    title: body.title,
+    description: body.description,
+    recipes: body.recipes.map((recipe) => ({
+      title: recipe.title,
+      servings: recipe.servings,
+      cookTimeMin: recipe.cookTimeMin,
+      description: recipe.description,
+      ingredients: recipe.ingredients,
+      steps: recipe.steps,
+      tags: recipe.tags,
+      photo: decodePhoto(recipe.photoBase64, recipe.photoMime),
+    })),
+  });
+
+  return c.json({ ok: true, slug, url: `${shareBaseUrl()}/b/${slug}`, deleteToken });
+});
+
+shareApiRouter.delete('/books/:slug', (c) => {
+  const token = c.req.header('x-share-delete-token') ?? '';
+  if (token === '') {
+    return c.json(
+      { ok: false, error: { code: 'FORBIDDEN', message: 'トークンがありません' } },
+      403,
+    );
+  }
+  const result = revokeBookShare(c.req.param('slug'), token);
+  if (result === 'not-found') {
+    return c.json({ ok: false, error: { code: 'NOT_FOUND', message: '見つかりません' } }, 404);
+  }
+  if (result === 'forbidden') {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'トークンが違います' } }, 403);
+  }
+  return c.json({ ok: true });
+});
+
 // バックアップ用の全件ダンプ。SHARE_EXPORT_TOKEN 未設定なら存在ごと隠す（404）
 shareApiRouter.get('/export', (c) => {
   const expected = process.env['SHARE_EXPORT_TOKEN'];
   if (!expected || expected.trim() === '') return c.notFound();
   if (c.req.header('x-export-token') !== expected) return c.notFound();
-  return c.json({ ok: true, shares: exportAllShares() });
+  return c.json({ ok: true, shares: exportAllShares(), books: exportAllBooks() });
 });
 
 // ── 閲覧ページ ───────────────────────────────────────────────────────────────
@@ -179,4 +261,27 @@ sharePageRouter.get('/:slug/photo', (c) => {
   return c.body(new Uint8Array(row.photo));
 });
 
-export { shareApiRouter, sharePageRouter };
+// ── レシピ帖 閲覧ページ ──────────────────────────────────────────────────────
+const bookPageRouter = new Hono();
+
+bookPageRouter.get('/:slug', (c) => {
+  const found = getActiveBook(c.req.param('slug'));
+  c.header('X-Robots-Tag', 'noindex');
+  if (!found) {
+    return c.html(renderNotFoundPage(), 404);
+  }
+  return c.html(renderBookPage(found.book, found.recipes, shareBaseUrl()));
+});
+
+bookPageRouter.get('/:slug/photo/:index', (c) => {
+  const found = getActiveBook(c.req.param('slug'));
+  c.header('X-Robots-Tag', 'noindex');
+  const index = Number(c.req.param('index'));
+  const recipe = found && Number.isInteger(index) ? found.recipes[index] : undefined;
+  if (!recipe?.photo || !recipe.photoMime) return c.notFound();
+  c.header('Content-Type', recipe.photoMime);
+  c.header('Cache-Control', 'public, max-age=86400');
+  return c.body(new Uint8Array(recipe.photo));
+});
+
+export { bookPageRouter, shareApiRouter, sharePageRouter };

@@ -4,7 +4,7 @@
  * Long-press enables multi-select mode with bulk delete action.
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ArrowUpDown, Check, Plus, Search, Trash2, X } from 'lucide-react-native';
+import { ArrowUpDown, BookOpen, Check, Plus, Search, Trash2, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -12,6 +12,7 @@ import {
   Image,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -30,8 +31,12 @@ import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { t, tCount } from '../../../src/i18n';
 import { getAliasMap } from '../../../src/services/name-alias.service';
-import { deleteRecipe, getRecipeList } from '../../../src/services/recipe.service';
-import type { RecipeListItem } from '../../../src/services/types';
+import { deleteRecipe, getRecipeDetail, getRecipeList } from '../../../src/services/recipe.service';
+import type { RecipeDetail, RecipeListItem } from '../../../src/services/types';
+import {
+  getUrlImportedRecipeIds,
+  publishRecipeBookToWeb,
+} from '../../../src/services/web-share.service';
 import { recipeMatchesQuery } from '../../../src/utils/recipeSearch';
 import { getRecipeEmoji } from '../../../src/utils/recipeEmoji';
 import {
@@ -149,6 +154,53 @@ export default function RecipeListScreen() {
 
     return sortRecipes(result, sortKey);
   }, [recipes, query, activeTagFilter, sortKey, aliases]);
+
+  // ── レシピ帖の Web 共有（docs/Web共有設計.md S2） ──
+  const [bookSheetOpen, setBookSheetOpen] = useState(false);
+  const [bookTitle, setBookTitle] = useState('');
+  const [bookEligibleIds, setBookEligibleIds] = useState<string[]>([]);
+  const [bookExcludedCount, setBookExcludedCount] = useState(0);
+  const [bookPublishing, setBookPublishing] = useState(false);
+
+  const handleOpenBookSheet = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    // 出所ゲート: URL 取り込み由来は帖に載せられない（転載をサーバーに置かない）
+    const urlImported = await getUrlImportedRecipeIds();
+    const eligible = [...selectedIds].filter((id) => !urlImported.has(id));
+    if (eligible.length === 0) {
+      Alert.alert(t('recipe.list.bookShare.title'), t('recipe.list.bookShare.allExcluded'));
+      return;
+    }
+    setBookEligibleIds(eligible);
+    setBookExcludedCount(selectedIds.size - eligible.length);
+    setBookTitle(t('recipe.list.bookShare.defaultTitle'));
+    setBookSheetOpen(true);
+  }, [selectedIds]);
+
+  const handlePublishBook = useCallback(async () => {
+    if (bookPublishing || bookTitle.trim() === '') return;
+    setBookPublishing(true);
+    try {
+      const details = (await Promise.all(bookEligibleIds.map((id) => getRecipeDetail(id)))).filter(
+        (d): d is RecipeDetail => d != null,
+      );
+      // 選択順ではなく一覧の表示順（絞り込み前の全件順）に並べる — 帖の目次が安定する
+      const order = new Map(recipes.map((r, i) => [r.id, i]));
+      details.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+      const record = await publishRecipeBookToWeb(bookTitle.trim(), details);
+      setBookSheetOpen(false);
+      exitSelectMode();
+      try {
+        await Share.share({ message: `${record.title}\n${record.url}` });
+      } catch {
+        // 共有シートのキャンセルは無視（設定 → Web共有の管理 から再共有できる）
+      }
+    } catch {
+      Alert.alert(t('recipe.list.bookShare.title'), t('recipe.list.bookShare.failed'));
+    } finally {
+      setBookPublishing(false);
+    }
+  }, [bookPublishing, bookTitle, bookEligibleIds, recipes, exitSelectMode]);
 
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;
@@ -362,6 +414,22 @@ export default function RecipeListScreen() {
           <Pressable
             style={[
               styles.actionBtn,
+              styles.actionBtnShare,
+              selectedIds.size === 0 && styles.actionBtnDisabled,
+            ]}
+            onPress={() => void handleOpenBookSheet()}
+            disabled={selectedIds.size === 0}
+          >
+            <BookOpen size={16} color={selectedIds.size === 0 ? Colors.muted : Colors.bg} />
+            <Text
+              style={[styles.actionBtnText, selectedIds.size === 0 && styles.actionBtnTextDisabled]}
+            >
+              {t('recipe.list.bookShare.action')}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.actionBtn,
               styles.actionBtnDelete,
               selectedIds.size === 0 && styles.actionBtnDisabled,
             ]}
@@ -377,6 +445,42 @@ export default function RecipeListScreen() {
           </Pressable>
         </View>
       )}
+
+      {/* ── レシピ帖の Web 共有シート ── */}
+      <BottomSheet
+        visible={bookSheetOpen}
+        onClose={() => setBookSheetOpen(false)}
+        title={t('recipe.list.bookShare.title')}
+      >
+        <Text style={styles.bookSheetNote}>
+          {tCount('recipe.list.bookShare.countNote', bookEligibleIds.length)}
+          {bookExcludedCount > 0 &&
+            ` ${tCount('recipe.list.bookShare.excludedNote', bookExcludedCount)}`}
+        </Text>
+        <TextInput
+          style={styles.bookTitleInput}
+          value={bookTitle}
+          onChangeText={setBookTitle}
+          placeholder={t('recipe.list.bookShare.titlePlaceholder')}
+          placeholderTextColor={Colors.muted}
+          maxLength={100}
+        />
+        <Text style={styles.bookSheetAttest}>{t('recipe.list.bookShare.attestNote')}</Text>
+        <Pressable
+          style={[
+            styles.bookPublishBtn,
+            (bookPublishing || bookTitle.trim() === '') && styles.actionBtnDisabled,
+          ]}
+          onPress={() => void handlePublishBook()}
+          disabled={bookPublishing || bookTitle.trim() === ''}
+        >
+          <Text style={styles.bookPublishBtnText}>
+            {bookPublishing
+              ? t('recipe.list.bookShare.publishing')
+              : t('recipe.list.bookShare.publish')}
+          </Text>
+        </Pressable>
+      </BottomSheet>
 
       <BottomSheet
         visible={sortSheetOpen}
@@ -677,6 +781,43 @@ const styles = StyleSheet.create({
   },
   actionBtnDelete: {
     backgroundColor: '#7A1F1F',
+  },
+  actionBtnShare: {
+    backgroundColor: Colors.gold,
+  },
+  bookSheetNote: {
+    fontSize: 13,
+    color: Colors.muted,
+    marginBottom: 12,
+  },
+  bookTitleInput: {
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: Colors.paper,
+    marginBottom: 12,
+  },
+  bookSheetAttest: {
+    fontSize: 12,
+    color: Colors.muted,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  bookPublishBtn: {
+    backgroundColor: Colors.gold,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bookPublishBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.bg,
   },
   actionBtnDisabled: {
     backgroundColor: Colors.bgCard,

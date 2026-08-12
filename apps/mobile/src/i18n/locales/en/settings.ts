@@ -75,6 +75,8 @@ const settings: typeof ja = {
     syncSubtitle: 'Right now everything is stored on this device only',
     nameAliases: 'Ingredient name dictionary',
     nameAliasesSubtitle: 'Review and fix the names the AI has learned',
+    webShares: 'Web shares',
+    webSharesSubtitle: 'Review or stop shared recipe books',
   },
 
   app: {
@@ -98,6 +100,22 @@ const settings: typeof ja = {
     guideTitle: 'Walkthrough',
     guideText:
       'Tap “?” on any screen to replay its guidance. “Show the walkthrough again” brings back the guidance on every screen.',
+  },
+  webShares: {
+    title: 'Web shares',
+    emptyTitle: 'No shared recipe books',
+    emptyMessage:
+      'In the recipe list, long-press to select multiple recipes, then tap "Recipe book" to share them as one web page.',
+    recipeCount: {
+      one: '{{count}} recipe',
+      other: '{{count}} recipes',
+    },
+    send: 'Send link',
+    stopTitle: 'Stop web sharing',
+    stopConfirm:
+      'This deletes the share page. People with the link will no longer see it. Continue?',
+    stopAction: 'Stop sharing',
+    stopFailed: 'Could not stop sharing. Check your connection and try again.',
   },
 };
 

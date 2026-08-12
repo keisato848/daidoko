@@ -277,6 +277,13 @@ export default function SettingsScreen() {
           enabled: true,
           onPress: () => router.push('/(tabs)/name-aliases'),
         },
+        {
+          id: 'web-shares',
+          label: t('settings.data.webShares'),
+          subtitle: t('settings.data.webSharesSubtitle'),
+          enabled: true,
+          onPress: () => router.push('/(tabs)/web-shares'),
+        },
       ],
     },
     {

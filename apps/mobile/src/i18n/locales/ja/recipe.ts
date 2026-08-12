@@ -175,6 +175,28 @@ const recipe = {
     } satisfies PluralMessage,
     selectAll: 'すべて選択',
 
+    bookShare: {
+      action: 'レシピ帖',
+      title: 'レシピ帖をWebで共有',
+      defaultTitle: 'わが家のレシピ帖',
+      titlePlaceholder: '帖の名前',
+      countNote: {
+        one: '選んだ{{count}}品を1つのページにまとめて共有します。',
+        other: '選んだ{{count}}品を1つのページにまとめて共有します。',
+      } satisfies PluralMessage,
+      excludedNote: {
+        one: '（URL取り込みの{{count}}品は権利保護のため載せられません）',
+        other: '（URL取り込みの{{count}}品は権利保護のため載せられません）',
+      } satisfies PluralMessage,
+      attestNote:
+        '共有できるのは、あなた自身が作成した内容だけです。リンクを知っている人は誰でも見られます（アプリは不要）。設定 → Web共有の管理 から、いつでも停止できます。',
+      publish: '共有する',
+      publishing: '作成中…',
+      failed: '共有ページを作成できませんでした。通信環境を確認してもう一度お試しください。',
+      allExcluded:
+        '選択したレシピはすべてURL取り込み由来のため、Web共有できません（権利保護のため）。',
+    },
+
     deleteTitle: 'レシピを削除',
     /** 一括削除。件数と「取り消せない」の両方が要る。 */
     deleteConfirm: {

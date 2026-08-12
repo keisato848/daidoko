@@ -4,7 +4,11 @@
  *   （転載をサーバーに保存しない — docs/Web共有設計.md §2-2）
  * - ペイロード: attested が必ず true で載る（確認ダイアログ通過の証跡）
  */
-import { buildSharePayload, shareBlockReasonForSourceTypes } from '../web-share.service';
+import {
+  buildShareRecipeBody,
+  buildSharePayload,
+  shareBlockReasonForSourceTypes,
+} from '../web-share.service';
 import type { RecipeDetail } from '../types';
 
 describe('shareBlockReasonForSourceTypes', () => {
@@ -65,5 +69,13 @@ describe('buildSharePayload', () => {
     expect('servings' in payload).toBe(false);
     expect('cookTimeMin' in payload).toBe(false);
     expect('description' in payload).toBe(false);
+  });
+
+  it('帖用の本文（buildShareRecipeBody）には attested / locale が載らない — 帖側で1回だけ付く', () => {
+    const body = buildShareRecipeBody(recipe);
+    expect('attested' in body).toBe(false);
+    expect('locale' in body).toBe(false);
+    expect(body.title).toBe('肉じゃが');
+    expect(body.ingredients).toHaveLength(2);
   });
 });
