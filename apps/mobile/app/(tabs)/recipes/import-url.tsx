@@ -14,6 +14,7 @@ import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
 import { type RecipeDraft, runImportAgent } from '../../../src/agents/import.agent';
 import { createRecipe } from '../../../src/services/recipe.service';
+import { createUrlSource } from '../../../src/services/source.service';
 import { applyAutoStepTimers } from '../../../src/utils/stepTimer';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
@@ -74,11 +75,17 @@ export default function ImportUrlScreen() {
 
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
-      await createRecipe(data);
+      // 出所（URL）を記録する。Web 共有の出所ゲートがこれを見て
+      // 他サイト由来のレシピの共有を封じる（docs/Web共有設計.md §2-2）
+      const sourceId = await createUrlSource({
+        url,
+        ...(draft?.sourceName ? { siteName: draft.sourceName } : {}),
+      });
+      await createRecipe({ ...data, sourceId });
       setShowToast(true);
       setTimeout(() => router.push('/(tabs)/recipes'), 1500);
     },
-    [router],
+    [router, url, draft],
   );
 
   // ── Phase: input ────────────────────────────────────────────────────────────

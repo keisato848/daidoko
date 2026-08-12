@@ -70,7 +70,26 @@ const recipe: typeof ja = {
       refine: 'Get closer to the restaurant taste',
       edit: 'Edit',
       share: 'Share',
+      webShare: 'Share as web page',
+      webShareSend: 'Send web share link',
+      webShareStop: 'Stop web sharing',
       revisions: 'Version history',
+    },
+
+    webShare: {
+      attestTitle: 'Is this your own recipe?',
+      attestBody:
+        'Web sharing is only for content you created yourself. Recipes copied from other sites or books cannot be shared.\n\nAnyone with the link can view this recipe (no app needed). You can stop sharing at any time.',
+      attestOk: 'Share',
+      failedTitle: 'Web share',
+      publishFailedBody: 'Could not create the share page. Check your connection and try again.',
+      stopTitle: 'Stop web sharing',
+      stopConfirm:
+        'This deletes the share page. People with the link will no longer see it. Continue?',
+      stopAction: 'Stop sharing',
+      stopDoneTitle: 'Web sharing stopped',
+      stopDoneBody: 'The share page has been deleted.',
+      stopFailedBody: 'Could not stop sharing. Check your connection and try again.',
     },
 
     pinAdd: 'Add to “Want to recreate”',

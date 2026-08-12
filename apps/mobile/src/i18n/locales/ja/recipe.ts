@@ -81,7 +81,27 @@ const recipe = {
       refine: 'お店の味に近づける',
       edit: '編集',
       share: '共有',
+      webShare: 'Webページで共有',
+      webShareSend: 'Web共有リンクを送る',
+      webShareStop: 'Web共有を停止',
       revisions: '版履歴',
+    },
+
+    webShare: {
+      attestTitle: '自分で作ったレシピですか？',
+      attestBody:
+        'Web共有は、あなた自身が作成した内容だけに使えます。ほかのサイトや本から写した内容は共有できません。\n\n共有すると、リンクを知っている人は誰でもこのレシピを見られます（アプリは不要です）。いつでも停止できます。',
+      attestOk: '共有する',
+      failedTitle: 'Web共有',
+      publishFailedBody:
+        '共有ページを作成できませんでした。通信環境を確認してもう一度お試しください。',
+      stopTitle: 'Web共有を停止',
+      stopConfirm:
+        '共有ページを削除します。リンクを知っている人も見られなくなります。よろしいですか？',
+      stopAction: '停止する',
+      stopDoneTitle: 'Web共有を停止しました',
+      stopDoneBody: '共有ページは削除されました。',
+      stopFailedBody: '停止できませんでした。通信環境を確認してもう一度お試しください。',
     },
 
     pinAdd: '再現したいに追加',

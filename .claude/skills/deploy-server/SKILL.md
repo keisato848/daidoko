@@ -17,15 +17,18 @@ description: Railway 本番サーバー（apps/server）へのデプロイと疎
 1. **環境変数の確認**（値は絶対に表示しない — JSON をファイルに落としてキー名だけ node で列挙し、即削除）
    - 必須: `GEMINI_API_KEY`
    - 追加・変更は本番シークレット書き込みなので**ユーザーの明示承認必須**。拒否されたらユーザー自身に `railway variables --service daidoko --set "KEY=..." --skip-deploys` を依頼
-2. **デプロイはユーザーの明示承認を得てから**: リポジトリルートで
+2. **/data ボリュームの確認**（Web 共有の SQLite。docs/Web共有設計.md）:
+   `railway volume list` に daidoko サービスへの `/data` マウントがあること。
+   無ければ `railway volume add -m /data`（無くても起動はするが共有データが再デプロイで消える）
+3. **デプロイはユーザーの明示承認を得てから**: リポジトリルートで
    `railway up --service daidoko --detach`
-3. **完了ポーリング**: `railway deployment list --service daidoko --json` の先頭 `.status` が `SUCCESS` になるまで（BUILDING → SUCCESS。FAILED なら `railway logs` で調査）
-4. **疎通確認**:
+4. **完了ポーリング**: `railway deployment list --service daidoko --json` の先頭 `.status` が `SUCCESS` になるまで（BUILDING → SUCCESS。FAILED なら `railway logs` で調査）
+5. **疎通確認**:
    - `curl https://daidoko-production.up.railway.app/health`
    - AI エンドポイント（**日本語 POST は Git Bash curl だと CP932 で壊れる — 必ず node fetch で**）:
      `node -e "fetch('https://daidoko-production.up.railway.app/api/v1/resolve/names',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:['たまご']})}).then(r=>r.json()).then(j=>console.log(JSON.stringify(j)))"`
      → `canonical` に `卵` が返れば Gemini まで疎通
-5. 結果（デプロイ ID・status・疎通結果）をユーザーに報告
+6. 結果（デプロイ ID・status・疎通結果）をユーザーに報告
 
 ## 注意
 

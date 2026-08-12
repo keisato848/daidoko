@@ -1,0 +1,209 @@
+/**
+ * 共有レシピページの HTML レンダリング（docs/Web共有設計.md §4）。
+ *
+ * - 全フィールドを HTML エスケープ（ユーザー入力をそのまま埋め込まない）
+ * - noindex（meta とヘッダの両方 — ルート側で X-Robots-Tag も付ける）
+ * - OGP: SNS に貼るとタイトル・説明・写真のカードで展開される
+ * - ブランド準拠のダーク配色（docs/brand/ロゴ仕様.md）・UI 表記は DAIDOKO
+ */
+import type { SharedRecipeRow } from './share-store.js';
+
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.daidoko.app';
+
+const STRINGS = {
+  ja: {
+    servings: (n: number) => `${n}人分`,
+    cookTime: (n: number) => `約${n}分`,
+    ingredients: '材料',
+    steps: '作り方',
+    memo: 'メモ',
+    cta: 'アプリでこのレシピを保存',
+    ctaSub: 'だいどこ — 家族で育てる、台所のレシピ手帳（Android）',
+    footer:
+      'このページは投稿者が共有したレシピです。投稿者が共有を停止すると表示されなくなります。',
+    notFound: 'このレシピは見つかりませんでした',
+    notFoundBody: 'リンクが間違っているか、投稿者が共有を停止しました。',
+  },
+  en: {
+    servings: (n: number) => `Serves ${n}`,
+    cookTime: (n: number) => `About ${n} min`,
+    ingredients: 'Ingredients',
+    steps: 'Steps',
+    memo: 'Notes',
+    cta: 'Save this recipe in the app',
+    ctaSub: 'DAIDOKO — a family recipe notebook (Android)',
+    footer: 'This recipe was shared by its author. It disappears when the author stops sharing.',
+    notFound: 'Recipe not found',
+    notFoundBody: 'The link may be wrong, or the author stopped sharing it.',
+  },
+} as const;
+
+export function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+const PAGE_CSS = `
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0A0805; color: #DCC9A8; font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+         line-height: 1.8; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 20px 48px; }
+  .brand { font-family: Georgia, 'Times New Roman', serif; font-style: italic; letter-spacing: 0.35em;
+           color: #C9A16A; font-size: 13px; text-align: center; padding: 8px 0 20px;
+           border-bottom: 1px solid #2E2418; }
+  .photo { width: 100%; border-radius: 12px; margin: 20px 0 4px; display: block; }
+  h1 { color: #F0E2C8; font-size: 26px; font-weight: 600; margin: 20px 0 6px; }
+  .meta { color: #8A7A5E; font-size: 13px; margin-bottom: 4px; }
+  .tags { color: #8A7A5E; font-size: 12px; }
+  h2 { color: #C9A16A; font-size: 15px; letter-spacing: 0.15em; margin: 28px 0 10px;
+       padding-bottom: 6px; border-bottom: 1px solid #2E2418; }
+  ul.ings { list-style: none; }
+  ul.ings li { display: flex; justify-content: space-between; gap: 12px;
+               padding: 7px 0; border-bottom: 1px dotted #2E2418; font-size: 15px; }
+  ul.ings .amt { color: #8A7A5E; white-space: nowrap; }
+  .grp { color: #C9A16A; font-size: 13px; margin-top: 10px; }
+  ol.steps { list-style: none; counter-reset: s; }
+  ol.steps li { counter-increment: s; display: flex; gap: 12px; padding: 10px 0; font-size: 15px; }
+  ol.steps li::before { content: counter(s); color: #C9A16A; font-family: Georgia, serif;
+                        font-style: italic; font-size: 18px; min-width: 22px; }
+  .memo { font-size: 14px; color: #B8A585; white-space: pre-wrap; }
+  .cta { display: block; text-align: center; background: #C9A16A; color: #0A0805;
+         text-decoration: none; border-radius: 10px; padding: 14px 16px; font-weight: 700;
+         font-size: 15px; margin: 36px 0 8px; }
+  .cta-sub { text-align: center; color: #8A7A5E; font-size: 12px; }
+  .footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid #2E2418;
+            color: #6A5C44; font-size: 11px; text-align: center; }
+`;
+
+interface SharedIngredient {
+  name: string;
+  amount?: string;
+  note?: string;
+  groupLabel?: string;
+}
+
+function parseJsonArray<T>(json: string): T[] {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderIngredients(ings: SharedIngredient[], _locale: 'ja' | 'en'): string {
+  const items: string[] = [];
+  let lastGroup = '';
+  for (const ing of ings) {
+    const group = ing.groupLabel?.trim() ?? '';
+    if (group && group !== lastGroup) {
+      items.push(`<li class="grp">${escapeHtml(group)}</li>`);
+    }
+    lastGroup = group;
+    const amount = [ing.amount, ing.note ? `（${ing.note}）` : ''].filter(Boolean).join(' ').trim();
+    items.push(
+      `<li><span>${escapeHtml(ing.name)}</span><span class="amt">${escapeHtml(amount)}</span></li>`,
+    );
+  }
+  return items.join('\n');
+}
+
+export function renderSharePage(row: SharedRecipeRow, baseUrl: string): string {
+  const locale = row.locale === 'en' ? 'en' : 'ja';
+  const s = STRINGS[locale];
+  const title = escapeHtml(row.title);
+  const ingredients = parseJsonArray<SharedIngredient>(row.ingredientsJson);
+  const steps = parseJsonArray<{ body: string }>(row.stepsJson);
+  const tags = parseJsonArray<string>(row.tagsJson);
+
+  const metaParts = [
+    row.servings != null ? s.servings(row.servings) : null,
+    row.cookTimeMin != null ? s.cookTime(row.cookTimeMin) : null,
+  ].filter(Boolean);
+
+  // OGP の説明: メモがあればそれ、無ければ材料名のプレビュー
+  const ogDescription = escapeHtml(
+    (
+      row.description?.trim() ||
+      ingredients
+        .slice(0, 6)
+        .map((i) => i.name)
+        .join('・')
+    ).slice(0, 120),
+  );
+  const photoUrl = row.photo ? `${baseUrl}/r/${row.slug}/photo` : null;
+
+  return `<!doctype html>
+<html lang="${locale}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${title} | DAIDOKO</title>
+<meta property="og:type" content="article">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${ogDescription}">
+<meta property="og:site_name" content="DAIDOKO">
+${photoUrl ? `<meta property="og:image" content="${escapeHtml(photoUrl)}">\n<meta name="twitter:card" content="summary_large_image">` : `<meta name="twitter:card" content="summary">`}
+<style>${PAGE_CSS}</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">DAIDOKO</div>
+  ${photoUrl ? `<img class="photo" src="${escapeHtml(photoUrl)}" alt="${title}">` : ''}
+  <h1>${title}</h1>
+  ${metaParts.length > 0 ? `<div class="meta">${escapeHtml(metaParts.join(' ・ '))}</div>` : ''}
+  ${tags.length > 0 ? `<div class="tags">${escapeHtml(tags.map((t) => `#${t}`).join(' '))}</div>` : ''}
+  ${
+    ingredients.length > 0
+      ? `<h2>${s.ingredients}</h2>\n<ul class="ings">${renderIngredients(ingredients, locale)}</ul>`
+      : ''
+  }
+  ${
+    steps.length > 0
+      ? `<h2>${s.steps}</h2>\n<ol class="steps">${steps
+          .map((st) => `<li><span>${escapeHtml(st.body)}</span></li>`)
+          .join('\n')}</ol>`
+      : ''
+  }
+  ${
+    row.description?.trim()
+      ? `<h2>${s.memo}</h2>\n<p class="memo">${escapeHtml(row.description.trim())}</p>`
+      : ''
+  }
+  <a class="cta" href="${PLAY_STORE_URL}">${s.cta}</a>
+  <div class="cta-sub">${s.ctaSub}</div>
+  <div class="footer">${s.footer}</div>
+</div>
+</body>
+</html>`;
+}
+
+export function renderNotFoundPage(): string {
+  // 言語は分からない（行が無い）ので日英併記
+  const ja = STRINGS.ja;
+  const en = STRINGS.en;
+  return `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${ja.notFound} | DAIDOKO</title>
+<style>${PAGE_CSS}</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">DAIDOKO</div>
+  <h1>${ja.notFound}</h1>
+  <p>${ja.notFoundBody}</p>
+  <p class="meta">${en.notFound} — ${en.notFoundBody}</p>
+</div>
+</body>
+</html>`;
+}
