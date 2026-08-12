@@ -295,228 +295,238 @@ export default function RecipeListScreen() {
 
   return (
     <View style={styles.container}>
-      {selectMode ? (
-        /* ── 選択モードヘッダー ── */
-        <View style={styles.selectHeader}>
-          <Pressable style={styles.selectCancelBtn} onPress={exitSelectMode}>
-            <X size={18} color={Colors.paper} />
-          </Pressable>
-          <Text style={styles.selectCount}>
-            {tCount('recipe.list.selectCount', selectedIds.size)}
-          </Text>
-          <Pressable style={styles.selectAllBtn} onPress={handleSelectAll}>
-            <Text style={styles.selectAllText}>{t('recipe.list.selectAll')}</Text>
-          </Pressable>
-        </View>
-      ) : (
-        /* ── 通常ヘッダー（検索 + フィルター） ── */
-        <>
-          <View style={styles.searchContainer}>
-            <View ref={searchRef} collapsable={false} style={styles.searchBar}>
-              <Search size={15} color={Colors.muted} />
-              <TextInput
-                style={styles.searchInput}
-                value={query}
-                onChangeText={setQuery}
-                placeholder={t('recipe.list.search')}
-                placeholderTextColor={Colors.muted}
-              />
-            </View>
-            <Pressable
-              style={styles.sortButton}
-              onPress={() => setSortSheetOpen(true)}
-              accessibilityLabel={t('recipe.list.sort')}
-            >
-              <ArrowUpDown size={14} color={Colors.gold} />
-              <Text style={styles.sortButtonText}>{recipeSortLabel(sortKey)}</Text>
+      {/* バナーの上に収めるラッパー。FAB・選択アクションバーは absolute で
+          ここに anchor する — container 直下だとバナーと重なる（AQUOS 実測） */}
+      <View style={styles.content}>
+        {selectMode ? (
+          /* ── 選択モードヘッダー ── */
+          <View style={styles.selectHeader}>
+            <Pressable style={styles.selectCancelBtn} onPress={exitSelectMode}>
+              <X size={18} color={Colors.paper} />
             </Pressable>
-            <HelpButton onPress={coach.show} />
+            <Text style={styles.selectCount}>
+              {tCount('recipe.list.selectCount', selectedIds.size)}
+            </Text>
+            <Pressable style={styles.selectAllBtn} onPress={handleSelectAll}>
+              <Text style={styles.selectAllText}>{t('recipe.list.selectAll')}</Text>
+            </Pressable>
           </View>
+        ) : (
+          /* ── 通常ヘッダー（検索 + フィルター） ── */
+          <>
+            <View style={styles.searchContainer}>
+              <View ref={searchRef} collapsable={false} style={styles.searchBar}>
+                <Search size={15} color={Colors.muted} />
+                <TextInput
+                  style={styles.searchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={t('recipe.list.search')}
+                  placeholderTextColor={Colors.muted}
+                />
+              </View>
+              <Pressable
+                style={styles.sortButton}
+                onPress={() => setSortSheetOpen(true)}
+                accessibilityLabel={t('recipe.list.sort')}
+              >
+                <ArrowUpDown size={14} color={Colors.gold} />
+                <Text style={styles.sortButtonText}>{recipeSortLabel(sortKey)}</Text>
+              </Pressable>
+              <HelpButton onPress={coach.show} />
+            </View>
 
-          <View style={styles.filterContainer}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterContent}
-            >
-              {tagFilters.map((tag) => (
-                <Pressable
-                  key={tag ?? '__all__'}
-                  style={[styles.filterChip, activeTagFilter === tag && styles.filterChipActive]}
-                  onPress={() => setActiveTagFilter(tag)}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      activeTagFilter === tag && styles.filterChipTextActive,
-                    ]}
+            <View style={styles.filterContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterContent}
+              >
+                {tagFilters.map((tag) => (
+                  <Pressable
+                    key={tag ?? '__all__'}
+                    style={[styles.filterChip, activeTagFilter === tag && styles.filterChipActive]}
+                    onPress={() => setActiveTagFilter(tag)}
                   >
-                    {tag ?? t('recipe.list.filterAll')}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          {query.length > 0 && (
-            <View style={styles.searchHint}>
-              <Text style={styles.searchHintText}>
-                {tCount('recipe.list.countSuffix', filtered.length)}
-                {filtered.some((r) => getMatchedIngredients(r).length > 0) && (
-                  <Text style={styles.searchHintHighlight}>
-                    {t('recipe.list.ingredientHitNote')}
-                  </Text>
-                )}
-              </Text>
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        activeTagFilter === tag && styles.filterChipTextActive,
+                      ]}
+                    >
+                      {tag ?? t('recipe.list.filterAll')}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
-          )}
-        </>
-      )}
 
-      {loading ? (
-        <Loading message={t('recipe.list.loading')} />
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          renderItem={renderRecipeCard}
-          numColumns={2}
-          columnWrapperStyle={filtered.length > 0 ? styles.row : undefined}
-          contentContainerStyle={[
-            styles.grid,
-            selectMode && styles.gridWithActionBar,
-            filtered.length === 0 && styles.gridEmpty,
-          ]}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            recipes.length === 0 ? (
-              <EmptyState
-                icon="📖"
-                title={t('recipe.list.emptyTitle')}
-                message={t('recipe.list.emptyMessage')}
-                actionLabel={t('recipe.list.emptyAction')}
-                onAction={() => router.push('/(tabs)/add')}
-              />
-            ) : (
-              <EmptyState
-                icon="🔍"
-                title={t('recipe.list.noMatchTitle')}
-                message={t('recipe.list.noMatchMessage')}
-              />
-            )
-          }
-        />
-      )}
+            {query.length > 0 && (
+              <View style={styles.searchHint}>
+                <Text style={styles.searchHintText}>
+                  {tCount('recipe.list.countSuffix', filtered.length)}
+                  {filtered.some((r) => getMatchedIngredients(r).length > 0) && (
+                    <Text style={styles.searchHintHighlight}>
+                      {t('recipe.list.ingredientHitNote')}
+                    </Text>
+                  )}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
 
-      {/* ── 選択モード アクションバー ── */}
-      {selectMode && (
-        <View style={styles.actionBar}>
-          <Pressable
-            style={[
-              styles.actionBtn,
-              styles.actionBtnShare,
-              selectedIds.size === 0 && styles.actionBtnDisabled,
+        {loading ? (
+          <Loading message={t('recipe.list.loading')} />
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            renderItem={renderRecipeCard}
+            numColumns={2}
+            columnWrapperStyle={filtered.length > 0 ? styles.row : undefined}
+            contentContainerStyle={[
+              styles.grid,
+              selectMode && styles.gridWithActionBar,
+              filtered.length === 0 && styles.gridEmpty,
             ]}
-            onPress={() => void handleOpenBookSheet()}
-            disabled={selectedIds.size === 0}
-          >
-            <BookOpen size={16} color={selectedIds.size === 0 ? Colors.muted : Colors.bg} />
-            <Text
-              style={[styles.actionBtnText, selectedIds.size === 0 && styles.actionBtnTextDisabled]}
-            >
-              {t('recipe.list.bookShare.action')}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.actionBtn,
-              styles.actionBtnDelete,
-              selectedIds.size === 0 && styles.actionBtnDisabled,
-            ]}
-            onPress={handleBulkDelete}
-            disabled={selectedIds.size === 0}
-          >
-            <Trash2 size={16} color={selectedIds.size === 0 ? Colors.muted : Colors.bg} />
-            <Text
-              style={[styles.actionBtnText, selectedIds.size === 0 && styles.actionBtnTextDisabled]}
-            >
-              {t('common.delete')}
-            </Text>
-          </Pressable>
-        </View>
-      )}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              recipes.length === 0 ? (
+                <EmptyState
+                  icon="📖"
+                  title={t('recipe.list.emptyTitle')}
+                  message={t('recipe.list.emptyMessage')}
+                  actionLabel={t('recipe.list.emptyAction')}
+                  onAction={() => router.push('/(tabs)/add')}
+                />
+              ) : (
+                <EmptyState
+                  icon="🔍"
+                  title={t('recipe.list.noMatchTitle')}
+                  message={t('recipe.list.noMatchMessage')}
+                />
+              )
+            }
+          />
+        )}
 
-      {/* ── レシピ帖の Web 共有シート ── */}
-      <BottomSheet
-        visible={bookSheetOpen}
-        onClose={() => setBookSheetOpen(false)}
-        title={t('recipe.list.bookShare.title')}
-      >
-        <Text style={styles.bookSheetNote}>
-          {tCount('recipe.list.bookShare.countNote', bookEligibleIds.length)}
-          {bookExcludedCount > 0 &&
-            ` ${tCount('recipe.list.bookShare.excludedNote', bookExcludedCount)}`}
-        </Text>
-        <TextInput
-          style={styles.bookTitleInput}
-          value={bookTitle}
-          onChangeText={setBookTitle}
-          placeholder={t('recipe.list.bookShare.titlePlaceholder')}
-          placeholderTextColor={Colors.muted}
-          maxLength={100}
-        />
-        <Text style={styles.bookSheetAttest}>{t('recipe.list.bookShare.attestNote')}</Text>
-        <Pressable
-          style={[
-            styles.bookPublishBtn,
-            (bookPublishing || bookTitle.trim() === '') && styles.actionBtnDisabled,
-          ]}
-          onPress={() => void handlePublishBook()}
-          disabled={bookPublishing || bookTitle.trim() === ''}
-        >
-          <Text style={styles.bookPublishBtnText}>
-            {bookPublishing
-              ? t('recipe.list.bookShare.publishing')
-              : t('recipe.list.bookShare.publish')}
-          </Text>
-        </Pressable>
-      </BottomSheet>
-
-      <BottomSheet
-        visible={sortSheetOpen}
-        onClose={() => setSortSheetOpen(false)}
-        title={t('recipe.list.sort')}
-      >
-        {RECIPE_SORT_KEYS.map((option) => {
-          const active = option === sortKey;
-          return (
+        {/* ── 選択モード アクションバー ── */}
+        {selectMode && (
+          <View style={styles.actionBar}>
             <Pressable
-              key={option}
-              style={styles.sortOption}
-              onPress={() => {
-                setSortKey(option);
-                setSortSheetOpen(false);
-              }}
+              style={[
+                styles.actionBtn,
+                styles.actionBtnShare,
+                selectedIds.size === 0 && styles.actionBtnDisabled,
+              ]}
+              onPress={() => void handleOpenBookSheet()}
+              disabled={selectedIds.size === 0}
             >
-              <Text style={[styles.sortOptionText, active && styles.sortOptionTextActive]}>
-                {recipeSortLabel(option)}
+              <BookOpen size={16} color={selectedIds.size === 0 ? Colors.muted : Colors.bg} />
+              <Text
+                style={[
+                  styles.actionBtnText,
+                  selectedIds.size === 0 && styles.actionBtnTextDisabled,
+                ]}
+              >
+                {t('recipe.list.bookShare.action')}
               </Text>
-              {active && <Check size={18} color={Colors.gold} />}
             </Pressable>
-          );
-        })}
-      </BottomSheet>
+            <Pressable
+              style={[
+                styles.actionBtn,
+                styles.actionBtnDelete,
+                selectedIds.size === 0 && styles.actionBtnDisabled,
+              ]}
+              onPress={handleBulkDelete}
+              disabled={selectedIds.size === 0}
+            >
+              <Trash2 size={16} color={selectedIds.size === 0 ? Colors.muted : Colors.bg} />
+              <Text
+                style={[
+                  styles.actionBtnText,
+                  selectedIds.size === 0 && styles.actionBtnTextDisabled,
+                ]}
+              >
+                {t('common.delete')}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
-      {!selectMode && (
-        <Pressable
-          style={styles.addFab}
-          onPress={() => router.push('/(tabs)/add')}
-          accessibilityRole="button"
-          accessibilityLabel={t('recipe.list.addLabel')}
+        {/* ── レシピ帖の Web 共有シート ── */}
+        <BottomSheet
+          visible={bookSheetOpen}
+          onClose={() => setBookSheetOpen(false)}
+          title={t('recipe.list.bookShare.title')}
         >
-          <Plus size={24} color={Colors.bg} />
-        </Pressable>
-      )}
+          <Text style={styles.bookSheetNote}>
+            {tCount('recipe.list.bookShare.countNote', bookEligibleIds.length)}
+            {bookExcludedCount > 0 &&
+              ` ${tCount('recipe.list.bookShare.excludedNote', bookExcludedCount)}`}
+          </Text>
+          <TextInput
+            style={styles.bookTitleInput}
+            value={bookTitle}
+            onChangeText={setBookTitle}
+            placeholder={t('recipe.list.bookShare.titlePlaceholder')}
+            placeholderTextColor={Colors.muted}
+            maxLength={100}
+          />
+          <Text style={styles.bookSheetAttest}>{t('recipe.list.bookShare.attestNote')}</Text>
+          <Pressable
+            style={[
+              styles.bookPublishBtn,
+              (bookPublishing || bookTitle.trim() === '') && styles.actionBtnDisabled,
+            ]}
+            onPress={() => void handlePublishBook()}
+            disabled={bookPublishing || bookTitle.trim() === ''}
+          >
+            <Text style={styles.bookPublishBtnText}>
+              {bookPublishing
+                ? t('recipe.list.bookShare.publishing')
+                : t('recipe.list.bookShare.publish')}
+            </Text>
+          </Pressable>
+        </BottomSheet>
+
+        <BottomSheet
+          visible={sortSheetOpen}
+          onClose={() => setSortSheetOpen(false)}
+          title={t('recipe.list.sort')}
+        >
+          {RECIPE_SORT_KEYS.map((option) => {
+            const active = option === sortKey;
+            return (
+              <Pressable
+                key={option}
+                style={styles.sortOption}
+                onPress={() => {
+                  setSortKey(option);
+                  setSortSheetOpen(false);
+                }}
+              >
+                <Text style={[styles.sortOptionText, active && styles.sortOptionTextActive]}>
+                  {recipeSortLabel(option)}
+                </Text>
+                {active && <Check size={18} color={Colors.gold} />}
+              </Pressable>
+            );
+          })}
+        </BottomSheet>
+
+        {!selectMode && (
+          <Pressable
+            style={styles.addFab}
+            onPress={() => router.push('/(tabs)/add')}
+            accessibilityRole="button"
+            accessibilityLabel={t('recipe.list.addLabel')}
+          >
+            <Plus size={24} color={Colors.bg} />
+          </Pressable>
+        )}
+      </View>
 
       <AdBanner />
       <CoachMarkOverlay
@@ -533,6 +543,9 @@ export default function RecipeListScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg, paddingTop: 54 },
+  content: {
+    flex: 1,
+  },
   addFab: {
     position: 'absolute',
     right: 20,
