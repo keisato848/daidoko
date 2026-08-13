@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { getDb, getExpoDb, isNativePlatform } from '../db/client';
 import { rebuildFts } from '../db/migrate';
 import { getAppMeta, setAppMeta } from './app-meta.service';
+import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
 import { t } from '../i18n';
 
 const BACKUP_FORMAT = 'daidoko.local-backup';
@@ -791,7 +792,9 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
     const localPath = rowString(row, 'local_path');
     if (!photoId || !localPath) continue;
 
-    const info = await FileSystem.getInfoAsync(localPath);
+    // DB は相対パス（旧データは絶対）。実ファイルに触る前に必ず解決する
+    const photoUri = resolvePhotoUri(localPath);
+    const info = await FileSystem.getInfoAsync(photoUri);
     if (!info.exists) {
       updatePhotoLocalPath(payload, photoId, null);
       continue;
@@ -799,7 +802,7 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
 
     const archivePath = createMigrationPhotoArchivePath(photoId, localPath);
     const fileName = archivePath.split('/').pop() ?? `${photoId}.jpg`;
-    const photoBase64 = await FileSystem.readAsStringAsync(localPath, {
+    const photoBase64 = await FileSystem.readAsStringAsync(photoUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
     zipEntries[archivePath] = base64ToUint8Array(photoBase64);
@@ -816,7 +819,8 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
     const localPath = rowString(row, column);
     if (!ownerId || !localPath) return;
 
-    const info = await FileSystem.getInfoAsync(localPath);
+    const photoUri = resolvePhotoUri(localPath);
+    const info = await FileSystem.getInfoAsync(photoUri);
     if (!info.exists) {
       row[column] = null;
       return;
@@ -824,7 +828,7 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
 
     const archivePath = createMigrationRecipePhotoArchivePath(ownerType, ownerId, localPath);
     const fileName = archivePath.split('/').pop() ?? `${ownerId}.jpg`;
-    const photoBase64 = await FileSystem.readAsStringAsync(localPath, {
+    const photoBase64 = await FileSystem.readAsStringAsync(photoUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
     zipEntries[archivePath] = base64ToUint8Array(photoBase64);
@@ -943,7 +947,7 @@ export async function restoreMigrationBackupPackage(
         encoding: FileSystem.EncodingType.Base64,
       });
       copiedPhotoUris.push(destination);
-      updatePhotoLocalPath(payload, photo.id, destination);
+      updatePhotoLocalPath(payload, photo.id, toStoredPhotoPath(destination));
       restoredPhotoCount += 1;
     }
 
@@ -960,7 +964,7 @@ export async function restoreMigrationBackupPackage(
         encoding: FileSystem.EncodingType.Base64,
       });
       copiedPhotoUris.push(destination);
-      updateRecipePhotoPath(payload, photo, destination);
+      updateRecipePhotoPath(payload, photo, toStoredPhotoPath(destination));
       restoredPhotoCount += 1;
     }
 
