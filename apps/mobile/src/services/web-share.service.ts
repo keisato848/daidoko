@@ -131,7 +131,7 @@ export function buildSharePayload(recipe: RecipeDetail, locale: 'ja' | 'en'): Sh
 }
 
 /** 表紙（無ければヒーロー）写真を Web 用に縮小して base64 で返す。失敗したら写真なしで進む */
-async function readShareTimePhoto(recipe: RecipeDetail): Promise<string | null> {
+export async function readShareTimePhoto(recipe: RecipeDetail): Promise<string | null> {
   const uri = recipe.coverPhotoPath ?? recipe.heroPhotoUri;
   if (!uri) return null;
   try {

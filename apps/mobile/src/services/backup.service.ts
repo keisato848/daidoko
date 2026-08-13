@@ -200,6 +200,30 @@ export const BACKUP_TABLES = [
     columns: ['id', 'family_id', 'source_normalized', 'canonical', 'updated_at'],
     optional: true,
   },
+  // レシピ帖（S4）。共有トークンごと復元する — 別端末に復元しても共有を止められるように
+  {
+    name: 'recipe_books',
+    columns: [
+      'id',
+      'title',
+      'created_at',
+      'updated_at',
+      'share_slug',
+      'share_url',
+      'share_delete_token',
+      'shared_at',
+      'share_locale',
+      'share_passcode',
+      'share_expires_at',
+      'is_legacy_share',
+    ],
+    optional: true,
+  },
+  {
+    name: 'recipe_book_items',
+    columns: ['book_id', 'recipe_id', 'position'],
+    optional: true,
+  },
 ] as const;
 
 type BackupTableName = (typeof BACKUP_TABLES)[number]['name'];
@@ -349,6 +373,8 @@ function createEmptyBackupTables(): BackupTables {
     shopping_items: [],
     jan_catalog: [],
     name_aliases: [],
+    recipe_books: [],
+    recipe_book_items: [],
   };
 }
 

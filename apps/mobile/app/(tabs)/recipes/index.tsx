@@ -31,12 +31,14 @@ import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { t, tCount } from '../../../src/i18n';
 import { getAliasMap } from '../../../src/services/name-alias.service';
-import { deleteRecipe, getRecipeDetail, getRecipeList } from '../../../src/services/recipe.service';
-import type { RecipeDetail, RecipeListItem } from '../../../src/services/types';
+import { deleteRecipe, getRecipeList } from '../../../src/services/recipe.service';
+import type { RecipeListItem } from '../../../src/services/types';
 import {
-  getUrlImportedRecipeIds,
-  publishRecipeBookToWeb,
-} from '../../../src/services/web-share.service';
+  createRecipeBook,
+  getRecipeBook,
+  shareRecipeBook,
+} from '../../../src/services/recipe-book.service';
+import { getUrlImportedRecipeIds } from '../../../src/services/web-share.service';
 import { recipeMatchesQuery } from '../../../src/utils/recipeSearch';
 import { getRecipeEmoji } from '../../../src/utils/recipeEmoji';
 import {
@@ -177,30 +179,49 @@ export default function RecipeListScreen() {
     setBookSheetOpen(true);
   }, [selectedIds]);
 
+  /** 帖を作る（S4: 帖はローカルの実体）。選択順ではなく一覧の表示順で収録する */
+  const createBookFromSelection = useCallback(async (): Promise<string> => {
+    const order = new Map(recipes.map((r, i) => [r.id, i]));
+    const ordered = [...selectedIds].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
+    return createRecipeBook(bookTitle.trim(), ordered);
+  }, [bookTitle, recipes, selectedIds]);
+
+  const handleCreateBookOnly = useCallback(async () => {
+    if (bookPublishing || bookTitle.trim() === '') return;
+    setBookPublishing(true);
+    try {
+      const id = await createBookFromSelection();
+      setBookSheetOpen(false);
+      exitSelectMode();
+      router.push({ pathname: '/(tabs)/book-edit', params: { id } });
+    } catch {
+      Alert.alert(t('recipe.list.bookShare.title'), t('recipe.list.bookShare.failed'));
+    } finally {
+      setBookPublishing(false);
+    }
+  }, [bookPublishing, bookTitle, createBookFromSelection, exitSelectMode, router]);
+
   const handlePublishBook = useCallback(async () => {
     if (bookPublishing || bookTitle.trim() === '') return;
     setBookPublishing(true);
     try {
-      const details = (await Promise.all(bookEligibleIds.map((id) => getRecipeDetail(id)))).filter(
-        (d): d is RecipeDetail => d != null,
-      );
-      // 選択順ではなく一覧の表示順（絞り込み前の全件順）に並べる — 帖の目次が安定する
-      const order = new Map(recipes.map((r, i) => [r.id, i]));
-      details.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-      const record = await publishRecipeBookToWeb(bookTitle.trim(), details);
+      const id = await createBookFromSelection();
+      // 即共有はパスコード・期限なしの既定で出す（後から帖の管理で設定できる）
+      await shareRecipeBook(id, { passcode: null, expiresInDays: null });
+      const book = await getRecipeBook(id);
       setBookSheetOpen(false);
       exitSelectMode();
       try {
-        await Share.share({ message: `${record.title}\n${record.url}` });
+        if (book?.shareUrl) await Share.share({ message: `${book.title}\n${book.shareUrl}` });
       } catch {
-        // 共有シートのキャンセルは無視（設定 → Web共有の管理 から再共有できる）
+        // 共有シートのキャンセルは無視（設定 → レシピ帖の管理 から再共有できる）
       }
     } catch {
       Alert.alert(t('recipe.list.bookShare.title'), t('recipe.list.bookShare.failed'));
     } finally {
       setBookPublishing(false);
     }
-  }, [bookPublishing, bookTitle, bookEligibleIds, recipes, exitSelectMode]);
+  }, [bookPublishing, bookTitle, createBookFromSelection, exitSelectMode]);
 
   const handleBulkDelete = useCallback(() => {
     const count = selectedIds.size;
@@ -487,6 +508,18 @@ export default function RecipeListScreen() {
               {bookPublishing
                 ? t('recipe.list.bookShare.publishing')
                 : t('recipe.list.bookShare.publish')}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.bookCreateOnlyBtn,
+              (bookPublishing || bookTitle.trim() === '') && styles.actionBtnDisabled,
+            ]}
+            onPress={() => void handleCreateBookOnly()}
+            disabled={bookPublishing || bookTitle.trim() === ''}
+          >
+            <Text style={styles.bookCreateOnlyBtnText}>
+              {t('recipe.list.bookShare.createOnly')}
             </Text>
           </Pressable>
         </BottomSheet>
@@ -831,6 +864,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: Colors.bg,
+  },
+  bookCreateOnlyBtn: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bookCreateOnlyBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.paper,
   },
   actionBtnDisabled: {
     backgroundColor: Colors.bgCard,

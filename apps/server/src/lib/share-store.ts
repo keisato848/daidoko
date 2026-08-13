@@ -51,6 +51,10 @@ export const sharedBooks = sqliteTable('shared_books', {
   description: text('description'),
   createdAt: text('created_at').notNull(),
   revokedAt: text('revoked_at'),
+  /** 有効期限（ISO）。超えたら 404 と同じ扱い（S4-2） */
+  expiresAt: text('expires_at'),
+  /** パスコード（数字4桁）の SHA-256(slug + ':' + passcode)。NULL = 保護なし（S4-2） */
+  passcodeHash: text('passcode_hash'),
 });
 
 export const sharedBookRecipes = sqliteTable('shared_book_recipes', {
@@ -96,7 +100,9 @@ CREATE TABLE IF NOT EXISTS shared_books (
   title             TEXT NOT NULL,
   description       TEXT,
   created_at        TEXT NOT NULL,
-  revoked_at        TEXT
+  revoked_at        TEXT,
+  expires_at        TEXT,
+  passcode_hash     TEXT
 );
 CREATE TABLE IF NOT EXISTS shared_book_recipes (
   book_slug         TEXT NOT NULL,
@@ -133,6 +139,16 @@ export function getShareDb(): BetterSQLite3Database {
   const sqlite = new Database(dbPath);
   sqlite.pragma('journal_mode = WAL');
   sqlite.exec(DDL);
+  // 既存 DB への追い付き（CREATE IF NOT EXISTS は列を足せない）。冪等
+  const bookCols = (sqlite.pragma('table_info(shared_books)') as { name: string }[]).map(
+    (c) => c.name,
+  );
+  if (!bookCols.includes('expires_at')) {
+    sqlite.exec('ALTER TABLE shared_books ADD COLUMN expires_at TEXT');
+  }
+  if (!bookCols.includes('passcode_hash')) {
+    sqlite.exec('ALTER TABLE shared_books ADD COLUMN passcode_hash TEXT');
+  }
   dbSingleton = drizzle(sqlite);
   return dbSingleton;
 }
@@ -243,7 +259,21 @@ export interface CreateBookShareInput {
   }[];
 }
 
-export function createBookShare(input: CreateBookShareInput): CreateShareResult {
+/** slug をソルトにする（同じ 4 桁でも帖ごとにハッシュが変わる） */
+function hashPasscode(slug: string, passcode: string): string {
+  return createHash('sha256').update(`${slug}:${passcode}`).digest('hex');
+}
+
+/** 期限・パスコードの公開設定（S4-2）。undefined = 指定なし（新規は無し扱い） */
+export interface ShareAccessInput {
+  expiresAt?: string | null | undefined;
+  passcode?: string | null | undefined;
+}
+
+export function createBookShare(
+  input: CreateBookShareInput,
+  access: ShareAccessInput = {},
+): CreateShareResult {
   const db = getShareDb();
   const slug = randomBytes(9).toString('base64url');
   const deleteToken = randomBytes(24).toString('base64url');
@@ -255,9 +285,20 @@ export function createBookShare(input: CreateBookShareInput): CreateShareResult 
       title: input.title,
       description: input.description ?? null,
       createdAt: new Date().toISOString(),
+      expiresAt: access.expiresAt ?? null,
+      passcodeHash: access.passcode ? hashPasscode(slug, access.passcode) : null,
     })
     .run();
-  input.recipes.forEach((recipe, position) => {
+  insertBookRecipes(db, slug, input.recipes);
+  return { slug, deleteToken };
+}
+
+function insertBookRecipes(
+  db: BetterSQLite3Database,
+  slug: string,
+  recipes: CreateBookShareInput['recipes'],
+): void {
+  recipes.forEach((recipe, position) => {
     db.insert(sharedBookRecipes)
       .values({
         bookSlug: slug,
@@ -274,7 +315,41 @@ export function createBookShare(input: CreateBookShareInput): CreateShareResult 
       })
       .run();
   });
-  return { slug, deleteToken };
+}
+
+export type UpdateBookResult = 'updated' | 'not-found' | 'forbidden';
+
+/**
+ * 帖の中身をまるごと差し替える（S4）。slug と削除トークンは不変 —
+ * 配ったリンクを生かしたまま育てられるのがこの API の目的。
+ * 差分更新はしない（単純さを取る）。
+ */
+export function updateBookShare(
+  slug: string,
+  deleteToken: string,
+  input: CreateBookShareInput,
+  access: ShareAccessInput = {},
+): UpdateBookResult {
+  const db = getShareDb();
+  const rows = db.select().from(sharedBooks).where(eq(sharedBooks.slug, slug)).all();
+  const row = rows[0];
+  if (!row || row.revokedAt) return 'not-found';
+  const expected = Buffer.from(row.deleteTokenHash, 'hex');
+  const actual = Buffer.from(hashToken(deleteToken), 'hex');
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return 'forbidden';
+  db.update(sharedBooks)
+    .set({
+      locale: input.locale,
+      title: input.title,
+      description: input.description ?? null,
+      expiresAt: access.expiresAt ?? null,
+      passcodeHash: access.passcode ? hashPasscode(slug, access.passcode) : null,
+    })
+    .where(eq(sharedBooks.slug, slug))
+    .run();
+  db.delete(sharedBookRecipes).where(eq(sharedBookRecipes.bookSlug, slug)).run();
+  insertBookRecipes(db, slug, input.recipes);
+  return 'updated';
 }
 
 export function getActiveBook(
@@ -288,6 +363,8 @@ export function getActiveBook(
     .all();
   const book = books[0];
   if (!book) return null;
+  // 期限切れは 404 と同じ扱い（存在を漏らさない）
+  if (book.expiresAt && book.expiresAt < new Date().toISOString()) return null;
   const recipes = db
     .select()
     .from(sharedBookRecipes)
@@ -295,6 +372,62 @@ export function getActiveBook(
     .orderBy(sharedBookRecipes.position)
     .all();
   return { book, recipes };
+}
+
+// ── パスコード検証（S4-2）─────────────────────────────────────────────────────
+// 4 桁 = 1 万通りなので総当たり対策が必須。slug ごとに失敗を数えてロックする。
+// カウンタはメモリ（再起動でリセット — 許容。ロック時間より再起動間隔の方が長い）
+
+const PASSCODE_MAX_FAILS = 5;
+const PASSCODE_LOCK_MS = 15 * 60 * 1000;
+const passcodeFails = new Map<string, { count: number; lockedUntil: number }>();
+
+export type PasscodeCheck = 'ok' | 'wrong' | 'locked';
+
+export function verifyBookPasscode(slug: string, passcode: string): PasscodeCheck {
+  const now = Date.now();
+  const state = passcodeFails.get(slug);
+  if (state && state.lockedUntil > now) return 'locked';
+  const book = getActiveBook(slug)?.book;
+  if (!book?.passcodeHash) return 'wrong';
+  const expected = Buffer.from(book.passcodeHash, 'hex');
+  const actual = Buffer.from(hashPasscode(slug, passcode), 'hex');
+  const ok = expected.length === actual.length && timingSafeEqual(expected, actual);
+  if (ok) {
+    passcodeFails.delete(slug);
+    return 'ok';
+  }
+  const count = (state?.count ?? 0) + 1;
+  passcodeFails.set(slug, {
+    count,
+    lockedUntil: count >= PASSCODE_MAX_FAILS ? now + PASSCODE_LOCK_MS : 0,
+  });
+  return 'wrong';
+}
+
+/** テスト用: ロックカウンタを破棄 */
+export function resetPasscodeFailsForTesting(): void {
+  passcodeFails.clear();
+}
+
+// 認証済み Cookie の署名。プロセス毎の使い捨て鍵（再起動で再入力 — 許容・設定不要）
+const cookieSecret = randomBytes(32);
+
+export function makeBookCookie(slug: string): string {
+  const book = getActiveBook(slug)?.book;
+  return createHash('sha256')
+    .update(cookieSecret)
+    .update(`${slug}:${book?.passcodeHash ?? ''}`)
+    .digest('base64url');
+}
+
+/** パスコード変更で古い Cookie が自動失効する（ハッシュを署名対象に含むため） */
+export function verifyBookCookie(slug: string, cookie: string | undefined): boolean {
+  if (!cookie) return false;
+  const expected = makeBookCookie(slug);
+  const a = Buffer.from(expected);
+  const b = Buffer.from(cookie);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export function revokeBookShare(slug: string, deleteToken: string): RevokeResult {

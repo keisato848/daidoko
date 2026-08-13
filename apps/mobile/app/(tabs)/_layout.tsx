@@ -72,6 +72,7 @@ export default function TabLayout() {
       <Tabs.Screen name="consume-meal" options={{ href: null }} />
       <Tabs.Screen name="name-aliases" options={{ href: null }} />
       <Tabs.Screen name="web-shares" options={{ href: null }} />
+      <Tabs.Screen name="book-edit" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-photo" options={{ href: null }} />
       <Tabs.Screen name="recipes/consult" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-ocr" options={{ href: null }} />

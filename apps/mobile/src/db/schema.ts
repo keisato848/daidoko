@@ -393,3 +393,40 @@ export const nameAliases = sqliteTable(
     ),
   }),
 );
+
+// ─── RecipeBook（レシピ帖, S4 — docs/Web共有設計.md §7）───────────────────────
+// 帖はローカルの実体。共有は任意の後続で、share_* が NULL なら未共有。
+// share_delete_token は取り消し＋更新（PATCH）の鍵 — 端末外に出さない。
+export const recipeBooks = sqliteTable('recipe_books', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  shareSlug: text('share_slug'),
+  shareUrl: text('share_url'),
+  shareDeleteToken: text('share_delete_token'),
+  sharedAt: text('shared_at'),
+  shareLocale: text('share_locale'),
+  /** 公開の強度（S4-2）。パスコードは更新時に再送するため平文で持つ（端末内のみ） */
+  sharePasscode: text('share_passcode'),
+  shareExpiresAt: text('share_expires_at'),
+  /** S2（app_meta 時代）に公開した帖 — 収録レシピ不明。停止のみ可 */
+  isLegacyShare: integer('is_legacy_share').notNull().default(0),
+});
+
+export const recipeBookItems = sqliteTable(
+  'recipe_book_items',
+  {
+    bookId: text('book_id')
+      .notNull()
+      .references(() => recipeBooks.id),
+    recipeId: text('recipe_id').notNull(),
+    position: integer('position').notNull(),
+  },
+  (table) => ({
+    bookRecipeIdx: uniqueIndex('idx_recipe_book_items_book_recipe').on(
+      table.bookId,
+      table.recipeId,
+    ),
+  }),
+);

@@ -175,6 +175,7 @@ const recipe: typeof ja = {
       attestNote:
         'Only content you created yourself can be shared. Anyone with the link can view it (no app needed). You can stop sharing anytime from Settings > Web shares.',
       publish: 'Share',
+      createOnly: 'Create book without sharing',
       publishing: 'Creating…',
       failed: 'Could not create the share page. Check your connection and try again.',
       allExcluded:
