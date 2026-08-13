@@ -33,7 +33,11 @@ pnpm exec eas submit -p ios --profile production --id <BUILD_ID> --non-interacti
 
 ## 残作業
 
-### 1. スクリーンショット（**macOS 必須**）
+### 1. スクリーンショット（**撮影済み** — 2026-08-13）
+
+**8枚とも取得済み**（`phone-screenshots/` にコミット済み・commit 666f1ce）。
+iPhone 16 Pro Max / iOS 18.5 で 1320×2868、ステータスバー 9:41 固定、8枚すべて別画像であることを確認済み。
+**残るはアップロードだけで、これは ASC API 経由なので Windows からでもできる。**
 
 主サイズ = 6.9インチ（iPhone 16 Pro Max = 1320×2868）。構成・順序は
 `phone-screenshots/README.md` の表（Google Play 版と揃える。iOS では OCR 系の `05` を使わない）。
