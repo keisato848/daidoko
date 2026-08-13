@@ -48,15 +48,6 @@ const home = {
     } satisfies CriticalPluralMessage,
   },
 
-  /** 起動時ボーナスの告知（R5 問題1）。 */
-  bonus: {
-    title: {
-      one: 'AIレシピ {{count}} 回分をプレゼントしました',
-      other: 'AIレシピ {{count}} 回分をプレゼントしました',
-    } satisfies PluralMessage,
-    body: 'お店で食べた料理を撮ると、家で作れるレシピになります。',
-  },
-
   /** 主役への直行ボタン（`docs/お店の味を再現設計.md` §4.3 問題2）。 */
   // まだ料理が無いときの入口。撮る（料理がある）と対になる
   consult: 'AIと相談しながらつくる',

@@ -24,10 +24,8 @@ jest.mock('../byok.service', () => ({
 
 import {
   AD_BONUS_DAILY_LIMIT,
-  clearLaunchBonusAnnouncement,
   currentDayKey,
   deriveFreemiumStatus,
-  hasPendingLaunchBonusAnnouncement,
   FREE_LIFETIME_LIMIT,
   getAdWatchedToday,
   getDailyUsage,
@@ -35,9 +33,7 @@ import {
   getFreemiumStatus,
   getTokenBalance,
   grantAdBonus,
-  grantLaunchBonusOnce,
   incrementDailyUsage,
-  LAUNCH_BONUS_TOKENS,
   recordCloudInference,
   remainingFree,
   spendToken,
@@ -198,52 +194,10 @@ describe('usage.service', () => {
       expect(await spendToken()).toBe(0);
     });
 
-    it('launch bonus grants LAUNCH_BONUS_TOKENS once, then no-ops', async () => {
-      expect(await grantLaunchBonusOnce()).toBe(true);
-      expect(await getTokenBalance()).toBe(LAUNCH_BONUS_TOKENS);
-      // second call: already granted on this install
-      expect(await grantLaunchBonusOnce()).toBe(false);
-      expect(await getTokenBalance()).toBe(LAUNCH_BONUS_TOKENS);
-    });
-
-    it('launch bonus stacks on top of ad-earned tokens', async () => {
-      await grantAdBonus();
-      await grantLaunchBonusOnce();
-      expect(await getTokenBalance()).toBe(1 + LAUNCH_BONUS_TOKENS);
-    });
-
-    // 付与しただけでは完全に無言で、設定を開かないと気づけなかった（R5 問題1）
-    describe('記念ボーナスの告知', () => {
-      it('何も付与していなければ告知しない', async () => {
-        expect(await hasPendingLaunchBonusAnnouncement()).toBe(false);
-      });
-
-      it('付与すると告知が予約される', async () => {
-        await grantLaunchBonusOnce();
-        expect(await hasPendingLaunchBonusAnnouncement()).toBe(true);
-      });
-
-      it('見せたら消える（毎回は出さない）', async () => {
-        await grantLaunchBonusOnce();
-        await clearLaunchBonusAnnouncement();
-        expect(await hasPendingLaunchBonusAnnouncement()).toBe(false);
-      });
-
-      it('消したあとに再度 grant を呼んでも復活しない（付与済みなので no-op）', async () => {
-        await grantLaunchBonusOnce();
-        await clearLaunchBonusAnnouncement();
-        expect(await grantLaunchBonusOnce()).toBe(false);
-        expect(await hasPendingLaunchBonusAnnouncement()).toBe(false);
-      });
-
-      // ホーム側も grant を呼んでから読む（付与と同時に読むと書き込み前に読んでしまい、
-      // 付与したその回の起動で告知が出なかった — 実機で確認）。
-      // 二重に呼んでもトークンが増えないことを固定する
-      it('起動時とホームの二重呼び出しでもトークンは増えない', async () => {
-        await Promise.all([grantLaunchBonusOnce(), grantLaunchBonusOnce()]);
-        expect(await getTokenBalance()).toBe(LAUNCH_BONUS_TOKENS);
-        expect(await hasPendingLaunchBonusAnnouncement()).toBe(true);
-      });
+    // 新規インストール直後に配られるトークンは無い。無料枠 1 回だけで始まる
+    // （リリース記念ボーナスの +3 は 2026-08-13 に撤去 — 初回が 4 回に見えていた）
+    it('新規インストールではトークンを持たない', async () => {
+      expect(await getTokenBalance()).toBe(0);
     });
 
     it('raises the effective allowance via deriveFreemiumStatus', () => {

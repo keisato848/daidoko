@@ -45,14 +45,6 @@ const home: typeof ja = {
     },
   },
 
-  bonus: {
-    title: {
-      one: '{{count}} free AI recipe is on us',
-      other: '{{count}} free AI recipes are on us',
-    },
-    body: 'Photograph a dish you ate out, and it becomes a recipe you can cook at home.',
-  },
-
   consult: 'Plan it with AI',
   capture: 'Photograph a dish you ate out',
 

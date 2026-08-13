@@ -19,13 +19,13 @@ describe('tCount — 数の入る文言', () => {
 
   it('en は 1 と複数で形が変わる', () => {
     setLocale('en');
-    expect(tCount('home.bonus.title', 1)).toBe('1 free AI recipe is on us');
-    expect(tCount('home.bonus.title', 3)).toBe('3 free AI recipes are on us');
+    expect(tCount('recipe.list.countSuffix', 1)).toBe('1 recipe');
+    expect(tCount('recipe.list.countSuffix', 3)).toBe('3 recipes');
   });
 
   it('0 は複数形を使う（英語の規則）', () => {
     setLocale('en');
-    expect(tCount('home.bonus.title', 0)).toBe('0 free AI recipes are on us');
+    expect(tCount('recipe.list.countSuffix', 0)).toBe('0 recipes');
   });
 
   it('A 階層の複数形は text を返す（{text,intent} が漏れない）', () => {
@@ -48,7 +48,7 @@ describe('tCount — 数の入る文言', () => {
       for (const count of [0, 1, 2]) {
         for (const key of [
           'home.select.count',
-          'home.bonus.title',
+          'recipe.list.countSuffix',
           'home.delete.confirm',
         ] as const) {
           const result = tCount(key, count);
