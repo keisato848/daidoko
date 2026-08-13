@@ -282,9 +282,11 @@ const recipe = {
 
     offlineNotice: 'インターネットにつながっていると、写真からレシピをつくれます',
 
+    // 無料枠は「生涯 N 回・リセットなし」（usage.service.ts の FREE_LIFETIME_LIMIT）。
+    // 「今日の」と書くと明日また使えると誤解させるので、期間を示す語は入れない。
     quotaRemaining: {
-      one: '今日の無料作成：あと {{count}} 回 ・ 使い放題にする',
-      other: '今日の無料作成：あと {{count}} 回 ・ 使い放題にする',
+      one: '無料作成：あと {{count}} 回 ・ 使い放題にする',
+      other: '無料作成：あと {{count}} 回 ・ 使い放題にする',
     } satisfies PluralMessage,
     unlimitedByok: '自分のAIキー・使い放題',
     unlimitedPremium: 'プレミアム・使い放題',
