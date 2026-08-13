@@ -20,7 +20,25 @@ node scripts/release/capture-ios-screenshots.mjs --shots 01,04   # 部分再取�
 - **アップロードは ASC API でできる**（`appScreenshotSets` → `appScreenshots` の予約＋アップロード＋コミット。
   2026-08-13 に疎通確認済み）。Play の `update-play-screenshots.mjs` 相当の一括スクリプトはまだ無いだけ。
   **撮影だけ macOS 必須で、アップロードは Windows からでよい。** Web UI から手で上げても構わない。
-- `08` と `10` は自動化対象外（manual）— 既存 PNG を維持する。
+- **`10` は自動化済み**（2026-08-13）。seed の `recipe-7`（ふわとろスクランブルエッグトースト）に
+  `seedBundledCoverPhotos` が `assets/seed-photos/scrambled-egg.jpg` を表紙として付けるので、
+  実データ無しで再現できる。`--photo-recipe <id>` で別レシピに差し替え可。
+  ※ Android 版 `capture-store-screenshots.mjs` はまだ `manual` のまま（Play は掲載済みのため未着手）。
+- `08`（AI 結果画面）は自動化対象外（manual）。deep link で到達できず、実際に AI 推論を走らせる必要がある。
+
+> **⚠️ 未解決: ディープリンクの確認ダイアログ（2026-08-13 に判明）**
+>
+> iOS は `simctl openurl daidoko://…` に対して
+> **「"だいどこ" で開きますか?」**（キャンセル／開く）の確認を挟む。
+> これを閉じないと画面遷移が起きず、**全ショットが「ホーム画面＋ダイアログ」の同一画像**になる。
+> `simctl` にタップ機能が無いため、スクリプト単体では閉じられない。
+>
+> スクリプト側は**同一画像を検出したら FAILED にする**ようにした（黙って成功扱いにしない）。
+> 実際に撮るには、この確認を通す手段が要る:
+> - シミュレータ上で人が「開く」を押す（1ショットごと）
+> - もしくは Universal Link 化・UI 自動化などスクリプト側の対応（未実装）
+>
+> **Android 版にはこのダイアログが無い。** iOS 移植時の見落とし。
 - 提出全体の進捗と残作業は `../SUBMISSION.md`。
 
 | 順  | ファイル                     | 内容                               |
