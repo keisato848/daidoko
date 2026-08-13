@@ -44,10 +44,10 @@ iPhone 16 Pro Max / iOS 18.5 で 1320×2868、ステータスバー 9:41 固定�
 
 **iPad 用スクショは不要**（2026-08-13 確認）。本アプリは iPhone 専用に宣言している:
 
-| 箇所                                             | 設定                             |
-| ------------------------------------------------ | -------------------------------- |
-| `apps/mobile/app.json`                           | `ios.supportsTablet: false`      |
-| `apps/mobile/ios/app.xcodeproj/project.pbxproj`  | `TARGETED_DEVICE_FAMILY = 1`     |
+| 箇所                                            | 設定                         |
+| ----------------------------------------------- | ---------------------------- |
+| `apps/mobile/app.json`                          | `ios.supportsTablet: false`  |
+| `apps/mobile/ios/app.xcodeproj/project.pbxproj` | `TARGETED_DEVICE_FAMILY = 1` |
 
 ASC は宣言したデバイスファミリーぶんしかスクショを要求しないので、iPad スロットは必須にならない。
 iPhone 専用アプリが iPad 上で互換モード表示されることに対して iPad スクショを求められることもない。
@@ -70,7 +70,7 @@ node scripts/release/capture-ios-screenshots.mjs
   疎通確認済み）。Play の `update-play-screenshots.mjs` 相当のスクリプトは未作成なので、
   撮り終えたら Windows 側でも書ける。Web UI から手で上げてもよい。
 
-### 2. 掲載文の反映（Windows でも可）
+### 2. ~~掲載文の反映~~ → **反映済み（2026-08-13）**
 
 `listing-ja.md` の内容を `appStoreVersionLocalizations` / `appInfoLocalizations` に流す。
 **公開文面なので、反映前に必ずユーザーに提示して承認を得る。**
@@ -88,7 +88,6 @@ node scripts/release/capture-ios-screenshots.mjs
   Apple の年齢レーティング質問票が訊いているのは
   **「アプリ内で、他人が作ったコンテンツをユーザーが目にするか」**（＝ Guideline 1.2 が求める
   フィルタ・通報・ブロックの必要性の有無）。`docs/Web共有設計.md` の設計上、これに当たらない:
-
   - サイト内に**一覧・検索・発見の面を作らない**（§2-1）
   - `noindex` ＋ `X-Robots-Tag` で検索エンジンにも載せない
   - 共有はユーザーの明示操作のみ・**いつでも取り消し可**（取り消し後は 404）
@@ -179,3 +178,34 @@ noindex, are revocable by the user at any time, and return 404 once revoked.
   次々クラッシュし（`maild` `searchd` `MobileCal` ほか）、アプリも起動 **19秒**ほどで消え、
   合成タップも UI に届かなくなった。Pageins は 4,099万回。
   **ビルドとシミュレータを同時に走らせないこと。** 詰まったら Mac 再起動が結局早い。
+
+---
+
+## 反映ログ（2026-08-13・Windows から ASC API で実施）
+
+| 項目                        | 結果                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| App 名                      | 「だいどこ - お店の味を再現するレシピ・買い物リスト」へ変更（旧 ASO 名から） |
+| サブタイトル                | 写真1枚から、家で作れるレシピに（16/30）                                     |
+| プロモーションテキスト      | 57/170。**審査なしで後から変更できる唯一の欄**                               |
+| キーワード                  | 83/100                                                                       |
+| 説明                        | 1109/4000                                                                    |
+| サポート/マーケティング URL | LP                                                                           |
+| 著作権                      | 2026 Kei Sato                                                                |
+| バージョン番号              | 自動作成の `1.0` → **`1.7.0`**（アップロード済みビルドに合わせる）           |
+| カテゴリ                    | FOOD_AND_DRINK / LIFESTYLE                                                   |
+| スクリーンショット          | `APP_IPHONE_67` に 8 枚・README の順序で並べ替え済み・全て COMPLETE          |
+
+**踏んだ落とし穴:**
+
+- **初回リリースには `whatsNew` を書けない**（`409 STATE_ERROR: Attribute 'whatsNew' cannot be edited at this time`）。
+  「バージョンごとの新機能」はアップデートの欄なので、初回は説明文が担う。listing-ja.md の
+  当該節は 1.8.0 以降で使う
+- スクショは **`appScreenshotSets` を作り直してから**入れると順序が確実
+  （予約 → PUT → `uploaded:true` + MD5 でコミット → `relationships/appScreenshots` の PATCH で並べ替え）
+- **アップロードは Windows から実行できる**（撮影だけ macOS 必須）。スクリプトはスクラッチパッドの
+  `push-listing.mjs` / `push-shots.mjs`（恒久化するなら `scripts/release/` へ）
+
+**残り**: 年齢レーティングの質問票（Console UI）→ 価格（無料）→ 審査提出。
+提出前に **PR #163（iOS 写真パス修正）をマージした上で iOS ビルドを作り直す**こと
+（今のビルドには写真が消える不具合が入っている）。
