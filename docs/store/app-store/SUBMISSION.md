@@ -38,6 +38,17 @@ pnpm exec eas submit -p ios --profile production --id <BUILD_ID> --non-interacti
 主サイズ = 6.9インチ（iPhone 16 Pro Max = 1320×2868）。構成・順序は
 `phone-screenshots/README.md` の表（Google Play 版と揃える。iOS では OCR 系の `05` を使わない）。
 
+**iPad 用スクショは不要**（2026-08-13 確認）。本アプリは iPhone 専用に宣言している:
+
+| 箇所                                             | 設定                             |
+| ------------------------------------------------ | -------------------------------- |
+| `apps/mobile/app.json`                           | `ios.supportsTablet: false`      |
+| `apps/mobile/ios/app.xcodeproj/project.pbxproj`  | `TARGETED_DEVICE_FAMILY = 1`     |
+
+ASC は宣言したデバイスファミリーぶんしかスクショを要求しないので、iPad スロットは必須にならない。
+iPhone 専用アプリが iPad 上で互換モード表示されることに対して iPad スクショを求められることもない。
+**将来 `supportsTablet: true` にすると 13インチ iPad のスクショが必須になる**点だけ注意。
+
 ```bash
 # 前提: リポジトリルートで pnpm install（apps/mobile 内では実行しない）
 xcrun simctl boot "iPhone 16 Pro Max" ; open -a Simulator
@@ -68,20 +79,58 @@ node scripts/release/capture-ios-screenshots.mjs
 ### 3. カテゴリ・年齢制限（Console UI／一部 API）
 
 - プライマリ = フード＆ドリンク、セカンダリ = ライフスタイル
-- **年齢レーティングの質問票**は要確認事項あり:
-  **Web 共有（レシピを限定公開リンクにする機能）を「ユーザー生成コンテンツ」として申告すべきか。**
-  アプリ内に他人の投稿を見る導線は無く、リンクを知る人だけが読める形なので「該当なし」と考えているが、
-  Apple の質問文を実際に読んでから判断すること。Play のデータセーフティ側は
-  「その他のユーザー作成コンテンツを収集」として申告済み。
+- **年齢レーティングの UGC 質問 → 「該当なし」で申告する**（2026-08-13 判断）
+
+  Apple の年齢レーティング質問票が訊いているのは
+  **「アプリ内で、他人が作ったコンテンツをユーザーが目にするか」**（＝ Guideline 1.2 が求める
+  フィルタ・通報・ブロックの必要性の有無）。`docs/Web共有設計.md` の設計上、これに当たらない:
+
+  - サイト内に**一覧・検索・発見の面を作らない**（§2-1）
+  - `noindex` ＋ `X-Robots-Tag` で検索エンジンにも載せない
+  - 共有はユーザーの明示操作のみ・**いつでも取り消し可**（取り消し後は 404）
+  - 出ていくのは**自分のレシピだけ**。受け手が読むのは**ブラウザ側**で、
+    アプリ内に他人の投稿を見る導線は無い
+  - 共有可否は `sources.type` で機械的に判定し、取り込み由来のレシピは共有できない（§2-2）
+
+  **Play の「その他のユーザー作成コンテンツを収集」とは別の質問なので、矛盾しない。**
+  あちらは「どんなデータを収集するか」（＝ Apple では App Privacy 側。申告済み）、
+  こちらは「他人の投稿を見せる面があるか」。引き継ぎ時にここを混同しないこと。
+
+  ※ ASC の質問文は改訂されることがあるので、実際の文面が上記の趣旨とずれていたら読み直して判断する。
 
 ### 4. App Review 情報
 
 - **アカウント不要**（デモアカウントの提供は不要）。ログインは存在しない
-- 備考に書くべきこと:
-  - AI 機能（写真からレシピ／感想での調整／相談）は**ネットワーク接続が必要**
-  - AI の無料枠は**インストールごとに1回**。使い切った後はリワード広告を1本見るたびに1回使える
-  - 自分の Gemini API キーを設定すると無制限（設定 → 自分の AI キーを使う）
-  - **アレルゲン検出は行っていない**（説明文にも明記）
+- **Sign-in required = No / Demo account = 不要**
+
+仕様は `apps/mobile/src/services/usage.service.ts:20-29` で確認済み（2026-08-13）:
+無料枠は **生涯 1 回（`FREE_LIFETIME_LIMIT`・日付キーを持たないのでリセットされない）**、
+広告で得たトークンは**失効しない**、**広告視聴は 1 日 3 本まで**（`AD_BONUS_DAILY_LIMIT`）。
+
+**Review Notes（そのまま貼れる英文）:**
+
+```
+No account or login is required. All core features (recipe library, cooking mode,
+shopping list, pantry) work fully offline with no sign-in.
+
+AI features (photo-to-recipe, taste adjustment, recipe consultation) require a
+network connection:
+- Each install includes 1 free AI generation. This is a lifetime allowance and
+  does not reset daily.
+- After it is used, the user can watch a rewarded ad to earn 1 more generation
+  (max 3 ad views per day; earned credits never expire).
+- Alternatively, entering a personal Google Gemini API key under
+  Settings > "Use your own AI key" removes the limit entirely, with no ads.
+
+The app does NOT perform allergen detection or provide medical/dietary advice.
+This is stated in the app description as well.
+
+Recipe sharing creates an unlisted web link for the user's OWN recipe only.
+There is no in-app feed, search, or discovery of other users' content. Links are
+noindex, are revocable by the user at any time, and return 404 once revoked.
+```
+
+日本語で出す場合も内容は同じ。**数値（1回・生涯・広告1日3本）は上記から変えないこと。**
 
 ### 5. 提出
 
@@ -99,3 +148,30 @@ node scripts/release/capture-ios-screenshots.mjs
   同じ `version` で作り直して再提出するときは buildNumber だけさらに上げる
 - App Store Connect の Web UI は**ウィンドウ幅が狭いとサイドバーが畳まれて操作しづらい**。
   ASC API で済むものは API で（アプリ枠作成と App Privacy だけが API 非対応）
+
+### Mac 側でスクショを撮るとき（2026-08-13 に踏んだもの）
+
+- **`node_modules` が古いと `expo run:ios` は JS バンドル段階で落ちる。**
+  今回は `expo-localization` が `package.json` にあるのに未導入で
+  `Unable to resolve module expo-localization`。**リポジトリルートで `pnpm install` してから**ビルドする
+  （このときは `+29 -167` パッケージ入れ替わった）。`apps/mobile` 内では実行しない。
+- **Release 構成は既定で `ONLY_ACTIVE_ARCH=NO`** ＝ シミュレータ向けでも x86_64 と arm64 の
+  両スライスを作るのでコンパイル量が 2 倍になる。Intel Mac では x86_64 しか使わないので、
+  `ONLY_ACTIVE_ARCH=YES` を渡せば実測で半分になる（`sqlite3.c` のような巨大 C ファイルで差が大きい）。
+- ビルド中は **`xcrun simctl` 系が 120 秒でタイムアウトする**ことがある（2 コア機で CPU を奪われるため）。
+  シミュレータの故障ではないので、ビルド完了を待ってから叩き直す。
+- ビルド完走までシミュレータはホーム画面のまま。`expo run:ios` は
+  **コンパイル完了後にインストール＆起動**するので、途中で何も起きないのが正常。
+- **ランタイムは Xcode の SDK 版に合わせる。** Xcode 16.4 の SDK は **18.5**
+  （ビルドログの `iPhoneSimulator18.5.sdk` で確認できる）。
+  **iOS 18.6 ランタイム**を使うと `com.apple.-0LaunchServicesMigrator` が
+  ウォッチドッグ（30秒）で殺され、`Data Migration Failed` → `simctl install` が
+  タイムアウトする。erase しても CPU が空いていても再現した。18.5 に落とすと install は通る。
+- **`simctl` がタイムアウトしても「失敗」とは限らない。** `perl -e 'alarm N; exec @ARGV'` で
+  上限をかけると `rc=142`（128+SIGALRM）になる。これは自分のタイムアウトであってアプリのエラーではない。
+- **`simctl terminate` が刺さると後続の `simctl` が全部詰まる**（CoreSimulator はデバイス操作を直列化する）。
+  復旧は「刺さった simctl を kill → `killall -9 com.apple.CoreSimulator.CoreSimulatorService`（launchd が復帰させる）」。
+- この機体（**8GB / Intel 4コア 1.4GHz**）では、シミュレータのシステムデーモンが
+  次々クラッシュし（`maild` `searchd` `MobileCal` ほか）、アプリも起動 **19秒**ほどで消え、
+  合成タップも UI に届かなくなった。Pageins は 4,099万回。
+  **ビルドとシミュレータを同時に走らせないこと。** 詰まったら Mac 再起動が結局早い。
