@@ -19,12 +19,14 @@ export function useDatabase() {
           await initDatabase();
 
           const { getDb, getExpoDb } = await import('../db/client');
-          const { ensureLocalIdentity, runMigrations, seedDatabase } =
+          const { ensureLocalIdentity, normalizePhotoPaths, runMigrations, seedDatabase } =
             await import('../db/migrate');
 
           runMigrations(getExpoDb());
           await ensureLocalIdentity(getDb());
           await seedDatabase(getDb());
+          // 旧データの絶対パスを相対へ揃える（冪等・photo-path.ts）
+          await normalizePhotoPaths(getDb());
         }
         // Web: no DB, screens use mock data
         setIsReady(true);
