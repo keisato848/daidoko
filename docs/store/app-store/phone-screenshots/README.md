@@ -17,8 +17,11 @@ node scripts/release/capture-ios-screenshots.mjs            # 全自動ショッ
 node scripts/release/capture-ios-screenshots.mjs --shots 01,04   # 部分再取得
 ```
 
-- アップロードは App Store Connect の Web UI か fastlane deliver（Play のような API 一括スクリプトは未整備）。
+- **アップロードは ASC API でできる**（`appScreenshotSets` → `appScreenshots` の予約＋アップロード＋コミット。
+  2026-08-13 に疎通確認済み）。Play の `update-play-screenshots.mjs` 相当の一括スクリプトはまだ無いだけ。
+  **撮影だけ macOS 必須で、アップロードは Windows からでよい。** Web UI から手で上げても構わない。
 - `08` と `10` は自動化対象外（manual）— 既存 PNG を維持する。
+- 提出全体の進捗と残作業は `../SUBMISSION.md`。
 
 | 順  | ファイル                     | 内容                               |
 | --- | ---------------------------- | ---------------------------------- |
