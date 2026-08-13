@@ -196,3 +196,21 @@ describe('画面の見出しを日本語のまま出さない', () => {
     }
   });
 });
+
+describe('{{...}} を持つ文言は必ず値を渡す', () => {
+  // レシピ帖の期限チップで実際に踏んだ: t() に値を渡さず自前で .replace() したため
+  // i18n-js が先に補間を試み、画面に `Expires in [missing "7" value] days` が出た。
+  // **穴埋めのある文言は t(key, params) で引く**（自前の置換に頼らない）。
+  it('値を渡せば穴が埋まる（渡さないと [missing…] が出る）', () => {
+    for (const locale of ['ja', 'en'] as const) {
+      setLocale(locale);
+      const filled = t('settings.book.expiryDays', { days: 7 });
+      expect(filled).toContain('7');
+      expect(filled).not.toContain('missing');
+      expect(filled).not.toContain('{{');
+
+      const unfilled = t('settings.book.expiryDays');
+      expect(unfilled).toContain('missing'); // 渡し忘れは目立つ形で出る
+    }
+  });
+});

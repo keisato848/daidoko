@@ -264,7 +264,7 @@ export default function BookEditScreen() {
               >
                 {option === null
                   ? t('settings.book.expiryNone')
-                  : t('settings.book.expiryDays').replace('{{days}}', String(option))}
+                  : t('settings.book.expiryDays', { days: option })}
               </Text>
             </Pressable>
           ))}

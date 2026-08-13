@@ -75,8 +75,8 @@ const settings: typeof ja = {
     syncSubtitle: 'Right now everything is stored on this device only',
     nameAliases: 'Ingredient name dictionary',
     nameAliasesSubtitle: 'Review and fix the names the AI has learned',
-    webShares: 'Web shares',
-    webSharesSubtitle: 'Review or stop shared recipe books',
+    webShares: 'Recipe books',
+    webSharesSubtitle: 'Create and edit books, and manage web sharing',
   },
 
   app: {

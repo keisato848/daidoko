@@ -80,8 +80,8 @@ const settings = {
     syncSubtitle: '現在は端末内のみ保存されます',
     nameAliases: '名寄せ辞書',
     nameAliasesSubtitle: 'AIが覚えた食材名の対応を確認・修正',
-    webShares: 'Web共有の管理',
-    webSharesSubtitle: '共有中のレシピ帖の確認・停止',
+    webShares: 'レシピ帖',
+    webSharesSubtitle: '帖の作成・編集と、Web共有の管理',
   },
 
   app: {
