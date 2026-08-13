@@ -44,12 +44,6 @@ import { getWantToCookRecipes } from '../../src/services/recipe.service';
 import { getTimeline } from '../../src/services/timeline.service';
 import type { RecipeListItem, TimelineEntry } from '../../src/services/types';
 import { formatProfileDisplayName } from '../../src/utils/profile';
-import {
-  clearLaunchBonusAnnouncement,
-  grantLaunchBonusOnce,
-  hasPendingLaunchBonusAnnouncement,
-  LAUNCH_BONUS_TOKENS,
-} from '../../src/services/usage.service';
 import { computeMonthlyStats } from '../../src/utils/timelineStats';
 
 type FilterTab = 'week' | 'month' | 'all';
@@ -100,8 +94,6 @@ export default function HomeScreen() {
   const [filter, setFilter] = useState<FilterTab>('all');
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  // 記念ボーナスの告知（R5 問題1）。付与しただけでは完全に無言だった
-  const [showBonus, setShowBonus] = useState(false);
 
   // 初回利用ガイド（コーチマーク）
   const cartRef = useRef<View>(null);
@@ -122,9 +114,7 @@ export default function HomeScreen() {
         ref: cartRef,
       },
     ],
-    // 初回はボーナス告知だけを見せる。同時に出すと両方まとめて流される（R5 問題4）。
-    // コーチマークの仕組み自体は残し、「?」からいつでも再生できる
-    !loading && !selectMode && !showBonus,
+    !loading && !selectMode,
   );
 
   const [wantList, setWantList] = useState<RecipeListItem[]>([]);
@@ -147,20 +137,8 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadTimeline();
-      // 付与を待ってから告知フラグを読む。_layout.tsx の付与と同時に走ると
-      // **書き込み前に読んでしまい、付与したその回の起動で告知が出なかった**（実機で確認）。
-      // grantLaunchBonusOnce は付与済みなら no-op なので、ここから呼んでも二重付与にならない
-      void grantLaunchBonusOnce()
-        .then(() => hasPendingLaunchBonusAnnouncement())
-        .then(setShowBonus)
-        .catch(() => setShowBonus(false));
     }, [loadTimeline]),
   );
-
-  const dismissBonus = useCallback(() => {
-    setShowBonus(false);
-    void clearLaunchBonusAnnouncement().catch(() => undefined);
-  }, []);
 
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
@@ -349,25 +327,6 @@ export default function HomeScreen() {
           ListHeaderComponent={
             !selectMode ? (
               <View>
-                {showBonus && (
-                  <View style={styles.bonusCard}>
-                    <View style={styles.bonusTextWrap}>
-                      <Text style={styles.bonusTitle}>
-                        {tCount('home.bonus.title', LAUNCH_BONUS_TOKENS)}
-                      </Text>
-                      <Text style={styles.bonusBody}>{t('home.bonus.body')}</Text>
-                    </View>
-                    <Pressable
-                      onPress={dismissBonus}
-                      hitSlop={10}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('common.close')}
-                    >
-                      <X size={16} color={Colors.goldDim} />
-                    </Pressable>
-                  </View>
-                )}
-
                 {/* 主役への直行。FAB（＋ → 追加方法選択）は残すが、写真からレシピだけは
                     1タップで届かせる（`docs/お店の味を再現設計.md` §4.3 問題2） */}
                 <PressableScale
@@ -581,20 +540,6 @@ const styles = StyleSheet.create({
     color: Colors.paperDim,
     letterSpacing: 2,
   },
-  bonusCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginTop: 14,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.gold,
-    backgroundColor: Colors.bgCard,
-  },
-  bonusTextWrap: { flex: 1, gap: 4 },
-  bonusTitle: { fontSize: 14, fontWeight: '600', color: Colors.gold, letterSpacing: 0.5 },
-  bonusBody: { fontSize: 13, fontWeight: '400', color: Colors.paperDim, lineHeight: 20 },
   captureButton: {
     flexDirection: 'row',
     alignItems: 'center',
