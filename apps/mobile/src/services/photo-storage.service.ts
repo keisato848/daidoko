@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
+import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
 import { generateId } from '../utils/id';
 import type { CapturedPhoto } from './photo-capture.service';
 import type { SaveCookingPhotoInput } from './types';
@@ -128,7 +129,8 @@ async function persistCookingLogPhoto(
 
   await adapter.copyAsync({ from: source, to: destination });
   return {
-    localPath: destination,
+    // DB には相対パスで持つ（iOS の container UUID は更新で変わる — photo-path.ts）
+    localPath: toStoredPhotoPath(destination),
     takenAt: photo.takenAt,
   };
 }
@@ -154,7 +156,10 @@ export async function cleanupStoredCookingPhotos(
   adapter: FileStorageAdapter = expoFileStorageAdapter,
 ): Promise<void> {
   await Promise.all(
-    photos.map((photo) => adapter.deleteAsync(photo.localPath, { idempotent: true })),
+    // 保存値は相対パス（旧データは絶対）。実ファイルに触るので必ず解決してから
+    photos.map((photo) =>
+      adapter.deleteAsync(resolvePhotoUri(photo.localPath), { idempotent: true }),
+    ),
   );
 }
 
@@ -196,5 +201,5 @@ export async function persistRecipePhoto(
   const extension = compressed ? 'jpg' : extensionForPhoto(photo.localPath, photo.mimeType);
   const destination = `${directory}${createRecipePhotoFileName(photo.takenAt, extension)}`;
   await adapter.copyAsync({ from: source, to: destination });
-  return destination;
+  return toStoredPhotoPath(destination);
 }

@@ -18,6 +18,7 @@ import {
 import { generateId } from '../utils/id';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
 import { getAliasMap } from './name-alias.service';
+import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
 import type {
   MemoItem,
   RecipeDetail,
@@ -97,8 +98,10 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       ingredientNames = ings.map((i) => i.name);
     }
 
-    const heroPhotoUri =
-      recipe.coverPhotoPath ?? (await getLatestCookingPhotoUri(db, schema, recipe.id));
+    // 表示用に解決する（DB は相対パス・旧データの絶対パスも貼り替わる）
+    const heroPhotoUri = resolvePhotoUri(
+      recipe.coverPhotoPath ?? (await getLatestCookingPhotoUri(db, schema, recipe.id)),
+    );
 
     result.push({
       id: recipe.id,
@@ -136,7 +139,7 @@ async function getLatestCookingPhotoUri(
     .orderBy(desc(schema.cookingPhotos.createdAt))
     .limit(1);
   if (rows.length === 0) return null;
-  return rows[0].cloudUrl ?? rows[0].localPath;
+  return rows[0].cloudUrl ?? resolvePhotoUri(rows[0].localPath);
 }
 
 export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | null> {
@@ -204,14 +207,18 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
 
   let stepsList: RecipeDetail['steps'] = [];
   if (r.currentRevId) {
-    stepsList = await db
+    const stepRows = await db
       .select()
       .from(schema.steps)
       .where(eq(schema.steps.revisionId, r.currentRevId))
       .orderBy(schema.steps.sortOrder);
+    // 手順写真も表示用に解決する（表紙と同じ理由 — photo-path.ts）
+    stepsList = stepRows.map((step) => ({ ...step, photoPath: resolvePhotoUri(step.photoPath) }));
   }
 
-  const heroPhotoUri = r.coverPhotoPath ?? (await getLatestCookingPhotoUri(db, schema, recipeId));
+  const heroPhotoUri = resolvePhotoUri(
+    r.coverPhotoPath ?? (await getLatestCookingPhotoUri(db, schema, recipeId)),
+  );
 
   return {
     id: r.id,
@@ -224,7 +231,7 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
     ingredients: ingredientsList,
     steps: stepsList,
     heroPhotoUri,
-    coverPhotoPath: r.coverPhotoPath,
+    coverPhotoPath: resolvePhotoUri(r.coverPhotoPath),
     pinnedAt: r.pinnedAt,
   };
 }
@@ -347,7 +354,7 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
     titleReading: input.titleReading ?? null,
     currentRevId: revId,
     status: 'active',
-    coverPhotoPath: input.coverPhotoPath ?? null,
+    coverPhotoPath: toStoredPhotoPath(input.coverPhotoPath),
     createdBy: USER_ID,
     createdAt: now,
     updatedAt: now,
@@ -393,7 +400,7 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
       body: step.body,
       timerSec: step.timerSec ?? null,
       photoId: null,
-      photoPath: step.photoPath ?? null,
+      photoPath: toStoredPhotoPath(step.photoPath),
     });
   }
 
@@ -511,7 +518,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
       title: input.title,
       titleReading: input.titleReading ?? null,
       currentRevId: revId,
-      coverPhotoPath: input.coverPhotoPath ?? null,
+      coverPhotoPath: toStoredPhotoPath(input.coverPhotoPath),
       updatedAt: now,
     })
     .where(eq(schema.recipes.id, recipeId));
@@ -540,7 +547,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
       body: step.body,
       timerSec: step.timerSec ?? null,
       photoId: null,
-      photoPath: step.photoPath ?? null,
+      photoPath: toStoredPhotoPath(step.photoPath),
     });
   }
 

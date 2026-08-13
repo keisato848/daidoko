@@ -28,7 +28,7 @@ import { t } from '../i18n';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 10; // v10: レシピ帖（recipe_books / recipe_book_items, S4）
+export const CURRENT_SCHEMA_VERSION = 11; // v10: 写真パスを相対化 / v11: レシピ帖（recipe_books, S4）
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -594,12 +594,70 @@ async function seedBundledPhotos(database: DB): Promise<void> {
     await asset.downloadAsync();
     if (!asset.localUri) continue;
 
-    const destination = `${directory}${createRecipePhotoFileName(item.takenAt, 'jpg', item.recipeId)}`;
+    const fileName = createRecipePhotoFileName(item.takenAt, 'jpg', item.recipeId);
+    const destination = `${directory}${fileName}`;
     await FileSystem.copyAsync({ from: asset.localUri, to: destination });
     await database
       .update(schema.recipes)
-      .set({ coverPhotoPath: destination })
+      // 相対パスで持つ（iOS の container UUID は更新で変わる — photo-path.ts）
+      .set({ coverPhotoPath: `recipe-photos/${fileName}` })
       .where(eq(schema.recipes.id, item.recipeId));
+  }
+}
+
+/**
+ * 写真パスを **documentDirectory からの相対パス**へ書き換える（v10）。
+ *
+ * 旧データは絶対パスで、iOS では container UUID が更新のたびに変わるため
+ * 参照できなくなる（`docs/データ設計.md` / `services/photo-path.ts`）。
+ * 読み取り側は解決時に貼り替えるので表示は既に直っているが、保存値も
+ * 揃えておかないとバックアップの持ち運びで同じ問題が起きる。
+ *
+ * 相対パスや管理外 URI は `toStoredPhotoPath` が素通しするので**冪等**。
+ */
+export async function normalizePhotoPaths(database: DB): Promise<void> {
+  const { toStoredPhotoPath } = await import('../services/photo-path');
+
+  const recipeRows = await database
+    .select({ id: schema.recipes.id, path: schema.recipes.coverPhotoPath })
+    .from(schema.recipes);
+  for (const row of recipeRows) {
+    if (!row.path) continue;
+    const next = toStoredPhotoPath(row.path);
+    if (next !== row.path) {
+      await database
+        .update(schema.recipes)
+        .set({ coverPhotoPath: next })
+        .where(eq(schema.recipes.id, row.id));
+    }
+  }
+
+  const stepRows = await database
+    .select({ id: schema.steps.id, path: schema.steps.photoPath })
+    .from(schema.steps);
+  for (const row of stepRows) {
+    if (!row.path) continue;
+    const next = toStoredPhotoPath(row.path);
+    if (next !== row.path) {
+      await database
+        .update(schema.steps)
+        .set({ photoPath: next })
+        .where(eq(schema.steps.id, row.id));
+    }
+  }
+
+  const photoRows = await database
+    .select({ id: schema.cookingPhotos.id, path: schema.cookingPhotos.localPath })
+    .from(schema.cookingPhotos);
+  for (const row of photoRows) {
+    if (!row.path) continue;
+    const next = toStoredPhotoPath(row.path);
+    if (next !== row.path) {
+      await database
+        .update(schema.cookingPhotos)
+        .set({ localPath: next })
+        .where(eq(schema.cookingPhotos.id, row.id));
+    }
   }
 }
 

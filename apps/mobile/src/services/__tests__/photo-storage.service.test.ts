@@ -47,7 +47,10 @@ describe('photo-storage.service', () => {
     });
     // 保存時圧縮: コピー元は圧縮後の一時ファイル、保存名は .jpg
     expect(copied[0].from).toBe('file:///cache/dinner-compressed.jpg');
-    expect(result[0].localPath).toContain('file:///documents/cooking-photos/cooking-photo-');
+    // 保存値は **相対パス**（iOS の container UUID 対策 — services/photo-path.ts）。
+    // コピー先そのものは絶対パスのまま
+    expect(copied[0].to).toContain('file:///documents/cooking-photos/cooking-photo-');
+    expect(result[0].localPath).toMatch(/^cooking-photos[/]cooking-photo-/);
     expect(result[0].localPath).toMatch(/\.jpg$/);
   });
 
@@ -123,7 +126,8 @@ describe('photo-storage.service', () => {
       intermediates: true,
     });
     expect(copied[0].from).toBe('file:///cache/cover-compressed.jpg');
-    expect(path).toContain('file:///documents/recipe-photos/recipe-photo-');
+    expect(copied[0].to).toContain('file:///documents/recipe-photos/recipe-photo-');
+    expect(path).toMatch(/^recipe-photos[/]recipe-photo-/);
     expect(path).toMatch(/\.jpg$/);
   });
 });
