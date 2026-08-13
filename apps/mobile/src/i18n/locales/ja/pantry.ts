@@ -65,9 +65,11 @@ const pantry = {
     analyzing: '食事を解析しています',
     lead: '食事の写真を撮ると、使った食材を推定して在庫を減らせます（実験的）。',
     capture: '食事を撮影',
+    // 写真レシピと**同じ生涯枠**（getFreemiumStatus().remaining）を表示している。
+    // 「今日の」と書くと明日また使えると誤解させるので、期間を示す語は入れない
     quotaRemaining: {
-      one: '今日の無料解析: 残り {{count}} 回',
-      other: '今日の無料解析: 残り {{count}} 回',
+      one: '無料解析: 残り {{count}} 回',
+      other: '無料解析: 残り {{count}} 回',
     } satisfies PluralMessage,
     // **料理名を文に差し込まない。** 日本語は「〜で使った」で繋がるが、
     // 英語は語順が変わるので文ごと分ける
