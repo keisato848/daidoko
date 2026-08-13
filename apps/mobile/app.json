@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.daidoko.app",
+      "buildNumber": "10019",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

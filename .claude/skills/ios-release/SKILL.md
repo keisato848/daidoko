@@ -1,6 +1,6 @@
 ---
 name: ios-release
-description: iOS（App Store）リリース一式（macOS で実行）。Xcode/シミュレータのセットアップ → シミュレータでの動作確認 → iOS用スクショ取得 → EAS iOS ビルド → TestFlight → App Store Connect 提出。方針=無料・広告なし・非取引者。
+description: iOS（App Store）リリース一式（macOS で実行）。Xcode/シミュレータのセットアップ → シミュレータでの動作確認 → iOS用スクショ取得 → EAS iOS ビルド → TestFlight → App Store Connect 提出。方針=無料・広告あり（2026-08 変更）・EU/英国除外で取引者申告回避。
 ---
 
 # iOS（App Store）リリースパイプライン（macOS 専用）
@@ -59,10 +59,11 @@ pnpm exec eas build -p ios --profile production --non-interactive --no-wait
 pnpm exec eas build:view <BUILD_ID> --json   # status FINISHED / artifacts
 ```
 
-- 初回は EAS が Apple ログインを求め、**配布証明書・プロビジョニングプロファイルを自動生成・管理**する。
+- ~~初回は EAS が Apple ログインを求める~~ → **クレデンシャル構築済み（2026-08-13・`docs/リリース手順.md` §7-4-2）**。
+  配布証明書・プロビジョニングプロファイルは EAS 管理（期限 2027-08-13）。ビルドは Windows からでも非対話で通る。
 - `eas.json` の `build.production` は platform 共有（top-level の env/autoIncrement）なので **iOS ビルドにそのまま使える**。
-  CLI 提出する場合のみ `submit.production.ios`（appleId / ascAppId / appleTeamId）を追加。`appVersionSource: local`
-  なので app.json の `version` を上げる。
+  **`submit.production.ios` も設定済み**（App Store Connect API キー `8C387NYC2T`・`.p8` は `C:\secure\`・リポジトリ外）。
+  `appVersionSource: local` なので app.json の `version` を上げる。
 - `ITSAppUsesNonExemptEncryption: false` は設定済み（輸出コンプライアンス質問を回避）。
 
 ## 4. TestFlight → 提出（外向きアクション — ユーザー承認を確認）
@@ -72,8 +73,8 @@ pnpm exec eas build:view <BUILD_ID> --json   # status FINISHED / artifacts
 3. App Store Connect でメタデータを設定:
    - **App Privacy（栄養ラベル）**: AI 機能利用時に写真・食材名をサーバー送信する旨を申告（Play のデータセーフティ相当）。
      端末内 OCR は無効化済みなので申告不要。
-   - **DSA 取引者ステータス = 非取引者**（無料・広告なし）。将来広告を入れる場合は取引者だが Apple は個人でも
-     **P.O. Box 可**（自宅住所は不要）。
+   - **DSA: EU/英国は配信対象外にして取引者申告を回避**（2026-08 方針変更で iOS も広告あり。Play と同じ配信方針）。
+     将来 EU 配信する場合は取引者だが Apple は個人でも **P.O. Box 可**（自宅住所は不要）。
    - スクショ（§2）・説明文（`docs/store/` を iOS 向けに流用）・年齢レーティング・カテゴリ（フード＆ドリンク）。
 4. 審査提出（~1〜3日）。
 
