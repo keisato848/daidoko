@@ -27,6 +27,13 @@ const STRINGS = {
     bookCta: 'アプリでレシピ帖をつくる',
     bookFooter:
       'このページは投稿者が共有したレシピ帖です。投稿者が共有を停止すると表示されなくなります。',
+    protectedTitle: '保護されたレシピ帖',
+    passcodePrompt:
+      'このレシピ帖はパスコードで保護されています。投稿者から聞いた4桁の数字を入力してください。',
+    passcodeLabel: 'パスコード（4桁）',
+    passcodeSubmit: '開く',
+    passcodeWrong: 'パスコードが違います。',
+    passcodeLocked: '試行回数が多すぎます。しばらく待ってからやり直してください。',
   },
   en: {
     servings: (n: number) => `Serves ${n}`,
@@ -43,6 +50,13 @@ const STRINGS = {
     bookCta: 'Make your own recipe book in the app',
     bookFooter:
       'This recipe book was shared by its author. It disappears when the author stops sharing.',
+    protectedTitle: 'Protected recipe book',
+    passcodePrompt:
+      'This recipe book is protected with a passcode. Enter the 4-digit code you received from the author.',
+    passcodeLabel: 'Passcode (4 digits)',
+    passcodeSubmit: 'Open',
+    passcodeWrong: 'Wrong passcode.',
+    passcodeLocked: 'Too many attempts. Please wait a while and try again.',
   },
 } as const;
 
@@ -286,6 +300,54 @@ ${ogImage ? `<meta property="og:image" content="${escapeHtml(ogImage)}">\n<meta 
   <a class="cta" href="${PLAY_STORE_URL}">${s.bookCta}</a>
   <div class="cta-sub">${s.ctaSub}</div>
   <div class="footer">${s.bookFooter}</div>
+</div>
+</body>
+</html>`;
+}
+
+/**
+ * パスコード入力ページ（S4-2）。帖のタイトルも OGP も出さない —
+ * リンクプレビューやソースから中身が漏れないようにするため。
+ */
+export function renderPasscodePage(
+  slug: string,
+  locale: string,
+  failed: boolean,
+  locked = false,
+): string {
+  const t = locale === 'en' ? STRINGS.en : STRINGS.ja;
+  const error = locked ? t.passcodeLocked : failed ? t.passcodeWrong : '';
+  return `<!doctype html>
+<html lang="${locale === 'en' ? 'en' : 'ja'}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${t.protectedTitle} | DAIDOKO</title>
+<style>${PAGE_CSS}
+  .pass-form { margin-top: 24px; display: flex; gap: 12px; align-items: center; }
+  .pass-form input {
+    background: #17120C; border: 1px solid #2E2418; border-radius: 8px;
+    color: #DCC9A8; font-size: 24px; letter-spacing: 8px; text-align: center;
+    width: 9em; max-width: 60vw; padding: 10px 12px;
+  }
+  .pass-form button {
+    background: #C9A16A; color: #0A0805; border: 0; border-radius: 8px;
+    font-size: 16px; font-weight: 600; padding: 12px 22px; cursor: pointer;
+  }
+  .pass-error { margin-top: 14px; color: #E08A7A; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">DAIDOKO</div>
+  <h1>${t.protectedTitle}</h1>
+  <p>${t.passcodePrompt}</p>
+  <form class="pass-form" method="post" action="/b/${escapeHtml(slug)}/unlock">
+    <input name="passcode" inputmode="numeric" autocomplete="one-time-code" pattern="\\d{4}" maxlength="4" required aria-label="${t.passcodeLabel}">
+    <button type="submit">${t.passcodeSubmit}</button>
+  </form>
+  ${error ? `<p class="pass-error">${error}</p>` : ''}
 </div>
 </body>
 </html>`;

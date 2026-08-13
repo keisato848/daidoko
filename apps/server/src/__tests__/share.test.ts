@@ -273,3 +273,168 @@ describe('Web 共有', () => {
     }
   });
 });
+
+// ── S4: 帖の更新（リンク不変）・パスコード・有効期限 ─────────────────────────
+import { createBookShare, resetPasscodeFailsForTesting } from '../lib/share-store.js';
+
+describe('レシピ帖 S4', () => {
+  beforeEach(() => {
+    resetShareRateLimitForTesting();
+    resetPasscodeFailsForTesting();
+  });
+
+  function s4BookPayload() {
+    return {
+      attested: true,
+      locale: 'ja',
+      title: 'わが家の定番',
+      recipes: [
+        {
+          title: '肉じゃが',
+          ingredients: [{ name: 'じゃがいも', amount: '3個' }],
+          steps: [{ body: '煮る' }],
+          tags: [],
+          photoBase64: TINY_JPEG_BASE64,
+          photoMime: 'image/jpeg',
+        },
+      ],
+    };
+  }
+
+  async function publishS4Book(payload: unknown): Promise<{
+    slug: string;
+    url: string;
+    deleteToken: string;
+    expiresAt: string | null;
+  }> {
+    const res = await app.request('/api/v1/share/books', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    expect(res.status).toBe(200);
+    return (await res.json()) as {
+      slug: string;
+      url: string;
+      deleteToken: string;
+      expiresAt: string | null;
+    };
+  }
+
+  async function patchBook(slug: string, token: string, payload: unknown): Promise<Response> {
+    return app.request(`/api/v1/share/books/${slug}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-share-delete-token': token },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  it('PATCH: slug を変えずに題名・収録レシピを差し替えられる', async () => {
+    const { slug, deleteToken } = await publishS4Book(s4BookPayload());
+    const updated = {
+      ...s4BookPayload(),
+      title: '改訂版レシピ帖',
+      recipes: [
+        {
+          title: '追加した唐揚げ',
+          ingredients: [{ name: '鶏もも', amount: '300g' }],
+          steps: [{ body: '揚げる' }],
+          tags: [],
+        },
+      ],
+    };
+    const res = await patchBook(slug, deleteToken, updated);
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean; slug: string; url: string };
+    expect(json.slug).toBe(slug);
+    const html = await (await app.request(`/b/${slug}`)).text();
+    expect(html).toContain('改訂版レシピ帖');
+    expect(html).toContain('追加した唐揚げ');
+    expect(html).not.toContain('肉じゃが');
+  });
+
+  it('PATCH: トークン不一致は 403・存在しない slug は 404', async () => {
+    const { slug } = await publishS4Book(s4BookPayload());
+    expect((await patchBook(slug, 'wrong-token', s4BookPayload())).status).toBe(403);
+    expect((await patchBook('nosuchslug12', 'token', s4BookPayload())).status).toBe(404);
+  });
+
+  it('パスコード: 未認証はページ 401（中身もタイトルも出ない）・写真も 404', async () => {
+    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '1234' });
+    const page = await app.request(`/b/${slug}`);
+    expect(page.status).toBe(401);
+    const html = await page.text();
+    expect(html).not.toContain('わが家の定番');
+    expect(html).not.toContain('肉じゃが');
+    expect(html).toContain('パスコード');
+    expect((await app.request(`/b/${slug}/photo/0`)).status).toBe(404);
+  });
+
+  it('パスコード: 正解で Cookie が発行され、ページも写真も読める', async () => {
+    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '1234' });
+    const wrong = await app.request(`/b/${slug}/unlock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'passcode=0000',
+    });
+    expect(wrong.status).toBe(401);
+
+    const ok = await app.request(`/b/${slug}/unlock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'passcode=1234',
+    });
+    expect(ok.status).toBe(303);
+    const setCookie = ok.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain(`daidoko_book_${slug}=`);
+    const cookie = setCookie.split(';')[0] ?? '';
+
+    const page = await app.request(`/b/${slug}`, { headers: { cookie } });
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('わが家の定番');
+    expect((await app.request(`/b/${slug}/photo/0`, { headers: { cookie } })).status).toBe(200);
+  });
+
+  it('パスコード: 5 回失敗でロックされ、正解でも通らない', async () => {
+    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '1234' });
+    for (let i = 0; i < 5; i++) {
+      await app.request(`/b/${slug}/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'passcode=9999',
+      });
+    }
+    const locked = await app.request(`/b/${slug}/unlock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'passcode=1234',
+    });
+    expect(locked.status).toBe(401);
+    expect(await locked.text()).toContain('試行回数');
+  });
+
+  it('有効期限: 期限を過ぎた帖は 404（存在を漏らさない）', async () => {
+    const past = new Date(Date.now() - 1000).toISOString();
+    const { slug } = createBookShare(
+      {
+        locale: 'ja',
+        title: '期限切れ帖',
+        recipes: [{ title: 'a', ingredients: [{ name: 'x' }], steps: [{ body: 'y' }], tags: [] }],
+      },
+      { expiresAt: past },
+    );
+    expect((await app.request(`/b/${slug}`)).status).toBe(404);
+  });
+
+  it('有効期限: expiresInDays を渡すと expiresAt が返り、PATCH null で解除できる', async () => {
+    const { slug, deleteToken, expiresAt } = await publishS4Book({
+      ...s4BookPayload(),
+      expiresInDays: 7,
+    });
+    expect(expiresAt).not.toBeNull();
+    const res = await patchBook(slug, deleteToken, { ...s4BookPayload(), expiresInDays: null });
+    const json = (await res.json()) as { expiresAt: string | null };
+    expect(json.expiresAt).toBeNull();
+    expect((await app.request(`/b/${slug}`)).status).toBe(200);
+  });
+});

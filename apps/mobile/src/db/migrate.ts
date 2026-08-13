@@ -28,7 +28,7 @@ import { t } from '../i18n';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 9;
+export const CURRENT_SCHEMA_VERSION = 10; // v10: レシピ帖（recipe_books / recipe_book_items, S4）
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -318,6 +318,29 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE UNIQUE INDEX IF NOT EXISTS idx_name_aliases_family_source ON name_aliases(family_id, source_normalized);
+
+  CREATE TABLE IF NOT EXISTS recipe_books (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    share_slug TEXT,
+    share_url TEXT,
+    share_delete_token TEXT,
+    shared_at TEXT,
+    share_locale TEXT,
+    share_passcode TEXT,
+    share_expires_at TEXT,
+    is_legacy_share INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS recipe_book_items (
+    book_id TEXT NOT NULL REFERENCES recipe_books(id),
+    recipe_id TEXT NOT NULL,
+    position INTEGER NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_recipe_book_items_book_recipe ON recipe_book_items(book_id, recipe_id);
 `;
 
 // Columns added after a table first shipped (SQLite has no ADD COLUMN IF NOT

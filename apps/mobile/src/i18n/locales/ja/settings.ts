@@ -107,20 +107,43 @@ const settings = {
       '各画面の「?」でその画面の案内を再生できます。「使い方ガイドを再表示」を押すと全画面の案内をもう一度見られます。',
   },
   webShares: {
-    title: 'Web共有の管理',
-    emptyTitle: '共有中のレシピ帖はありません',
-    emptyMessage:
-      'レシピ一覧で長押し→複数選択→「レシピ帖」から、選んだレシピを1つのWebページにまとめて共有できます。',
+    title: 'レシピ帖',
+    emptyTitle: 'レシピ帖はまだありません',
+    emptyBody:
+      'レシピ一覧で長押し→複数選択→「レシピ帖」から作れます。作った帖はここで編集・共有できます。',
     recipeCount: {
       one: '{{count}}品',
       other: '{{count}}品',
     } satisfies PluralMessage,
+    shared: '共有中',
+    passcodeOn: 'パスコードあり',
+    legacyNote: '以前の形式の共有（停止のみ可）',
     send: 'リンクを送る',
     stopTitle: 'Web共有を停止',
     stopConfirm:
       '共有ページを削除します。リンクを知っている人も見られなくなります。よろしいですか？',
     stopAction: '停止する',
     stopFailed: '停止できませんでした。通信環境を確認してもう一度お試しください。',
+    deleteTitle: 'レシピ帖を削除',
+    deleteConfirm: 'この帖を削除しますか？（レシピ自体は消えません）',
+  },
+  book: {
+    title: 'レシピ帖',
+    name: '帖の名前',
+    recipes: '収録レシピ',
+    addRecipes: 'レシピを追加',
+    noRecipes: 'まだレシピがありません。「レシピを追加」から選んでください。',
+    excludedTag: '共有時は除外（URL取り込み）',
+    accessTitle: '公開の設定',
+    passcodeLabel: 'パスコード（4桁）で保護する',
+    passcodeInvalid: 'パスコードは数字4桁で入力してください。',
+    expiryNone: '無期限',
+    expiryDays: '{{days}}日で失効',
+    shareNow: 'Webページで共有する',
+    applyUpdate: '更新を反映（リンクはそのまま）',
+    updated: '共有ページを更新しました。リンクは変わっていません。',
+    sharedNote:
+      'この帖は共有中です。中身や設定を変えたら「更新を反映」で同じリンクのまま反映されます。',
   },
 };
 

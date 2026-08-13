@@ -13,7 +13,12 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { renderBookPage, renderNotFoundPage, renderSharePage } from '../lib/share-page.js';
+import {
+  renderBookPage,
+  renderNotFoundPage,
+  renderPasscodePage,
+  renderSharePage,
+} from '../lib/share-page.js';
 import {
   createBookShare,
   createShare,
@@ -21,8 +26,12 @@ import {
   exportAllShares,
   getActiveBook,
   getActiveShare,
+  makeBookCookie,
   revokeBookShare,
   revokeShare,
+  updateBookShare,
+  verifyBookCookie,
+  verifyBookPasscode,
 } from '../lib/share-store.js';
 
 // ── ベース URL（共有 URL の組み立てと OGP の絶対 URL に使う） ────────────────
@@ -96,13 +105,33 @@ const shareRecipeSchema = shareRecipeBodySchema.extend({
 });
 
 // レシピ帖（S2）: 複数レシピを 1 ページに。写真込みで重くなるため冊数を絞る
+// S4-2: 公開の強度（有効期限・パスコード）。null/省略 = 無し
 const shareBookSchema = z.object({
   attested: z.literal(true),
   locale: z.enum(['ja', 'en']),
   title: z.string().trim().min(1).max(100),
   description: z.string().max(500).optional(),
   recipes: z.array(shareRecipeBodySchema).min(1).max(20),
+  expiresInDays: z
+    .union([z.literal(7), z.literal(30)])
+    .nullable()
+    .optional(),
+  passcode: z
+    .string()
+    .regex(/^\d{4}$/)
+    .nullable()
+    .optional(),
 });
+
+function accessFromBody(body: {
+  expiresInDays?: 7 | 30 | null | undefined;
+  passcode?: string | null | undefined;
+}): { expiresAt: string | null; passcode: string | null } {
+  const expiresAt = body.expiresInDays
+    ? new Date(Date.now() + body.expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+    : null;
+  return { expiresAt, passcode: body.passcode ?? null };
+}
 
 function clientIp(headers: { get: (name: string) => string | null | undefined }): string {
   return (
@@ -195,7 +224,40 @@ shareApiRouter.post('/books', zValidator('json', shareBookSchema), (c) => {
   }
 
   const body = c.req.valid('json');
-  const { slug, deleteToken } = createBookShare({
+  const access = accessFromBody(body);
+  const { slug, deleteToken } = createBookShare(bookInputFromBody(body), access);
+
+  return c.json({
+    ok: true,
+    slug,
+    url: `${shareBaseUrl()}/b/${slug}`,
+    deleteToken,
+    expiresAt: access.expiresAt,
+  });
+});
+
+function bookInputFromBody(body: {
+  locale: 'ja' | 'en';
+  title: string;
+  description?: string | undefined;
+  recipes: {
+    title: string;
+    servings?: number | undefined;
+    cookTimeMin?: number | undefined;
+    description?: string | undefined;
+    ingredients: {
+      name: string;
+      amount?: string | undefined;
+      note?: string | undefined;
+      groupLabel?: string | undefined;
+    }[];
+    steps: { body: string }[];
+    tags: string[];
+    photoBase64?: string | undefined;
+    photoMime?: string | undefined;
+  }[];
+}): Parameters<typeof createBookShare>[0] {
+  return {
     locale: body.locale,
     title: body.title,
     description: body.description,
@@ -209,9 +271,44 @@ shareApiRouter.post('/books', zValidator('json', shareBookSchema), (c) => {
       tags: recipe.tags,
       photo: decodePhoto(recipe.photoBase64, recipe.photoMime),
     })),
-  });
+  };
+}
 
-  return c.json({ ok: true, slug, url: `${shareBaseUrl()}/b/${slug}`, deleteToken });
+// S4: 中身の差し替え。slug は不変（配ったリンクを生かす）。認証 = 削除トークン
+shareApiRouter.patch('/books/:slug', zValidator('json', shareBookSchema), (c) => {
+  const token = c.req.header('x-share-delete-token') ?? '';
+  if (token === '') {
+    return c.json(
+      { ok: false, error: { code: 'FORBIDDEN', message: 'トークンがありません' } },
+      403,
+    );
+  }
+  const ip = clientIp({ get: (n) => c.req.header(n) });
+  if (!checkShareRateLimit(`share:${ip}`)) {
+    return c.json(
+      {
+        ok: false,
+        error: { code: 'RATE_LIMITED', message: '本日の共有上限に達しました', retryable: false },
+      },
+      429,
+    );
+  }
+  const body = c.req.valid('json');
+  const access = accessFromBody(body);
+  const slug = c.req.param('slug');
+  const result = updateBookShare(slug, token, bookInputFromBody(body), access);
+  if (result === 'not-found') {
+    return c.json({ ok: false, error: { code: 'NOT_FOUND', message: '見つかりません' } }, 404);
+  }
+  if (result === 'forbidden') {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'トークンが違います' } }, 403);
+  }
+  return c.json({
+    ok: true,
+    slug,
+    url: `${shareBaseUrl()}/b/${slug}`,
+    expiresAt: access.expiresAt,
+  });
 });
 
 shareApiRouter.delete('/books/:slug', (c) => {
@@ -264,23 +361,75 @@ sharePageRouter.get('/:slug/photo', (c) => {
 // ── レシピ帖 閲覧ページ ──────────────────────────────────────────────────────
 const bookPageRouter = new Hono();
 
+const BOOK_COOKIE = 'daidoko_book';
+
+function parseCookie(header: string | undefined, name: string): string | undefined {
+  if (!header) return undefined;
+  for (const part of header.split(';')) {
+    const [k, ...rest] = part.trim().split('=');
+    if (k === name) return rest.join('=');
+  }
+  return undefined;
+}
+
+/** パスコード保護中で未認証なら true（ページ・写真とも同じ判定で守る） */
+function bookLocked(
+  c: { req: { header: (n: string) => string | undefined } },
+  slug: string,
+  passcodeHash: string | null,
+): boolean {
+  if (!passcodeHash) return false;
+  const cookie = parseCookie(c.req.header('cookie'), `${BOOK_COOKIE}_${slug}`);
+  return !verifyBookCookie(slug, cookie);
+}
+
 bookPageRouter.get('/:slug', (c) => {
-  const found = getActiveBook(c.req.param('slug'));
+  const slug = c.req.param('slug');
+  const found = getActiveBook(slug);
   c.header('X-Robots-Tag', 'noindex');
   if (!found) {
     return c.html(renderNotFoundPage(), 404);
   }
+  if (bookLocked(c, slug, found.book.passcodeHash)) {
+    // 中身もタイトルも出さない（OGP も出さない — プレビューで漏れるため）
+    return c.html(renderPasscodePage(slug, found.book.locale, false), 401);
+  }
   return c.html(renderBookPage(found.book, found.recipes, shareBaseUrl()));
 });
 
-bookPageRouter.get('/:slug/photo/:index', (c) => {
-  const found = getActiveBook(c.req.param('slug'));
+// パスコード入力。成功で slug スコープの署名 Cookie を置き、読み直しを許す
+bookPageRouter.post('/:slug/unlock', async (c) => {
+  const slug = c.req.param('slug');
+  const found = getActiveBook(slug);
   c.header('X-Robots-Tag', 'noindex');
+  if (!found?.book.passcodeHash) return c.html(renderNotFoundPage(), 404);
+  const form = await c.req.parseBody();
+  const passcode = typeof form['passcode'] === 'string' ? form['passcode'] : '';
+  const check = verifyBookPasscode(slug, passcode);
+  if (check !== 'ok') {
+    return c.html(renderPasscodePage(slug, found.book.locale, true, check === 'locked'), 401);
+  }
+  c.header(
+    'Set-Cookie',
+    `${BOOK_COOKIE}_${slug}=${makeBookCookie(slug)}; Path=/b/${slug}; Max-Age=86400; HttpOnly; SameSite=Lax; Secure`,
+  );
+  return c.redirect(`/b/${slug}`, 303);
+});
+
+bookPageRouter.get('/:slug/photo/:index', (c) => {
+  const slug = c.req.param('slug');
+  const found = getActiveBook(slug);
+  c.header('X-Robots-Tag', 'noindex');
+  // ページだけ守って写真が直リンクで読めては意味がない — 同じ鍵で守る
+  if (found && bookLocked(c, slug, found.book.passcodeHash)) return c.notFound();
   const index = Number(c.req.param('index'));
   const recipe = found && Number.isInteger(index) ? found.recipes[index] : undefined;
   if (!recipe?.photo || !recipe.photoMime) return c.notFound();
   c.header('Content-Type', recipe.photoMime);
-  c.header('Cache-Control', 'public, max-age=86400');
+  c.header(
+    'Cache-Control',
+    found?.book.passcodeHash ? 'private, max-age=3600' : 'public, max-age=86400',
+  );
   return c.body(new Uint8Array(recipe.photo));
 });
 

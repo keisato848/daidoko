@@ -102,20 +102,43 @@ const settings: typeof ja = {
       'Tap “?” on any screen to replay its guidance. “Show the walkthrough again” brings back the guidance on every screen.',
   },
   webShares: {
-    title: 'Web shares',
-    emptyTitle: 'No shared recipe books',
-    emptyMessage:
-      'In the recipe list, long-press to select multiple recipes, then tap "Recipe book" to share them as one web page.',
+    title: 'Recipe books',
+    emptyTitle: 'No recipe books yet',
+    emptyBody:
+      'In the recipe list, long-press to select multiple recipes, then tap "Recipe book". Books you create can be edited and shared here.',
     recipeCount: {
       one: '{{count}} recipe',
       other: '{{count}} recipes',
     },
+    shared: 'Shared',
+    passcodeOn: 'Passcode set',
+    legacyNote: 'Shared in the old format (can only be stopped)',
     send: 'Send link',
     stopTitle: 'Stop web sharing',
     stopConfirm:
       'This deletes the share page. People with the link will no longer see it. Continue?',
     stopAction: 'Stop sharing',
     stopFailed: 'Could not stop sharing. Check your connection and try again.',
+    deleteTitle: 'Delete recipe book',
+    deleteConfirm: 'Delete this book? (Your recipes themselves are not deleted.)',
+  },
+  book: {
+    title: 'Recipe book',
+    name: 'Book title',
+    recipes: 'Recipes in this book',
+    addRecipes: 'Add recipes',
+    noRecipes: 'No recipes yet. Tap "Add recipes" to pick some.',
+    excludedTag: 'Excluded when sharing (URL import)',
+    accessTitle: 'Sharing options',
+    passcodeLabel: 'Protect with a 4-digit passcode',
+    passcodeInvalid: 'Enter a 4-digit numeric passcode.',
+    expiryNone: 'No expiry',
+    expiryDays: 'Expires in {{days}} days',
+    shareNow: 'Share as a web page',
+    applyUpdate: 'Apply changes (same link)',
+    updated: 'The shared page was updated. The link stays the same.',
+    sharedNote:
+      'This book is shared. After changing its contents or settings, tap "Apply changes" to update the same link.',
   },
 };
 
