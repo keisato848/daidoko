@@ -1,0 +1,17 @@
+{
+  "version": "1.7.0",
+  "versionCode": 10019,
+  "verifiedAt": "2026-08-12T23:48:09.313Z",
+  "device": {
+    "serial": "359971911306313",
+    "model": "SH-RM19s",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10019,
+  "checked": [
+    "AQUOS SH-RM19s 実機 (10019・--prebuild ビルド): ①バナー広告表示・FAB/選択アクションバーとの重なり修正の配置確認(10019ビルドで再確認) ②Web共有 単品: 発行→実機Chromeでページ表示(写真/グループ/タグ)→停止→404 ③レシピ帖: 2品選択→発行→実機Chromeで目次+全レシピ表示→設定の管理画面から停止→404 ④広告ゲート成功経路: 無料枠0→相談送信→ゲートダイアログ→テストリワード広告視聴→報酬獲得→自動続行→Gemini consult 200・AI応答+下書き表示(ペイウォール非経由)。②〜④は同一コミットの10019相当ビルドで実施・10019で起動/バナー/一覧のスモーク再確認。エミュレータ(daidoko_e2e_fresh_api36)でも Web共有 S1/S2 一気通貫確認済み"
+  ],
+  "screenshot": "screenshots/1.7.0-10019-2026-08-12T23-48-09-313Z.png",
+  "headCommit": "1c1b0391bd5f0580bc0ebd2c882e6d5ee64eeea2"
+}
