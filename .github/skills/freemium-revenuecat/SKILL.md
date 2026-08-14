@@ -16,10 +16,13 @@ Design of record: `docs/フリーミアム設計.md`.
 
 ## Where Things Live (apps/mobile)
 
-- `src/services/usage.service.ts` — device-local daily quota (`FREE_DAILY_LIMIT = 1`,
-  `app_meta` key `ai_photo_recipe_usage:YYYY-MM-DD`, auto-resets daily) plus the rewarded-ad
-  bonus (`AD_BONUS_DAILY_LIMIT = 3`, key `ai_photo_recipe_ad_bonus:YYYY-MM-DD`, `grantAdBonus()`).
-  `getFreemiumStatus()` returns `canInfer` + `canWatchAdForMore`; `recordCloudInference()`.
+- `src/services/usage.service.ts` — device-local lifetime quota (`FREE_LIFETIME_LIMIT = 1`,
+  `app_meta` key `ai_photo_recipe_free_lifetime_used`, never resets) plus rewarded-ad tokens
+  (key `ai_photo_recipe_token_balance`, `grantAdBonus()` / `spendToken()`). Tokens never expire
+  and **there is no per-day watch cap** — the old `AD_BONUS_DAILY_LIMIT = 3` was removed
+  2026-08-14 (#173) because free users hit it and got stranded on the paywall. Cost is bounded
+  by the server's global cap, not here. `getFreemiumStatus()` returns `canInfer` +
+  `canWatchAdForMore`; `recordCloudInference()`.
 - `src/services/entitlement.service.ts` — provider factory (RevenueCat when
   `EXPO_PUBLIC_REVENUECAT_API_KEY` set + native, else `StubEntitlementProvider`).
 - `src/services/entitlement.revenuecat.ts` — the ONLY file importing `react-native-purchases`.

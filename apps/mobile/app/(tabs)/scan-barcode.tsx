@@ -7,8 +7,9 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'ex
 import { useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import { lookupJan, rememberJan } from '../../src/services/jan.service';
@@ -73,38 +74,45 @@ export default function ScanBarcodeScreen() {
   }
 
   if (scannedCode) {
+    // autoFocus でキーボードが即座に出る画面。包まないと「追加して覚える」が隠れる
     return (
-      <View style={styles.center}>
-        <Text style={styles.namingTitle}>{t('pantry.scan.newProduct')}</Text>
-        <Text style={styles.code}>JAN: {scannedCode}</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder={t('pantry.scan.namePlaceholder')}
-          placeholderTextColor={Colors.muted}
-          autoFocus
-          maxLength={50}
-        />
-        <TextInput
-          style={styles.input}
-          value={unit}
-          onChangeText={setUnit}
-          placeholder={t('pantry.scan.unitPlaceholder')}
-          placeholderTextColor={Colors.muted}
-          maxLength={6}
-        />
-        <Pressable
-          style={[styles.button, !name.trim() && styles.buttonDisabled]}
-          onPress={handleSave}
-          disabled={!name.trim()}
+      <KeyboardAvoider style={styles.namingFill}>
+        <ScrollView
+          contentContainerStyle={styles.namingBody}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
         >
-          <Text style={styles.buttonText}>{t('pantry.scan.addAndRemember')}</Text>
-        </Pressable>
-        <Pressable onPress={() => router.back()} hitSlop={8}>
-          <Text style={styles.link}>{t('common.cancel')}</Text>
-        </Pressable>
-      </View>
+          <Text style={styles.namingTitle}>{t('pantry.scan.newProduct')}</Text>
+          <Text style={styles.code}>JAN: {scannedCode}</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder={t('pantry.scan.namePlaceholder')}
+            placeholderTextColor={Colors.muted}
+            autoFocus
+            maxLength={50}
+          />
+          <TextInput
+            style={styles.input}
+            value={unit}
+            onChangeText={setUnit}
+            placeholder={t('pantry.scan.unitPlaceholder')}
+            placeholderTextColor={Colors.muted}
+            maxLength={6}
+          />
+          <Pressable
+            style={[styles.button, !name.trim() && styles.buttonDisabled]}
+            onPress={handleSave}
+            disabled={!name.trim()}
+          >
+            <Text style={styles.buttonText}>{t('pantry.scan.addAndRemember')}</Text>
+          </Pressable>
+          <Pressable onPress={() => router.back()} hitSlop={8}>
+            <Text style={styles.link}>{t('common.cancel')}</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoider>
     );
   }
 
@@ -134,6 +142,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    gap: 16,
+  },
+  namingFill: { flex: 1, backgroundColor: Colors.bg },
+  // center と同じ見た目。ScrollView の中身なので flex ではなく flexGrow
+  namingBody: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 24,
     gap: 16,
   },
   message: { color: Colors.paper, fontSize: 15, textAlign: 'center', lineHeight: 22 },

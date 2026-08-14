@@ -8,8 +8,9 @@
  * リワード広告は**利用者が選んで見る**形式（AdMob ポリシー）なので、
  * 自動再生はせず、確認ダイアログを 1 つだけ挟む。
  *
- * ペイウォール画面は「広告が出せないとき」（視聴上限・no-fill・広告無効ビルド）の
- * 逃げ道として残す — BYOK の案内がそこにある。
+ * 視聴回数に上限は無い（2026-08-14 撤廃）。したがってペイウォール画面に落ちるのは
+ * **広告そのものが出せないとき**（no-fill・広告無効ビルド・オフライン）だけで、
+ * そこは BYOK 案内への逃げ道として残す。
  */
 import { Alert } from 'react-native';
 
@@ -24,7 +25,7 @@ export type InferenceGateResult = 'ready' | 'cancelled' | 'paywall';
  * 状態からの純粋な分岐（テスト対象）。
  * - canInfer → そのまま実行
  * - 枠切れ ＋ 広告を出せる → その場で広告を持ちかける
- * - 枠切れ ＋ 広告を出せない（視聴上限・広告なしビルド）→ ペイウォール（BYOK 案内）
+ * - 枠切れ ＋ 広告を出せない（no-fill・広告なしビルド）→ ペイウォール（BYOK 案内）
  */
 export function decideInferenceGate(
   status: Pick<FreemiumStatus, 'canInfer' | 'canWatchAdForMore'>,
