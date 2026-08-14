@@ -20,6 +20,17 @@ const paywall: typeof ja = {
   subscribe: 'Start Premium',
   restore: 'Restore purchases',
 
+  /**
+   * Heading for platforms where purchases are unavailable. Avoids the word
+   * "Premium" so we never advertise something that cannot be bought.
+   */
+  freeTitle: 'Get more AI recipes',
+  freeSubtitle: {
+    one: 'AI recipe creation is free for your first {{count}} use. After that, watch an ad to earn one more.',
+    other:
+      'AI recipe creation is free for your first {{count}} uses. After that, watch an ad to earn one more.',
+  },
+
   terms: {
     text: 'The subscription is charged at purchase and renews automatically unless cancelled. You can cancel any time from your store account settings.',
     intent:

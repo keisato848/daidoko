@@ -8,6 +8,17 @@ import type { CriticalMessage, PluralMessage } from '../../types';
 
 const paywall = {
   title: 'DAIDOKO プレミアム',
+
+  /**
+   * 課金が使えないプラットフォーム向けの見出し。
+   * **買えない商品を宣伝しない**ため、プレミアムの語を出さない（`isEntitlementConfigured()`）。
+   */
+  freeTitle: 'AIレシピをもっと使う',
+  freeSubtitle: {
+    one: '無料のAIレシピ作成は初回{{count}}回まで。以降は広告を見るたびに1回使えます。',
+    other: '無料のAIレシピ作成は初回{{count}}回まで。以降は広告を見るたびに1回使えます。',
+  } satisfies PluralMessage,
+
   subtitle: {
     one: '無料のAIレシピ作成は初回{{count}}回まで。以降は広告を見るたびに1回使えます。\nプレミアムなら、回数を気にせず使えます。',
     other:

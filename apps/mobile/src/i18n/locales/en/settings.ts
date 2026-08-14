@@ -9,6 +9,8 @@ const settings: typeof ja = {
   plan: {
     sectionTitle: 'Plan',
     upgrade: 'Go Premium',
+    /** Row label where purchases are unavailable. Do not tease Premium there. */
+    free: 'Free plan',
     loading: 'Loading…',
     premium: 'Premium',
     premiumSubtitle: 'Premium — unlimited',

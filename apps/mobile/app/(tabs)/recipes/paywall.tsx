@@ -21,7 +21,10 @@ import { EULA_URL, PRIVACY_POLICY_URL } from '../../../src/constants/legal';
 import { Colors } from '../../../src/constants/theme';
 import { t, tCount } from '../../../src/i18n';
 import { getAdRewardProvider } from '../../../src/services/ad-reward.service';
-import { getEntitlementProvider } from '../../../src/services/entitlement.service';
+import {
+  getEntitlementProvider,
+  isEntitlementConfigured,
+} from '../../../src/services/entitlement.service';
 import { EntitlementUnavailableError } from '../../../src/services/entitlement.types';
 import {
   FREE_LIFETIME_LIMIT,
@@ -40,6 +43,10 @@ function benefitText(key: (typeof BENEFIT_KEYS)[number]): string {
 
 export default function PaywallScreen() {
   const router = useRouter();
+  // 課金が使えるプラットフォームでだけ購入 UI を出す。
+  // 有料化は iOS 先行で、Android は住所公開の制約が未解決のまま（`docs/フリーミアム設計.md` §6）。
+  // **買えないのに購入ボタンを出すと、押した先で必ず失敗する。**
+  const premiumAvailable = isEntitlementConfigured();
   const [price, setPrice] = useState<string | null>(null);
   const [loadingOffer, setLoadingOffer] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -143,43 +150,54 @@ export default function PaywallScreen() {
         <View style={styles.crownWrap}>
           <Crown size={40} color={Colors.gold} />
         </View>
-        <Text style={styles.title}>{t('paywall.title')}</Text>
-        <Text style={styles.subtitle}>{tCount('paywall.subtitle', FREE_LIFETIME_LIMIT)}</Text>
+        <Text style={styles.title}>
+          {premiumAvailable ? t('paywall.title') : t('paywall.freeTitle')}
+        </Text>
+        <Text style={styles.subtitle}>
+          {tCount(
+            premiumAvailable ? 'paywall.subtitle' : 'paywall.freeSubtitle',
+            FREE_LIFETIME_LIMIT,
+          )}
+        </Text>
 
-        <View style={styles.benefits}>
-          {BENEFIT_KEYS.map((key) => (
-            <View key={key} style={styles.benefitRow}>
-              <Check size={18} color={Colors.gold} />
-              <Text style={styles.benefitText}>{benefitText(key)}</Text>
+        {premiumAvailable && (
+          <>
+            <View style={styles.benefits}>
+              {BENEFIT_KEYS.map((key) => (
+                <View key={key} style={styles.benefitRow}>
+                  <Check size={18} color={Colors.gold} />
+                  <Text style={styles.benefitText}>{benefitText(key)}</Text>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
 
-        <View style={styles.priceCard}>
-          {loadingOffer ? (
-            <ActivityIndicator color={Colors.gold} />
-          ) : (
-            <>
-              <Text style={styles.priceValue}>{price ?? t('paywall.priceFallback')}</Text>
-              <Text style={styles.priceUnit}>
-                {price ? t('paywall.priceUnit') : t('paywall.priceUnitFallback')}
-              </Text>
-            </>
-          )}
-        </View>
+            <View style={styles.priceCard}>
+              {loadingOffer ? (
+                <ActivityIndicator color={Colors.gold} />
+              ) : (
+                <>
+                  <Text style={styles.priceValue}>{price ?? t('paywall.priceFallback')}</Text>
+                  <Text style={styles.priceUnit}>
+                    {price ? t('paywall.priceUnit') : t('paywall.priceUnitFallback')}
+                  </Text>
+                </>
+              )}
+            </View>
 
-        <Pressable
-          accessibilityRole="button"
-          style={[styles.subscribeButton, busy && styles.buttonDisabled]}
-          onPress={handleSubscribe}
-          disabled={busy}
-        >
-          {busy ? (
-            <ActivityIndicator color={Colors.bg} />
-          ) : (
-            <Text style={styles.subscribeText}>{t('paywall.subscribe')}</Text>
-          )}
-        </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              style={[styles.subscribeButton, busy && styles.buttonDisabled]}
+              onPress={handleSubscribe}
+              disabled={busy}
+            >
+              {busy ? (
+                <ActivityIndicator color={Colors.bg} />
+              ) : (
+                <Text style={styles.subscribeText}>{t('paywall.subscribe')}</Text>
+              )}
+            </Pressable>
+          </>
+        )}
 
         {canWatchAd && (
           <>
@@ -200,31 +218,35 @@ export default function PaywallScreen() {
           <Text style={styles.tokenBalance}>{tCount('paywall.tokenBalance', tokenBalance)}</Text>
         )}
 
-        <Pressable
-          accessibilityRole="button"
-          style={styles.restoreButton}
-          onPress={handleRestore}
-          disabled={busy}
-        >
-          <Text style={styles.restoreText}>{t('paywall.restore')}</Text>
-        </Pressable>
+        {premiumAvailable && (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.restoreButton}
+              onPress={handleRestore}
+              disabled={busy}
+            >
+              <Text style={styles.restoreText}>{t('paywall.restore')}</Text>
+            </Pressable>
 
-        <Text style={styles.terms}>{t('paywall.terms')}</Text>
+            <Text style={styles.terms}>{t('paywall.terms')}</Text>
 
-        {/* App Store の審査ガイドライン 3.1.2 は、自動更新サブスクの画面に
-            利用規約とプライバシーポリシーへの**機能するリンク**を求める。
-            文言だけでは足りず、リンクが無いと審査で止まる。 */}
-        <View style={styles.legalLinks}>
-          <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(EULA_URL)}>
-            <Text style={styles.legalLink}>{t('paywall.eula')}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="link"
-            onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
-          >
-            <Text style={styles.legalLink}>{t('paywall.privacyPolicy')}</Text>
-          </Pressable>
-        </View>
+            {/* App Store の審査ガイドライン 3.1.2 は、自動更新サブスクの画面に
+                利用規約とプライバシーポリシーへの**機能するリンク**を求める。
+                文言だけでは足りず、リンクが無いと審査で止まる。 */}
+            <View style={styles.legalLinks}>
+              <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(EULA_URL)}>
+                <Text style={styles.legalLink}>{t('paywall.eula')}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
+              >
+                <Text style={styles.legalLink}>{t('paywall.privacyPolicy')}</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );

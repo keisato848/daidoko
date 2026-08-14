@@ -13,6 +13,8 @@ const settings = {
   plan: {
     sectionTitle: 'プラン',
     upgrade: 'プレミアムにする',
+    /** 課金が使えないプラットフォームでの行名。プレミアムへ誘わない。 */
+    free: '無料プラン',
     loading: '読み込み中…',
     premium: 'プレミアム',
     premiumSubtitle: 'プレミアム・使い放題',
