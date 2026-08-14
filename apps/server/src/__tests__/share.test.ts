@@ -438,3 +438,28 @@ describe('レシピ帖 S4', () => {
     expect((await app.request(`/b/${slug}`)).status).toBe(200);
   });
 });
+
+// ── 「アプリで保存」の遷移先（iOS 公開後に env で切り替える）─────────────────
+import { storeUrlForUserAgent } from '../lib/share-page.js';
+
+describe('storeUrlForUserAgent', () => {
+  const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X)';
+  const ANDROID = 'Mozilla/5.0 (Linux; Android 13; SH-RM19s)';
+
+  it('SHARE_APP_STORE_URL 未設定なら iOS でも Play へ送る（公開前の App Store は 404 のため）', () => {
+    delete process.env['SHARE_APP_STORE_URL'];
+    expect(storeUrlForUserAgent(IPHONE)).toContain('play.google.com');
+    expect(storeUrlForUserAgent(ANDROID)).toContain('play.google.com');
+  });
+
+  it('設定後は iOS だけ App Store へ送る', () => {
+    process.env['SHARE_APP_STORE_URL'] = 'https://apps.apple.com/app/id6800964382';
+    try {
+      expect(storeUrlForUserAgent(IPHONE)).toContain('apps.apple.com');
+      expect(storeUrlForUserAgent(ANDROID)).toContain('play.google.com');
+      expect(storeUrlForUserAgent(undefined)).toContain('play.google.com');
+    } finally {
+      delete process.env['SHARE_APP_STORE_URL'];
+    }
+  });
+});

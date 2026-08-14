@@ -10,6 +10,17 @@ import type { SharedBookRecipeRow, SharedBookRow, SharedRecipeRow } from './shar
 
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.daidoko.app';
 
+/**
+ * 「アプリで保存」の遷移先。iOS から見ているなら App Store へ送りたいが、
+ * **公開前の App Store URL は 404 になる**ので、`SHARE_APP_STORE_URL` を
+ * 設定するまでは全員 Play へ送る（iOS 公開時に env を入れるだけで切り替わる）。
+ */
+export function storeUrlForUserAgent(userAgent: string | undefined): string {
+  const appStore = process.env['SHARE_APP_STORE_URL'];
+  if (!appStore || appStore.trim() === '') return PLAY_STORE_URL;
+  return /iPhone|iPad|iPod/i.test(userAgent ?? '') ? appStore : PLAY_STORE_URL;
+}
+
 const STRINGS = {
   ja: {
     servings: (n: number) => `${n}人分`,
@@ -18,7 +29,7 @@ const STRINGS = {
     steps: '作り方',
     memo: 'メモ',
     cta: 'アプリでこのレシピを保存',
-    ctaSub: 'だいどこ — 家族で育てる、台所のレシピ手帳（Android）',
+    ctaSub: 'だいどこ — 家族で育てる、台所のレシピ手帳',
     footer:
       'このページは投稿者が共有したレシピです。投稿者が共有を停止すると表示されなくなります。',
     notFound: 'このレシピは見つかりませんでした',
@@ -42,7 +53,7 @@ const STRINGS = {
     steps: 'Steps',
     memo: 'Notes',
     cta: 'Save this recipe in the app',
-    ctaSub: 'DAIDOKO — a family recipe notebook (Android)',
+    ctaSub: 'DAIDOKO — a family recipe notebook',
     footer: 'This recipe was shared by its author. It disappears when the author stops sharing.',
     notFound: 'Recipe not found',
     notFoundBody: 'The link may be wrong, or the author stopped sharing it.',
@@ -135,7 +146,11 @@ function renderIngredients(ings: SharedIngredient[], _locale: 'ja' | 'en'): stri
   return items.join('\n');
 }
 
-export function renderSharePage(row: SharedRecipeRow, baseUrl: string): string {
+export function renderSharePage(
+  row: SharedRecipeRow,
+  baseUrl: string,
+  storeUrl: string = PLAY_STORE_URL,
+): string {
   const locale = row.locale === 'en' ? 'en' : 'ja';
   const s = STRINGS[locale];
   const title = escapeHtml(row.title);
@@ -198,7 +213,7 @@ ${photoUrl ? `<meta property="og:image" content="${escapeHtml(photoUrl)}">\n<met
       ? `<h2>${s.memo}</h2>\n<p class="memo">${escapeHtml(row.description.trim())}</p>`
       : ''
   }
-  <a class="cta" href="${PLAY_STORE_URL}">${s.cta}</a>
+  <a class="cta" href="${escapeHtml(storeUrl)}">${s.cta}</a>
   <div class="cta-sub">${s.ctaSub}</div>
   <div class="footer">${s.footer}</div>
 </div>
@@ -226,6 +241,7 @@ export function renderBookPage(
   book: SharedBookRow,
   bookRecipes: SharedBookRecipeRow[],
   baseUrl: string,
+  storeUrl: string = PLAY_STORE_URL,
 ): string {
   const locale = book.locale === 'en' ? 'en' : 'ja';
   const s = STRINGS[locale];
@@ -297,7 +313,7 @@ ${ogImage ? `<meta property="og:image" content="${escapeHtml(ogImage)}">\n<meta 
   <h2>${s.toc}</h2>
   <ol class="toc">${toc}</ol>
   ${sections}
-  <a class="cta" href="${PLAY_STORE_URL}">${s.bookCta}</a>
+  <a class="cta" href="${escapeHtml(storeUrl)}">${s.bookCta}</a>
   <div class="cta-sub">${s.ctaSub}</div>
   <div class="footer">${s.bookFooter}</div>
 </div>

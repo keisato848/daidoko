@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.daidoko.app",
-      "buildNumber": "10020",
+      "buildNumber": "10021",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -57,7 +57,9 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "バーコード（JAN）を読み取るためにカメラを使用します。"
+          "cameraPermission": "バーコード（JAN）を読み取るためにカメラを使用します。",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       "./plugins/withDaidokoOcr",
