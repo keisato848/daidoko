@@ -1,7 +1,9 @@
 /**
  * Paywall — get more AI photo-recipes: watch a rewarded ad for one more, or
- * subscribe to premium (unlimited, ad-free). Reached when a free user has used
- * their daily quota, or from Settings.
+ * subscribe to premium (unlimited, ad-free). Reached from Settings, or when a
+ * free user is out of uses **and no ad can be shown** (no-fill / ads-disabled
+ * build / offline) — the in-place ad offer in `inference-gate.service` handles
+ * every other exhausted case, with no per-day watch cap.
  */
 import { useRouter } from 'expo-router';
 import { Check, Crown, Gift, X } from 'lucide-react-native';

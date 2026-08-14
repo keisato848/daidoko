@@ -3,10 +3,14 @@
  *
  * 無料枠は**初回の FREE_LIFETIME_LIMIT 回だけ**（既定 1・日次リセットなし。
  * 2026-08-12 に「毎日1回」から変更 — ユーザー判断）。使い切ったら、
- * リワード広告を見るたびに 1 回ぶんのトークンが貯まる。トークンは無期限で、
- * 視聴は 1 日 AD_BONUS_DAILY_LIMIT 回まで（獲得レートの上限であって当日消費の
- * 縛りではない）。Premium (RevenueCat) bypasses the quota. The server's global
- * cap remains the real cost ceiling. See docs/フリーミアム設計.md.
+ * リワード広告を見るたびに 1 回ぶんのトークンが貯まる。トークンは無期限。
+ *
+ * **広告視聴の回数に上限は無い**（2026-08-14 に AD_BONUS_DAILY_LIMIT=3 を撤廃 —
+ * ユーザー判断「無料でも使い続けられるように」）。1 日 3 本の上限があった頃は、
+ * 4 本目を見ようとした無料ユーザーが BYOK 案内しかないペイウォールに飛ばされ、
+ * その日は事実上使えなくなっていた。全体のコスト上限はサーバーの global cap
+ * (`apps/server/src/lib/rate-limit.ts`) が担保するので、端末側で速度制限をかける
+ * 必要はない。Premium (RevenueCat) bypasses the quota. See docs/フリーミアム設計.md.
  *
  * 既存ユーザーへの移行: 日次キーの履歴は数え直さない（生涯カウンタは 0 から）。
  * 更新後に 1 回だけ無料枠が復活するが、害はなく実装が単純。
@@ -19,13 +23,10 @@ import { isPremium } from './entitlement.service';
 
 /** 無料の AI レシピ作成の**生涯**回数（build-time configurable, default 1）。 */
 export const FREE_LIFETIME_LIMIT = FREE_DAILY_LIMIT_CONFIG;
-/** Max rewarded-ad watches (token grants) per day. Earn-rate limiter only — banked tokens never expire. */
-export const AD_BONUS_DAILY_LIMIT = 3;
 
 const USAGE_KEY_PREFIX = 'ai_photo_recipe_usage:';
 /** 生涯の無料枠消費数。日付キーを持たない = リセットされない。 */
 const LIFETIME_FREE_KEY = 'ai_photo_recipe_free_lifetime_used';
-const AD_WATCH_KEY_PREFIX = 'ai_photo_recipe_ad_watch:';
 const TOKEN_BALANCE_KEY = 'ai_photo_recipe_token_balance';
 
 export interface FreemiumStatus {
@@ -39,12 +40,10 @@ export interface FreemiumStatus {
   /** Remaining uses today; Infinity for premium. */
   remaining: number;
   canInfer: boolean;
-  /** Offer a rewarded ad: out of uses, ads available, today's watch cap not reached. */
+  /** Offer a rewarded ad: out of uses and an ad can be shown. No per-day watch cap. */
   canWatchAdForMore: boolean;
   /** Ad-earned tokens banked and not yet spent (persists across days). */
   tokenBalance: number;
-  /** Max ad watches (token grants) allowed per day. */
-  adWatchLimit: number;
 }
 
 /** Calendar-day key, e.g. "2026-06-28". */
@@ -67,8 +66,6 @@ export function deriveFreemiumStatus(
   adAvailable = false,
   byok = false,
   baseLimit: number = FREE_LIFETIME_LIMIT,
-  bonusLimit: number = AD_BONUS_DAILY_LIMIT,
-  adWatchedToday = 0,
 ): FreemiumStatus {
   if (premium || byok) {
     return {
@@ -80,7 +77,6 @@ export function deriveFreemiumStatus(
       canInfer: true,
       canWatchAdForMore: false,
       tokenBalance: 0,
-      adWatchLimit: bonusLimit,
     };
   }
   const balance = Math.max(0, tokenBalance);
@@ -93,9 +89,8 @@ export function deriveFreemiumStatus(
     limit,
     remaining,
     canInfer: remaining > 0,
-    canWatchAdForMore: adAvailable && remaining === 0 && adWatchedToday < bonusLimit,
+    canWatchAdForMore: adAvailable && remaining === 0,
     tokenBalance: balance,
-    adWatchLimit: bonusLimit,
   };
 }
 
@@ -124,11 +119,6 @@ async function incrementLifetimeFreeUsed(): Promise<void> {
   await setAppMeta(LIFETIME_FREE_KEY, String((await getLifetimeFreeUsed()) + 1));
 }
 
-/** How many rewarded ads have been watched today (earn-rate gate; resets daily). */
-export async function getAdWatchedToday(date: Date = new Date()): Promise<number> {
-  return readCount(AD_WATCH_KEY_PREFIX + currentDayKey(date));
-}
-
 /** Ad-earned tokens banked and not yet spent. Persists indefinitely (no date key). */
 export async function getTokenBalance(): Promise<number> {
   return readCount(TOKEN_BALANCE_KEY);
@@ -140,16 +130,11 @@ async function setTokenBalance(value: number): Promise<void> {
 
 /**
  * Watch a rewarded ad to earn one banked token (persists indefinitely).
- * Gated only by today's watch count vs AD_BONUS_DAILY_LIMIT — once that cap is
- * hit, further calls are no-ops until the next calendar day. Returns the new
- * (or unchanged, if capped) token balance.
+ * **Ungated** — every watch banks a token, however many times a day.
+ * Returns the new token balance.
  */
-export async function grantAdBonus(date: Date = new Date()): Promise<number> {
-  const watchedToday = await getAdWatchedToday(date);
-  const balance = await getTokenBalance();
-  if (watchedToday >= AD_BONUS_DAILY_LIMIT) return balance;
-  await setAppMeta(AD_WATCH_KEY_PREFIX + currentDayKey(date), String(watchedToday + 1));
-  const next = balance + 1;
+export async function grantAdBonus(): Promise<number> {
+  const next = (await getTokenBalance()) + 1;
   await setTokenBalance(next);
   return next;
 }
@@ -165,23 +150,13 @@ export async function spendToken(): Promise<number> {
 
 /** Combined premium + quota + token status for the gate / UI. */
 export async function getFreemiumStatus(): Promise<FreemiumStatus> {
-  const [premium, used, tokenBalance, adWatchedToday, byok] = await Promise.all([
+  const [premium, used, tokenBalance, byok] = await Promise.all([
     isPremium(),
     getLifetimeFreeUsed(),
     getTokenBalance(),
-    getAdWatchedToday(),
     hasUserApiKey(),
   ]);
-  return deriveFreemiumStatus(
-    premium,
-    used,
-    tokenBalance,
-    isAdRewardAvailable(),
-    byok,
-    FREE_LIFETIME_LIMIT,
-    AD_BONUS_DAILY_LIMIT,
-    adWatchedToday,
-  );
+  return deriveFreemiumStatus(premium, used, tokenBalance, isAdRewardAvailable(), byok);
 }
 
 /**

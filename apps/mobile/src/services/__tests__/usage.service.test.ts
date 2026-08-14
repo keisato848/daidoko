@@ -23,11 +23,9 @@ jest.mock('../byok.service', () => ({
 }));
 
 import {
-  AD_BONUS_DAILY_LIMIT,
   currentDayKey,
   deriveFreemiumStatus,
   FREE_LIFETIME_LIMIT,
-  getAdWatchedToday,
   getDailyUsage,
   getLifetimeFreeUsed,
   getFreemiumStatus,
@@ -165,27 +163,23 @@ describe('usage.service', () => {
   });
 
   describe('token banking', () => {
-    it('grants a token per watch, up to the daily watch cap', async () => {
-      const d = new Date(2026, 5, 10);
+    // 1 日 3 本の獲得上限は 2026-08-14 に撤廃（#173）。無料ユーザーが「広告を見れば
+    // 使い続けられる」状態を守るのがこのテストの目的なので、回数を増やしても止まらないこと。
+    it('grants a token per watch, with no daily cap', async () => {
       expect(await getTokenBalance()).toBe(0);
-      expect(await grantAdBonus(d)).toBe(1);
-      expect(await grantAdBonus(d)).toBe(2);
-      expect(await grantAdBonus(d)).toBe(AD_BONUS_DAILY_LIMIT);
-      // today's watch cap reached — further grants are no-ops
-      expect(await grantAdBonus(d)).toBe(AD_BONUS_DAILY_LIMIT);
-      expect(await getAdWatchedToday(d)).toBe(AD_BONUS_DAILY_LIMIT);
+      for (let i = 1; i <= 10; i += 1) {
+        expect(await grantAdBonus()).toBe(i);
+      }
     });
 
-    it('banks tokens indefinitely — balance survives a day change and watch cap resets', async () => {
-      const day1 = new Date(2026, 5, 10);
-      const day2 = new Date(2026, 5, 11);
-      for (let i = 0; i < AD_BONUS_DAILY_LIMIT; i += 1) await grantAdBonus(day1);
-      expect(await getTokenBalance()).toBe(AD_BONUS_DAILY_LIMIT);
+    it('banks tokens indefinitely — balance survives a day change', async () => {
+      await grantAdBonus();
+      await grantAdBonus();
+      expect(await getTokenBalance()).toBe(2);
 
-      // new day: watch count resets, but the banked balance does not
-      expect(await getAdWatchedToday(day2)).toBe(0);
-      expect(await getTokenBalance()).toBe(AD_BONUS_DAILY_LIMIT);
-      expect(await grantAdBonus(day2)).toBe(AD_BONUS_DAILY_LIMIT + 1);
+      // 日付キーを持たないので、暦日をまたいでも残高はそのまま
+      expect(await getTokenBalance()).toBe(2);
+      expect(await grantAdBonus()).toBe(3);
     });
 
     it('spendToken floors at zero', async () => {
@@ -208,25 +202,12 @@ describe('usage.service', () => {
       });
     });
 
-    it('offers an ad only when out of uses, ads available, today’s watch cap not reached', () => {
+    it('offers an ad whenever out of uses and an ad can be shown', () => {
       expect(deriveFreemiumStatus(false, 1, 0, true).canWatchAdForMore).toBe(true);
       // ads unavailable → no offer
       expect(deriveFreemiumStatus(false, 1, 0, false).canWatchAdForMore).toBe(false);
       // still has a use left → no offer yet
       expect(deriveFreemiumStatus(false, 0, 0, true).canWatchAdForMore).toBe(false);
-      // today's watch cap reached → no offer (even with zero banked tokens)
-      expect(
-        deriveFreemiumStatus(
-          false,
-          1,
-          0,
-          true,
-          false,
-          FREE_LIFETIME_LIMIT,
-          AD_BONUS_DAILY_LIMIT,
-          AD_BONUS_DAILY_LIMIT,
-        ).canWatchAdForMore,
-      ).toBe(false);
     });
 
     it('never offers ads to premium users', () => {
@@ -250,6 +231,25 @@ describe('usage.service', () => {
       const status = await getFreemiumStatus();
       expect(status.canInfer).toBe(false);
       expect(status.canWatchAdForMore).toBe(true);
+    });
+
+    // #173 の回帰テスト。以前は 1 日 3 本で canWatchAdForMore が false になり、
+    // 4 本目を見ようとした無料ユーザーがペイウォールに詰んでいた。
+    it('無料ユーザーは同じ日に何度でも「広告→1回」を繰り返せる', async () => {
+      mockAdAvailable = true;
+      await recordCloudInference(); // 無料枠を使い切る
+
+      for (let i = 0; i < 8; i += 1) {
+        const exhausted = await getFreemiumStatus();
+        expect(exhausted.canInfer).toBe(false);
+        expect(exhausted.canWatchAdForMore).toBe(true); // 何本目でも広告を持ちかけられる
+
+        await grantAdBonus(); // 広告を見た
+        expect((await getFreemiumStatus()).canInfer).toBe(true);
+        await recordCloudInference(); // 使う → またトークン 0
+      }
+
+      expect(await getTokenBalance()).toBe(0);
     });
   });
 });
