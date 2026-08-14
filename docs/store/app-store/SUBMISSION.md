@@ -209,3 +209,67 @@ noindex, are revocable by the user at any time, and return 404 once revoked.
 **残り**: 年齢レーティングの質問票（Console UI）→ 価格（無料）→ 審査提出。
 提出前に **PR #163（iOS 写真パス修正）をマージした上で iOS ビルドを作り直す**こと
 （今のビルドには写真が消える不具合が入っている）。
+
+---
+
+## 初回審査に提出（2026-08-14）
+
+**iOS 1.8.0 / build 10023 を審査に提出した（`WAITING_FOR_REVIEW`・承認後に自動公開）。**
+
+### 提出前の監査で見つけて直したもの
+
+**掲載情報だけでなく、提出物そのもの（.ipa）を開いて検査した**（手順 = `docs/リリース手順.md` §7-4-3）。
+
+| 見つけたもの                                                   | 原因                                                            | 対処                                                                                                            |
+| -------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 使っていない `NSMicrophoneUsageDescription`                    | `expo-camera` **と** `expo-image-picker` の**両方**が既定で足す | 両方に `microphonePermission: false`（片方だけでは消えない — 10021 で実証）                                     |
+| `NSUserTrackingUsageDescription` があるのに ATT を呼んでいない | ads プラグインの `userTrackingUsageDescription`                 | 削除。**文字列があるだけで Apple はバイナリを「トラッキングする」と判定**し、App Privacy と矛盾して提出が止まる |
+
+### 提出 API を叩いて初めて出たブロッカー
+
+静的検査では見つからない「申告どうしの矛盾・未設定」は、**実際に提出して初めて分かる**。先に踏んでおくと審査に回ってから拒否されるより早い。
+
+- `ENTITY_ERROR.ATTRIBUTE.REQUIRED: contentRightsDeclaration` → `DOES_NOT_USE_THIRD_PARTY_CONTENT`
+- `STATE_ERROR.APP_PRICING_REQUIRED` → 価格スケジュールを**無料**で作成（基準地域 JPN・`/v1/appPriceSchedules` に `${p1}` 形式のローカル ID で inline 作成）
+- `STATE_ERROR.BINARY_INDICATES_APP_TRACKS_USERS` → 上記 ATT 文字列の削除（**再ビルドが必要**）
+
+### 提出の API 手順（旧 API は使えない）
+
+`appStoreVersionSubmissions` は **CREATE 不可**（403）。現行は:
+
+1. `POST /v1/reviewSubmissions`（platform: IOS）
+2. `POST /v1/reviewSubmissionItems`（reviewSubmission + appStoreVersion）
+3. `PATCH /v1/reviewSubmissions/{id}` に `{ submitted: true }` → `WAITING_FOR_REVIEW`
+
+### 年齢制限の追加質問に回答（2026-08-14・期限 2026-09-07 より前に完了）
+
+Apple が質問票を改訂して追加した項目。**督促は「アプリ情報」ページに出るが、
+回答欄はそこには無い** — 「年齢制限指定 → 編集」で開くステップ 1「機能」の中にある。
+督促文だけ見て探すと見つからないので注意。
+
+未回答だったのは **「13歳未満のユーザに対するソーシャルメディアの利用不可」の 1 問だけ**で、
+これが空のまま「次へ」が無効になっていた（他は API で入れた値がそのまま反映済み）。
+
+| 設問                                 | 回答     |
+| ------------------------------------ | -------- |
+| ペアレンタルコントロール             | いいえ   |
+| 年齢保証                             | いいえ   |
+| 制限のないWebアクセス                | いいえ   |
+| ユーザ生成コンテンツ                 | いいえ   |
+| ソーシャルメディア                   | いいえ   |
+| 13歳未満のソーシャルメディア利用不可 | いいえ   |
+| メッセージ・チャット                 | いいえ   |
+| 広告                                 | **はい** |
+
+ステップ 2〜7 は「なし」のまま、上書きも「該当なし」で保存。
+**算出結果 = 4+**（172か所の国または地域／ブラジル A12／韓国 すべて／ベトナム 00+）。
+`GET /v1/apps/6800964382/appInfos?include=ageRatingDeclaration` で
+`socialMediaAgeRestricted: false` が入ったことと `appStoreAgeRating: FOUR_PLUS` を確認済み。
+
+**保存直後に「問題が発生しました」らしき要素が DOM に現れるが、8 件とも非表示のテンプレート残骸**で、
+実際の保存は通っている。API で読み返して確かめること。
+
+### 残タスク
+
+- 審査結果の確認。承認後は `SHARE_APP_STORE_URL` を Railway に設定すると、共有ページの「アプリで保存」が iOS 端末では App Store に向く
+- 無料枠が**再インストールで復活する**件（アップデートでは復活しない）。iOS はキーチェーンが削除後も残るので `expo-secure-store` に記録すれば塞げる。次リリースの題材
