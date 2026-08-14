@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.daidoko.app",
-      "buildNumber": "10022",
+      "buildNumber": "10023",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -69,8 +69,7 @@
         {
           "androidAppId": "ca-app-pub-2633806931583277~2829239666",
           "iosAppId": "ca-app-pub-2633806931583277~1080328085",
-          "delayAppMeasurementInit": true,
-          "userTrackingUsageDescription": "広告の表示回数の制御と不正防止のために利用します。"
+          "delayAppMeasurementInit": true
         }
       ]
     ],
