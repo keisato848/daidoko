@@ -412,6 +412,10 @@ export default function RecipeListScreen() {
               filtered.length === 0 && styles.gridEmpty,
             ]}
             showsVerticalScrollIndicator={false}
+            /* 検索中でもカードを 1 タップで開ける（既定の never だと
+               1 タップ目がキーボードを閉じるだけで消費される） */
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             ListEmptyComponent={
               recipes.length === 0 ? (
                 <EmptyState

@@ -13,6 +13,11 @@
  *
  * 入力欄のある画面は必ずこれで包む。個々の画面で `KeyboardAvoidingView` を
  * 直に使うと、また `behavior` の指定漏れが起きる。
+ * **この規約は `__tests__/keyboard-avoider-coverage.test.ts` が機械的に見張る**
+ * （文章で書いただけの頃、主役の「写真からレシピ」を含む 5 画面が漏れていた — #172）。
+ *
+ * `Modal` の中身は画面本体とは**別のツリー**なので、画面を包んでもモーダル内には
+ * 効かない。モーダルの内側にも個別に置くこと。
  */
 import { KeyboardAvoidingView, StyleSheet, type ViewStyle } from 'react-native';
 
