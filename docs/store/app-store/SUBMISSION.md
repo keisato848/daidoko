@@ -106,9 +106,10 @@ node scripts/release/capture-ios-screenshots.mjs
 - **アカウント不要**（デモアカウントの提供は不要）。ログインは存在しない
 - **Sign-in required = No / Demo account = 不要**
 
-仕様は `apps/mobile/src/services/usage.service.ts:20-29` で確認済み（2026-08-13）:
+仕様は `apps/mobile/src/services/usage.service.ts` で確認済み（2026-08-14 更新）:
 無料枠は **生涯 1 回（`FREE_LIFETIME_LIMIT`・日付キーを持たないのでリセットされない）**、
-広告で得たトークンは**失効しない**、**広告視聴は 1 日 3 本まで**（`AD_BONUS_DAILY_LIMIT`）。
+広告で得たトークンは**失効しない**、**広告視聴の回数に上限は無い**
+（`AD_BONUS_DAILY_LIMIT` は #173 で撤廃。無料のまま使い続けられる）。
 
 **Review Notes（そのまま貼れる英文）:**
 
@@ -120,8 +121,9 @@ AI features (photo-to-recipe, taste adjustment, recipe consultation) require a
 network connection:
 - Each install includes 1 free AI generation. This is a lifetime allowance and
   does not reset daily.
-- After it is used, the user can watch a rewarded ad to earn 1 more generation
-  (max 3 ad views per day; earned credits never expire).
+- After it is used, the user can watch a rewarded ad to earn 1 more generation.
+  Ads are opt-in (never auto-played), there is no cap on how many can be watched,
+  and earned credits never expire.
 - Alternatively, entering a personal Google Gemini API key under
   Settings > "Use your own AI key" removes the limit entirely, with no ads.
 
@@ -133,7 +135,7 @@ There is no in-app feed, search, or discovery of other users' content. Links are
 noindex, are revocable by the user at any time, and return 404 once revoked.
 ```
 
-日本語で出す場合も内容は同じ。**数値（1回・生涯・広告1日3本）は上記から変えないこと。**
+日本語で出す場合も内容は同じ。**数値（無料枠 1 回・生涯・広告の視聴回数は無制限）は上記から変えないこと。**
 
 ### 5. 提出
 
