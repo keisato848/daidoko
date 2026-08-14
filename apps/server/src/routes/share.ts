@@ -18,6 +18,7 @@ import {
   renderNotFoundPage,
   renderPasscodePage,
   renderSharePage,
+  storeUrlForUserAgent,
 } from '../lib/share-page.js';
 import {
   createBookShare,
@@ -346,7 +347,9 @@ sharePageRouter.get('/:slug', (c) => {
   if (!row) {
     return c.html(renderNotFoundPage(), 404);
   }
-  return c.html(renderSharePage(row, shareBaseUrl()));
+  return c.html(
+    renderSharePage(row, shareBaseUrl(), storeUrlForUserAgent(c.req.header('user-agent'))),
+  );
 });
 
 sharePageRouter.get('/:slug/photo', (c) => {
@@ -394,7 +397,14 @@ bookPageRouter.get('/:slug', (c) => {
     // 中身もタイトルも出さない（OGP も出さない — プレビューで漏れるため）
     return c.html(renderPasscodePage(slug, found.book.locale, false), 401);
   }
-  return c.html(renderBookPage(found.book, found.recipes, shareBaseUrl()));
+  return c.html(
+    renderBookPage(
+      found.book,
+      found.recipes,
+      shareBaseUrl(),
+      storeUrlForUserAgent(c.req.header('user-agent')),
+    ),
+  );
 });
 
 // パスコード入力。成功で slug スコープの署名 Cookie を置き、読み直しを許す
