@@ -18,13 +18,14 @@
  *
  * 使い方:
  *   node scripts/release/capture-ios-screenshots.mjs [--udid <udid>] [--shots 01,02]
- *     [--out <dir>] [--recipe <id>] [--keep-status-bar] [--wait <ms>]
+ *     [--out <dir>] [--recipe <id>] [--photo-recipe <id>] [--keep-status-bar] [--wait <ms>]
  *
  * manual 指定のショット（AI 実行結果など自動遷移できない画面）はスキップし、
  * 既存ファイルを維持する。
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -40,6 +41,8 @@ if (process.platform !== 'darwin') {
 
 const args = parseArgs(process.argv.slice(2));
 const RECIPE_ID = args.recipe ?? 'recipe-1';
+/** 表紙写真つきレシピ（seed 同梱の scrambled-egg.jpg が付く） */
+const PHOTO_RECIPE_ID = args.photoRecipe ?? 'recipe-7';
 
 /**
  * ショット定義。route は Expo Router のパス（daidoko://<route> で開く）。
@@ -59,9 +62,11 @@ const SHOTS = [
   },
   { file: '08-photo-recipe-result.png', manual: true, label: 'AI 結果画面（手動撮影・既存維持）' },
   {
+    // recipe-7（ふわとろスクランブルエッグトースト）は seedBundledCoverPhotos が
+    // assets/seed-photos/scrambled-egg.jpg を表紙に設定するので、実データ無しで再現できる。
     file: '10-recipe-detail-photo.png',
-    manual: true,
-    label: '写真つき詳細（実データ依存・既存維持）',
+    route: `recipes/${PHOTO_RECIPE_ID}`,
+    label: '写真つき詳細（recipe-7・表紙は seed 同梱）',
   },
 ];
 
@@ -78,6 +83,8 @@ const selected = SHOTS.filter(
 
 if (!args.keepStatusBar) overrideStatusBar();
 const results = [];
+/** 撮影済みの画像ハッシュ → ファイル名。同一画像の二度撮り（＝遷移失敗）を検出する。 */
+const capturedDigests = new Map();
 try {
   for (const shot of selected) {
     if (shot.manual) {
@@ -128,6 +135,25 @@ function captureShot(shot) {
   const w = buf.readUInt32BE(16);
   const h = buf.readUInt32BE(20);
   const size = `${w}x${h} ${Math.round(buf.length / 1024)}KB`;
+
+  // 画面が遷移していないと、どのショットも同じ絵（ホーム画面など）になる。
+  // PNG として妥当なだけでは "撮れた" と言えないので、既出の絵と一致したら失敗にする。
+  // 実際に踏んだ罠: iOS は daidoko:// を simctl openurl で開くと
+  // 「"だいどこ" で開きますか?」の確認ダイアログを挟む。放置すると遷移せず、
+  // 全ショットがホーム画面＋ダイアログの同一画像になる（2026-08-13）。
+  const digest = crypto.createHash('sha256').update(buf).digest('hex');
+  const duplicateOf = capturedDigests.get(digest);
+  if (duplicateOf) {
+    console.error(
+      `FAILED (${shot.file} が ${duplicateOf} と同一画像): 画面遷移が起きていません。\n` +
+        `  シミュレータ画面を確認してください。ディープリンクの確認ダイアログ` +
+        `（「"だいどこ" で開きますか?」）が出ていると、この症状になります。`,
+    );
+    results.push({ ...shot, status: 'FAILED', size });
+    return;
+  }
+  capturedDigests.set(digest, shot.file);
+
   console.log(`captured: ${shot.file} (${size}) — ${shot.label}`);
   results.push({ ...shot, status: 'captured', size });
 }
@@ -215,6 +241,7 @@ function parseArgs(argv) {
     if (t === '--udid') parsed.udid = argv[++i];
     else if (t === '--out') parsed.out = argv[++i];
     else if (t === '--recipe') parsed.recipe = argv[++i];
+    else if (t === '--photo-recipe') parsed.photoRecipe = argv[++i];
     else if (t === '--shots') parsed.shots = argv[++i].split(',').map((s) => s.trim());
     else if (t === '--wait') parsed.waitMs = Number(argv[++i]);
     else if (t === '--keep-status-bar') parsed.keepStatusBar = true;

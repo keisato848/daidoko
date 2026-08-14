@@ -72,6 +72,10 @@ tmp/
 temp/
 Temp/
 
+# React Native プリビルド成果物のローカルキャッシュ（回線が遅い環境での pod install 用・数百MB）
+# 使い方は docs/iOS開発環境.md / HERMES_ENGINE_TARBALL_PATH 等で参照する
+.rn-artifacts-cache/
+
 # Claude Code
 .claude/*
 !.claude/skills/

@@ -61,8 +61,8 @@ const pantry: typeof ja = {
     lead: 'Photograph a meal and we’ll estimate what you used and subtract it (experimental).',
     capture: 'Photograph a meal',
     quotaRemaining: {
-      one: 'Free analyses left today: {{count}}',
-      other: 'Free analyses left today: {{count}}',
+      one: 'Free analyses left: {{count}}',
+      other: 'Free analyses left: {{count}}',
     },
     resultWithDish:
       'These are the pantry items used in “{{dish}}”.\nPick what to subtract, then confirm.',

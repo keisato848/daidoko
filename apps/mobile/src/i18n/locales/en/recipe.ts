@@ -266,8 +266,8 @@ const recipe: typeof ja = {
     offlineNotice: 'Connect to the internet to create recipes from photos',
 
     quotaRemaining: {
-      one: '{{count}} free creation left today · go unlimited',
-      other: '{{count}} free creations left today · go unlimited',
+      one: '{{count}} free creation left · go unlimited',
+      other: '{{count}} free creations left · go unlimited',
     },
     unlimitedByok: 'Your own AI key — unlimited',
     unlimitedPremium: 'Premium — unlimited',

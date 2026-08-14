@@ -17,8 +17,33 @@ node scripts/release/capture-ios-screenshots.mjs            # 全自動ショッ
 node scripts/release/capture-ios-screenshots.mjs --shots 01,04   # 部分再取得
 ```
 
-- アップロードは App Store Connect の Web UI か fastlane deliver（Play のような API 一括スクリプトは未整備）。
-- `08` と `10` は自動化対象外（manual）— 既存 PNG を維持する。
+- **アップロードは ASC API でできる**（`appScreenshotSets` → `appScreenshots` の予約＋アップロード＋コミット。
+  2026-08-13 に疎通確認済み）。Play の `update-play-screenshots.mjs` 相当の一括スクリプトはまだ無いだけ。
+  **撮影だけ macOS 必須で、アップロードは Windows からでよい。** Web UI から手で上げても構わない。
+- **`10` は自動化済み**（2026-08-13）。seed の `recipe-7`（ふわとろスクランブルエッグトースト）に
+  `seedBundledCoverPhotos` が `assets/seed-photos/scrambled-egg.jpg` を表紙として付けるので、
+  実データ無しで再現できる。`--photo-recipe <id>` で別レシピに差し替え可。
+  ※ Android 版 `capture-store-screenshots.mjs` はまだ `manual` のまま（Play は掲載済みのため未着手）。
+- `08`（AI 結果画面）は自動化対象外（manual）。deep link で到達できず、実際に AI 推論を走らせる必要がある。
+
+- 提出全体の進捗と残作業は `../SUBMISSION.md`。
+
+> **全ショットが同じ絵になったら、アプリが起動できていない（2026-08-13 の教訓）**
+>
+> 症状: iOS が **「"だいどこ" で開きますか?」**（キャンセル／開く）の確認を出し続け、
+> 画面遷移が起きず、**全ショットが「ホーム画面＋ダイアログ」の同一画像**になる。
+>
+> **ダイアログ自体は原因ではない。** アプリが起動直後にクラッシュしていると、
+> SpringBoard が `openurl` のたびに「アプリを開くか」を訊いてくる。
+> このときは実際に `ExpoLocalization` ネイティブモジュールが無くて即死していた
+> （`ios/` が古い prebuild のままで、後から入った依存がリンクされていなかった）。
+> **`expo prebuild -p ios --clean` でネイティブを作り直したら、確認ダイアログは一度も出なくなった。**
+>
+> 詰まったら、まず `xcrun simctl launch <udid> com.daidoko.app` してから
+> 30 秒後にプロセスが生きているか確認する。死んでいるならスクショの問題ではない。
+> 原因は `xcrun simctl spawn <udid> log show --last 5m --predicate 'process == "app"'` で追う。
+>
+> なおスクリプトは**同一画像を検出したら FAILED にする**（黙って成功扱いにしない）。
 
 | 順  | ファイル                     | 内容                               |
 | --- | ---------------------------- | ---------------------------------- |
