@@ -28,6 +28,10 @@ const paywall: typeof ja = {
       'is both a policy violation and a misrepresentation of a recurring charge.',
   },
 
+  /** Label for the links App Review guideline 3.1.2 requires. Do not drop the links. */
+  eula: 'Terms of Use',
+  privacyPolicy: 'Privacy Policy',
+
   or: 'or',
   watchAd: 'Watch an ad to earn 1 credit',
   tokenHint: {

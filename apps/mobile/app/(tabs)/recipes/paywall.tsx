@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import {
   View,
 } from 'react-native';
 
+import { EULA_URL, PRIVACY_POLICY_URL } from '../../../src/constants/legal';
 import { Colors } from '../../../src/constants/theme';
 import { t, tCount } from '../../../src/i18n';
 import { getAdRewardProvider } from '../../../src/services/ad-reward.service';
@@ -208,6 +210,21 @@ export default function PaywallScreen() {
         </Pressable>
 
         <Text style={styles.terms}>{t('paywall.terms')}</Text>
+
+        {/* App Store の審査ガイドライン 3.1.2 は、自動更新サブスクの画面に
+            利用規約とプライバシーポリシーへの**機能するリンク**を求める。
+            文言だけでは足りず、リンクが無いと審査で止まる。 */}
+        <View style={styles.legalLinks}>
+          <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(EULA_URL)}>
+            <Text style={styles.legalLink}>{t('paywall.eula')}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
+          >
+            <Text style={styles.legalLink}>{t('paywall.privacyPolicy')}</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </View>
   );
@@ -354,5 +371,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 17,
     marginTop: 4,
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    // 区切りは記号ではなく余白で出す。中黒は日本語の文字なので英語面に持ち込めない。
+    columnGap: 20,
+    marginTop: 10,
+  },
+  legalLink: {
+    fontSize: 11,
+    color: Colors.gold,
+    textDecorationLine: 'underline',
+    // 小さい文字なので、指で押せる高さを確保する
+    paddingVertical: 6,
   },
 });

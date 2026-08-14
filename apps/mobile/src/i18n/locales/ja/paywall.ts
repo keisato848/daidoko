@@ -35,6 +35,10 @@ const paywall = {
       'is both a policy violation and a misrepresentation of a recurring charge.',
   } satisfies CriticalMessage,
 
+  /** 審査ガイドライン 3.1.2 が求めるリンクのラベル。リンク自体を消さないこと。 */
+  eula: '利用規約',
+  privacyPolicy: 'プライバシーポリシー',
+
   or: 'または',
   watchAd: '広告を見て 1 回ぶん貯める',
   /** 貯めた回数が**失効しない**ことの説明。当日限りだと誤解させない。 */
