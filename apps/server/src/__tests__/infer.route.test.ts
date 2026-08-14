@@ -82,6 +82,36 @@ describe('POST /api/v1/infer/photo', () => {
     });
   });
 
+  // 思考トークンは課金上「出力」に計上され、実測ではコストを支配していた。
+  // 既定オフはここ（ルート）で効かせる — 評価ハーネスは provider を直呼びするので
+  // 影響を受けず、A/B の「思考あり」基準が保てる（`lib/thinking-budget.ts`）。
+  describe('思考トークンの既定', () => {
+    afterEach(() => {
+      delete process.env['GEMINI_THINKING_BUDGET'];
+    });
+
+    it('既定では thinkingBudget=0 を provider に渡す', async () => {
+      let seen: number | undefined = -1;
+      stubProvider(async (input) => {
+        seen = input.thinkingBudget;
+        return VALID_DISH;
+      });
+      await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+      expect(seen).toBe(0);
+    });
+
+    it('GEMINI_THINKING_BUDGET=auto なら渡さない（モデル既定＝思考あり）', async () => {
+      process.env['GEMINI_THINKING_BUDGET'] = 'auto';
+      let hasKey = true;
+      stubProvider(async (input) => {
+        hasKey = 'thinkingBudget' in input;
+        return VALID_DISH;
+      });
+      await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+      expect(hasKey).toBe(false);
+    });
+  });
+
   describe('エラーケース', () => {
     it('料理でない画像 → ok:false, VISION_NOT_A_DISH', async () => {
       stubProvider(async () => ({ isDish: false, confidence: 'low' }));
