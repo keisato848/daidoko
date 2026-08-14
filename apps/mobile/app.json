@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.daidoko.app",
-      "buildNumber": "10021",
+      "buildNumber": "10022",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -51,7 +51,8 @@
         "expo-image-picker",
         {
           "photosPermission": "レシピ写真を選択するために写真ライブラリへのアクセスを使用します。",
-          "cameraPermission": "レシピ写真を撮影するためにカメラを使用します。"
+          "cameraPermission": "レシピ写真を撮影するためにカメラを使用します。",
+          "microphonePermission": false
         }
       ],
       [
