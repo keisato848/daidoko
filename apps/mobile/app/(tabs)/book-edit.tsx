@@ -21,6 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '../../src/components/BottomSheet';
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import {
@@ -195,103 +196,113 @@ export default function BookEditScreen() {
         <Text style={styles.headerTitle}>{t('settings.book.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.label}>{t('settings.book.name')}</Text>
-        <TextInput
-          style={styles.input}
-          value={title}
-          onChangeText={setTitle}
-          onBlur={() => void saveTitle()}
-          maxLength={100}
-          placeholderTextColor={Colors.muted}
-        />
-
-        <View style={styles.sectionHead}>
-          <Text style={styles.label}>{t('settings.book.recipes')}</Text>
-          <Pressable style={styles.addBtn} onPress={() => void openPicker()} hitSlop={6}>
-            <Plus size={16} color={Colors.gold} />
-            <Text style={styles.addBtnText}>{t('settings.book.addRecipes')}</Text>
-          </Pressable>
-        </View>
-        {book.items.map((item) => (
-          <View key={item.recipeId} style={styles.itemRow}>
-            <Text
-              style={[styles.itemTitle, item.excluded && styles.itemExcluded]}
-              numberOfLines={1}
-            >
-              {item.title}
-            </Text>
-            {item.excluded && (
-              <Text style={styles.excludedTag}>{t('settings.book.excludedTag')}</Text>
-            )}
-            <Pressable onPress={() => void removeRecipe(item.recipeId)} hitSlop={8}>
-              <X size={16} color={Colors.muted} />
-            </Pressable>
-          </View>
-        ))}
-        {book.items.length === 0 && (
-          <Text style={styles.emptyItems}>{t('settings.book.noRecipes')}</Text>
-        )}
-
-        {/* 公開の強度（S4-2）。人単位の権限は持てない — リンクの強度だけ */}
-        <Text style={[styles.label, styles.sectionGap]}>{t('settings.book.accessTitle')}</Text>
-        <Pressable style={styles.optionRow} onPress={() => setPasscodeOn((v) => !v)}>
-          <View style={[styles.checkbox, passcodeOn && styles.checkboxOn]}>
-            {passcodeOn && <Check size={12} color={Colors.bg} />}
-          </View>
-          <Text style={styles.optionLabel}>{t('settings.book.passcodeLabel')}</Text>
-        </Pressable>
-        {passcodeOn && (
+      {/* 題名・パスコードの入力欄より下に「共有する」ボタンがあるので包む */}
+      <KeyboardAvoider style={styles.fill}>
+        <ScrollView
+          contentContainerStyle={styles.body}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          <Text style={styles.label}>{t('settings.book.name')}</Text>
           <TextInput
-            style={[styles.input, styles.passcodeInput]}
-            value={passcode}
-            onChangeText={(v) => setPasscode(v.replace(/[^0-9]/g, '').slice(0, 4))}
-            keyboardType="number-pad"
-            maxLength={4}
-            placeholder="0000"
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            onBlur={() => void saveTitle()}
+            maxLength={100}
             placeholderTextColor={Colors.muted}
           />
-        )}
-        <View style={styles.expiryRow}>
-          {EXPIRY_OPTIONS.map((option) => (
-            <Pressable
-              key={String(option)}
-              style={[styles.expiryChip, expiresInDays === option && styles.expiryChipOn]}
-              onPress={() => setExpiresInDays(option)}
-            >
-              <Text
-                style={[styles.expiryChipText, expiresInDays === option && styles.expiryChipTextOn]}
-              >
-                {option === null
-                  ? t('settings.book.expiryNone')
-                  : t('settings.book.expiryDays', { days: option })}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
 
-        <Pressable
-          style={[styles.shareBtn, busy && styles.btnDisabled]}
-          onPress={handleShare}
-          disabled={busy}
-        >
-          <Text style={styles.shareBtnText}>
-            {busy
-              ? t('recipe.list.bookShare.publishing')
-              : book.shareUrl == null
-                ? t('settings.book.shareNow')
-                : t('settings.book.applyUpdate')}
-          </Text>
-        </Pressable>
-        {book.shareUrl != null && (
-          <>
-            <Text style={styles.sharedNote}>{t('settings.book.sharedNote')}</Text>
-            <Pressable style={styles.stopBtn} onPress={handleStop}>
-              <Text style={styles.stopBtnText}>{t('settings.webShares.stopAction')}</Text>
+          <View style={styles.sectionHead}>
+            <Text style={styles.label}>{t('settings.book.recipes')}</Text>
+            <Pressable style={styles.addBtn} onPress={() => void openPicker()} hitSlop={6}>
+              <Plus size={16} color={Colors.gold} />
+              <Text style={styles.addBtnText}>{t('settings.book.addRecipes')}</Text>
             </Pressable>
-          </>
-        )}
-      </ScrollView>
+          </View>
+          {book.items.map((item) => (
+            <View key={item.recipeId} style={styles.itemRow}>
+              <Text
+                style={[styles.itemTitle, item.excluded && styles.itemExcluded]}
+                numberOfLines={1}
+              >
+                {item.title}
+              </Text>
+              {item.excluded && (
+                <Text style={styles.excludedTag}>{t('settings.book.excludedTag')}</Text>
+              )}
+              <Pressable onPress={() => void removeRecipe(item.recipeId)} hitSlop={8}>
+                <X size={16} color={Colors.muted} />
+              </Pressable>
+            </View>
+          ))}
+          {book.items.length === 0 && (
+            <Text style={styles.emptyItems}>{t('settings.book.noRecipes')}</Text>
+          )}
+
+          {/* 公開の強度（S4-2）。人単位の権限は持てない — リンクの強度だけ */}
+          <Text style={[styles.label, styles.sectionGap]}>{t('settings.book.accessTitle')}</Text>
+          <Pressable style={styles.optionRow} onPress={() => setPasscodeOn((v) => !v)}>
+            <View style={[styles.checkbox, passcodeOn && styles.checkboxOn]}>
+              {passcodeOn && <Check size={12} color={Colors.bg} />}
+            </View>
+            <Text style={styles.optionLabel}>{t('settings.book.passcodeLabel')}</Text>
+          </Pressable>
+          {passcodeOn && (
+            <TextInput
+              style={[styles.input, styles.passcodeInput]}
+              value={passcode}
+              onChangeText={(v) => setPasscode(v.replace(/[^0-9]/g, '').slice(0, 4))}
+              keyboardType="number-pad"
+              maxLength={4}
+              placeholder="0000"
+              placeholderTextColor={Colors.muted}
+            />
+          )}
+          <View style={styles.expiryRow}>
+            {EXPIRY_OPTIONS.map((option) => (
+              <Pressable
+                key={String(option)}
+                style={[styles.expiryChip, expiresInDays === option && styles.expiryChipOn]}
+                onPress={() => setExpiresInDays(option)}
+              >
+                <Text
+                  style={[
+                    styles.expiryChipText,
+                    expiresInDays === option && styles.expiryChipTextOn,
+                  ]}
+                >
+                  {option === null
+                    ? t('settings.book.expiryNone')
+                    : t('settings.book.expiryDays', { days: option })}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable
+            style={[styles.shareBtn, busy && styles.btnDisabled]}
+            onPress={handleShare}
+            disabled={busy}
+          >
+            <Text style={styles.shareBtnText}>
+              {busy
+                ? t('recipe.list.bookShare.publishing')
+                : book.shareUrl == null
+                  ? t('settings.book.shareNow')
+                  : t('settings.book.applyUpdate')}
+            </Text>
+          </Pressable>
+          {book.shareUrl != null && (
+            <>
+              <Text style={styles.sharedNote}>{t('settings.book.sharedNote')}</Text>
+              <Pressable style={styles.stopBtn} onPress={handleStop}>
+                <Text style={styles.stopBtnText}>{t('settings.webShares.stopAction')}</Text>
+              </Pressable>
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoider>
 
       <BottomSheet
         visible={pickerOpen}
@@ -321,6 +332,7 @@ export default function BookEditScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
+  fill: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

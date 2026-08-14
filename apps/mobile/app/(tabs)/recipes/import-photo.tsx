@@ -22,6 +22,7 @@ import {
   runRecipePhotoAgent,
   type RecipePhotoAgentOutput,
 } from '../../../src/agents/recipe-photo.agent';
+import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
@@ -439,33 +440,47 @@ export default function ImportPhotoScreen() {
         animationType="fade"
         onRequestClose={handleCancelComment}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            {pendingPhoto && (
-              <Image source={{ uri: pendingPhoto.localPath }} style={styles.modalImage} />
-            )}
-            <Text style={styles.modalTitle}>{t('recipe.photo.commentTitle')}</Text>
-            <Text style={styles.modalHint}>{t('recipe.photo.commentHint')}</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder={t('recipe.photo.commentPlaceholder')}
-              placeholderTextColor={Colors.muted}
-              maxLength={1000}
-              multiline
-              autoFocus
-            />
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalCancelButton} onPress={handleCancelComment}>
-                <Text style={styles.modalCancelText}>{t('recipe.photo.commentCancel')}</Text>
-              </Pressable>
-              <Pressable style={styles.modalConfirmButton} onPress={handleConfirmComment}>
-                <Text style={styles.modalConfirmText}>{t('recipe.photo.commentConfirm')}</Text>
-              </Pressable>
+        {/*
+          `Modal` の中身は画面本体とは別のツリーなので、画面を KeyboardAvoider で
+          包んでもここには効かない。**モーダルの内側にも要る**。
+          さらに autoFocus でキーボードが即座に立ち上がるため、包み忘れると
+          「これで作る」が必ずキーボードの下に隠れる（#172 の報告そのもの）。
+        */}
+        <KeyboardAvoider style={styles.modalOverlay}>
+          <ScrollView
+            contentContainerStyle={styles.modalScrollBody}
+            /* キーボードを出したままボタンを押せるように（既定の never だと
+               1 タップ目がキーボードを閉じるだけで消費される） */
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+          >
+            <View style={styles.modalCard}>
+              {pendingPhoto && (
+                <Image source={{ uri: pendingPhoto.localPath }} style={styles.modalImage} />
+              )}
+              <Text style={styles.modalTitle}>{t('recipe.photo.commentTitle')}</Text>
+              <Text style={styles.modalHint}>{t('recipe.photo.commentHint')}</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder={t('recipe.photo.commentPlaceholder')}
+                placeholderTextColor={Colors.muted}
+                maxLength={1000}
+                multiline
+                autoFocus
+              />
+              <View style={styles.modalButtons}>
+                <Pressable style={styles.modalCancelButton} onPress={handleCancelComment}>
+                  <Text style={styles.modalCancelText}>{t('recipe.photo.commentCancel')}</Text>
+                </Pressable>
+                <Pressable style={styles.modalConfirmButton} onPress={handleConfirmComment}>
+                  <Text style={styles.modalConfirmText}>{t('recipe.photo.commentConfirm')}</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoider>
       </Modal>
     </View>
   );
@@ -580,8 +595,13 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  // 余白があれば中央、キーボードで足りなくなったらスクロール（小さい端末で切れない）
+  modalScrollBody: {
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingVertical: 24,
   },
   modalCard: {
     backgroundColor: Colors.bgCard,

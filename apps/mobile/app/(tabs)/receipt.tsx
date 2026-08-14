@@ -10,6 +10,7 @@ import { Camera, Check, ImageIcon, X } from 'lucide-react-native';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Loading } from '../../src/components/Loading';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
@@ -116,7 +117,8 @@ export default function ReceiptScreen() {
   const chosenCount = items.filter((it) => it.include && it.name.trim()).length;
 
   return (
-    <View style={styles.container}>
+    // 品目名を直すとキーボードが出る。包まないと下部の「在庫に追加」フッターが隠れる
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
@@ -159,6 +161,9 @@ export default function ReceiptScreen() {
             data={items}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
+            /* 編集中でもチェックや他の行を 1 タップで操作できる */
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
             renderItem={({ item }) => (
               <View style={styles.row}>
                 <Pressable
@@ -206,7 +211,7 @@ export default function ReceiptScreen() {
           </View>
         </>
       )}
-    </View>
+    </KeyboardAvoider>
   );
 }
 
