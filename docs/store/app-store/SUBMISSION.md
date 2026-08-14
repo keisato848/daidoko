@@ -209,3 +209,40 @@ noindex, are revocable by the user at any time, and return 404 once revoked.
 **残り**: 年齢レーティングの質問票（Console UI）→ 価格（無料）→ 審査提出。
 提出前に **PR #163（iOS 写真パス修正）をマージした上で iOS ビルドを作り直す**こと
 （今のビルドには写真が消える不具合が入っている）。
+
+---
+
+## 初回審査に提出（2026-08-14）
+
+**iOS 1.8.0 / build 10023 を審査に提出した（`WAITING_FOR_REVIEW`・承認後に自動公開）。**
+
+### 提出前の監査で見つけて直したもの
+
+**掲載情報だけでなく、提出物そのもの（.ipa）を開いて検査した**（手順 = `docs/リリース手順.md` §7-4-3）。
+
+| 見つけたもの                                                   | 原因                                                            | 対処                                                                                                            |
+| -------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 使っていない `NSMicrophoneUsageDescription`                    | `expo-camera` **と** `expo-image-picker` の**両方**が既定で足す | 両方に `microphonePermission: false`（片方だけでは消えない — 10021 で実証）                                     |
+| `NSUserTrackingUsageDescription` があるのに ATT を呼んでいない | ads プラグインの `userTrackingUsageDescription`                 | 削除。**文字列があるだけで Apple はバイナリを「トラッキングする」と判定**し、App Privacy と矛盾して提出が止まる |
+
+### 提出 API を叩いて初めて出たブロッカー
+
+静的検査では見つからない「申告どうしの矛盾・未設定」は、**実際に提出して初めて分かる**。先に踏んでおくと審査に回ってから拒否されるより早い。
+
+- `ENTITY_ERROR.ATTRIBUTE.REQUIRED: contentRightsDeclaration` → `DOES_NOT_USE_THIRD_PARTY_CONTENT`
+- `STATE_ERROR.APP_PRICING_REQUIRED` → 価格スケジュールを**無料**で作成（基準地域 JPN・`/v1/appPriceSchedules` に `${p1}` 形式のローカル ID で inline 作成）
+- `STATE_ERROR.BINARY_INDICATES_APP_TRACKS_USERS` → 上記 ATT 文字列の削除（**再ビルドが必要**）
+
+### 提出の API 手順（旧 API は使えない）
+
+`appStoreVersionSubmissions` は **CREATE 不可**（403）。現行は:
+
+1. `POST /v1/reviewSubmissions`（platform: IOS）
+2. `POST /v1/reviewSubmissionItems`（reviewSubmission + appStoreVersion）
+3. `PATCH /v1/reviewSubmissions/{id}` に `{ submitted: true }` → `WAITING_FOR_REVIEW`
+
+### 残タスク
+
+- **年齢制限の新しいソーシャルメディア質問**（Console の「アプリ情報」）— 期限 2026-09-07。今回の提出は通るが期限内に回答が要る
+- 審査結果の確認。承認後は `SHARE_APP_STORE_URL` を Railway に設定すると、共有ページの「アプリで保存」が iOS 端末では App Store に向く
+- 無料枠が**再インストールで復活する**件（アップデートでは復活しない）。iOS はキーチェーンが削除後も残るので `expo-secure-store` に記録すれば塞げる。次リリースの題材
