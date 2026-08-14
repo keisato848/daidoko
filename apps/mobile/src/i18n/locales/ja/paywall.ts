@@ -8,6 +8,17 @@ import type { CriticalMessage, PluralMessage } from '../../types';
 
 const paywall = {
   title: 'DAIDOKO プレミアム',
+
+  /**
+   * 課金が使えないプラットフォーム向けの見出し。
+   * **買えない商品を宣伝しない**ため、プレミアムの語を出さない（`isEntitlementConfigured()`）。
+   */
+  freeTitle: 'AIレシピをもっと使う',
+  freeSubtitle: {
+    one: '無料のAIレシピ作成は初回{{count}}回まで。以降は広告を見るたびに1回使えます。',
+    other: '無料のAIレシピ作成は初回{{count}}回まで。以降は広告を見るたびに1回使えます。',
+  } satisfies PluralMessage,
+
   subtitle: {
     one: '無料のAIレシピ作成は初回{{count}}回まで。以降は広告を見るたびに1回使えます。\nプレミアムなら、回数を気にせず使えます。',
     other:
@@ -34,6 +45,14 @@ const paywall = {
       'purchase, and where to cancel. App store rules require all three; dropping any of them ' +
       'is both a policy violation and a misrepresentation of a recurring charge.',
   } satisfies CriticalMessage,
+
+  /** 審査ガイドライン 3.1.2 が求めるリンクのラベル。リンク自体を消さないこと。 */
+  eula: '利用規約',
+  privacyPolicy: 'プライバシーポリシー',
+
+  /** 課金が使えないとき、無制限にする唯一の手段。行き止まりを作らないために出す。 */
+  useOwnKey: '自分のAIキーを使う',
+  useOwnKeyHint: '自分の Gemini キーを設定すると、回数の制限なく使えます。',
 
   or: 'または',
   watchAd: '広告を見て 1 回ぶん貯める',

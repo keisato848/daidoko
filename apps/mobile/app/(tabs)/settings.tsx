@@ -22,6 +22,7 @@ import {
   getCurrentUserProfile,
 } from '../../src/services/user.service';
 import { getAdRewardProvider } from '../../src/services/ad-reward.service';
+import { isEntitlementConfigured } from '../../src/services/entitlement.service';
 import { isLaunchCameraEnabled, setLaunchCameraEnabled } from '../../src/services/app-meta.service';
 import { getFreemiumStatus, type FreemiumStatus } from '../../src/services/usage.service';
 import { useUnitSystemStore } from '../../src/stores/unitSystem.store';
@@ -103,7 +104,9 @@ export default function SettingsScreen() {
   }, []);
 
   // Plan row content depends on premium state (avoid nested ternaries).
-  let planLabel = t('settings.plan.upgrade');
+  // 課金が使えないプラットフォームでは「プレミアムにする」と誘わない
+  // （押した先で必ず失敗する）。有料化は iOS 先行 — `docs/フリーミアム設計.md` §6。
+  let planLabel = isEntitlementConfigured() ? t('settings.plan.upgrade') : t('settings.plan.free');
   let planSubtitle = t('settings.plan.loading');
   let planOnPress = () => router.push('/recipes/paywall');
   if (freemium) {

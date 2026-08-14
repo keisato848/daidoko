@@ -16,9 +16,7 @@ export const SERVER_BASE_URL =
 
 export const API_V1 = `${SERVER_BASE_URL}/api/v1`;
 
-// RevenueCat の公開 SDK キー（プラットフォーム別）。
-// 未設定なら課金は無効化され、無料枠のみでアプリは完全に動作する（Stub プロバイダ）。
-export const REVENUECAT_API_KEY = process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'] ?? '';
+// RevenueCat の公開 SDK キーは後段（platformValue の定義後）で解決する。
 
 // リワード広告（AdMob）の有効化フラグ。既定 false ＝ 広告 UI 非表示で挙動不変。
 // 動作確認は EXPO_PUBLIC_ADMOB_ENABLED=true でビルド（app.json のテスト ID で Google テスト広告が出る）。
@@ -40,25 +38,37 @@ export const FREE_DAILY_LIMIT_CONFIG =
 // 「空ならテスト ID」のフォールバックがあるため、ここで空を通してしまうと
 // **本番ビルドにテスト広告が出る**（iOS のユニットを作る前に踏みかけた）。
 // 空かどうかの判定は各サービスの isConfigured 側で行う。
-function platformAdUnit(androidId: string | undefined, iosId: string | undefined): string {
-  return (Platform.OS === 'ios' ? iosId : androidId) ?? '';
+function platformValue(android: string | undefined, ios: string | undefined): string {
+  return (Platform.OS === 'ios' ? ios : android) ?? '';
 }
 
 // リワード広告ユニット ID。
-export const ADMOB_REWARDED_UNIT_ID = platformAdUnit(
+export const ADMOB_REWARDED_UNIT_ID = platformValue(
   process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID'],
   process.env['EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID_IOS'],
 );
 // アプリ起動広告ユニット ID。
-export const ADMOB_APP_OPEN_UNIT_ID = platformAdUnit(
+export const ADMOB_APP_OPEN_UNIT_ID = platformValue(
   process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID'],
   process.env['EXPO_PUBLIC_ADMOB_APP_OPEN_UNIT_ID_IOS'],
 );
 // バナー広告ユニット ID（一覧系画面の下部）。料理中モードには出さない
 // （ストア掲載文で「広告なし」を約束している）。
-export const ADMOB_BANNER_UNIT_ID = platformAdUnit(
+export const ADMOB_BANNER_UNIT_ID = platformValue(
   process.env['EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID'],
   process.env['EXPO_PUBLIC_ADMOB_BANNER_UNIT_ID_IOS'],
+);
+
+// RevenueCat の公開 SDK キー。**ストアごとに完全に別物**（Play=`goog_…` / App Store=`appl_…`）で、
+// 片方のキーでもう片方のストアを叩くと購入フローが必ず落ちる。
+// `eas.json` の production プロファイルは同じ env を全プラットフォームへ配るので、
+// 変数 1 本では Android と iOS のどちらかが必ず壊れる（AdMob のユニット ID で同じ罠を踏んだ）。
+// 無印 = Android・`_IOS` = iOS の対応は広告ユニットと揃えてある。
+//
+// 未設定なら課金は無効化され、無料枠と広告だけでアプリは完全に動作する（Stub プロバイダ）。
+export const REVENUECAT_API_KEY = platformValue(
+  process.env['EXPO_PUBLIC_REVENUECAT_API_KEY'],
+  process.env['EXPO_PUBLIC_REVENUECAT_API_KEY_IOS'],
 );
 
 // BYOK（持ち込みキー）で端末から直接呼ぶ Gemini モデル。サーバー側の既定と揃える。

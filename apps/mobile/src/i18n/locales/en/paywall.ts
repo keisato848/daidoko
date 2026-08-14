@@ -20,6 +20,17 @@ const paywall: typeof ja = {
   subscribe: 'Start Premium',
   restore: 'Restore purchases',
 
+  /**
+   * Heading for platforms where purchases are unavailable. Avoids the word
+   * "Premium" so we never advertise something that cannot be bought.
+   */
+  freeTitle: 'Get more AI recipes',
+  freeSubtitle: {
+    one: 'AI recipe creation is free for your first {{count}} use. After that, watch an ad to earn one more.',
+    other:
+      'AI recipe creation is free for your first {{count}} uses. After that, watch an ad to earn one more.',
+  },
+
   terms: {
     text: 'The subscription is charged at purchase and renews automatically unless cancelled. You can cancel any time from your store account settings.',
     intent:
@@ -27,6 +38,14 @@ const paywall: typeof ja = {
       'purchase, and where to cancel. App store rules require all three; dropping any of them ' +
       'is both a policy violation and a misrepresentation of a recurring charge.',
   },
+
+  /** Label for the links App Review guideline 3.1.2 requires. Do not drop the links. */
+  eula: 'Terms of Use',
+  privacyPolicy: 'Privacy Policy',
+
+  /** The only way to go unlimited where purchases are unavailable. Keeps the screen from dead-ending. */
+  useOwnKey: 'Use your own AI key',
+  useOwnKeyHint: 'Set your own Gemini key to use it without any limit.',
 
   or: 'or',
   watchAd: 'Watch an ad to earn 1 credit',
