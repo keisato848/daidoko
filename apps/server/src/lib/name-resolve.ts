@@ -1,4 +1,5 @@
 import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
+import { thinkingConfigFragment } from './thinking-budget.js';
 /**
  * Managed name resolution — messy pantry/receipt names → canonical ingredient
  * names via Gemini (text, batched). Mirrors the mobile BYOK provider prompt.
@@ -78,6 +79,8 @@ export class GeminiNameResolver implements NameResolver {
       generationConfig: {
         responseMimeType: 'application/json',
         responseSchema: RESPONSE_SCHEMA,
+        // 材料名の名寄せは短い分類で、深い推論を要さない（`thinking-budget.ts`）。
+        ...thinkingConfigFragment(),
       },
     };
     const url = `${GEMINI_ENDPOINT}/${this.model}:generateContent?key=${this.apiKey}`;

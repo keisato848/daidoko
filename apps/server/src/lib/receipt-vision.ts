@@ -1,4 +1,5 @@
 import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
+import { thinkingConfigFragment } from './thinking-budget.js';
 /**
  * Receipt Vision — extract grocery item names from a receipt photo so the
  * pantry can be stocked in one tap. Provider abstraction (default Gemini
@@ -99,6 +100,8 @@ export class GeminiReceiptVisionProvider implements ReceiptVisionProvider {
         temperature: 0.2,
         responseMimeType: 'application/json',
         responseSchema: GEMINI_RESPONSE_SCHEMA,
+        // レシートの読み取りは構造化抽出で、深い推論を要さない（`thinking-budget.ts`）。
+        ...thinkingConfigFragment(),
       },
     };
 

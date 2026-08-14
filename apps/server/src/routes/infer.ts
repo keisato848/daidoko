@@ -6,6 +6,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 
 import { runPhotoInferAgent } from '../agents/photo-infer.agent.js';
+import { resolveThinkingBudget } from '../lib/thinking-budget.js';
 import {
   GeminiVisionRecipeProvider,
   VisionConfigError,
@@ -109,6 +110,10 @@ inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
     throw err;
   }
 
+  // 思考オフは**ルート側**で効かせる。評価ハーネスは provider を直呼びするので
+  // ここを通らず、A/B の「思考あり」基準がそのまま残る（`scripts/vision-eval.ts`）。
+  const thinkingBudget = resolveThinkingBudget();
+
   const result = await runPhotoInferAgent(
     {
       imageBase64,
@@ -116,6 +121,7 @@ inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
       ...(context !== undefined && { context }),
       outputLocale: parseOutputLocale(locale),
       unitSystem: parseUnitSystem(unitSystem),
+      ...(thinkingBudget !== undefined && { thinkingBudget }),
     },
     provider,
   );

@@ -1,4 +1,5 @@
 import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
+import { thinkingConfigFragment } from './thinking-budget.js';
 /**
  * Meal-consumption Vision — infer which ingredients a meal photo used up, so the
  * pantry can be decremented. Provider abstraction (default Gemini Flash). The
@@ -95,6 +96,8 @@ export class GeminiMealVisionProvider implements MealVisionProvider {
         temperature: 0.4,
         responseMimeType: 'application/json',
         responseSchema: GEMINI_RESPONSE_SCHEMA,
+        // 写真から食材を読み取る抽出寄りの処理（`thinking-budget.ts`）。
+        ...thinkingConfigFragment(),
       },
     };
 

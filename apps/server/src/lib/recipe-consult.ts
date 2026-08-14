@@ -18,6 +18,7 @@ import {
   type OutputLocale,
   type OutputUnitSystem,
 } from './output-locale.js';
+import { thinkingConfigFragment } from './thinking-budget.js';
 
 export type ConsultRole = 'user' | 'assistant';
 
@@ -265,6 +266,8 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
         temperature: 0.6,
         responseMimeType: 'application/json',
         responseSchema: GEMINI_RESPONSE_SCHEMA,
+        // 相談は往復のたびに課金される。**ここが一番効く**（`thinking-budget.ts`）。
+        ...thinkingConfigFragment(),
       },
     };
 
