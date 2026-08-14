@@ -82,6 +82,17 @@ describe('課金が使えないプラットフォーム', () => {
     expect(screen.queryByText('DAIDOKO プレミアム')).toBeNull();
   });
 
+  it('BYOK への導線を必ず出す（行き止まりにしない）', async () => {
+    render(<PaywallScreen />);
+    expect(await screen.findByText('自分のAIキーを使う')).toBeTruthy();
+  });
+
+  it('「または」を単独で出さない（前段の購入ボタンが無いため）', async () => {
+    render(<PaywallScreen />);
+    await screen.findByText('AIレシピをもっと使う');
+    expect(screen.queryByText('または')).toBeNull();
+  });
+
   it('サブスク前提の法務リンクも出さない', async () => {
     render(<PaywallScreen />);
     await screen.findByText('AIレシピをもっと使う');

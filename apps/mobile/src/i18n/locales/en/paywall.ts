@@ -43,6 +43,10 @@ const paywall: typeof ja = {
   eula: 'Terms of Use',
   privacyPolicy: 'Privacy Policy',
 
+  /** The only way to go unlimited where purchases are unavailable. Keeps the screen from dead-ending. */
+  useOwnKey: 'Use your own AI key',
+  useOwnKeyHint: 'Set your own Gemini key to use it without any limit.',
+
   or: 'or',
   watchAd: 'Watch an ad to earn 1 credit',
   tokenHint: {

@@ -6,7 +6,7 @@
  * every other exhausted case, with no per-day watch cap.
  */
 import { useRouter } from 'expo-router';
-import { Check, Crown, Gift, X } from 'lucide-react-native';
+import { Check, Crown, Gift, KeyRound, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -203,7 +203,9 @@ export default function PaywallScreen() {
 
         {canWatchAd && (
           <>
-            <Text style={styles.orText}>{t('paywall.or')}</Text>
+            {/* 「または」は購入ボタンとの二択で初めて意味を持つ。課金が使えない
+                プラットフォームでは前段が無く、接続詞だけが浮いて読めなくなる。 */}
+            {premiumAvailable && <Text style={styles.orText}>{t('paywall.or')}</Text>}
             <Pressable
               accessibilityRole="button"
               style={[styles.adButton, busy && styles.buttonDisabled]}
@@ -218,6 +220,23 @@ export default function PaywallScreen() {
         )}
         {tokenBalance > 0 && (
           <Text style={styles.tokenBalance}>{tCount('paywall.tokenBalance', tokenBalance)}</Text>
+        )}
+
+        {/* 課金が使えないプラットフォームでは、無制限にする手段が BYOK しかない。
+            無料枠が残っている間は広告ボタンも出ないので、これが無いと画面が
+            本文だけの行き止まりになる（実機で確認）。 */}
+        {!premiumAvailable && (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.adButton}
+              onPress={() => router.replace('/(tabs)/ai-key')}
+            >
+              <KeyRound size={18} color={Colors.gold} />
+              <Text style={styles.adButtonText}>{t('paywall.useOwnKey')}</Text>
+            </Pressable>
+            <Text style={styles.tokenHint}>{t('paywall.useOwnKeyHint')}</Text>
+          </>
         )}
 
         {premiumAvailable && (
