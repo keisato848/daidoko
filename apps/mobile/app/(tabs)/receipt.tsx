@@ -24,7 +24,11 @@ import {
   PhotoCaptureCancelledError,
   type PhotoCaptureSource,
 } from '../../src/services/photo-capture.service';
-import { inferReceiptFromVision } from '../../src/services/receipt-vision.provider';
+import {
+  inferReceiptFromVision,
+  type ReceiptInferenceItem,
+} from '../../src/services/receipt-vision.provider';
+import { formatQuantityInput, parseQuantityInput } from '../../src/utils/receiptQuantity';
 import { parseReceipt } from '../../src/utils/receiptParser';
 
 function mimeTypeFor(uri: string): 'image/jpeg' | 'image/png' | 'image/webp' {
@@ -39,6 +43,9 @@ type Phase = 'select' | 'processing' | 'review' | 'error';
 interface ReviewItem {
   id: string;
   name: string;
+  /** 数量は自由入力のまま持つ（空欄＝数量未管理。0 や 1 で埋めない）。 */
+  quantity: string;
+  unit: string;
   include: boolean;
 }
 
@@ -58,7 +65,7 @@ export default function ReceiptScreen() {
       try {
         const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
 
-        let names: string[];
+        let parsed: ReceiptInferenceItem[];
         if (nativeRecognize) {
           // 端末内OCR（無料・オフライン）→ テキストから品目パース
           let imageUri = photo.localPath;
@@ -72,7 +79,12 @@ export default function ReceiptScreen() {
             // fall back to the original image
           }
           const result = await nativeRecognize(imageUri);
-          names = parseReceipt(result.rawText).map((p) => p.name);
+          // 端末内OCRは品目名しか出せない。数量は読めていないので null のまま通す
+          parsed = parseReceipt(result.rawText).map((p) => ({
+            name: p.name,
+            quantity: null,
+            unit: null,
+          }));
         } else {
           // クラウドAI（Vision）— BYOKキーがあれば端末から直接 Gemini
           const inference = await inferReceiptFromVision({
@@ -84,15 +96,23 @@ export default function ReceiptScreen() {
             setPhase('error');
             return;
           }
-          names = inference.items;
+          parsed = inference.items;
         }
 
-        if (names.length === 0) {
+        if (parsed.length === 0) {
           setErrorMsg(t('pantry.receipt.noItems'));
           setPhase('error');
           return;
         }
-        setItems(names.map((name, i) => ({ id: String(i), name, include: true })));
+        setItems(
+          parsed.map((item, i) => ({
+            id: String(i),
+            name: item.name,
+            quantity: formatQuantityInput(item.quantity),
+            unit: item.unit ?? '',
+            include: true,
+          })),
+        );
         setPhase('review');
       } catch (error) {
         if (error instanceof PhotoCaptureCancelledError) {
@@ -109,7 +129,11 @@ export default function ReceiptScreen() {
   const handleAdd = useCallback(async () => {
     const chosen = items.filter((it) => it.include && it.name.trim());
     for (const it of chosen) {
-      await addPantryItem(it.name.trim(), { quantity: 1 }).catch(() => undefined);
+      // 空欄の数量は null のまま渡す＝在庫は「数量未管理」で持つ（§6）
+      await addPantryItem(it.name.trim(), {
+        quantity: parseQuantityInput(it.quantity),
+        unit: it.unit.trim() || null,
+      }).catch(() => undefined);
     }
     router.back();
   }, [items, router]);
@@ -191,6 +215,35 @@ export default function ReceiptScreen() {
                   }
                   editable={item.include}
                   maxLength={50}
+                />
+                <TextInput
+                  style={[styles.qtyInput, !item.include && styles.nameInputOff]}
+                  value={item.quantity}
+                  onChangeText={(text) =>
+                    setItems((prev) =>
+                      prev.map((it) => (it.id === item.id ? { ...it, quantity: text } : it)),
+                    )
+                  }
+                  editable={item.include}
+                  keyboardType="numeric"
+                  maxLength={6}
+                  placeholder={t('pantry.receipt.quantityPlaceholder')}
+                  placeholderTextColor={Colors.muted}
+                  accessibilityLabel={t('pantry.receipt.quantityLabel')}
+                />
+                <TextInput
+                  style={[styles.unitInput, !item.include && styles.nameInputOff]}
+                  value={item.unit}
+                  onChangeText={(text) =>
+                    setItems((prev) =>
+                      prev.map((it) => (it.id === item.id ? { ...it, unit: text } : it)),
+                    )
+                  }
+                  editable={item.include}
+                  maxLength={6}
+                  placeholder={t('pantry.receipt.unitPlaceholder')}
+                  placeholderTextColor={Colors.muted}
+                  accessibilityLabel={t('pantry.receipt.unitLabel')}
                 />
               </View>
             )}
@@ -286,7 +339,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
@@ -311,6 +364,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
   },
   nameInputOff: { color: Colors.muted, opacity: 0.5 },
+  qtyInput: {
+    width: 52,
+    fontSize: 15,
+    color: Colors.paper,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    backgroundColor: '#130E08',
+    textAlign: 'center',
+  },
+  unitInput: {
+    width: 56,
+    fontSize: 15,
+    color: Colors.paper,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    backgroundColor: '#130E08',
+    textAlign: 'center',
+  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',

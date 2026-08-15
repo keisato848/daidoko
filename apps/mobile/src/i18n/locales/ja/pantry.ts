@@ -101,7 +101,12 @@ const pantry = {
         'retained. Receipts carry purchase history; dropping either half misrepresents what ' +
         'happens to that data.',
     } satisfies CriticalMessage,
-    resultHint: '読み取った品目です。不要な行のチェックを外し、名前を直して追加してください。',
+    resultHint:
+      '読み取った品目です。不要な行のチェックを外し、名前・数量・単位を直して追加してください。数量が空欄のものは「数量未管理」で在庫に入ります。',
+    quantityPlaceholder: '数量',
+    quantityLabel: '数量（空欄なら数量未管理）',
+    unitPlaceholder: '単位',
+    unitLabel: '単位（例: 個・g）',
     exclude: '除外',
     include: '含める',
     retry: 'やり直す',
