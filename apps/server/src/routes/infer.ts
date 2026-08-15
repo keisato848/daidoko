@@ -203,9 +203,10 @@ inferRouter.post('/meal', zValidator('json', inferMealSchema), async (c) => {
 
 // ─── POST /receipt — receipt photo → grocery item names (Vision) ─────────────
 
-const inferReceiptSchema = z.object({
-  imageBase64: z.string().min(1, '画像が空です').max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
-  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+/** レシート1枚の OCR テキストの上限。長いレシートでも数千字に収まる。 */
+const MAX_OCR_TEXT_LENGTH = 20_000;
+
+const receiptCommonSchema = {
   /** 端末の言語。AI が返す文言の言語を決める。省略時は ja。 */
   locale: z.enum(['ja', 'en']).optional(),
   /**
@@ -214,7 +215,26 @@ const inferReceiptSchema = z.object({
    * 米国の利用者に「180度」を 180°F と読まれると料理が失敗する。
    */
   unitSystem: z.enum(['metric', 'imperial']).optional(),
-});
+};
+
+/**
+ * 入力は2種類。端末内 OCR が読めたときは `ocrText`、読めなかったときは画像。
+ * **画像側の形は変えない** — 旧バージョンのアプリが送ってくる（`docs/在庫・レシート設計レビュー.md` §3.4）。
+ */
+const inferReceiptSchema = z.union([
+  z.object({
+    imageBase64: z
+      .string()
+      .min(1, '画像が空です')
+      .max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
+    mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+    ...receiptCommonSchema,
+  }),
+  z.object({
+    ocrText: z.string().min(1, 'テキストが空です').max(MAX_OCR_TEXT_LENGTH, 'テキストが長すぎます'),
+    ...receiptCommonSchema,
+  }),
+]);
 
 let receiptProviderOverride: ReceiptVisionProvider | null = null;
 
@@ -238,7 +258,7 @@ inferRouter.post('/receipt', zValidator('json', inferReceiptSchema), async (c) =
     });
   }
 
-  const { imageBase64, mimeType, locale } = c.req.valid('json');
+  const input = c.req.valid('json');
 
   let provider: ReceiptVisionProvider;
   try {
@@ -254,11 +274,12 @@ inferRouter.post('/receipt', zValidator('json', inferReceiptSchema), async (c) =
   }
 
   try {
-    const data = await provider.infer({
-      imageBase64,
-      mimeType,
-      outputLocale: parseOutputLocale(locale),
-    });
+    const outputLocale = parseOutputLocale(input.locale);
+    const data = await provider.infer(
+      'ocrText' in input
+        ? { ocrText: input.ocrText, outputLocale }
+        : { imageBase64: input.imageBase64, mimeType: input.mimeType, outputLocale },
+    );
     return c.json({ ok: true, data });
   } catch (err) {
     const retryable = err instanceof ReceiptVisionRequestError;

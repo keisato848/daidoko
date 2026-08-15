@@ -7,7 +7,11 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { RECEIPT_RESPONSE_SCHEMA, RECEIPT_SYSTEM_PROMPT } from '../lib/receipt-vision.js';
+import {
+  RECEIPT_RESPONSE_SCHEMA,
+  RECEIPT_SYSTEM_PROMPT,
+  RECEIPT_TEXT_SYSTEM_PROMPT,
+} from '../lib/receipt-vision.js';
 
 interface GeminiObjectSchema {
   properties: Record<string, unknown>;
@@ -28,6 +32,31 @@ describe('RECEIPT_SYSTEM_PROMPT', () => {
   it('品目名の正規化と非商品行の除外は従来どおり残っている', () => {
     expect(RECEIPT_SYSTEM_PROMPT).toContain('半角カナ');
     expect(RECEIPT_SYSTEM_PROMPT).toContain('小計・合計');
+  });
+});
+
+describe('RECEIPT_TEXT_SYSTEM_PROMPT', () => {
+  /**
+   * テキスト経路は端末内 OCR の生テキストを渡す（`docs/在庫・レシート設計レビュー.md` §3.4）。
+   * 品目の作り方が画像経路とずれると、**同じレシートが経路によって違う在庫になる**。
+   */
+  it('品目の作り方は画像経路と同じ規則を持つ', () => {
+    for (const rule of ['半角カナ', '小計・合計', '1 で埋めない', '値引き']) {
+      expect(RECEIPT_TEXT_SYSTEM_PROMPT).toContain(rule);
+    }
+  });
+
+  it('画像を見る前提の文言が残っていない', () => {
+    expect(RECEIPT_TEXT_SYSTEM_PROMPT).not.toContain('写真');
+  });
+
+  it('OCR の崩れ（列のずれ・誤認識）を前提にしている', () => {
+    expect(RECEIPT_TEXT_SYSTEM_PROMPT).toContain('OCR');
+    expect(RECEIPT_TEXT_SYSTEM_PROMPT).toContain('誤認識');
+  });
+
+  it('レシートでないテキストを isReceipt=false で返させる', () => {
+    expect(RECEIPT_TEXT_SYSTEM_PROMPT).toContain('isReceipt=false');
   });
 });
 
