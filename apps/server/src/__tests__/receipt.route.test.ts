@@ -16,7 +16,12 @@ import {
 const VALID_RECEIPT: ReceiptVisionRaw = {
   isReceipt: true,
   store: 'だいどこスーパー',
-  items: [{ name: '牛乳' }, { name: '卵' }, { name: '豚こま切れ肉' }],
+  items: [
+    { name: '牛乳', quantity: 2, unit: '本' },
+    { name: '卵', quantity: 1, unit: 'パック' },
+    // 数量が読めなかった行（レシートでは普通に起きる）
+    { name: '豚こま切れ肉' },
+  ],
   confidence: 'high',
 };
 
@@ -67,6 +72,16 @@ describe('POST /api/v1/infer/receipt', () => {
       expect(body.data?.isReceipt).toBe(true);
       expect(body.data?.items?.map((i) => i.name)).toEqual(['牛乳', '卵', '豚こま切れ肉']);
       expect(body.data?.confidence).toBe('high');
+    });
+
+    it('数量・単位をそのまま返す（読めなかった行は数量なしで返る）', async () => {
+      stubProvider(async () => VALID_RECEIPT);
+      const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+      const body = (await res.json()) as { ok: boolean; data?: ReceiptVisionRaw };
+      expect(body.data?.items?.[0]).toEqual({ name: '牛乳', quantity: 2, unit: '本' });
+      // 読めなかった数量は 1 で埋めず、欠けたまま返す（在庫は合算なので推測は積もる）
+      expect(body.data?.items?.[2]?.quantity).toBeUndefined();
+      expect(body.data?.items?.[2]?.unit).toBeUndefined();
     });
 
     it('レシートでない画像 → ok:true, isReceipt=false（判定はクライアント側）', async () => {
