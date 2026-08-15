@@ -1,0 +1,5 @@
+The daily limit of three ads is gone. Watch as many as you like to stock up credits for AI recipes, whenever it suits you. Credits you earn never expire.
+
+Fixed screens where the keyboard covered the buttons underneath it, such as the notes field when creating a recipe from a photo. You can now move on without dismissing it first.
+
+Also: small polish across the AI recipe screens.
