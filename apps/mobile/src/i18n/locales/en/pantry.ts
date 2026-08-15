@@ -90,6 +90,14 @@ const pantry: typeof ja = {
         'retained. Receipts carry purchase history; dropping either half misrepresents what ' +
         'happens to that data.',
     },
+    disclosureOnDevice: {
+      text: 'This device reads the text itself and sends only that text to a cloud AI to sort it into items. The photo stays on your device. If the text can’t be read, the photo is sent instead (for analysis only, and it is not stored).',
+      intent:
+        'MUST state ALL THREE: only the TEXT leaves the device on the normal path, the photo ' +
+        'stays on the device on that path, AND the photo IS sent when the on-device read ' +
+        'fails. Dropping the fallback makes this read as "the photo never leaves", which is ' +
+        'false. Receipts carry purchase history.',
+    },
     resultHint:
       'Here’s what we read. Uncheck what you don’t want, fix the names, amounts and units, then add. Rows with a blank amount go in without a tracked quantity.',
     quantityPlaceholder: 'Qty',

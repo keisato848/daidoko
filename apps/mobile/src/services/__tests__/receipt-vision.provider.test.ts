@@ -1,4 +1,19 @@
-import { normalizeReceiptRaw } from '../receipt-vision.provider';
+import {
+  inferReceiptFromText,
+  inferReceiptFromVision,
+  normalizeReceiptRaw,
+} from '../receipt-vision.provider';
+
+const mockGetUserApiKey = jest.fn<Promise<string | null>, []>();
+
+jest.mock('../byok.service', () => ({
+  getUserApiKey: () => mockGetUserApiKey(),
+}));
+
+jest.mock('expo-file-system/legacy', () => ({
+  readAsStringAsync: async () => 'BASE64BYTES',
+  EncodingType: { Base64: 'base64' },
+}));
 
 describe('normalizeReceiptRaw', () => {
   it('品目名を trim し、空行を落とし、重複を1つにまとめる', () => {
@@ -94,5 +109,69 @@ describe('normalizeReceiptRaw', () => {
       { name: '豚こま', quantity: 300, unit: 'g' },
       { name: '豚こま', quantity: 1, unit: 'パック' },
     ]);
+  });
+});
+
+/**
+ * 何を送るか（`docs/在庫・レシート設計レビュー.md` §3.4）。
+ * レシートは購入履歴そのものなので、**テキストで済むときに画像を送らない**ことが要件。
+ */
+describe('送信するもの', () => {
+  const originalFetch = global.fetch;
+  let fetchMock: jest.Mock;
+
+  beforeEach(() => {
+    mockGetUserApiKey.mockReset().mockResolvedValue(null);
+    fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true, data: { isReceipt: true, items: [{ name: '牛乳' }] } }),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  function lastBody(): Record<string, unknown> {
+    const init = fetchMock.mock.calls[0][1] as { body: string };
+    return JSON.parse(init.body) as Record<string, unknown>;
+  }
+
+  it('テキスト経路は ocrText だけを送る（画像は送らない）', async () => {
+    const result = await inferReceiptFromText({ ocrText: '牛乳 2本 ¥398' });
+
+    const body = lastBody();
+    expect(body['ocrText']).toBe('牛乳 2本 ¥398');
+    expect(body['imageBase64']).toBeUndefined();
+    // 出力は画像経路と同じ形（同じ後処理を通っている）
+    expect(result.items).toEqual([{ name: '牛乳', quantity: null, unit: null }]);
+  });
+
+  it('画像経路は従来どおり imageBase64 と mimeType を送る', async () => {
+    await inferReceiptFromVision({ localPath: '/tmp/receipt.jpg', mimeType: 'image/jpeg' });
+
+    const body = lastBody();
+    expect(body['imageBase64']).toBe('BASE64BYTES');
+    expect(body['mimeType']).toBe('image/jpeg');
+    expect(body['ocrText']).toBeUndefined();
+  });
+
+  it('BYOK でもテキスト経路は画像パートを積まない', async () => {
+    mockGetUserApiKey.mockResolvedValue('user-key');
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          { content: { parts: [{ text: JSON.stringify({ isReceipt: true, items: [] }) }] } },
+        ],
+      }),
+    });
+
+    await inferReceiptFromText({ ocrText: '牛乳 2本' });
+
+    const parts = (lastBody()['contents'] as { parts: Record<string, unknown>[] }[])[0].parts;
+    expect(parts.some((part) => 'inlineData' in part)).toBe(false);
+    expect(parts.map((part) => part['text'])).toContain('牛乳 2本');
   });
 });

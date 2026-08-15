@@ -1,9 +1,14 @@
 /**
- * レシート確認画面（Issue #178-1）。
+ * レシート確認画面（Issue #178）。
  *
- * 数量は在庫に**合算**されるので、画面が勝手に 1 を入れると間違いが積もる。
- * 「読めた数量は在庫まで運ぶ」「読めなかったものは空欄のまま null で渡す」
- * 「利用者が直した値が優先される」の3つを固定する。
+ * 固定したいことが2つある。
+ *
+ * 1. **数量の扱い**（#178-1）。数量は在庫に**合算**されるので、画面が勝手に 1 を入れると
+ *    間違いが積もる。「読めた数量は在庫まで運ぶ」「読めなかったものは空欄のまま null で
+ *    渡す」「利用者が直した値が優先される」。
+ * 2. **経路の選択とフォールバック**（`docs/在庫・レシート設計レビュー.md` §3.4）。
+ *    端末内OCRで文字にできたらテキストだけを送り、できなければ写真を送る。
+ *    端末内OCRが転んでも**画面にエラーを出さずに**写真経路へ落ちること。
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
@@ -11,7 +16,10 @@ import ReceiptScreen from '../receipt';
 import { t, tCount } from '../../../src/i18n';
 
 const mockAddPantryItem = jest.fn(async () => null);
-const mockInferReceipt = jest.fn();
+const mockInferFromVision = jest.fn();
+const mockInferFromText = jest.fn();
+const mockRecognizeTextOnDevice = jest.fn();
+const mockIsClientOcrAvailable = jest.fn();
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), replace: jest.fn(), push: jest.fn() }),
@@ -22,12 +30,13 @@ jest.mock('../../../src/services/pantry.service', () => ({
 }));
 
 jest.mock('../../../src/services/receipt-vision.provider', () => ({
-  inferReceiptFromVision: (...args: unknown[]) => mockInferReceipt(...(args as [])),
+  inferReceiptFromVision: (...args: unknown[]) => mockInferFromVision(...(args as [])),
+  inferReceiptFromText: (...args: unknown[]) => mockInferFromText(...(args as [])),
 }));
 
-// 端末内OCRは SDK 54 で外れているので、常にクラウド経路（本番と同じ）
 jest.mock('../../../src/services/client-ocr.provider', () => ({
-  createClientOcrRecognizer: () => null,
+  recognizeTextOnDevice: (...args: unknown[]) => mockRecognizeTextOnDevice(...(args as [])),
+  isClientOcrAvailable: (...args: unknown[]) => mockIsClientOcrAvailable(...(args as [])),
 }));
 
 jest.mock('../../../src/services/photo-capture.service', () => ({
@@ -35,50 +44,137 @@ jest.mock('../../../src/services/photo-capture.service', () => ({
   PhotoCaptureCancelledError: class extends Error {},
 }));
 
-async function readReceipt(
-  items: { name: string; quantity: number | null; unit: string | null }[],
-) {
-  mockInferReceipt.mockResolvedValue({ isReceipt: true, store: null, items });
+type Item = { name: string; quantity: number | null; unit: string | null };
+
+function inference(items: Item[], isReceipt = true) {
+  return { isReceipt, store: null, items };
+}
+
+/** 撮影 → 読み取り完了（確認画面が出る）まで進める。 */
+async function capture() {
   render(<ReceiptScreen />);
   await act(async () => {
     fireEvent.press(screen.getByText(t('pantry.receipt.capture')));
   });
+}
+
+async function readReceipt(items: Item[]) {
+  mockInferFromVision.mockResolvedValue(inference(items));
+  await capture();
   await waitFor(() => expect(screen.getByText(t('pantry.receipt.retry'))).toBeTruthy());
 }
 
 describe('ReceiptScreen', () => {
   beforeEach(() => {
     mockAddPantryItem.mockClear();
-    mockInferReceipt.mockReset();
+    mockInferFromVision.mockReset();
+    mockInferFromText.mockReset();
+    // 既定は端末内OCRが無い端末（＝写真をそのまま送る従来の経路）
+    mockRecognizeTextOnDevice.mockReset().mockResolvedValue(null);
+    mockIsClientOcrAvailable.mockReset().mockResolvedValue(false);
   });
 
-  it('読み取った数量・単位を在庫にそのまま渡す', async () => {
-    await readReceipt([{ name: '牛乳', quantity: 2, unit: '本' }]);
+  describe('数量の受け渡し', () => {
+    it('読み取った数量・単位を在庫にそのまま渡す', async () => {
+      await readReceipt([{ name: '牛乳', quantity: 2, unit: '本' }]);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(tCount('pantry.receipt.confirm', 1)));
+      await act(async () => {
+        fireEvent.press(screen.getByText(tCount('pantry.receipt.confirm', 1)));
+      });
+      expect(mockAddPantryItem).toHaveBeenCalledWith('牛乳', { quantity: 2, unit: '本' });
     });
-    expect(mockAddPantryItem).toHaveBeenCalledWith('牛乳', { quantity: 2, unit: '本' });
+
+    it('数量が読めなかった品目は空欄で出し、null のまま在庫へ渡す（1 で埋めない）', async () => {
+      await readReceipt([{ name: '玉ねぎ', quantity: null, unit: null }]);
+
+      expect(screen.getByLabelText(t('pantry.receipt.quantityLabel')).props.value).toBe('');
+      await act(async () => {
+        fireEvent.press(screen.getByText(tCount('pantry.receipt.confirm', 1)));
+      });
+      expect(mockAddPantryItem).toHaveBeenCalledWith('玉ねぎ', { quantity: null, unit: null });
+    });
+
+    it('確認画面で直した数量・単位が在庫に入る', async () => {
+      await readReceipt([{ name: '豚こま', quantity: 500, unit: 'g' }]);
+
+      fireEvent.changeText(screen.getByLabelText(t('pantry.receipt.quantityLabel')), '300');
+      fireEvent.changeText(screen.getByLabelText(t('pantry.receipt.unitLabel')), 'パック');
+      await act(async () => {
+        fireEvent.press(screen.getByText(tCount('pantry.receipt.confirm', 1)));
+      });
+      expect(mockAddPantryItem).toHaveBeenCalledWith('豚こま', { quantity: 300, unit: 'パック' });
+    });
   });
 
-  it('数量が読めなかった品目は空欄で出し、null のまま在庫へ渡す（1 で埋めない）', async () => {
-    await readReceipt([{ name: '玉ねぎ', quantity: null, unit: null }]);
+  describe('読み取り経路の選択', () => {
+    it('端末内OCRで文字にできたら、写真ではなくテキストだけを送る', async () => {
+      mockRecognizeTextOnDevice.mockResolvedValue('だいどこスーパー\n牛乳 2本 ¥398');
+      mockInferFromText.mockResolvedValue(inference([{ name: '牛乳', quantity: 2, unit: '本' }]));
 
-    expect(screen.getByLabelText(t('pantry.receipt.quantityLabel')).props.value).toBe('');
-    await act(async () => {
-      fireEvent.press(screen.getByText(tCount('pantry.receipt.confirm', 1)));
+      await capture();
+      await waitFor(() => expect(screen.getByText(t('pantry.receipt.retry'))).toBeTruthy());
+      expect(mockInferFromText).toHaveBeenCalledWith({
+        ocrText: 'だいどこスーパー\n牛乳 2本 ¥398',
+      });
+      expect(mockInferFromVision).not.toHaveBeenCalled();
     });
-    expect(mockAddPantryItem).toHaveBeenCalledWith('玉ねぎ', { quantity: null, unit: null });
+
+    it('端末内OCRが使えない・読めないときは写真を送る', async () => {
+      mockRecognizeTextOnDevice.mockResolvedValue(null);
+      await readReceipt([{ name: '牛乳', quantity: null, unit: null }]);
+
+      expect(mockInferFromText).not.toHaveBeenCalled();
+      expect(mockInferFromVision).toHaveBeenCalledWith({
+        localPath: '/tmp/receipt.jpg',
+        mimeType: 'image/jpeg',
+      });
+    });
+
+    it('テキストからレシートと判定できなければ写真経路をやり直す', async () => {
+      mockRecognizeTextOnDevice.mockResolvedValue('��� ??? ###');
+      mockInferFromText.mockResolvedValue(inference([], false));
+      mockInferFromVision.mockResolvedValue(
+        inference([{ name: '卵', quantity: 1, unit: 'パック' }]),
+      );
+
+      await capture();
+      await waitFor(() => expect(screen.getByText(t('pantry.receipt.retry'))).toBeTruthy());
+      expect(mockInferFromVision).toHaveBeenCalled();
+      expect(screen.getByDisplayValue('卵')).toBeTruthy();
+    });
+
+    it('テキストからは1件も取れなかったときも写真経路をやり直す', async () => {
+      mockRecognizeTextOnDevice.mockResolvedValue('小計 1,280\n合計 1,382');
+      mockInferFromText.mockResolvedValue(inference([]));
+      mockInferFromVision.mockResolvedValue(
+        inference([{ name: '卵', quantity: null, unit: null }]),
+      );
+
+      await capture();
+      await waitFor(() => expect(screen.getByText(t('pantry.receipt.retry'))).toBeTruthy());
+      expect(mockInferFromVision).toHaveBeenCalled();
+    });
+
+    it('写真経路でもレシートでなければ、その旨だけを出す（生のエラーを出さない）', async () => {
+      mockInferFromVision.mockResolvedValue(inference([], false));
+
+      await capture();
+      await waitFor(() => expect(screen.getByText(t('pantry.receipt.notRecognized'))).toBeTruthy());
+    });
   });
 
-  it('確認画面で直した数量・単位が在庫に入る', async () => {
-    await readReceipt([{ name: '豚こま', quantity: 500, unit: 'g' }]);
-
-    fireEvent.changeText(screen.getByLabelText(t('pantry.receipt.quantityLabel')), '300');
-    fireEvent.changeText(screen.getByLabelText(t('pantry.receipt.unitLabel')), 'パック');
-    await act(async () => {
-      fireEvent.press(screen.getByText(tCount('pantry.receipt.confirm', 1)));
+  describe('送信するものの開示', () => {
+    it('端末内OCRが使えるときは「文字だけを送る／読めなければ写真」と伝える', async () => {
+      mockIsClientOcrAvailable.mockResolvedValue(true);
+      render(<ReceiptScreen />);
+      await waitFor(() =>
+        expect(screen.getByText(t('pantry.receipt.disclosureOnDevice'))).toBeTruthy(),
+      );
     });
-    expect(mockAddPantryItem).toHaveBeenCalledWith('豚こま', { quantity: 300, unit: 'パック' });
+
+    it('端末内OCRが無いときは写真を送ることを伝える', async () => {
+      render(<ReceiptScreen />);
+      await waitFor(() => expect(screen.getByText(t('pantry.receipt.disclosure'))).toBeTruthy());
+    });
   });
 });
