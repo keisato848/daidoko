@@ -7,6 +7,8 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_V1, GEMINI_MODEL } from '../config';
+import { normalizeItemName } from '../utils/itemName';
+import { normalizeReceiptQuantity } from '../utils/receiptQuantity';
 import { getUserApiKey } from './byok.service';
 import { requestLocale, withOutputLanguage } from './ai-output-locale';
 
@@ -19,7 +21,10 @@ const SYSTEM_PROMPT = [
   'レシートに印字された商品行のうち、食材・食品・飲料だけを items に列挙してください。',
   '品目名は家庭の在庫管理に使える一般的な名前へ正規化します（例: 半角カナ「ｷﾞｭｳﾆｭｳ」→「牛乳」）。ブランド名・容量・規格は省きます。',
   '日用品・雑貨、レジ袋、値引き行、小計・合計・ポイントなどの非商品行は除外します。',
-  '同じ品目が複数行あっても 1 つにまとめます。',
+  '同じ品目が複数行あっても 1 つにまとめます（数量がすべて読み取れる場合のみ合算し、1 行でも読めなければ quantity を省きます）。',
+  'quantity には購入数量を入れます。行に数量が印字されておらず内容量（例: 「豚こま 500g」）だけが読めるときは、その内容量を quantity、単位を unit にします。',
+  'unit には印字された単位・助数詞（個・本・袋・パック・g・ml など）だけを入れます。数量しか印字されていない場合は unit を省きます。',
+  '数量が読み取れない・自信が無い場合は quantity を省きます（1 で埋めない）。値引き行や単価行の数字を数量として拾わないでください。',
   '写真がレシートでない場合は isReceipt=false を返し、items は空にします。',
 ].join('\n');
 
@@ -32,7 +37,12 @@ const RESPONSE_SCHEMA = {
       type: 'ARRAY',
       items: {
         type: 'OBJECT',
-        properties: { name: { type: 'STRING' } },
+        properties: {
+          name: { type: 'STRING' },
+          // 数量・単位は任意（読めなかったことを表せる必要があるので required に入れない）
+          quantity: { type: 'NUMBER' },
+          unit: { type: 'STRING' },
+        },
         required: ['name'],
       },
     },
@@ -41,28 +51,65 @@ const RESPONSE_SCHEMA = {
   required: ['isReceipt'],
 };
 
+/**
+ * A single line read off the receipt. `quantity` / `unit` are null when the
+ * receipt didn't say (or the value looked implausible) — the pantry treats a
+ * null quantity as "unmanaged", which is honest, whereas a guessed 1 quietly
+ * inflates stock. See docs/買い物リスト・在庫設計.md §6.
+ */
+export interface ReceiptInferenceItem {
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+}
+
 export interface ReceiptInference {
   isReceipt: boolean;
   store: string | null;
-  /** Normalized, de-duplicated item names in print order. */
-  items: string[];
+  /** Normalized, de-duplicated items in print order. */
+  items: ReceiptInferenceItem[];
+}
+
+interface ReceiptVisionItemRaw {
+  name?: string;
+  quantity?: number | null;
+  unit?: string | null;
 }
 
 interface ReceiptVisionRaw {
   isReceipt?: boolean;
   store?: string;
-  items?: { name?: string }[];
+  items?: ReceiptVisionItemRaw[];
+}
+
+/** Sum two quantities the way the pantry does: null wins (＝数量未管理). */
+function mergeQuantity(a: number | null, b: number | null): number | null {
+  if (a == null || b == null) return null;
+  return Math.round((a + b) * 1000) / 1000;
 }
 
 export function normalizeReceiptRaw(raw: ReceiptVisionRaw): ReceiptInference {
-  const seen = new Set<string>();
-  const items: string[] = [];
+  // Merge duplicates on the same key the pantry merges on (normalized name ×
+  // unit), so what the review screen shows matches what actually gets stored.
+  const indexByKey = new Map<string, number>();
+  const items: ReceiptInferenceItem[] = [];
   if (Array.isArray(raw.items)) {
     for (const item of raw.items) {
       const name = typeof item?.name === 'string' ? item.name.trim().slice(0, 50) : '';
-      if (!name || seen.has(name)) continue;
-      seen.add(name);
-      items.push(name);
+      if (!name) continue;
+      const { quantity, unit } = normalizeReceiptQuantity(item?.quantity, item?.unit);
+      const key = `${normalizeItemName(name)}|${unit ?? ''}`;
+      const existingIndex = indexByKey.get(key);
+      if (existingIndex != null) {
+        const existing = items[existingIndex];
+        items[existingIndex] = {
+          ...existing,
+          quantity: mergeQuantity(existing.quantity, quantity),
+        };
+        continue;
+      }
+      indexByKey.set(key, items.length);
+      items.push({ name, quantity, unit });
     }
   }
   return {
