@@ -16,7 +16,11 @@ export { createCookingLog, deleteCookingLog, getLogsForRecipe } from './cooking-
 export { createOcrSource } from './source.service';
 export { capturePhoto, cleanupTemporaryPhotos } from './photo-capture.service';
 export { preprocessImageForOcr } from './image-preprocess.service';
-export { createClientOcrRecognizer, isClientOcrAvailable } from './client-ocr.provider';
+export {
+  createClientOcrRecognizer,
+  isClientOcrAvailable,
+  recognizeTextOnDevice,
+} from './client-ocr.provider';
 export { getTagsForFamily, upsertTags } from './tag.service';
 export {
   getShoppingItems,
