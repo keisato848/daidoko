@@ -59,7 +59,6 @@ module.exports = [
       'apps/mobile/src/db/seed.ts',
       'apps/mobile/src/e2e/**',
       'apps/mobile/src/constants/licenses.ts',
-      'apps/mobile/src/utils/receiptParser.ts',
       // レシートの単位表記（「個」「ｇ」）を在庫の表記へ寄せる対応表。画面の文言ではなく保存値
       'apps/mobile/src/utils/receiptQuantity.ts',
       'apps/mobile/src/utils/recipeTextParser.ts',
