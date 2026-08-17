@@ -5,11 +5,11 @@
 import { useRouter } from 'expo-router';
 import { ClipboardCopy, FileText, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Clipboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Clipboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
-import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
+import { KeyboardAwareScroll } from '../../../src/components/KeyboardAwareScroll';
 import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
 import { createRecipe } from '../../../src/services/recipe.service';
@@ -98,7 +98,7 @@ export default function ImportTextScreen() {
   }
 
   return (
-    <KeyboardAvoider style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
@@ -107,7 +107,10 @@ export default function ImportTextScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScroll
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.iconWrapper}>
           <FileText size={32} color={Colors.gold} />
         </View>
@@ -141,13 +144,13 @@ export default function ImportTextScreen() {
             {isParsing ? t('recipeImport.text.parsing') : t('recipeImport.text.parse')}
           </Text>
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScroll>
       <Toast
         message={toastMessage ?? ''}
         visible={toastMessage != null}
         onDismiss={() => setToastMessage(null)}
       />
-    </KeyboardAvoider>
+    </View>
   );
 }
 
