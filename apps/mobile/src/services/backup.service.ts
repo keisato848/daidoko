@@ -84,6 +84,7 @@ export const BACKUP_TABLES = [
       'status',
       'cover_photo_path',
       'pinned_at',
+      'place_name',
       'created_by',
       'created_at',
       'updated_at',

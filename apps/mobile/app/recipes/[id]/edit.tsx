@@ -43,6 +43,7 @@ export default function EditRecipeScreen() {
         })),
         tags: detail.tags,
         coverPhotoPath: detail.coverPhotoPath ?? undefined,
+        placeName: detail.placeName ?? '',
       });
     });
   }, [id]);
@@ -72,6 +73,7 @@ export default function EditRecipeScreen() {
         })),
         tags: data.tags,
         coverPhotoPath: data.coverPhotoPath || undefined,
+        placeName: data.placeName || undefined,
       };
 
       await updateRecipe(id, input);

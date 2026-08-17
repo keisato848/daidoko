@@ -38,6 +38,8 @@ export interface RecipeDetail {
   coverPhotoPath: string | null;
   /** 作りたいリスト: ピン留め日時（ISO） — null = 未ピン */
   pinnedAt: string | null;
+  /** お店の名前（任意）。レシピが持つ（記録側は履歴なので表示に使わない） */
+  placeName: string | null;
 }
 
 export interface MemoItem {
@@ -134,6 +136,8 @@ export interface SaveRecipeInput {
   tags: string[];
   /** 表紙写真（端末内パス）。null/undefined = なし */
   coverPhotoPath?: string | null;
+  /** お店の名前（任意）。空文字・undefined = 未設定 */
+  placeName?: string | null;
 }
 
 export interface UpdateRecipeInput extends SaveRecipeInput {

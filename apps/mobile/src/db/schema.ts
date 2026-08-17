@@ -76,6 +76,14 @@ export const recipes = sqliteTable(
     status: text('status').notNull().default('active'), // 'active' | 'archived'
     coverPhotoPath: text('cover_photo_path'), // 表紙写真（端末内パス, v7）
     pinnedAt: text('pinned_at'), // 作りたいリスト（ピン留め日時, v8）— null = 未ピン
+    /**
+     * お店の名前（v12・任意）。「あの店のあの料理」を再現する単位はレシピ 1 件なので、
+     * 店名はレシピが持つ。**表示は常にここを見る。**
+     * 記録（`cooking_logs.place_name`）にも列があるが、あちらは初回に入力されたときだけ
+     * 埋まる履歴で、**後から店名を入れても過去の記録は変わらない** — 表示に使うと
+     * 「後から入力したのに出てこない」が起きる。
+     */
+    placeName: text('place_name'),
     createdBy: text('created_by')
       .notNull()
       .references(() => users.id),
@@ -209,7 +217,11 @@ export const cookingLogs = sqliteTable(
      * （`docs/お店の味を再現設計.md` §3）。
      */
     kind: text('kind').notNull().default('cooked'),
-    /** 店名（kind='eaten_out' のとき。任意） */
+    /**
+     * 店名（kind='eaten_out' のとき。任意）。
+     * **表示には使わない** — 表示は `recipes.place_name` を正とする（v12）。
+     * ここは「その日どこで食べたか」の事実として残す。
+     */
     placeName: text('place_name'),
   },
   (table) => ({
