@@ -2,6 +2,7 @@ import { getLocales } from 'expo-localization';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { Colors } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
@@ -112,15 +113,20 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: Colors.bg },
-      }}
-    >
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
-    </Stack>
+    // キーボードの位置・高さを全画面で扱えるようにする土台（`KeyboardAvoider` が使う）。
+    // **アプリのルートに 1 つだけ**置く決まりで、これが無いと配下の
+    // KeyboardAvoidingView / KeyboardAwareScrollView は黙って何もしない。
+    <KeyboardProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.bg },
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
+      </Stack>
+    </KeyboardProvider>
   );
 }
 

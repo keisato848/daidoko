@@ -21,7 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '../../src/components/BottomSheet';
-import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
+import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import {
@@ -197,8 +197,8 @@ export default function BookEditScreen() {
         <View style={styles.headerSpacer} />
       </View>
       {/* 題名・パスコードの入力欄より下に「共有する」ボタンがあるので包む */}
-      <KeyboardAvoider style={styles.fill}>
-        <ScrollView
+      <View style={styles.fill}>
+        <KeyboardAwareScroll
           contentContainerStyle={styles.body}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -301,8 +301,8 @@ export default function BookEditScreen() {
               </Pressable>
             </>
           )}
-        </ScrollView>
-      </KeyboardAvoider>
+        </KeyboardAwareScroll>
+      </View>
 
       <BottomSheet
         visible={pickerOpen}
