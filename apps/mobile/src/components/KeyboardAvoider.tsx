@@ -1,25 +1,29 @@
 /**
  * キーボードでボタンが隠れないようにする共通ラッパー。
  *
- * **`behavior` を Android で未指定にしてはいけない。**
- * `AndroidManifest` は `adjustResize` を指定しているが、この構成では
- * **ウィンドウがリサイズされず**、ソフトキーボードが画面の上に重なるだけになる。
- * その状態で `behavior=undefined` にすると `KeyboardAvoidingView` はただの View になり、
- * 画面下端のボタン（送信・保存・変換）がキーボードの下に完全に隠れる。
- * 実機 AQUOS SH-RM19s (Android 13) とエミュレータ API 36 の両方で再現する。
+ * 中身は `react-native-keyboard-controller` の `KeyboardAvoidingView`。
+ * React Native 標準のものは**キーボードの開閉を「点」でしか見ない**（`keyboardDidShow` /
+ * `keyboardDidHide`）ため、Android の edge-to-edge（SDK 54 で強制）ではウィンドウが
+ * リサイズされず高さがずれる・追従がガタつく、という問題があった。
+ * こちらはフレーム単位で追従するので、`behavior` の指定に頼らずに正しい余白が入る。
  *
- * そのため **両プラットフォームで `padding`** を使う。RN はキーボードの高さを
- * `keyboardDidShow` で通知するので、リサイズされない環境でも正しく余白が入る。
+ * **ルートに `KeyboardProvider` が要る**（`app/_layout.tsx`）。無いと黙って何もしない。
  *
  * 入力欄のある画面は必ずこれで包む。個々の画面で `KeyboardAvoidingView` を
- * 直に使うと、また `behavior` の指定漏れが起きる。
+ * 直に使うと、また指定漏れが起きる。
  * **この規約は `__tests__/keyboard-avoider-coverage.test.ts` が機械的に見張る**
  * （文章で書いただけの頃、主役の「写真からレシピ」を含む 5 画面が漏れていた — #172）。
  *
  * `Modal` の中身は画面本体とは**別のツリー**なので、画面を包んでもモーダル内には
  * 効かない。モーダルの内側にも個別に置くこと。
+ *
+ * **スクロールの中に入力欄と、その下に続くボタン（「材料を追加」等）がある画面は
+ * これではなく `KeyboardAwareScroll` を使う。** こちらは領域を縮めるだけなので、
+ * Android がフォーカス欄を「ぎりぎり見える位置」まで送った結果、直下のボタンが
+ * キーボードの下に残る（実機 AQUOS で再現・レシピ作成の「材料を追加」）。
  */
-import { KeyboardAvoidingView, StyleSheet, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { StyleSheet, type ViewStyle } from 'react-native';
 
 interface KeyboardAvoiderProps {
   children: React.ReactNode;
