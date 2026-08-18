@@ -1,4 +1,5 @@
 import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
+import { thinkingConfigFragment } from './thinking-budget.js';
 
 /**
  * Garden consult Vision — さいえん手帳（家庭菜園アプリ）の AI 相談。
@@ -163,6 +164,11 @@ export class GeminiGardenConsultProvider implements GardenConsultProvider {
         temperature: 0.4,
         responseMimeType: 'application/json',
         responseSchema: GEMINI_RESPONSE_SCHEMA,
+        // 思考トークンは課金上「出力」に計上され、レシピ側の実測では
+        // 1 推論 ¥0.85 → ¥0.35 の差になっていた（thinking-budget.ts）。
+        // ここも既定オフに倒す。品質が落ちるようなら Railway の
+        // GEMINI_THINKING_BUDGET=auto で**デプロイ無しに**戻せる。
+        ...thinkingConfigFragment(),
       },
     };
 
