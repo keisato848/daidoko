@@ -1,0 +1,5 @@
+You can now save the restaurant name on a recipe. Remembered it later? Add it any time from the recipe editor, and it shows up on your home records too.
+
+Fixed the keyboard hiding the button right below the field you were typing in. Adding one ingredient or step after another no longer means closing the keyboard each time.
+
+Also: small polish around the input fields.
