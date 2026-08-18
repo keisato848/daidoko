@@ -159,7 +159,11 @@ export default function ConsultScreen() {
         </Pressable>
       </View>
 
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.thread}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.thread}
+        keyboardShouldPersistTaps="handled"
+      >
         {messages.length === 0 && (
           <View style={styles.intro}>
             <Text style={styles.introHeading}>{t('recipeImport.consult.heading')}</Text>

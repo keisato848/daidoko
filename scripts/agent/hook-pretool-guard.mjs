@@ -19,6 +19,7 @@ const REPO_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 // （`let` は TDZ にかかるため、関数だけ先に巻き上がっても呼べない）。
 let deviceVerificationStatusCache;
 let releaseTagStatusCache;
+let unpushedCommitsCache;
 
 const payload = await readStdinJson();
 const commandText = extractCommandText(payload);
@@ -126,6 +127,8 @@ if (!commandText) {
     'ask',
     'EAS production ビルドはローカル作業ディレクトリをアップロードします。main を checkout 済みか確認してください（docs/リリース手順.md §2-3）。',
   );
+} else if (/\bgh\s+pr\s+merge\b/i.test(commandText) && unpushedCommits()?.blocked) {
+  respond('deny', unpushedCommits().reason);
 } else if (
   /\bgh\s+pr\s+merge\b/i.test(commandText) ||
   gitRule(String.raw`merge\b`).test(commandText)
@@ -259,6 +262,75 @@ function appChangedSince(headCommit) {
   });
   if (!log.ok) return null;
   return log.stdout.split(/\r?\n/).filter(Boolean);
+}
+
+/**
+ * `gh pr merge` の直前に、**手元のコミットが push 済みか**を確かめる。
+ *
+ * なぜ要るか: 2026-08-18 に、修正をコミットしただけで push せずに PR をマージし、
+ * その 6 ファイル（キーボード周りの水平展開）が main に入らなかった。PR は
+ * **push 済みのコミットしか含まない**ので、ローカルにだけある変更は黙って落ちる。
+ * CI は通り、マージも成功し、次に実機で触るまで気づけない。
+ *
+ * 判定は現在のブランチと upstream の差分。upstream 無し（未 push）も対象。
+ * git が失敗したときはフェイルオープン（ガードのせいで作業を止めない）。
+ */
+function unpushedCommits() {
+  if (unpushedCommitsCache !== undefined) return unpushedCommitsCache;
+  unpushedCommitsCache = computeUnpushedCommits();
+  return unpushedCommitsCache;
+}
+
+function computeUnpushedCommits() {
+  const branch = runCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: REPO_ROOT });
+  if (!branch.ok) return null;
+  const name = branch.stdout.trim();
+  // main や detached HEAD からのマージは、この事故の形にならない
+  if (!name || name === 'HEAD' || name === 'main') return null;
+
+  const upstream = runCommand(
+    'git',
+    ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+    { cwd: REPO_ROOT },
+  );
+  if (!upstream.ok) {
+    return {
+      blocked: true,
+      reason:
+        'ブランチ ' +
+        name +
+        ' はまだ push されていません（upstream 無し）。' +
+        'このままマージしても手元のコミットは PR に含まれません。' +
+        '先に ' +
+        '`' +
+        'git push -u origin ' +
+        name +
+        '`' +
+        ' してください。',
+    };
+  }
+
+  const ahead = runCommand('git', ['rev-list', '--count', '@{u}..HEAD'], { cwd: REPO_ROOT });
+  if (!ahead.ok) return null;
+  const count = Number(ahead.stdout.trim());
+  if (!Number.isFinite(count) || count === 0) return { blocked: false };
+
+  return {
+    blocked: true,
+    reason:
+      'ブランチ ' +
+      name +
+      ' に push されていないコミットが ' +
+      count +
+      ' 件あります。' +
+      'PR は push 済みのコミットしか含まないので、このままマージすると手元の変更は main に入りません' +
+      '（2026-08-18 に実際に 6 ファイル落ちました）。' +
+      '先に ' +
+      '`' +
+      'git push' +
+      '`' +
+      ' し、PR に反映されたことを確認してからマージしてください。',
+  };
 }
 
 function computeReleaseTagStatus() {

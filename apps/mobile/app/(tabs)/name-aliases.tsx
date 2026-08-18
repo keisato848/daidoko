@@ -69,6 +69,7 @@ export default function NameAliasesScreen() {
       <Text style={styles.description}>{t('pantry.aliases.lead')}</Text>
 
       <FlatList
+        keyboardShouldPersistTaps="handled"
         data={entries}
         keyExtractor={(entry) => entry.id}
         contentContainerStyle={styles.listContent}

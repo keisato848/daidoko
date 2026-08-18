@@ -36,6 +36,7 @@ const DEFAULT_VALUES: RecipeFormData = {
   cookTimeMin: undefined,
   prepTimeMin: undefined,
   coverPhotoPath: undefined,
+  placeName: '',
   ingredients: [{ name: '', amount: '', groupLabel: '', note: '' }],
   steps: [{ body: '', timerSec: undefined, photoPath: undefined }],
   tags: [],
@@ -149,6 +150,14 @@ export function RecipeForm({
             placeholder={t('recipe.form.descriptionPlaceholder')}
             multiline
             style={styles.multilineInput}
+          />
+          {/* お店の名前はレシピの属性。**常に出す** — 写真から作った初回だけでなく、
+              あとから思い出して足せることがこの欄の存在理由（記録側に持つと直せない） */}
+          <FormField
+            label={t('recipe.form.placeLabel')}
+            value={watchedValues.placeName ?? ''}
+            onChangeText={(v) => setValue('placeName', v)}
+            placeholder={t('recipe.form.placePlaceholder')}
           />
           <View style={styles.stepperRow}>
             <NumberStepper

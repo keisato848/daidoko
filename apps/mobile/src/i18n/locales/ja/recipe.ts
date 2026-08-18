@@ -28,6 +28,9 @@ const recipe = {
     readingPlaceholder: '例: にくじゃが',
     descriptionLabel: '説明',
     descriptionPlaceholder: 'レシピの簡単な説明（任意）',
+    /** お店の名前。あとから足せることが大事なので、常に出す（初回限定にしない） */
+    placeLabel: 'お店の名前',
+    placePlaceholder: '例: 麻婆豆腐の○○屋（任意）',
     minutesSuffix: '分',
     photoSection: '写真',
     createTitle: 'レシピ作成',

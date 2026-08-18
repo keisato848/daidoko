@@ -89,7 +89,7 @@ export default function AiKeyScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <KeyboardAwareScroll contentContainerStyle={styles.body}>
+      <KeyboardAwareScroll contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={styles.iconWrap}>
           <KeyRound size={34} color={Colors.gold} />
         </View>
