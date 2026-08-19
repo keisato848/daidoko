@@ -93,6 +93,26 @@ export const GARDEN_POOL: RateLimitPool = {
   clientDefault: 20,
 };
 
+/**
+ * さいえん手帳の収穫の写真記録（`/garden/harvest`）。
+ *
+ * **相談とも分ける。** 1 推論が ¥0.07 と相談（¥0.35）の 1/5 で、
+ * 頻度は収穫期にほぼ毎日と桁が違う。同じ枠に入れると、
+ * **安い呼び出しが高い呼び出しの枠に締め出される**（プールを分けた元の理由と同じ）。
+ *
+ * 既定 500 は「200 人が毎日 1 枚記録しても収まる」（¥0.07 × 500 × 30 = 月 ¥1,050）。
+ * さいえん手帳側は無料枠 1 枚/日 + まとめてリワードなので、
+ * 実際の消費はこれより緩やかになる見込み（saien-techo#144）。
+ */
+export const HARVEST_POOL: RateLimitPool = {
+  key: '__global_harvest__',
+  label: 'さいえん手帳 収穫記録',
+  globalEnv: 'HARVEST_GLOBAL_DAILY_LIMIT',
+  globalDefault: 500,
+  clientEnv: 'HARVEST_DAILY_LIMIT',
+  clientDefault: 60,
+};
+
 interface Bucket {
   count: number;
   resetAt: number;

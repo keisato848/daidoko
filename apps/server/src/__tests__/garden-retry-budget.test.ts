@@ -23,6 +23,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CLIENT_TIMEOUT_MS, GARDEN_RETRY_BUDGET_MS } from '../lib/garden-vision.js';
+import { HARVEST_RETRY_BUDGET_MS } from '../lib/harvest-vision.js';
 
 /** アップロードとサーバー処理に残しておく余裕。 */
 const HEADROOM_MS = 5_000;
@@ -39,5 +40,17 @@ describe('garden consult のリトライ予算', () => {
   it('リトライが 1 回きりになっていない（一過性の詰まりを拾えること）', () => {
     // 予算を削りすぎて「実質リトライ無し」になると、今度は拾えるはずの失敗を落とす。
     expect(GARDEN_RETRY_BUDGET_MS).toBeGreaterThan(20_000);
+  });
+});
+
+describe('harvest（収穫の写真記録）のリトライ予算', () => {
+  // harvest-vision.ts は「テストが上限を見張るために公開する」と宣言している。
+  // ここが無いとその宣言が嘘になる（garden と同じ制約を負う）。
+  it('アプリの待ち時間（60 秒）を超えない', () => {
+    expect(HARVEST_RETRY_BUDGET_MS).toBeLessThanOrEqual(CLIENT_TIMEOUT_MS - HEADROOM_MS);
+  });
+
+  it('リトライが 1 回きりになっていない', () => {
+    expect(HARVEST_RETRY_BUDGET_MS).toBeGreaterThan(20_000);
   });
 });

@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   checkRateLimit,
   GARDEN_POOL,
+  HARVEST_POOL,
   RECIPE_POOL,
   resetRateLimitForTesting,
 } from '../lib/rate-limit.js';
@@ -25,6 +26,8 @@ const ENV_KEYS = [
   'INFER_DAILY_LIMIT',
   'GARDEN_GLOBAL_DAILY_LIMIT',
   'GARDEN_DAILY_LIMIT',
+  'HARVEST_GLOBAL_DAILY_LIMIT',
+  'HARVEST_DAILY_LIMIT',
 ];
 
 beforeEach(() => {
@@ -33,10 +36,27 @@ beforeEach(() => {
 });
 
 describe('レート上限のプール分離', () => {
-  it('プールのキーが衝突していない', () => {
-    expect(RECIPE_POOL.key).not.toBe(GARDEN_POOL.key);
-    expect(RECIPE_POOL.globalEnv).not.toBe(GARDEN_POOL.globalEnv);
-    expect(RECIPE_POOL.clientEnv).not.toBe(GARDEN_POOL.clientEnv);
+  it('プールのキーが衝突していない（3 プールすべて）', () => {
+    const keys = [RECIPE_POOL.key, GARDEN_POOL.key, HARVEST_POOL.key];
+    expect(new Set(keys).size).toBe(3);
+    const globals = [RECIPE_POOL.globalEnv, GARDEN_POOL.globalEnv, HARVEST_POOL.globalEnv];
+    expect(new Set(globals).size).toBe(3);
+    const clients = [RECIPE_POOL.clientEnv, GARDEN_POOL.clientEnv, HARVEST_POOL.clientEnv];
+    expect(new Set(clients).size).toBe(3);
+  });
+
+  it('相談を使い切っても、収穫の読み取りは通る（逆も）', () => {
+    // 収穫は単価 1/5・頻度が桁違い。相談の枠に締め出されないことが分離の本体。
+    process.env['GARDEN_GLOBAL_DAILY_LIMIT'] = '1';
+    expect(checkRateLimit('ip-h', GARDEN_POOL).allowed).toBe(true);
+    expect(checkRateLimit('ip-h', GARDEN_POOL).allowed).toBe(false);
+    expect(checkRateLimit('ip-h', HARVEST_POOL).allowed).toBe(true);
+
+    process.env['HARVEST_GLOBAL_DAILY_LIMIT'] = '1';
+    resetRateLimitForTesting();
+    expect(checkRateLimit('ip-h2', HARVEST_POOL).allowed).toBe(true);
+    expect(checkRateLimit('ip-h2', HARVEST_POOL).allowed).toBe(false);
+    expect(checkRateLimit('ip-h2', GARDEN_POOL).allowed).toBe(true);
   });
 
   it('レシピ側を使い切っても、さいえん手帳の相談は通る', () => {
@@ -80,9 +100,10 @@ describe('レート上限のプール分離', () => {
     expect(checkRateLimit('ip-c', GARDEN_POOL).allowed).toBe(true);
   });
 
-  it('既定値: レシピ 30 / さいえん手帳 100', () => {
-    // 「月 ¥1,000 以内」の方針から逆算した値。変えるときは根拠ごと更新する。
+  it('既定値: レシピ 30 / 相談 100 / 収穫 500', () => {
+    // それぞれ「月 ¥1,000 前後」の方針から単価で逆算した値。変えるときは根拠ごと更新する。
     expect(RECIPE_POOL.globalDefault).toBe(30);
     expect(GARDEN_POOL.globalDefault).toBe(100);
+    expect(HARVEST_POOL.globalDefault).toBe(500);
   });
 });
