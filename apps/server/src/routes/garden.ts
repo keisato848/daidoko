@@ -1,9 +1,13 @@
 /**
- * POST /api/v1/garden/consult — さいえん手帳の AI 相談（写真 → 診断・アドバイス）。
+ * さいえん手帳（家庭菜園アプリ）がこのサーバーに相乗りしているルート群
+ * （WBS 決定⑨）。レシピ系とは共存させない。
  *
- * さいえん手帳（家庭菜園アプリ）がこのサーバーに相乗りしている唯一のルート。
- * プロンプト・スキーマは lib/garden-vision.ts に閉じており、レシピ系とは
- * 共存させない（さいえん手帳 WBS 決定⑨）。
+ * - `POST /api/v1/garden/consult` … AI 相談（写真 → 診断・アドバイス）
+ * - `POST /api/v1/garden/harvest` … 収穫の写真記録（写真 → 作物と個数）
+ *
+ * **2 つは別物として扱う。** 目的も出力の長さも単価も頻度も違うので、
+ * プロンプト（`lib/garden-vision.ts` / `lib/harvest-vision.ts`）も
+ * レート上限のプールも分けてある。
  */
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -15,10 +19,26 @@ import {
   GardenVisionRequestError,
   type GardenConsultProvider,
 } from '../lib/garden-vision.js';
-import { checkRateLimit, GARDEN_POOL } from '../lib/rate-limit.js';
+import {
+  GeminiHarvestVisionProvider,
+  HarvestVisionConfigError,
+  HarvestVisionRequestError,
+  sanitize as sanitizeHarvest,
+  type HarvestVisionProvider,
+} from '../lib/harvest-vision.js';
+import { checkRateLimit, GARDEN_POOL, HARVEST_POOL } from '../lib/rate-limit.js';
 import { parseOutputLocale } from '../lib/output-locale.js';
 
 const gardenRouter = new Hono();
+
+/** レート制限のクライアント識別。Railway は x-forwarded-for を付ける。 */
+function clientIp(c: { req: { header: (name: string) => string | undefined } }): string {
+  return (
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous'
+  );
+}
 
 // base64 of a ~1024px JPEG is well under this; guard against oversized payloads.
 const MAX_IMAGE_BASE64_LENGTH = 8_000_000; // ~6 MB decoded
@@ -50,11 +70,7 @@ gardenRouter.post('/consult', zValidator('json', gardenConsultSchema), async (c)
   // **グローバル上限もレシピ系と分ける**（GARDEN_POOL）。以前は 1 本のカウンタを
   // 共有していて、だいどこのレシピ推論（¥0.45/回）が使い切ると さいえん手帳の
   // AI 相談（¥0.35/回）まで止まっていた。上限は GARDEN_GLOBAL_DAILY_LIMIT。
-  const ip =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
-  const rate = checkRateLimit(ip, GARDEN_POOL);
+  const rate = checkRateLimit(clientIp(c), GARDEN_POOL);
   if (!rate.allowed) {
     return c.json({
       ok: false,
@@ -108,6 +124,83 @@ gardenRouter.post('/consult', zValidator('json', gardenConsultSchema), async (c)
         code: 'AI_INFER_FAILED',
         message: '診断に失敗しました。時間をおいてお試しください。',
         retryable,
+      },
+    });
+  }
+});
+
+// ─── 収穫の写真記録（saien-techo#143） ──────────────────────────────────────
+
+const harvestSchema = z.object({
+  imageBase64: z.string().min(1, '画像が空です').max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  /** 栽培に登録されている作物名。推定の手がかり（任意） */
+  cropName: z.string().max(50, '作物名が長すぎます').optional(),
+  locale: z.enum(['ja', 'en']).optional(),
+});
+
+let harvestProviderOverride: HarvestVisionProvider | null = null;
+
+export function setHarvestProviderForTesting(provider: HarvestVisionProvider | null): void {
+  harvestProviderOverride = provider;
+}
+
+function resolveHarvestProvider(): HarvestVisionProvider {
+  return harvestProviderOverride ?? new GeminiHarvestVisionProvider();
+}
+
+gardenRouter.post('/harvest', zValidator('json', harvestSchema), async (c) => {
+  // **相談とも別のプール。** 単価が 1/5・頻度が桁違いなので、
+  // 同じ枠に入れると安い呼び出しが高い呼び出しに締め出される。
+  const rate = checkRateLimit(clientIp(c), HARVEST_POOL);
+  if (!rate.allowed) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'RATE_LIMITED',
+        message: '本日の利用上限に達しました。時間をおいてお試しください。',
+        retryable: false,
+      },
+    });
+  }
+
+  const { imageBase64, mimeType, cropName, locale } = c.req.valid('json');
+
+  let provider: HarvestVisionProvider;
+  try {
+    provider = resolveHarvestProvider();
+  } catch (err) {
+    if (err instanceof HarvestVisionConfigError) {
+      return c.json({
+        ok: false,
+        error: {
+          code: 'AI_API_UNAVAILABLE',
+          message: '写真の読み取りが利用できません',
+          retryable: false,
+        },
+      });
+    }
+    throw err;
+  }
+
+  try {
+    const raw = await provider.analyze({
+      imageBase64,
+      mimeType,
+      ...(cropName !== undefined && { cropName }),
+      outputLocale: parseOutputLocale(locale),
+    });
+    // **必ずここを通す。** provider が何を返しても、台帳に載る値は境界で検める。
+    return c.json({ ok: true, data: sanitizeHarvest(raw) });
+  } catch (err) {
+    // garden/consult と同じく、理由をログに残す（握り潰さない）。
+    console.error('[garden/harvest] failed:', err instanceof Error ? err.message : String(err));
+    return c.json({
+      ok: false,
+      error: {
+        code: 'AI_INFER_FAILED',
+        message: '写真を読み取れませんでした。数量は手で入力できます。',
+        retryable: err instanceof HarvestVisionRequestError,
       },
     });
   }
