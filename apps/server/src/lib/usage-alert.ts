@@ -30,7 +30,12 @@ interface WindowState {
   notified: Set<number>;
 }
 
-let state: WindowState = { resetAt: 0, notified: new Set() };
+/**
+ * プールごとに分ける。**1 本の state を共有してはいけない** —
+ * だいどこのレシピ推論とさいえん手帳の AI 相談は上限も単価も別なので、
+ * 混ぜると片方の到達がもう片方の通知を食い潰す（10% 到達が 1 回しか鳴らない）。
+ */
+const states = new Map<string, WindowState>();
 
 function isConfigured(): boolean {
   if (process.env['USAGE_ALERT_WEBHOOK_URL']?.trim()) return true;
@@ -43,12 +48,22 @@ function isConfigured(): boolean {
  * Called after each allowed request with the current global count. Sends one
  * mail per 10% step (10%, 20%, … 100%) per window.
  */
-export function notifyGlobalUsage(count: number, limit: number, resetAt: number): void {
+export function notifyGlobalUsage(
+  count: number,
+  limit: number,
+  resetAt: number,
+  pool: { label: string; globalEnv: string } = {
+    label: 'AI推論',
+    globalEnv: 'INFER_GLOBAL_DAILY_LIMIT',
+  },
+): void {
   if (limit <= 0 || count <= 0) return;
   if (!isConfigured()) return;
 
-  if (state.resetAt !== resetAt) {
+  let state = states.get(pool.label);
+  if (!state || state.resetAt !== resetAt) {
     state = { resetAt, notified: new Set() };
+    states.set(pool.label, state);
   }
 
   const decile = Math.min(10, Math.floor((count * 10) / limit));
@@ -57,14 +72,14 @@ export function notifyGlobalUsage(count: number, limit: number, resetAt: number)
   // after a restart) produces one mail, not a backlog of stale steps.
   for (let d = 1; d <= decile; d += 1) state.notified.add(d);
 
-  const subject = `だいどこ AI利用 ${decile * 10}% 到達（${count}/${limit} 回）`;
+  const subject = `${pool.label} ${decile * 10}% 到達（${count}/${limit} 回）`;
   const text = [
-    `AI 推論のグローバル日次利用が上限の ${decile * 10}% に達しました。`,
+    `${pool.label}のグローバル日次利用が上限の ${decile * 10}% に達しました。`,
     '',
     `現在: ${count} 回 / 上限 ${limit} 回`,
     `カウンタのリセット: ${new Date(resetAt).toISOString()}`,
     '',
-    '上限は Railway の環境変数 INFER_GLOBAL_DAILY_LIMIT で調整できます。',
+    `上限は Railway の環境変数 ${pool.globalEnv} で調整できます。`,
   ].join('\n');
 
   void sendAlert(subject, text);
@@ -117,7 +132,7 @@ async function sendViaResend(subject: string, text: string): Promise<void> {
   }
 }
 
-/** Test helper: clear dedup state. */
+/** Test helper: clear dedup state（プールをまたいで全部消す）。 */
 export function resetUsageAlertForTesting(): void {
-  state = { resetAt: 0, notified: new Set() };
+  states.clear();
 }

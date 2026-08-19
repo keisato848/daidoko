@@ -1,0 +1,1 @@
+Occasionally an English error message appeared when creating a recipe from a photo. It now shows a clear message and suggests waiting a moment before trying again.

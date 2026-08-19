@@ -38,6 +38,8 @@ interface MutableRecipe {
   status: string;
   coverPhotoPath?: string | null;
   pinnedAt?: string | null;
+  /** お店の名前（v12）。表示は常にこちらを使う（記録側は履歴） */
+  placeName?: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -165,7 +167,8 @@ export function getMockTimeline(): TimelineEntry[] {
         rating: log.rating,
         memo: log.memo,
         kind: log.kind ?? 'cooked',
-        placeName: log.placeName ?? null,
+        // 店名はレシピ側が正（native の timeline.service と揃える）
+        placeName: recipe?.placeName ?? null,
         photos: getPhotosForLog(log.id),
       };
     });
@@ -253,6 +256,7 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     steps,
     heroPhotoUri: recipe.coverPhotoPath ?? null,
     coverPhotoPath: recipe.coverPhotoPath ?? null,
+    placeName: recipe.placeName ?? null,
     pinnedAt: recipe.pinnedAt ?? null,
   };
 }
@@ -546,6 +550,7 @@ export function getMockCookingLogsForRecipe(recipeId: string): TimelineEntry[] {
         rating: log.rating,
         memo: log.memo,
         kind: log.kind ?? 'cooked',
+        // 店名はレシピ側が正（native の timeline.service と揃える）
         placeName: log.placeName ?? null,
         photos: getPhotosForLog(log.id),
       };

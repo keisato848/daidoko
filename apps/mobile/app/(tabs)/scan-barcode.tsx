@@ -7,9 +7,9 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'ex
 import { useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
+import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import { lookupJan, rememberJan } from '../../src/services/jan.service';
@@ -76,8 +76,8 @@ export default function ScanBarcodeScreen() {
   if (scannedCode) {
     // autoFocus でキーボードが即座に出る画面。包まないと「追加して覚える」が隠れる
     return (
-      <KeyboardAvoider style={styles.namingFill}>
-        <ScrollView
+      <View style={styles.namingFill}>
+        <KeyboardAwareScroll
           contentContainerStyle={styles.namingBody}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -111,8 +111,8 @@ export default function ScanBarcodeScreen() {
           <Pressable onPress={() => router.back()} hitSlop={8}>
             <Text style={styles.link}>{t('common.cancel')}</Text>
           </Pressable>
-        </ScrollView>
-      </KeyboardAvoider>
+        </KeyboardAwareScroll>
+      </View>
     );
   }
 

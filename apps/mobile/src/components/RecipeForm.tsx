@@ -5,9 +5,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback, useEffect, useState } from 'react';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { KeyboardAvoider } from './KeyboardAvoider';
+import { KeyboardAwareScroll } from './KeyboardAwareScroll';
 import { Colors } from '../constants/theme';
 import { t, tCount, tDynamic } from '../i18n';
 import { getTagsForFamily } from '../services/tag.service';
@@ -36,6 +36,7 @@ const DEFAULT_VALUES: RecipeFormData = {
   cookTimeMin: undefined,
   prepTimeMin: undefined,
   coverPhotoPath: undefined,
+  placeName: '',
   ingredients: [{ name: '', amount: '', groupLabel: '', note: '' }],
   steps: [{ body: '', timerSec: undefined, photoPath: undefined }],
   tags: [],
@@ -99,7 +100,11 @@ export function RecipeForm({
   );
 
   return (
-    <KeyboardAvoider style={styles.container}>
+    // 保存はヘッダー（スクロールの外・上）なのでキーボードに隠れない。
+    // 隠れるのは**行の直下**にある「材料を追加 / 手順を追加」なので、
+    // 領域を縮める `KeyboardAvoider` ではなく `KeyboardAwareScroll` で
+    // フォーカス欄の下に余白を確保する（KeyboardAwareScroll のコメント参照）。
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={onCancel} hitSlop={12}>
@@ -117,7 +122,7 @@ export function RecipeForm({
         </Pressable>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScroll
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -145,6 +150,14 @@ export function RecipeForm({
             placeholder={t('recipe.form.descriptionPlaceholder')}
             multiline
             style={styles.multilineInput}
+          />
+          {/* お店の名前はレシピの属性。**常に出す** — 写真から作った初回だけでなく、
+              あとから思い出して足せることがこの欄の存在理由（記録側に持つと直せない） */}
+          <FormField
+            label={t('recipe.form.placeLabel')}
+            value={watchedValues.placeName ?? ''}
+            onChangeText={(v) => setValue('placeName', v)}
+            placeholder={t('recipe.form.placePlaceholder')}
           />
           <View style={styles.stepperRow}>
             <NumberStepper
@@ -256,8 +269,8 @@ export function RecipeForm({
             }}
           />
         </View>
-      </ScrollView>
-    </KeyboardAvoider>
+      </KeyboardAwareScroll>
+    </View>
   );
 }
 

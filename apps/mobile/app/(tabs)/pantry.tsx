@@ -121,13 +121,7 @@ export default function PantryScreen() {
   return (
     <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityLabel={t('common.close')}
-        >
-          <X size={20} color={Colors.muted} />
-        </Pressable>
+        {/* タブになったので「閉じる」は置かない（戻る先が無く、back はアプリを抜けてしまう）— Issue #182 */}
         <Text style={styles.headerTitle}>{t('pantry.title')}</Text>
         <View ref={actionsRef} collapsable={false} style={styles.headerActions}>
           <Pressable
@@ -205,6 +199,7 @@ export default function PantryScreen() {
       )}
 
       <FlatList
+        keyboardShouldPersistTaps="handled"
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}

@@ -254,13 +254,27 @@ describe('店で食べた / 家で作った の区別（R1）', () => {
   });
 
   it('タイムラインにも kind が出る（作った記録として並べない）', async () => {
-    await createCookingLog({
+    const id = await createCookingLog({
       recipeId: 'recipe-kind-timeline',
       cookedAt: new Date('2026-08-03T14:00:00Z').toISOString(),
       kind: 'eaten_out',
       placeName: 'ラーメン一番',
     });
-    const entry = (await getTimeline()).find((e) => e.placeName === 'ラーメン一番');
+    const entry = (await getTimeline()).find((e) => e.id === id);
     expect(entry?.kind).toBe('eaten_out');
+  });
+
+  it('タイムラインの店名は**レシピ**を見る（記録側は表示に使わない, v12）', async () => {
+    // 記録に店名を入れても、レシピに無ければタイムラインには出ない。
+    // 逆に、あとからレシピに店名を入れれば過去の記録の表示も直る — これがレシピ側に
+    // 持たせた理由そのもの（記録側だと空のまま作られた分を直せない）。
+    const id = await createCookingLog({
+      recipeId: 'recipe-kind-place-source',
+      cookedAt: new Date('2026-08-03T15:00:00Z').toISOString(),
+      kind: 'eaten_out',
+      placeName: '記録にだけ入れた店名',
+    });
+    const entry = (await getTimeline()).find((e) => e.id === id);
+    expect(entry?.placeName).toBeNull();
   });
 });

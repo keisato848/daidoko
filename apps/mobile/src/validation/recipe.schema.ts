@@ -39,6 +39,8 @@ export const recipeFormSchema = z.object({
   prepTimeMin: z.number().int().min(1).max(999).optional(),
   /** 表紙写真（端末内パス） */
   coverPhotoPath: z.string().optional(),
+  /** お店の名前（任意）。「あの店のあの料理」を再現する単位はレシピなのでここが正 */
+  placeName: z.string().max(60).optional(),
   ingredients: z.array(ingredientSchema).min(1, 'recipe.validation.ingredientsRequired'),
   steps: z.array(stepSchema).min(1, 'recipe.validation.stepsRequired'),
   tags: z.array(z.string()),

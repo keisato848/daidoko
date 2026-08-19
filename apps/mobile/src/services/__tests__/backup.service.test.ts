@@ -71,6 +71,10 @@ describe('バックアップ対象の取りこぼし防止', () => {
     expect(columnsOf('cooking_logs')).toEqual(expect.arrayContaining(['kind', 'place_name']));
   });
 
+  it('v12 の recipes.place_name が入っている（復元でお店の名前が消えないため）', () => {
+    expect(columnsOf('recipes')).toContain('place_name');
+  });
+
   it('写真パスの列が入っている（復元後に写真が見えなくなるのを防ぐ）', () => {
     expect(columnsOf('recipes')).toContain('cover_photo_path');
     expect(columnsOf('steps')).toContain('photo_path');

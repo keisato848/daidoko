@@ -233,6 +233,7 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
     heroPhotoUri,
     coverPhotoPath: resolvePhotoUri(r.coverPhotoPath),
     pinnedAt: r.pinnedAt,
+    placeName: r.placeName,
   };
 }
 
@@ -355,6 +356,7 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
     currentRevId: revId,
     status: 'active',
     coverPhotoPath: toStoredPhotoPath(input.coverPhotoPath),
+    placeName: input.placeName?.trim() ? input.placeName.trim() : null,
     createdBy: USER_ID,
     createdAt: now,
     updatedAt: now,
@@ -519,6 +521,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
       titleReading: input.titleReading ?? null,
       currentRevId: revId,
       coverPhotoPath: toStoredPhotoPath(input.coverPhotoPath),
+      placeName: input.placeName?.trim() ? input.placeName.trim() : null,
       updatedAt: now,
     })
     .where(eq(schema.recipes.id, recipeId));

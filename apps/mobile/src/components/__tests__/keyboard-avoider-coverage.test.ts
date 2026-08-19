@@ -13,13 +13,31 @@ import { join, resolve } from 'node:path';
 
 const APP_DIR = resolve(__dirname, '../../../app');
 
-/** KeyboardAvoider で包まない画面と、その理由。無条件に足さないこと。 */
+/** ラッパーで包まない画面と、その理由。無条件に足さないこと。 */
 const EXEMPT: Record<string, string> = {
+  '(tabs)/recipes/import-photo.tsx':
+    'モーダル外の入力欄は「お店の名前」だけで、画面最上部の固定バーにあり下に続く操作が無い。' +
+    'その下の RecipeForm は KeyboardAwareScroll で自前にキーボードを扱うので、' +
+    '外側をさらに包むと二重に領域が縮む。モーダル内側の KeyboardAvoider は別途必須（下のテスト）。',
   '(tabs)/recipes/index.tsx':
     '検索欄は画面の最上部にあり、その下にボタンが無い（隠れて困る操作が無い）。' +
     'それに対して包むと最下部の AdBanner がキーボードの直上へ押し上げられ、' +
     '誤タップを誘発する。代わりに FlatList へ keyboardShouldPersistTaps を入れてある。',
 };
+
+/** `<Modal ...>` 〜 `</Modal>` を落として、モーダル**外**のツリーだけを残す。 */
+function stripModalBlocks(source: string): string {
+  let result = '';
+  let rest = source;
+  for (;;) {
+    const start = rest.indexOf('<Modal');
+    if (start < 0) return result + rest;
+    const end = rest.indexOf('</Modal>', start);
+    if (end < 0) return result + rest.slice(0, start); // 閉じが無ければ以降は捨てる
+    result += rest.slice(0, start);
+    rest = rest.slice(end + '</Modal>'.length);
+  }
+}
 
 function collectScreens(dir: string, acc: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -60,7 +78,8 @@ describe('KeyboardAvoider coverage', () => {
     (key) => {
       const screen = withInput.find((candidate) => candidate.key === key);
       if (EXEMPT[key]) return; // 理由は EXEMPT に記録済み
-      expect(screen?.source).toMatch(/from '.*components\/KeyboardAvoider'/);
+      // 入力欄の下に続くボタンがある画面は KeyboardAwareScroll を使う（どちらでもよい）
+      expect(screen?.source).toMatch(/from '.*components\/(KeyboardAvoider|KeyboardAwareScroll)'/);
     },
   );
 
@@ -70,11 +89,25 @@ describe('KeyboardAvoider coverage', () => {
     }
   });
 
-  it('Modal の中の入力欄には、モーダル内側にも KeyboardAvoider が要る', () => {
+  it('Modal の中の入力欄には、モーダル内側にもラッパーが要る', () => {
     // 画面全体を包んでも Modal の中身は別ツリーなので効かない。#172 の報告箇所。
-    const importPhoto = withInput.find((s) => s.key === '(tabs)/recipes/import-photo.tsx');
-    if (!importPhoto) throw new Error('import-photo.tsx が見つからない（走査対象から外れた？）');
-    const modalBlock = importPhoto.source.slice(importPhoto.source.indexOf('<Modal'));
-    expect(modalBlock).toContain('<KeyboardAvoider');
+    for (const screen of withInput) {
+      const modalStart = screen.source.indexOf('<Modal');
+      if (modalStart < 0) continue;
+      const modalBlock = screen.source.slice(modalStart);
+      if (!modalBlock.includes('<TextInput')) continue;
+      expect(modalBlock).toMatch(/<(KeyboardAvoider|KeyboardAwareScroll)/);
+    }
+  });
+
+  it('モーダルの外に入力欄がある画面は、モーダルの外側も包まれている', () => {
+    // import だけ見ていた頃は、**モーダルの内側だけ**包んだ画面が素通りしていた
+    // （import-photo がまさにそれで、画面本体は包まれていなかった）。
+    for (const screen of withInput) {
+      if (EXEMPT[screen.key]) continue;
+      const outsideModal = stripModalBlocks(screen.source);
+      if (!outsideModal.includes('<TextInput')) continue;
+      expect(outsideModal).toMatch(/<(KeyboardAvoider|KeyboardAwareScroll)/);
+    }
   });
 });

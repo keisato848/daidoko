@@ -7,19 +7,10 @@
 import { useRouter } from 'expo-router';
 import { KeyRound, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Alert,
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { InfoTooltip } from '../../src/components/InfoTooltip';
-import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
+import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import {
@@ -85,7 +76,7 @@ export default function AiKeyScreen() {
   }, []);
 
   return (
-    <KeyboardAvoider style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
@@ -98,7 +89,7 @@ export default function AiKeyScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.body}>
+      <KeyboardAwareScroll contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={styles.iconWrap}>
           <KeyRound size={34} color={Colors.gold} />
         </View>
@@ -159,8 +150,8 @@ export default function AiKeyScreen() {
             detail={t('byok.detail.supported')}
           />
         </View>
-      </ScrollView>
-    </KeyboardAvoider>
+      </KeyboardAwareScroll>
+    </View>
   );
 }
 
