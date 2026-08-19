@@ -15,7 +15,7 @@ import {
   GardenVisionRequestError,
   type GardenConsultProvider,
 } from '../lib/garden-vision.js';
-import { checkRateLimit } from '../lib/rate-limit.js';
+import { checkRateLimit, GARDEN_POOL } from '../lib/rate-limit.js';
 import { parseOutputLocale } from '../lib/output-locale.js';
 
 const gardenRouter = new Hono();
@@ -47,13 +47,14 @@ function resolveProvider(): GardenConsultProvider {
 }
 
 gardenRouter.post('/consult', zValidator('json', gardenConsultSchema), async (c) => {
-  // クライアント別カウンタはレシピ系と分ける（garden: プレフィックス）。
-  // グローバル上限は checkRateLimit 内部で共有 — コスト天井は 1 本のまま。
+  // **グローバル上限もレシピ系と分ける**（GARDEN_POOL）。以前は 1 本のカウンタを
+  // 共有していて、だいどこのレシピ推論（¥0.45/回）が使い切ると さいえん手帳の
+  // AI 相談（¥0.35/回）まで止まっていた。上限は GARDEN_GLOBAL_DAILY_LIMIT。
   const ip =
     c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
-  const rate = checkRateLimit(`garden:${ip}`);
+  const rate = checkRateLimit(ip, GARDEN_POOL);
   if (!rate.allowed) {
     return c.json({
       ok: false,

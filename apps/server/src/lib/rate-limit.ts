@@ -31,9 +31,67 @@
 import { notifyGlobalUsage } from './usage-alert.js';
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
-const GLOBAL_KEY = '__global__';
 
 export type RateLimitResult = { allowed: true } | { allowed: false; scope: 'client' | 'global' };
+
+/**
+ * 用途ごとの独立した上限。**1 本のグローバルカウンタを共有してはいけない。**
+ *
+ * このサーバーは だいどこ と さいえん手帳 が相乗りしている（さいえん手帳 決定⑨）。
+ * 両者は 1 推論あたりの単価が違う:
+ *
+ * | 用途 | 内容 | 実測の単価 |
+ * | --- | --- | --- |
+ * | レシピ推論（だいどこ） | 画像 + 材料と手順の長い出力 | **¥0.45** |
+ * | AI 相談（さいえん手帳） | 画像 + 診断の構造化出力 | **¥0.35**（思考オフ後） |
+ *
+ * 単価が違うのに 1 本のカウンタを共有すると、**安い呼び出しが高い呼び出しの枠に
+ * 締め出される**。実際 2026-08-19 まで両者が同じ 30 回/日を分け合っており、
+ * さいえん手帳が公開されても写真ベースの記録（saien-techo#143）に着手できなかった。
+ *
+ * 上限はどれも Railway の環境変数で**デプロイ無しに**変えられる。
+ */
+export interface RateLimitPool {
+  /** グローバル計数のキー。プール間で共有しない */
+  key: string;
+  /** 通知メールの見出しに使う名前 */
+  label: string;
+  /** グローバル上限の環境変数名 */
+  globalEnv: string;
+  globalDefault: number;
+  /** クライアント別上限の環境変数名 */
+  clientEnv: string;
+  clientDefault: number;
+}
+
+/**
+ * だいどこのレシピ系（`/infer/*`・`/resolve/*`）。**既定 30 は据え置く** —
+ * 「月の上限を ¥1,000 以内」の方針から逆算した値（¥0.45 × 30 回 × 30 日 ≒ ¥405）。
+ */
+export const RECIPE_POOL: RateLimitPool = {
+  key: '__global__',
+  label: 'だいどこ AI利用',
+  globalEnv: 'INFER_GLOBAL_DAILY_LIMIT',
+  globalDefault: 30,
+  clientEnv: 'INFER_DAILY_LIMIT',
+  clientDefault: 20,
+};
+
+/**
+ * さいえん手帳の AI 相談（`/garden/consult`）。
+ *
+ * 既定 100 は「無料枠 1 回/日 × 100 人が毎日使っても月 ¥1,050 に収まる」
+ * （¥0.35 × 100 × 30）。**レシピ側の 30 とは独立**なので、片方が使い切っても
+ * もう片方は動く。
+ */
+export const GARDEN_POOL: RateLimitPool = {
+  key: '__global_garden__',
+  label: 'さいえん手帳 AI相談',
+  globalEnv: 'GARDEN_GLOBAL_DAILY_LIMIT',
+  globalDefault: 100,
+  clientEnv: 'GARDEN_DAILY_LIMIT',
+  clientDefault: 20,
+};
 
 interface Bucket {
   count: number;
@@ -64,23 +122,29 @@ function currentBucket(key: string, now: number): Bucket {
  * Returns whether the request is allowed and, if not, which cap was hit.
  * Increments both the global and per-client counters only when allowed.
  */
-export function checkRateLimit(clientId: string, now = Date.now()): RateLimitResult {
-  const clientLimit = limitFromEnv('INFER_DAILY_LIMIT', 20);
-  const globalLimit = limitFromEnv('INFER_GLOBAL_DAILY_LIMIT', 30);
+export function checkRateLimit(
+  clientId: string,
+  pool: RateLimitPool = RECIPE_POOL,
+  now = Date.now(),
+): RateLimitResult {
+  const clientLimit = limitFromEnv(pool.clientEnv, pool.clientDefault);
+  const globalLimit = limitFromEnv(pool.globalEnv, pool.globalDefault);
 
-  const globalBucket = currentBucket(GLOBAL_KEY, now);
+  const globalBucket = currentBucket(pool.key, now);
   if (globalLimit > 0 && globalBucket.count >= globalLimit) {
     return { allowed: false, scope: 'global' };
   }
 
-  const clientBucket = currentBucket(`client:${clientId}`, now);
+  // クライアント別カウンタもプールで分ける。同じ IP がレシピと相談を
+  // 両方使ったとき、片方の消費でもう片方が止まらないように。
+  const clientBucket = currentBucket(`${pool.key}:client:${clientId}`, now);
   if (clientLimit > 0 && clientBucket.count >= clientLimit) {
     return { allowed: false, scope: 'client' };
   }
 
   globalBucket.count += 1;
   clientBucket.count += 1;
-  notifyGlobalUsage(globalBucket.count, globalLimit, globalBucket.resetAt);
+  notifyGlobalUsage(globalBucket.count, globalLimit, globalBucket.resetAt, pool);
   return { allowed: true };
 }
 
