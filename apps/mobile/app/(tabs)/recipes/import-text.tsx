@@ -5,11 +5,11 @@
 import { useRouter } from 'expo-router';
 import { ClipboardCopy, FileText, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Clipboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Clipboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
-import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
+import { KeyboardAwareScroll } from '../../../src/components/KeyboardAwareScroll';
 import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
 import { createRecipe } from '../../../src/services/recipe.service';
@@ -98,16 +98,31 @@ export default function ImportTextScreen() {
   }
 
   return (
-    <KeyboardAvoider style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
         <Text style={styles.headerTitle}>{t('recipeImport.text.title')}</Text>
-        <View style={styles.headerSpacer} />
+        {/* 本文の入力欄は画面の大半を占めるので、下にボタンを置くと
+            フォーカス時にキーボードで隠れる（KeyboardAwareScroll の余白では足りない）。
+            ヘッダーならキーボードの高さに関係なく必ず押せる（RecipeForm の保存と同じ形）。 */}
+        <Pressable
+          accessibilityRole="button"
+          style={[styles.headerAction, !rawText.trim() && styles.headerActionDisabled]}
+          onPress={handleParse}
+          disabled={!rawText.trim() || isParsing}
+        >
+          <Text style={styles.headerActionText}>
+            {isParsing ? t('recipeImport.text.parsing') : t('recipeImport.text.parse')}
+          </Text>
+        </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScroll
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.iconWrapper}>
           <FileText size={32} color={Colors.gold} />
         </View>
@@ -131,23 +146,13 @@ export default function ImportTextScreen() {
           textAlignVertical="top"
           autoCorrect={false}
         />
-
-        <Pressable
-          style={[styles.parseButton, !rawText.trim() && styles.parseButtonDisabled]}
-          onPress={handleParse}
-          disabled={!rawText.trim() || isParsing}
-        >
-          <Text style={styles.parseButtonText}>
-            {isParsing ? t('recipeImport.text.parsing') : t('recipeImport.text.parse')}
-          </Text>
-        </Pressable>
-      </ScrollView>
+      </KeyboardAwareScroll>
       <Toast
         message={toastMessage ?? ''}
         visible={toastMessage != null}
         onDismiss={() => setToastMessage(null)}
       />
-    </KeyboardAvoider>
+    </View>
   );
 }
 
@@ -172,7 +177,6 @@ const styles = StyleSheet.create({
     color: Colors.paper,
     letterSpacing: 0.5,
   },
-  headerSpacer: { width: 20 },
   content: {
     padding: 24,
     gap: 16,
@@ -222,17 +226,18 @@ const styles = StyleSheet.create({
     color: Colors.paper,
     lineHeight: 22,
   },
-  parseButton: {
+  // ヘッダーの主要アクション。RecipeForm の保存ボタンと見た目を揃える
+  headerAction: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: Colors.gold,
     borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
   },
-  parseButtonDisabled: {
-    opacity: 0.4,
+  headerActionDisabled: {
+    opacity: 0.5,
   },
-  parseButtonText: {
-    fontSize: 15,
+  headerActionText: {
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.bg,
     letterSpacing: 1,

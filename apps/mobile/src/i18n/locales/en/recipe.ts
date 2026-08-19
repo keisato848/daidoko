@@ -18,6 +18,8 @@ const recipe: typeof ja = {
     readingLabel: 'Reading',
     readingPlaceholder: 'e.g. beef stew',
     descriptionLabel: 'Description',
+    placeLabel: 'Restaurant name',
+    placePlaceholder: 'e.g. Joe’s Diner (optional)',
     descriptionPlaceholder: 'A short description (optional)',
     minutesSuffix: 'min',
     photoSection: 'Photo',

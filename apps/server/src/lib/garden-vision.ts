@@ -1,4 +1,5 @@
 import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
+import { thinkingConfigFragment } from './thinking-budget.js';
 
 /**
  * Garden consult Vision — さいえん手帳（家庭菜園アプリ）の AI 相談。
@@ -108,10 +109,38 @@ const GEMINI_RESPONSE_SCHEMA = {
 } as const;
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
-const REQUEST_TIMEOUT_MS = 30_000;
-const MAX_ATTEMPTS = 4;
+
+/**
+ * リトライの予算は、**呼び出し側（さいえん手帳アプリ）が待つ時間の中に収める**。
+ *
+ * アプリの `garden-consult.service.ts` は 60 秒で `AbortController` を発火させる。
+ * 以前はここが 30 秒 × 4 回 + バックオフ 13.5 秒 = **133.5 秒**で、アプリの我慢を
+ * 倍以上超えていた。実際 2026-08-19 に 4 回とも空振りして 134 秒かかった記録がある
+ * （`POST /api/v1/garden/consult 200 134s`）。
+ *
+ * この構成だと **3 回目と 4 回目は成功しても誰にも届かない** — アプリは 60 秒で
+ * 諦めているのに、サーバーだけが Gemini を叩き続けて課金だけが増える。
+ *
+ * 実測の所要は 5.2〜5.5 秒（273KB の実写真）。15 秒はその約 3 倍で、
+ * 一過性の詰まりを拾うには十分。
+ *
+ *   15 × 3 + (0 + 1.5 + 4) = **50.5 秒** < 60 秒
+ *
+ * 残る 9.5 秒は画像のアップロードとサーバー側の処理に充てる。
+ * **この不等式は `__tests__/garden-retry-budget.test.ts` が見張る。**
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+const MAX_ATTEMPTS = 3;
 const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
-const BACKOFF_MS = [0, 1_500, 4_000, 8_000];
+const BACKOFF_MS = [0, 1_500, 4_000];
+
+/** 最悪ケースの所要時間（ミリ秒）。テストが上限を見張るために公開する。 */
+export const GARDEN_RETRY_BUDGET_MS =
+  REQUEST_TIMEOUT_MS * MAX_ATTEMPTS +
+  BACKOFF_MS.slice(0, MAX_ATTEMPTS).reduce((sum, ms) => sum + ms, 0);
+
+/** さいえん手帳アプリ側の待ち時間（`garden-consult.service.ts` の TIMEOUT_MS）。 */
+export const CLIENT_TIMEOUT_MS = 60_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -163,6 +192,11 @@ export class GeminiGardenConsultProvider implements GardenConsultProvider {
         temperature: 0.4,
         responseMimeType: 'application/json',
         responseSchema: GEMINI_RESPONSE_SCHEMA,
+        // 思考トークンは課金上「出力」に計上され、レシピ側の実測では
+        // 1 推論 ¥0.85 → ¥0.35 の差になっていた（thinking-budget.ts）。
+        // ここも既定オフに倒す。品質が落ちるようなら Railway の
+        // GEMINI_THINKING_BUDGET=auto で**デプロイ無しに**戻せる。
+        ...thinkingConfigFragment(),
       },
     };
 

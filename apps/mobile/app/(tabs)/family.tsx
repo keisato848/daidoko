@@ -5,19 +5,10 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronLeft, Copy, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
-import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
+import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
 import {
@@ -153,7 +144,7 @@ export default function FamilyScreen() {
   const canJoin = joinCode.trim().length > 0 && !saving;
 
   return (
-    <KeyboardAvoider style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
           <ChevronLeft size={20} color={Colors.goldDim} />
@@ -162,7 +153,10 @@ export default function FamilyScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScroll
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.groupSummary}>
           <View style={styles.groupIcon}>
             <Users size={28} color={Colors.gold} />
@@ -280,8 +274,8 @@ export default function FamilyScreen() {
             </Pressable>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoider>
+      </KeyboardAwareScroll>
+    </View>
   );
 }
 

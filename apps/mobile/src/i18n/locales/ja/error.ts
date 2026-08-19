@@ -33,6 +33,13 @@ const error = {
       'MUST NOT be confusable with the daily quota being exhausted.',
   } satisfies CriticalMessage,
 
+  /**
+   * 想定外の失敗（多くはネイティブ側の一時的な例外）。**原因を説明しない**。
+   * 実際に Expo の Java 例外がそのまま画面に出た（2026-08-19・再実行では成功）ので、
+   * 生の文言を見せない受け皿として置く。
+   */
+  photoRecipeUnexpected: '写真をうまく読み込めませんでした。少し時間をおいてからお試しください。',
+
   /** 原因が分からないときの汎用。**具体的な原因を騙らない**ことが役目。 */
   photoRecipeFailed: {
     text: '写真からレシピをつくれませんでした。もう一度お試しください。',

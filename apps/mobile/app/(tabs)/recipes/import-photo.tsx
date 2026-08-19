@@ -33,13 +33,17 @@ import {
   isClientImageLabelingAvailable,
 } from '../../../src/services/client-image-label.provider';
 import { createClientOcrRecognizer } from '../../../src/services/client-ocr.provider';
-import { inferRecipeFromVision } from '../../../src/services/vision-recipe.provider';
+import {
+  inferRecipeFromVision,
+  VisionInferenceError,
+} from '../../../src/services/vision-recipe.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import { preprocessImageForOcr } from '../../../src/services/image-preprocess.service';
 import {
   capturePhoto,
   PhotoCaptureCancelledError,
+  UserFacingError,
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
@@ -73,6 +77,23 @@ function confidenceLabel(confidence: RecipePhotoAgentOutput['confidence']): stri
   return t('recipe.photo.confidence.low');
 }
 
+/**
+ * 画面に出してよい文言だけを返す。
+ *
+ * ネイティブモジュール（expo-image-picker 等）が投げた例外は英語の Java 文言そのままで、
+ * 素通しすると利用者に意味不明な文字列が出る（2026-08-19 に実際に出た。再実行では成功した
+ * ので、プロセス回収などの一時的な失敗と見ている）。翻訳済みのエラーだけ `message` を使い、
+ * それ以外は「少し時間をおいて」に寄せる。原因が分かっていないので具体的な理由は騙らない。
+ */
+function readableError(error: unknown): string {
+  if (error instanceof VisionInferenceError || error instanceof UserFacingError) {
+    return error.message;
+  }
+  // 切り分けのために中身は残す（画面には出さない）
+  console.warn('[import-photo] unexpected error', error);
+  return t('error.photoRecipeUnexpected');
+}
+
 export default function ImportPhotoScreen() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('select');
@@ -86,7 +107,6 @@ export default function ImportPhotoScreen() {
   const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
   // R1: 店で食べた / 家で作った。主役は「店の味の再現」なので既定は eaten_out
   const [logKind, setLogKind] = useState<CookingLogKind>('eaten_out');
-  const [placeName, setPlaceName] = useState('');
 
   // Refresh the freemium quota on focus (e.g. after returning from the paywall).
   const refreshFreemium = useCallback(() => {
@@ -200,7 +220,7 @@ export default function ImportPhotoScreen() {
         setPendingPhoto(photo);
       } catch (error) {
         if (error instanceof PhotoCaptureCancelledError) return;
-        setErrorMsg(error instanceof Error ? error.message : t('error.photoRecipeFailed'));
+        setErrorMsg(readableError(error));
       }
     },
     [router],
@@ -216,7 +236,7 @@ export default function ImportPhotoScreen() {
     try {
       await inferPhoto(photo, { allowCloudInference: true });
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : t('error.photoRecipeFailed'));
+      setErrorMsg(readableError(error));
       setPhase('select');
     }
   }, [pendingPhoto, inferPhoto]);
@@ -229,6 +249,9 @@ export default function ImportPhotoScreen() {
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
       if (!photoResult) return;
+      // 店名の入力欄は RecipeForm 側に一本化した（同じ画面に 2 つ出さない）。
+      // レシピが正で、記録には「その日どこで食べたか」として同じ値を控える。
+      const place = data.placeName?.trim() ?? '';
       const sourceId = await createPhotoSource({
         labelSummary: photoResult.evidenceSummary ?? photoResult.labelSummary,
         capturedAt: capturedPhoto?.takenAt,
@@ -254,7 +277,8 @@ export default function ImportPhotoScreen() {
             cookedAt: new Date().toISOString(),
             photos: persisted,
             kind: logKind,
-            ...(logKind === 'eaten_out' && placeName.trim() ? { placeName: placeName.trim() } : {}),
+            // 記録側は「その日どこで食べたか」の履歴。表示はレシピ側を使う（schema.ts 参照）
+            ...(logKind === 'eaten_out' && place ? { placeName: place } : {}),
           });
         } catch {
           // non-fatal — recipe is saved even if the photo could not be stored
@@ -276,7 +300,7 @@ export default function ImportPhotoScreen() {
       // 一覧ではなく、いま作ったレシピへ着地する（探させない）
       setTimeout(() => router.replace(`/(tabs)/recipes/${recipeId}`), 1500);
     },
-    [capturedPhoto, logKind, notes, photoResult, placeName, router],
+    [capturedPhoto, logKind, notes, photoResult, router],
   );
 
   if (phase === 'preview') {
@@ -306,16 +330,6 @@ export default function ImportPhotoScreen() {
               </Pressable>
             ))}
           </View>
-          {logKind === 'eaten_out' && (
-            <TextInput
-              style={styles.placeInput}
-              value={placeName}
-              onChangeText={setPlaceName}
-              placeholder={t('recipe.photo.placeNamePlaceholder')}
-              placeholderTextColor={Colors.muted}
-              maxLength={60}
-            />
-          )}
         </View>
         <RecipeForm
           initialValues={

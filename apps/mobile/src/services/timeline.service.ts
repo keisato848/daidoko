@@ -30,7 +30,9 @@ export async function getTimeline(): Promise<TimelineEntry[]> {
       rating: schema.cookingLogs.rating,
       memo: schema.cookingLogs.memo,
       kind: schema.cookingLogs.kind,
-      placeName: schema.cookingLogs.placeName,
+      // 店名は**レシピ**を正とする（記録側は初回入力時しか埋まらないので、
+      // 後から店名を入れても過去の記録の表示が直らない）
+      placeName: schema.recipes.placeName,
     })
     .from(schema.cookingLogs)
     .leftJoin(schema.recipes, eq(schema.cookingLogs.recipeId, schema.recipes.id))

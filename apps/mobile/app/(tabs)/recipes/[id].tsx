@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   MoreVertical,
   ShoppingCart,
+  Store,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -478,6 +479,15 @@ export default function RecipeDetailScreen() {
 
       <View style={styles.meta}>
         <Text style={styles.title}>{recipe.title}</Text>
+        {/* お店の名前（v12）。編集画面で後から足せるので、足した結果がここに出る */}
+        {recipe.placeName ? (
+          <View style={styles.placeRow}>
+            <Store size={13} color={Colors.goldDim} />
+            <Text style={styles.placeText} numberOfLines={1}>
+              {recipe.placeName}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.metaRow}>
           {recipe.rating != null && <Stars rating={recipe.rating} size={13} />}
           {recipe.servings != null && (
@@ -797,6 +807,17 @@ const styles = StyleSheet.create({
     color: Colors.paper,
     marginBottom: 6,
     letterSpacing: 0.5,
+  },
+  placeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  placeText: {
+    color: Colors.goldDim,
+    fontSize: 13,
+    flexShrink: 1,
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
   metaText: {

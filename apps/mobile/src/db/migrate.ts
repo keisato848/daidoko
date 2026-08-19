@@ -28,7 +28,7 @@ import { t } from '../i18n';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 11; // v10: 写真パスを相対化 / v11: レシピ帖（recipe_books, S4）
+export const CURRENT_SCHEMA_VERSION = 12; // v11: レシピ帖（recipe_books, S4）/ v12: レシピの店名
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -352,7 +352,44 @@ const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   // v9: 店で食べた / 家で作った の区別（docs/お店の味を再現設計.md §3）
   { table: 'cooking_logs', columnDdl: "kind TEXT NOT NULL DEFAULT 'cooked'" },
   { table: 'cooking_logs', columnDdl: 'place_name TEXT' },
+  // v12: 店名は**レシピ**が持つ。記録側にも列はあるが、そちらは
+  // 「その日どこで食べたか」の事実で、後から入力しても過去の記録は変わらない。
+  // 表示は常にレシピ側を使う（未入力のまま作られた記録が後から直らないため）。
+  { table: 'recipes', columnDdl: 'place_name TEXT' },
 ];
+
+/**
+ * v12: 記録に入っている店名をレシピへ引き継ぐ。
+ *
+ * 店名はもともと `cooking_logs.place_name` にしか無く、写真からレシピを作る初回にしか
+ * 入力できなかった。表示をレシピ側に移すので、**既存の店名が消えて見えないように**
+ * ここで移送する。同じレシピに複数の記録があるときは**最初に入力されたもの**を採る
+ * （後の記録ほど店名が空のことが多く、空で上書きしたくない）。
+ * 既にレシピ側に値があるものは触らない（利用者が入力し直した可能性がある）。
+ */
+function backfillRecipePlaceName(expoDb: { execSync: (sql: string) => void }): void {
+  try {
+    expoDb.execSync(`
+      UPDATE recipes SET place_name = (
+        SELECT l.place_name FROM cooking_logs l
+        WHERE l.recipe_id = recipes.id
+          AND l.place_name IS NOT NULL
+          AND TRIM(l.place_name) <> ''
+        ORDER BY l.cooked_at ASC
+        LIMIT 1
+      )
+      WHERE (place_name IS NULL OR TRIM(place_name) = '')
+        AND EXISTS (
+          SELECT 1 FROM cooking_logs l
+          WHERE l.recipe_id = recipes.id
+            AND l.place_name IS NOT NULL
+            AND TRIM(l.place_name) <> ''
+        )
+    `);
+  } catch {
+    // 列がまだ無い等（新規インストール直後）。表示に影響しないので黙って進む
+  }
+}
 
 /** Run migrations (create tables + additive column changes) */
 export function runMigrations(expoDb: { execSync: (sql: string) => void }): MigrationResult {
@@ -364,6 +401,7 @@ export function runMigrations(expoDb: { execSync: (sql: string) => void }): Migr
       // column already exists (fresh install or already migrated)
     }
   }
+  backfillRecipePlaceName(expoDb);
   expoDb.execSync(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   return { schemaVersion: CURRENT_SCHEMA_VERSION };
 }

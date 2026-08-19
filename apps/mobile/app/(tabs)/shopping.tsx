@@ -133,6 +133,7 @@ export default function ShoppingListScreen() {
       </View>
 
       <FlatList
+        keyboardShouldPersistTaps="handled"
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
