@@ -100,10 +100,7 @@ gardenRouter.post('/consult', zValidator('json', gardenConsultSchema), async (c)
     // GeminiGardenConsultProvider は失敗の種別を lastError に載せて投げてくる
     // （`request failed` = 中断/通信断 / `Gemini responded 429|503: …` / `empty model response`）。
     // ユーザーに見せる文言は変えない — 出すのはサーバーのログだけ。
-    console.error(
-      '[garden/consult] failed:',
-      err instanceof Error ? err.message : String(err),
-    );
+    console.error('[garden/consult] failed:', err instanceof Error ? err.message : String(err));
     return c.json({
       ok: false,
       error: {
