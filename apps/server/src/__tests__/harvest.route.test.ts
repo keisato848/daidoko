@@ -171,4 +171,17 @@ describe('プロンプト', () => {
   it('可食判断をしないと明示している', () => {
     expect(HARVEST_SYSTEM_PROMPT_FOR_TESTING).toContain('可食判断');
   });
+
+  it('株に付いたままの実は収穫物でないと明示している', () => {
+    // これが緩むと、畑の株を撮っただけで「収穫 2 個」が台帳に入る
+    // （スモークテストで実際に起きた — 鉢植えの株の写真に count:2 が返った）。
+    expect(HARVEST_SYSTEM_PROMPT_FOR_TESTING).toContain('株に付いたままの実は収穫物ではありません');
+    expect(HARVEST_SYSTEM_PROMPT_FOR_TESTING).toContain('株から切り離してある');
+  });
+
+  it('ヒントの作物だけを数えると明示している', () => {
+    // その日の収穫を全部並べた写真（複数作物）は普通に起きる。
+    // 記録先の栽培は決まっているので、他の作物を count に混ぜてはいけない。
+    expect(HARVEST_SYSTEM_PROMPT_FOR_TESTING).toContain('その作物だけを数えます');
+  });
 });
