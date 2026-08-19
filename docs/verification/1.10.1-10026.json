@@ -1,0 +1,19 @@
+{
+  "version": "1.10.1",
+  "versionCode": 10026,
+  "verifiedAt": "2026-08-19T10:28:43.170Z",
+  "device": {
+    "serial": "359971911306313",
+    "model": "SH-RM19s",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10026,
+  "checked": [
+    "1.10.1/10026 の release ビルドでコールドスタート。既存データ（レシピ・記録・店名 Creperie）健全",
+    "写真からレシピの画面が開き、導線が壊れていない（#189 のエラー表示変更による回帰なし）",
+    "16KB アライメント 48/48 PASS"
+  ],
+  "screenshot": "screenshots/1.10.1-10026-2026-08-19T10-28-43-170Z.png",
+  "headCommit": "edce6079520039a05c67e02d6eb24c63aaa5c8c2"
+}
