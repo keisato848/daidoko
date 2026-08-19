@@ -29,6 +29,20 @@ export class PhotoCaptureCancelledError extends Error {
   }
 }
 
+/**
+ * **利用者に見せてよい**（翻訳済みの）エラー。
+ *
+ * 画面はこの型のときだけ `message` をそのまま出す。ネイティブモジュールが投げた例外は
+ * 英語の Java スタックそのままなので、素通しさせない — 実際に写真取り込みで
+ * Expo の Java 例外が画面に出た（2026-08-19・再実行で成功した間欠的な失敗）。
+ */
+export class UserFacingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UserFacingError';
+  }
+}
+
 function stampPhoto(
   photo: Omit<CapturedPhoto, 'source' | 'takenAt' | 'temporary'>,
   source: PhotoCaptureSource,
