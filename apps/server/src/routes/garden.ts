@@ -94,6 +94,16 @@ gardenRouter.post('/consult', zValidator('json', gardenConsultSchema), async (c)
     return c.json({ ok: true, data });
   } catch (err) {
     const retryable = err instanceof GardenVisionRequestError;
+    // **理由をここで捨てない。** 以前はこの catch が err を握り潰していたため、
+    // 失敗しても Railway のログには `POST /api/v1/garden/consult 200 134s` の 1 行しか
+    // 残らず、**何が 4 回起きたのかを後から知る手段が無かった**（2026-08-19 に実際に踏んだ）。
+    // GeminiGardenConsultProvider は失敗の種別を lastError に載せて投げてくる
+    // （`request failed` = 中断/通信断 / `Gemini responded 429|503: …` / `empty model response`）。
+    // ユーザーに見せる文言は変えない — 出すのはサーバーのログだけ。
+    console.error(
+      '[garden/consult] failed:',
+      err instanceof Error ? err.message : String(err),
+    );
     return c.json({
       ok: false,
       error: {
