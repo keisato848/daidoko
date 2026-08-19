@@ -158,7 +158,10 @@ gardenRouter.post('/harvest', zValidator('json', harvestSchema), async (c) => {
       ok: false,
       error: {
         code: 'RATE_LIMITED',
-        message: '本日の利用上限に達しました。時間をおいてお試しください。',
+        message:
+          rate.scope === 'global'
+            ? '本日の利用上限に達しました。時間をおいてお試しください。'
+            : '本日の利用上限に達しました。',
         retryable: false,
       },
     });
