@@ -19,6 +19,9 @@ const error: typeof ja = {
       'MUST convey: temporary congestion; retrying shortly is likely to succeed. ' +
       'MUST NOT be confusable with the daily quota being exhausted.',
   },
+  photoRecipeUnexpected:
+    'Something went wrong while reading the photo. Please wait a moment and try again.',
+
   photoRecipeFailed: {
     text: "We couldn't create a recipe from that photo. Please try again.",
     intent:

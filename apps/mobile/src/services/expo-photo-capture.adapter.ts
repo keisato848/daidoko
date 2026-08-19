@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 
+import { UserFacingError } from './photo-capture.service';
 import type { CapturedPhoto, PhotoCaptureAdapter } from './photo-capture.service';
 import { t } from '../i18n';
 
@@ -17,7 +18,7 @@ function toCapturedPhoto(asset: ImagePicker.ImagePickerAsset | undefined): RawCa
 
 async function ensureCameraPermission(): Promise<void> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permission.granted) throw new Error(t('error.cameraPermissionDenied'));
+  if (!permission.granted) throw new UserFacingError(t('error.cameraPermissionDenied'));
 }
 
 export const expoImagePickerPhotoCaptureAdapter: PhotoCaptureAdapter = {

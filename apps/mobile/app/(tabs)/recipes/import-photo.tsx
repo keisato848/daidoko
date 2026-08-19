@@ -33,13 +33,17 @@ import {
   isClientImageLabelingAvailable,
 } from '../../../src/services/client-image-label.provider';
 import { createClientOcrRecognizer } from '../../../src/services/client-ocr.provider';
-import { inferRecipeFromVision } from '../../../src/services/vision-recipe.provider';
+import {
+  inferRecipeFromVision,
+  VisionInferenceError,
+} from '../../../src/services/vision-recipe.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import { preprocessImageForOcr } from '../../../src/services/image-preprocess.service';
 import {
   capturePhoto,
   PhotoCaptureCancelledError,
+  UserFacingError,
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
@@ -71,6 +75,23 @@ function confidenceLabel(confidence: RecipePhotoAgentOutput['confidence']): stri
   if (confidence === 'high') return t('recipe.photo.confidence.high');
   if (confidence === 'medium') return t('recipe.photo.confidence.medium');
   return t('recipe.photo.confidence.low');
+}
+
+/**
+ * 画面に出してよい文言だけを返す。
+ *
+ * ネイティブモジュール（expo-image-picker 等）が投げた例外は英語の Java 文言そのままで、
+ * 素通しすると利用者に意味不明な文字列が出る（2026-08-19 に実際に出た。再実行では成功した
+ * ので、プロセス回収などの一時的な失敗と見ている）。翻訳済みのエラーだけ `message` を使い、
+ * それ以外は「少し時間をおいて」に寄せる。原因が分かっていないので具体的な理由は騙らない。
+ */
+function readableError(error: unknown): string {
+  if (error instanceof VisionInferenceError || error instanceof UserFacingError) {
+    return error.message;
+  }
+  // 切り分けのために中身は残す（画面には出さない）
+  console.warn('[import-photo] unexpected error', error);
+  return t('error.photoRecipeUnexpected');
 }
 
 export default function ImportPhotoScreen() {
@@ -199,7 +220,7 @@ export default function ImportPhotoScreen() {
         setPendingPhoto(photo);
       } catch (error) {
         if (error instanceof PhotoCaptureCancelledError) return;
-        setErrorMsg(error instanceof Error ? error.message : t('error.photoRecipeFailed'));
+        setErrorMsg(readableError(error));
       }
     },
     [router],
@@ -215,7 +236,7 @@ export default function ImportPhotoScreen() {
     try {
       await inferPhoto(photo, { allowCloudInference: true });
     } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : t('error.photoRecipeFailed'));
+      setErrorMsg(readableError(error));
       setPhase('select');
     }
   }, [pendingPhoto, inferPhoto]);
