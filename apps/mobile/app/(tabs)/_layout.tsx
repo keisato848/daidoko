@@ -1,6 +1,6 @@
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Tabs } from 'expo-router';
-import { Home, BookOpen, Plus, Settings } from 'lucide-react-native';
+import { Home, BookOpen, Plus, Refrigerator, Settings } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
@@ -52,6 +52,18 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/*
+        在庫はレシート・買い物・作れるレシピの起点なのに、ホームの「買物」→買い物リスト→
+        「在庫へ」と 2 段奥にあって使われなかった（Issue #182）。タブに出して 1 タップにする。
+        並びは「追加」を中央に保つため ホーム / レシピ / 追加 / 在庫 / 設定。
+      */}
+      <Tabs.Screen
+        name="pantry"
+        options={{
+          title: t('ui.tab.pantry'),
+          tabBarIcon: ({ color, size }) => <Refrigerator size={size} color={color} />,
+        }}
+      />
       <Tabs.Screen
         name="settings"
         options={{
@@ -65,7 +77,6 @@ export default function TabLayout() {
       <Tabs.Screen name="licenses" options={{ href: null }} />
       <Tabs.Screen name="ai-key" options={{ href: null }} />
       <Tabs.Screen name="shopping" options={{ href: null }} />
-      <Tabs.Screen name="pantry" options={{ href: null }} />
       <Tabs.Screen name="scan-barcode" options={{ href: null }} />
       <Tabs.Screen name="receipt" options={{ href: null }} />
       <Tabs.Screen name="cookable" options={{ href: null }} />

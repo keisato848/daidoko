@@ -69,6 +69,7 @@ const ui: typeof ja = {
     home: 'Home',
     recipes: 'Recipes',
     add: 'Add',
+    pantry: 'Pantry',
     settings: 'Settings',
   },
 
