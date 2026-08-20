@@ -193,7 +193,25 @@ export async function addMissingRecipeIngredientsToList(
 
   const { getInStockNormalizedNames } = await import('./pantry.service');
   const { getAliasMap } = await import('./name-alias.service');
-  const [pantryNames, aliases] = await Promise.all([getInStockNormalizedNames(), getAliasMap()]);
+  const { normalizeItemName } = await import('../utils/itemName');
+  const [pantryNames, currentAliases] = await Promise.all([
+    getInStockNormalizedNames(),
+    getAliasMap(),
+  ]);
+  let aliases = currentAliases;
+
+  // 「足りない材料」は在庫とレシピ材料の突合そのもの。**ここでも辞書を育てる**
+  // （cookable 画面を開かないと辞書が空のままだったのが名寄せが効かない原因だった。
+  //  docs/買い物リスト・在庫設計.md §6）。投げるのはルールで当たらなかった材料だけで、
+  //  枠切れ・オフラインは黙って素通しして従来どおり動く。
+  const unresolved = detail.ingredients
+    .map((ingredient) => normalizeItemName(ingredient.name))
+    .filter((name) => name && !isInStock(name, pantryNames, aliases));
+  if (unresolved.length > 0) {
+    const { resolveNames } = await import('./name-resolve.service');
+    const resolved = await resolveNames(unresolved).catch(() => null);
+    if (resolved && resolved.resolved > 0) aliases = await getAliasMap();
+  }
 
   const result: AddMissingIngredientsResult = { added: 0, alreadyInPantry: 0, alreadyOnList: 0 };
   for (const ingredient of detail.ingredients) {

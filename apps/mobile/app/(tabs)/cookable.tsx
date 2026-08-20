@@ -13,7 +13,10 @@ import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
 import { getAdRewardProvider, isAdRewardAvailable } from '../../src/services/ad-reward.service';
 import { getCookableRecipes, type CookableRecipe } from '../../src/services/cookable.service';
-import { grantResolveAdBonus, resolvePantryNames } from '../../src/services/name-resolve.service';
+import {
+  grantResolveAdBonus,
+  resolveUnmatchedNames,
+} from '../../src/services/name-resolve.service';
 
 export default function CookableScreen() {
   const router = useRouter();
@@ -32,7 +35,7 @@ export default function CookableScreen() {
   const autoResolve = useCallback(async () => {
     setResolving(true);
     try {
-      const result = await resolvePantryNames();
+      const result = await resolveUnmatchedNames();
       if (result.resolved > 0) await refresh();
       setAdRemaining(result.canWatchAd ? result.remaining : null);
     } catch {

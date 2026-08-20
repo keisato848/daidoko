@@ -49,14 +49,18 @@ export async function getFreeResolveRemaining(): Promise<number> {
   return Math.max(0, NAME_RESOLVE_FREE_DAILY + bonus - used);
 }
 
-/** Resolve as many uncached pantry names as the tier/quota allows, then cache. */
-export async function resolvePantryNames(): Promise<ResolveResult> {
+/**
+ * 渡された正規化名のうち**未キャッシュのものだけ**を、枠の範囲で解決してキャッシュする。
+ *
+ * 呼び出し側が「何を解決するか」を決める。突合に関わるのは在庫名とレシピ材料名の
+ * **両側**なので、在庫名だけを対象にしていた頃は片側しか canonical に寄らなかった
+ * （docs/買い物リスト・在庫設計.md §6）。
+ */
+export async function resolveNames(normalizedNames: string[]): Promise<ResolveResult> {
   if (!isNativePlatform) return { resolved: 0, remaining: 0, mode: 'none', canWatchAd: false };
 
-  const { getInStockNormalizedNames } = await import('./pantry.service');
   const { getUncachedNames, cacheAliases } = await import('./name-alias.service');
-  const pantryNames = await getInStockNormalizedNames();
-  const uncached = await getUncachedNames(pantryNames);
+  const uncached = await getUncachedNames(normalizedNames);
   const mode = await getResolveMode();
   if (uncached.length === 0 || mode === 'none') {
     return { resolved: 0, remaining: uncached.length, mode, canWatchAd: false };
@@ -70,8 +74,8 @@ export async function resolvePantryNames(): Promise<ResolveResult> {
 
   const batch = uncached.slice(0, budget);
   try {
-    const { resolveNames } = await import('./name-resolve.provider');
-    const results = await resolveNames(batch);
+    const { resolveNames: resolveViaProvider } = await import('./name-resolve.provider');
+    const results = await resolveViaProvider(batch);
     // Non-food (empty canonical) caches to itself so it isn't re-asked and can't
     // spuriously match; otherwise cache the normalized canonical ingredient name.
     const byName = new Map(results.map((r) => [r.name, r.canonical]));
@@ -98,6 +102,28 @@ export async function resolvePantryNames(): Promise<ResolveResult> {
   } catch {
     return { resolved: 0, remaining: uncached.length, mode, canWatchAd: false };
   }
+}
+
+/**
+ * cookable の突合で当たらなかった名前（**在庫側・レシピ材料側の両方**）を解決する。
+ * 旧 `resolvePantryNames` の後継。
+ *
+ * ルールで当たる名前は含まれないので、投げるのは「解決する価値があった名前」だけ。
+ */
+export async function resolveUnmatchedNames(): Promise<ResolveResult> {
+  if (!isNativePlatform) return { resolved: 0, remaining: 0, mode: 'none', canWatchAd: false };
+
+  const { getRecipeList } = await import('./recipe.service');
+  const { getInStockNormalizedNames } = await import('./pantry.service');
+  const { getAliasMap } = await import('./name-alias.service');
+  const { collectUnmatchedNames } = await import('./cookable.service');
+
+  const [recipes, pantry, aliases] = await Promise.all([
+    getRecipeList(),
+    getInStockNormalizedNames(),
+    getAliasMap(),
+  ]);
+  return resolveNames(collectUnmatchedNames(recipes, pantry, aliases));
 }
 
 /** Grant an ad-unlocked bonus batch of resolutions (free tier). */
