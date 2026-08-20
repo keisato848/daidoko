@@ -29,7 +29,6 @@ export const EXCLUDED_FILES = new Set([
   'src/db/seed.ts', // サンプルデータ（EXPO_PUBLIC_ENABLE_SAMPLE_DATA が無ければ非表示）
   'src/e2e/photo-recipe-batch-fixtures.ts', // 評価用の期待値。ユーザーには出ない
   'src/constants/licenses.ts', // OSS ライセンス表記。翻訳しない
-  'src/utils/receiptParser.ts', // 日本のレシート書式
   'src/utils/recipeTextParser.ts', // 日本語レシピ本文の解析
   'src/utils/recipeTextNormalizer.ts',
   'src/utils/stepTimer.ts', // 「10分」「1時間半」の抽出

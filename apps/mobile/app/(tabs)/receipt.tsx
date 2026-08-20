@@ -1,20 +1,27 @@
 /**
  * レシート登録（P5）— 在庫画面の「レシート」から開く。
  * レシート写真 → 読み取り → 品目確認(編集/取捨) → 在庫へ一括追加。
- * 読み取りは端末内OCR(利用可能な端末のみ・無料)を優先し、無い端末では
- * クラウドAI（Vision）で解析する（BYOKキーがあれば端末から直接 Gemini）。
- * docs/買い物リスト・在庫設計.md §5.6 / Issue #68
+ *
+ * 読み取りは2経路（`docs/在庫・レシート設計レビュー.md` §3.4 / Issue #178）:
+ *   端末内OCRが使える → 文字起こし → **テキストだけ**を AI へ → 構造化
+ *   使えない/読めない → **画像**を AI へ（Vision）
+ * 端末内OCRは文字起こしに専念する。品目化（非食品の除外・重複統合・数量抽出）は
+ * どちらの経路でも AI 側の同じロジックを通る。
+ * 端末内OCRが転ぶ条件（モデル未取得・認識失敗・文字なし）はすべて画像経路へ落とす。
  */
 import { useRouter } from 'expo-router';
 import { Camera, Check, ImageIcon, X } from 'lucide-react-native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Loading } from '../../src/components/Loading';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
-import { createClientOcrRecognizer } from '../../src/services/client-ocr.provider';
+import {
+  recognizeTextOnDevice,
+  isClientOcrAvailable,
+} from '../../src/services/client-ocr.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../src/services/expo-photo-capture.adapter';
 import { preprocessImageForOcr } from '../../src/services/image-preprocess.service';
@@ -25,11 +32,27 @@ import {
   type PhotoCaptureSource,
 } from '../../src/services/photo-capture.service';
 import {
+  inferReceiptFromText,
   inferReceiptFromVision,
-  type ReceiptInferenceItem,
+  type ReceiptInference,
 } from '../../src/services/receipt-vision.provider';
 import { formatQuantityInput, parseQuantityInput } from '../../src/utils/receiptQuantity';
-import { parseReceipt } from '../../src/utils/receiptParser';
+
+/**
+ * 端末内OCRで文字起こしする。**読めなければ null**（呼び出し側は画像経路へ）。
+ * 前処理（傾き・コントラスト補正）は失敗しても元画像で続ける — 読めれば十分で、
+ * ここで止まると「端末内で読めたはずのレシート」を画像経路に流すことになる。
+ */
+async function readTextOnDevice(localPath: string): Promise<string | null> {
+  let imageUri = localPath;
+  try {
+    const pre = await preprocessImageForOcr(localPath, expoImageManipulatorPreprocessAdapter);
+    imageUri = pre.imageUri;
+  } catch {
+    // fall back to the original image
+  }
+  return recognizeTextOnDevice(imageUri);
+}
 
 function mimeTypeFor(uri: string): 'image/jpeg' | 'image/png' | 'image/webp' {
   const lower = uri.toLowerCase();
@@ -55,76 +78,79 @@ export default function ReceiptScreen() {
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 端末内OCRの有無は起動中に変わらないので初回判定を保持
-  const nativeRecognize = useMemo(() => createClientOcrRecognizer(), []);
+  /**
+   * 端末内OCRが**いま**使えるか。文言（何を送るか）を出し分けるためだけに持つ。
+   * 経路そのものは読み取りの直前に判定し直す（モデルはあとから届くことがある）。
+   */
+  const [ocrReady, setOcrReady] = useState(false);
 
-  const handlePick = useCallback(
-    async (source: PhotoCaptureSource) => {
-      setErrorMsg(null);
-      setPhase('processing');
-      try {
-        const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
+  useEffect(() => {
+    let mounted = true;
+    isClientOcrAvailable()
+      .then((available) => {
+        if (mounted) setOcrReady(available);
+      })
+      .catch(() => {
+        if (mounted) setOcrReady(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-        let parsed: ReceiptInferenceItem[];
-        if (nativeRecognize) {
-          // 端末内OCR（無料・オフライン）→ テキストから品目パース
-          let imageUri = photo.localPath;
-          try {
-            const pre = await preprocessImageForOcr(
-              photo.localPath,
-              expoImageManipulatorPreprocessAdapter,
-            );
-            imageUri = pre.imageUri;
-          } catch {
-            // fall back to the original image
-          }
-          const result = await nativeRecognize(imageUri);
-          // 端末内OCRは品目名しか出せない。数量は読めていないので null のまま通す
-          parsed = parseReceipt(result.rawText).map((p) => ({
-            name: p.name,
-            quantity: null,
-            unit: null,
-          }));
-        } else {
-          // クラウドAI（Vision）— BYOKキーがあれば端末から直接 Gemini
-          const inference = await inferReceiptFromVision({
-            localPath: photo.localPath,
-            mimeType: mimeTypeFor(photo.localPath),
-          });
-          if (!inference.isReceipt) {
-            setErrorMsg(t('pantry.receipt.notRecognized'));
-            setPhase('error');
-            return;
-          }
-          parsed = inference.items;
-        }
+  const handlePick = useCallback(async (source: PhotoCaptureSource) => {
+    setErrorMsg(null);
+    setPhase('processing');
+    try {
+      const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
 
-        if (parsed.length === 0) {
-          setErrorMsg(t('pantry.receipt.noItems'));
+      // ① 端末内OCRで文字にできたら、テキストだけを AI へ送る（写真は端末から出ない）
+      let inference: ReceiptInference | null = null;
+      const ocrText = await readTextOnDevice(photo.localPath);
+      if (ocrText) {
+        inference = await inferReceiptFromText({ ocrText });
+        // レシートと認識されない／1件も取れないのは OCR が崩れたということ。
+        // 写真ならまだ読める見込みがあるので、画像経路をもう一度だけ試す
+        if (!inference.isReceipt || inference.items.length === 0) inference = null;
+      }
+
+      // ② 端末内OCRが使えない・読めなかった → 画像を AI へ（BYOKキーがあれば直接 Gemini）
+      if (!inference) {
+        inference = await inferReceiptFromVision({
+          localPath: photo.localPath,
+          mimeType: mimeTypeFor(photo.localPath),
+        });
+        if (!inference.isReceipt) {
+          setErrorMsg(t('pantry.receipt.notRecognized'));
           setPhase('error');
           return;
         }
-        setItems(
-          parsed.map((item, i) => ({
-            id: String(i),
-            name: item.name,
-            quantity: formatQuantityInput(item.quantity),
-            unit: item.unit ?? '',
-            include: true,
-          })),
-        );
-        setPhase('review');
-      } catch (error) {
-        if (error instanceof PhotoCaptureCancelledError) {
-          setPhase('select');
-          return;
-        }
-        setErrorMsg(error instanceof Error ? error.message : t('pantry.receipt.failed'));
-        setPhase('error');
       }
-    },
-    [nativeRecognize],
-  );
+
+      if (inference.items.length === 0) {
+        setErrorMsg(t('pantry.receipt.noItems'));
+        setPhase('error');
+        return;
+      }
+      setItems(
+        inference.items.map((item, i) => ({
+          id: String(i),
+          name: item.name,
+          quantity: formatQuantityInput(item.quantity),
+          unit: item.unit ?? '',
+          include: true,
+        })),
+      );
+      setPhase('review');
+    } catch (error) {
+      if (error instanceof PhotoCaptureCancelledError) {
+        setPhase('select');
+        return;
+      }
+      setErrorMsg(error instanceof Error ? error.message : t('pantry.receipt.failed'));
+      setPhase('error');
+    }
+  }, []);
 
   const handleAdd = useCallback(async () => {
     const chosen = items.filter((it) => it.include && it.name.trim());
@@ -172,9 +198,10 @@ export default function ReceiptScreen() {
             <ImageIcon size={20} color={Colors.gold} />
             <Text style={styles.bigButtonOutlineText}>{t('common.pickFromGallery')}</Text>
           </Pressable>
-          {!nativeRecognize && (
-            <Text style={styles.cloudNote}>{t('pantry.receipt.disclosure')}</Text>
-          )}
+          {/* 何が端末から出るのかを、経路に合わせて出し分ける（テキストだけ／写真） */}
+          <Text style={styles.cloudNote}>
+            {ocrReady ? t('pantry.receipt.disclosureOnDevice') : t('pantry.receipt.disclosure')}
+          </Text>
         </View>
       )}
 

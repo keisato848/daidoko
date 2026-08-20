@@ -50,6 +50,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
+import com.google.android.gms.common.moduleinstall.ModuleInstall
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.label.ImageLabel
 import com.google.mlkit.vision.label.ImageLabeling
@@ -70,9 +71,40 @@ class DaidokoOcrModule(
 
   override fun getName(): String = NAME
 
+  /**
+   * 端末内 OCR が **いま** 使えるか。
+   *
+   * ML Kit は unbundled（Play Services 版）なので、アプリに入っているのは薄い
+   * ラッパーだけで、認識モデルは Play Services が必要に応じて配布する。
+   * マニフェストの com.google.mlkit.vision.DEPENDENCIES はインストール時取得を
+   * 依頼するがベストエフォートで、**インストール直後・通信が無い端末では未取得のまま**。
+   * その状態で process() を呼べば失敗する（初回のレシート読み取りが生の ML Kit
+   * エラーで落ちていた原因 — docs/在庫・レシート設計レビュー.md §1 症状2）。
+   *
+   * ここでは取得済みかを Play Services に問い合わせて答える。未取得なら false を返し、
+   * 呼び出し側はクラウド経路へ落とす。併せて deferred install を依頼しておくので、
+   * 次に開くころには端末内で読めるようになっている。
+   *
+   * **失敗しても reject しない。** 可用性の問い合わせに失敗した＝使えない、で十分で、
+   * 呼び出し側にエラー処理を増やす理由がない。
+   */
   @ReactMethod
   fun isAvailable(promise: Promise) {
-    promise.resolve(true)
+    try {
+      val client = ModuleInstall.getClient(reactContext)
+      client.areModulesAvailable(recognizer)
+        .addOnSuccessListener { response ->
+          val available = response.areModulesAvailable()
+          if (!available) {
+            // 取得を予約するだけ。結果は待たない（この呼び出しの答えは変わらない）
+            runCatching { client.deferredInstall(recognizer).addOnFailureListener { } }
+          }
+          promise.resolve(available)
+        }
+        .addOnFailureListener { promise.resolve(false) }
+    } catch (error: Exception) {
+      promise.resolve(false)
+    }
   }
 
   @ReactMethod

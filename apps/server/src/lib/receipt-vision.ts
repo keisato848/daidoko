@@ -1,17 +1,34 @@
 import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
 import { thinkingConfigFragment } from './thinking-budget.js';
 /**
- * Receipt Vision — extract grocery item names from a receipt photo so the
- * pantry can be stocked in one tap. Provider abstraction (default Gemini
- * Flash). Replaces / complements the on-device ML Kit OCR path, which is
- * Android-only and unavailable since the SDK 54 migration
- * (docs/買い物リスト・在庫設計.md §5.6, Issue #68).
+ * Receipt — extract grocery items (name / quantity / unit) so the pantry can be
+ * stocked in one tap. Provider abstraction (default Gemini Flash).
+ *
+ * **Two inputs, one structured output.** The device sends *text* when its
+ * on-device OCR could read the receipt, and the *photo* only when it could not.
+ * A receipt is a purchase history, so not sending the image is worth something
+ * on its own, and the text call drops the image tokens
+ * (docs/在庫・レシート設計レビュー.md §3.4 / Issue #178).
+ * Both inputs share this schema and its post-processing — only the framing of
+ * the prompt differs.
  */
-export interface ReceiptVisionInput {
+export interface ReceiptVisionImageInput {
   /** 出力言語。省略時は ja（既存の呼び出しは挙動が変わらない）。 */
   outputLocale?: OutputLocale;
   imageBase64: string;
   mimeType: string;
+}
+
+/** 端末内 OCR が読み取った生テキスト（行の崩れ・列のずれ・誤認識を含む）。 */
+export interface ReceiptVisionTextInput {
+  outputLocale?: OutputLocale;
+  ocrText: string;
+}
+
+export type ReceiptVisionInput = ReceiptVisionImageInput | ReceiptVisionTextInput;
+
+export function isReceiptTextInput(input: ReceiptVisionInput): input is ReceiptVisionTextInput {
+  return 'ocrText' in input;
 }
 
 /**
@@ -39,18 +56,45 @@ export interface ReceiptVisionProvider {
 export class ReceiptVisionConfigError extends Error {}
 export class ReceiptVisionRequestError extends Error {}
 
-export const RECEIPT_SYSTEM_PROMPT = [
-  'あなたはスーパーやコンビニのレシート写真から「食材・食品の品目」を抽出する日本語の専門家です。',
-  'レシートに印字された商品行のうち、食材・食品・飲料だけを items に列挙してください。',
+/**
+ * 品目の作り方。**画像経路とテキスト経路で共有する** — 片方だけ緩めると、同じレシートが
+ * 経路によって違う在庫になる。数量は在庫で合算されるので、その差は消えずに積もる。
+ */
+const RECEIPT_ITEM_RULES = [
   '品目名は家庭の在庫管理に使える一般的な名前へ正規化します（例: 半角カナ「ｷﾞｭｳﾆｭｳ」→「牛乳」、「TVﾊﾟｽﾀ 1.6mm 500g」→「パスタ」）。ブランド名・容量・規格は省きます。',
   '日用品・雑貨（洗剤・ラップ等）、レジ袋、値引き・割引行、小計・合計・ポイント・釣銭などの非商品行は除外します。',
   '同じ品目が複数行あっても 1 つにまとめます（数量がすべて読み取れる場合のみ合算し、1 行でも読めなければ quantity を省きます）。',
   'quantity には購入数量を入れます。行に数量が印字されておらず内容量（例: 「豚こま 500g」）だけが読めるときは、その内容量を quantity、単位を unit にします。',
   'unit には印字された単位・助数詞（個・本・袋・パック・g・ml など）だけを入れます。数量しか印字されていない場合は unit を省きます。',
   '**数量が読み取れない・自信が無い場合は quantity を省きます（1 で埋めない）**。値引き行や単価行の数字を数量として拾わないでください。',
-  '写真がレシートでない場合は isReceipt=false を返し、items は空にします。',
+];
+
+const RECEIPT_TAIL_RULES = [
   'store には店名が読み取れた場合のみ設定します（任意）。',
   '読み取りの確からしさを confidence（high / medium / low）で自己申告します。',
+];
+
+export const RECEIPT_SYSTEM_PROMPT = [
+  'あなたはスーパーやコンビニのレシート写真から「食材・食品の品目」を抽出する日本語の専門家です。',
+  'レシートに印字された商品行のうち、食材・食品・飲料だけを items に列挙してください。',
+  ...RECEIPT_ITEM_RULES,
+  '写真がレシートでない場合は isReceipt=false を返し、items は空にします。',
+  ...RECEIPT_TAIL_RULES,
+].join('\n');
+
+/**
+ * テキスト経路のプロンプト。渡されるのは**端末内 OCR の生テキスト**なので、画像を見る前提の
+ * 文言（「写真」「印字されている」）はそのままでは成り立たない。OCR は列がずれ、品名と数量が
+ * 別の行に落ちる。そこを補うのがこちらの仕事になる。
+ */
+export const RECEIPT_TEXT_SYSTEM_PROMPT = [
+  'あなたはレシートを OCR にかけて得られたテキストから「食材・食品の品目」を抽出する日本語の専門家です。',
+  '入力は OCR の生テキストです。行の折り返し・列のずれ・誤認識が含まれます。品名と数量・単価が別の行に分かれていることがあるので、レシートの体裁として自然になるように対応づけてください。',
+  'テキストに含まれる商品行のうち、食材・食品・飲料だけを items に列挙してください。',
+  ...RECEIPT_ITEM_RULES,
+  '意味の取れない文字列は OCR の誤認識です。品目として無理に採用しないでください。',
+  'テキストがレシートのものでない場合は isReceipt=false を返し、items は空にします。',
+  ...RECEIPT_TAIL_RULES,
 ].join('\n');
 
 export const RECEIPT_RESPONSE_SCHEMA = {
@@ -98,26 +142,28 @@ export class GeminiReceiptVisionProvider implements ReceiptVisionProvider {
   }
 
   async infer(input: ReceiptVisionInput): Promise<ReceiptVisionRaw> {
+    const isText = isReceiptTextInput(input);
+    const parts = isText
+      ? [
+          { text: 'このレシートの OCR テキストから食材・食品の品目を抽出してください。' },
+          { text: input.ocrText },
+        ]
+      : [
+          { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } },
+          { text: 'このレシートから食材・食品の品目を抽出してください。' },
+        ];
     const body = {
       systemInstruction: {
         parts: [
           {
             text: withOutputLanguage(
-              RECEIPT_SYSTEM_PROMPT,
+              isText ? RECEIPT_TEXT_SYSTEM_PROMPT : RECEIPT_SYSTEM_PROMPT,
               input.outputLocale ?? DEFAULT_OUTPUT_LOCALE,
             ),
           },
         ],
       },
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } },
-            { text: 'このレシートから食材・食品の品目を抽出してください。' },
-          ],
-        },
-      ],
+      contents: [{ role: 'user', parts }],
       generationConfig: {
         temperature: 0.2,
         responseMimeType: 'application/json',

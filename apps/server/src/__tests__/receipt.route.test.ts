@@ -8,7 +8,9 @@ import app from '../index.js';
 import { setReceiptProviderForTesting } from '../routes/infer.js';
 import { resetRateLimitForTesting } from '../lib/rate-limit.js';
 import {
+  isReceiptTextInput,
   ReceiptVisionRequestError,
+  type ReceiptVisionInput,
   type ReceiptVisionProvider,
   type ReceiptVisionRaw,
 } from '../lib/receipt-vision.js';
@@ -90,6 +92,47 @@ describe('POST /api/v1/infer/receipt', () => {
       const body = (await res.json()) as { ok: boolean; data?: ReceiptVisionRaw };
       expect(body.ok).toBe(true);
       expect(body.data?.isReceipt).toBe(false);
+    });
+  });
+
+  describe('テキスト入力（端末内 OCR の文字起こし）', () => {
+    it('ocrText だけでも通り、画像ではなくテキストがプロバイダに渡る', async () => {
+      let seen: ReceiptVisionInput | null = null;
+      stubProvider(async (input) => {
+        seen = input;
+        return VALID_RECEIPT;
+      });
+      const res = await post({ ocrText: 'だいどこスーパー\n牛乳 2本 ¥398' });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean; data?: ReceiptVisionRaw };
+      expect(body.ok).toBe(true);
+      // 画像経路と同じ構造化出力（スキーマも後処理も共用しているのが要点）
+      expect(body.data?.items?.[0]).toEqual({ name: '牛乳', quantity: 2, unit: '本' });
+      const input = seen as ReceiptVisionInput | null;
+      expect(input && isReceiptTextInput(input)).toBe(true);
+      expect(input).not.toHaveProperty('imageBase64');
+    });
+
+    it('空のテキストは 400（読めなかったなら画像で送るべきで、空送信は無駄な推論になる）', async () => {
+      const res = await post({ ocrText: '' });
+      expect(res.status).toBe(400);
+    });
+
+    it('長すぎるテキストは 400', async () => {
+      const res = await post({ ocrText: 'あ'.repeat(20_001) });
+      expect(res.status).toBe(400);
+    });
+
+    it('画像入力はこれまでどおり画像として渡る（旧バージョンのアプリが送ってくる）', async () => {
+      let seen: ReceiptVisionInput | null = null;
+      stubProvider(async (input) => {
+        seen = input;
+        return VALID_RECEIPT;
+      });
+      await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+      const input = seen as ReceiptVisionInput | null;
+      expect(input && isReceiptTextInput(input)).toBe(false);
+      expect(input).toMatchObject({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
     });
   });
 

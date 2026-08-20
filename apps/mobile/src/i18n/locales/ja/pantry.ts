@@ -101,6 +101,18 @@ const pantry = {
         'retained. Receipts carry purchase history; dropping either half misrepresents what ' +
         'happens to that data.',
     } satisfies CriticalMessage,
+    /**
+     * 端末内OCRが使える端末での開示。送るのは文字だけだが、**読めなければ写真を送る**。
+     * その条件を落とすと「写真は出ない」と読めてしまう。
+     */
+    disclosureOnDevice: {
+      text: 'この端末では文字の読み取りを端末内で行い、その文字だけをクラウド AI へ送って品目に整えます。写真は端末から出ません。文字を読み取れなかったときだけ写真を送信します（解析のためだけで、保存されません）。',
+      intent:
+        'MUST state ALL THREE: only the TEXT leaves the device on the normal path, the photo ' +
+        'stays on the device on that path, AND the photo IS sent when the on-device read ' +
+        'fails. Dropping the fallback makes this read as "the photo never leaves", which is ' +
+        'false. Receipts carry purchase history.',
+    } satisfies CriticalMessage,
     resultHint:
       '読み取った品目です。不要な行のチェックを外し、名前・数量・単位を直して追加してください。数量が空欄のものは「数量未管理」で在庫に入ります。',
     quantityPlaceholder: '数量',
