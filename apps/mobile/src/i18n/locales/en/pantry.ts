@@ -90,7 +90,12 @@ const pantry: typeof ja = {
         'retained. Receipts carry purchase history; dropping either half misrepresents what ' +
         'happens to that data.',
     },
-    resultHint: 'Here’s what we read. Uncheck what you don’t want and fix any names before adding.',
+    resultHint:
+      'Here’s what we read. Uncheck what you don’t want, fix the names, amounts and units, then add. Rows with a blank amount go in without a tracked quantity.',
+    quantityPlaceholder: 'Qty',
+    quantityLabel: 'Amount (blank = quantity not tracked)',
+    unitPlaceholder: 'Unit',
+    unitLabel: 'Unit (e.g. pcs, g)',
     exclude: 'Exclude',
     include: 'Include',
     retry: 'Start over',
