@@ -46,6 +46,8 @@ const home: typeof ja = {
   },
 
   consult: 'Plan it with AI',
+  /** 在庫ループの入口。在庫に何か入っているときだけ出す */
+  cookable: 'Cook from your pantry',
   capture: 'Photograph a dish you ate out',
 
   wantTitle: 'Want to recreate',
