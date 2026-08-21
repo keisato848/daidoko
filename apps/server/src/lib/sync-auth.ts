@@ -86,3 +86,23 @@ export function parseAuthHeader(header: string | undefined): ParsedAuth | null {
   if (dot <= 0 || dot === token.length - 1) return null;
   return { deviceId: token.slice(0, dot), secret: token.slice(dot + 1) };
 }
+
+/**
+ * LWW（Last-Write-Wins）の勝敗判定（設計 §5-1b）。
+ * 基準は clientUpdatedAt（端末の時計）— サーバー到着順にしない
+ * （オフライン編集の勝敗が「後でつないだ方が勝つ」になるのを防ぐ）。
+ * 同時刻は deviceId の辞書順で決定的に（どの端末で計算しても同じ結果になる）。
+ */
+export function lwwIncomingWins(
+  incomingUpdatedAt: string,
+  incomingDeviceId: string,
+  existingUpdatedAt: string,
+  existingDeviceId: string,
+): boolean {
+  const a = Date.parse(incomingUpdatedAt);
+  const b = Date.parse(existingUpdatedAt);
+  if (Number.isNaN(a)) return false; // 壊れたタイムスタンプは負け（既存を守る）
+  if (Number.isNaN(b)) return true;
+  if (a !== b) return a > b;
+  return incomingDeviceId > existingDeviceId;
+}

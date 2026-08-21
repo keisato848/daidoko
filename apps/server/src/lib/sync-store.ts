@@ -16,6 +16,7 @@ import postgres, { type Sql } from 'postgres';
 
 import {
   MAX_DEVICES_PER_GROUP,
+  lwwIncomingWins,
   generateDeviceSecret,
   generateId,
   generateInviteCode,
@@ -287,4 +288,174 @@ export async function leaveGroup(device: AuthedDevice): Promise<void> {
 export async function deleteGroup(groupId: string): Promise<void> {
   const sql = await db();
   await sql`DELETE FROM sync_groups WHERE id = ${groupId}`;
+}
+
+// ── S1: push / pull（設計 §5-1b） ────────────────────────────────────────────
+
+export interface PushChange {
+  entityType: string;
+  entityId: string;
+  /** 不透明な JSON 文字列。サーバーは解釈しない（削除 tombstone は null 可） */
+  payload: string | null;
+  clientUpdatedAt: string;
+  deleted: boolean;
+}
+
+export interface PullChange extends PushChange {
+  seq: number;
+  updatedByDevice: string;
+}
+
+export interface PullDelta {
+  seq: number;
+  entityType: string;
+  entityId: string;
+  field: string;
+  delta: number;
+  deviceId: string;
+}
+
+export interface PushResult {
+  applied: number;
+  latestSeq: number;
+}
+
+export interface PullResult {
+  changes: PullChange[];
+  deltas: PullDelta[];
+  latestSeq: number;
+  hasMore: boolean;
+}
+
+/**
+ * 変更の一括受け取り。LWW で採用分だけに seq を採番して保存する。
+ * 全体を 1 トランザクションで行う（seq の穴・順序乱れを作らない）。
+ */
+export async function pushChanges(
+  device: AuthedDevice,
+  changes: readonly PushChange[],
+): Promise<PushResult> {
+  const sql = await db();
+  return sql.begin(async (tx) => {
+    let applied = 0;
+    for (const change of changes) {
+      const rows = await tx<{ updated_at: Date; updated_by_device: string }[]>`
+        SELECT updated_at, updated_by_device FROM sync_entities
+        WHERE group_id = ${device.groupId}
+          AND entity_type = ${change.entityType} AND entity_id = ${change.entityId}`;
+      const existing = rows[0];
+      if (
+        existing &&
+        !lwwIncomingWins(
+          change.clientUpdatedAt,
+          device.deviceId,
+          existing.updated_at.toISOString(),
+          existing.updated_by_device,
+        )
+      ) {
+        continue; // 既存の方が新しい — この変更は捨てる（クライアントは pull で追いつく）
+      }
+      const seqRows = await tx<{ seq: string }[]>`
+        UPDATE sync_groups SET seq = seq + 1 WHERE id = ${device.groupId} RETURNING seq::text`;
+      const seq = Number(seqRows[0]?.seq ?? '0');
+      const deletedAt = change.deleted ? new Date() : null;
+      await tx`
+        INSERT INTO sync_entities
+          (group_id, entity_type, entity_id, payload, deleted_at, seq, updated_at, updated_by_device)
+        VALUES
+          (${device.groupId}, ${change.entityType}, ${change.entityId}, ${change.payload ?? ''},
+           ${deletedAt}, ${seq}, ${new Date(change.clientUpdatedAt)}, ${device.deviceId})
+        ON CONFLICT (group_id, entity_type, entity_id) DO UPDATE SET
+          payload = EXCLUDED.payload,
+          deleted_at = EXCLUDED.deleted_at,
+          seq = EXCLUDED.seq,
+          updated_at = EXCLUDED.updated_at,
+          updated_by_device = EXCLUDED.updated_by_device`;
+      applied += 1;
+    }
+    const latest = await tx<{ seq: string }[]>`
+      SELECT seq::text FROM sync_groups WHERE id = ${device.groupId}`;
+    return { applied, latestSeq: Number(latest[0]?.seq ?? '0') };
+  });
+}
+
+/** since 以降の変更を seq 順で返す。呼び出し端末の last_pull_seq も進める（到達記録） */
+export async function pullChanges(
+  device: AuthedDevice,
+  since: number,
+  limit: number,
+): Promise<PullResult> {
+  const sql = await db();
+  const rows = await sql<
+    {
+      entity_type: string;
+      entity_id: string;
+      payload: string;
+      deleted_at: Date | null;
+      seq: string;
+      updated_at: Date;
+      updated_by_device: string;
+    }[]
+  >`
+    SELECT entity_type, entity_id, payload, deleted_at, seq::text, updated_at, updated_by_device
+    FROM sync_entities
+    WHERE group_id = ${device.groupId} AND seq > ${since}
+    ORDER BY seq ASC LIMIT ${limit + 1}`;
+  const deltaRows = await sql<
+    {
+      seq: string;
+      entity_type: string;
+      entity_id: string;
+      field: string;
+      delta: number;
+      device_id: string;
+    }[]
+  >`
+    SELECT seq::text, entity_type, entity_id, field, delta, device_id
+    FROM sync_deltas
+    WHERE group_id = ${device.groupId} AND seq > ${since}
+    ORDER BY seq ASC LIMIT ${limit + 1}`;
+
+  const hasMore = rows.length > limit || deltaRows.length > limit;
+  const changes = rows.slice(0, limit).map((r) => ({
+    entityType: r.entity_type,
+    entityId: r.entity_id,
+    payload: r.deleted_at ? null : r.payload,
+    deleted: r.deleted_at !== null,
+    clientUpdatedAt: r.updated_at.toISOString(),
+    seq: Number(r.seq),
+    updatedByDevice: r.updated_by_device,
+  }));
+  const deltas = deltaRows.slice(0, limit).map((r) => ({
+    seq: Number(r.seq),
+    entityType: r.entity_type,
+    entityId: r.entity_id,
+    field: r.field,
+    delta: r.delta,
+    deviceId: r.device_id,
+  }));
+
+  const latest = await sql<{ seq: string }[]>`
+    SELECT seq::text FROM sync_groups WHERE id = ${device.groupId}`;
+  await sql`UPDATE sync_devices SET last_pull_seq = ${since} WHERE id = ${device.deviceId}`;
+  return { changes, deltas, latestSeq: Number(latest[0]?.seq ?? '0'), hasMore };
+}
+
+/** Expo Push トークンの登録（無ければ通知は飛ばないだけ — ベストエフォート） */
+export async function setDevicePushToken(
+  device: AuthedDevice,
+  expoPushToken: string | null,
+): Promise<void> {
+  const sql = await db();
+  await sql`UPDATE sync_devices SET expo_push_token = ${expoPushToken}
+            WHERE id = ${device.deviceId}`;
+}
+
+/** 同グループの他端末の push トークン（変更通知の宛先） */
+export async function getOtherDevicePushTokens(device: AuthedDevice): Promise<string[]> {
+  const sql = await db();
+  const rows = await sql<{ expo_push_token: string | null }[]>`
+    SELECT expo_push_token FROM sync_devices
+    WHERE group_id = ${device.groupId} AND id != ${device.deviceId}`;
+  return rows.map((r) => r.expo_push_token).filter((t): t is string => !!t);
 }

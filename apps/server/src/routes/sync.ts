@@ -17,10 +17,14 @@ import {
   createGroup,
   deleteGroup,
   getGroupInfo,
+  getOtherDevicePushTokens,
   isSyncEnabled,
   joinGroup,
   leaveGroup,
+  pullChanges,
+  pushChanges,
   rotateInvite,
+  setDevicePushToken,
   type AuthedDevice,
 } from '../lib/sync-store.js';
 
@@ -185,5 +189,91 @@ syncRouter.delete('/group', requireDevice, zValidator('json', deleteGroupSchema)
   await deleteGroup(device.groupId);
   return c.json({ ok: true });
 });
+
+// ── S1: push / pull（設計 §5-1b） ────────────────────────────────────────────
+
+/** payload はレシピ丸ごと（材料・手順込み）を想定 — 余裕を見て 300KB で弾く */
+const MAX_PAYLOAD_CHARS = 300_000;
+const MAX_CHANGES_PER_PUSH = 200;
+
+const pushSchema = z.object({
+  changes: z
+    .array(
+      z.object({
+        entityType: z.string().min(1).max(40),
+        entityId: z.string().min(1).max(64),
+        payload: z.string().max(MAX_PAYLOAD_CHARS).nullable(),
+        clientUpdatedAt: z.string().datetime({ offset: true }),
+        deleted: z.boolean(),
+      }),
+    )
+    .min(1)
+    .max(MAX_CHANGES_PER_PUSH),
+});
+
+/**
+ * 変更を受けたら同グループの他端末へ Expo Push（**内容を持たない同期トリガー** —
+ * 文言に利用者名・データ内容を含めない。§0-2 の該当性判定）。ベストエフォートで
+ * 失敗は握る — 通知が落ちても次回起動時の pull で追いつく。
+ */
+async function notifyGroupDevices(device: AuthedDevice): Promise<void> {
+  try {
+    const tokens = await getOtherDevicePushTokens(device);
+    if (tokens.length === 0) return;
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        tokens.map((to) => ({
+          to,
+          title: 'だいどこ',
+          body: '家族の共有データが更新されました',
+          data: { type: 'sync' },
+        })),
+      ),
+    });
+  } catch {
+    // ベストエフォート
+  }
+}
+
+syncRouter.post('/push', requireDevice, zValidator('json', pushSchema), async (c) => {
+  const device = c.get('device');
+  const { changes } = c.req.valid('json');
+  const result = await pushChanges(device, changes);
+  if (result.applied > 0) void notifyGroupDevices(device);
+  return c.json({ ok: true, data: result });
+});
+
+syncRouter.get('/pull', requireDevice, async (c) => {
+  const device = c.get('device');
+  const since = Number(c.req.query('since') ?? '0');
+  const rawLimit = Number(c.req.query('limit') ?? '500');
+  if (!Number.isInteger(since) || since < 0) {
+    return c.json({ ok: false, error: 'BAD_REQUEST' }, 400);
+  }
+  const limit = Number.isInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 500) : 500;
+  const result = await pullChanges(device, since, limit);
+  return c.json({ ok: true, data: result });
+});
+
+const deviceUpdateSchema = z.object({
+  expoPushToken: z.string().max(200).nullable().optional(),
+});
+
+/** 端末情報の更新（現状は push トークンのみ） */
+syncRouter.patch(
+  '/devices/me',
+  requireDevice,
+  zValidator('json', deviceUpdateSchema),
+  async (c) => {
+    const device = c.get('device');
+    const body = c.req.valid('json');
+    if (body.expoPushToken !== undefined) {
+      await setDevicePushToken(device, body.expoPushToken);
+    }
+    return c.json({ ok: true });
+  },
+);
 
 export default syncRouter;

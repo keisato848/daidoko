@@ -61,6 +61,154 @@ describe('同期が無効な環境（DATABASE_URL なし）', () => {
   });
 });
 
+describe.runIf(Boolean(TEST_DB))('S1: push / pull（実 PostgreSQL）', () => {
+  beforeAll(() => {
+    process.env['SYNC_DATABASE_URL'] = TEST_DB as string;
+    resetSyncRateLimitForTesting();
+  });
+  afterAll(async () => {
+    delete process.env['SYNC_DATABASE_URL'];
+    await closeSyncStoreForTesting();
+  });
+
+  let owner: { deviceId: string; secret: string };
+  let member: { deviceId: string; secret: string };
+
+  async function cleanup() {
+    // グループ削除（オーナー）で後始末
+    await app.request('/api/v1/sync/group', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...authHeader(owner.deviceId, owner.secret) },
+      body: JSON.stringify({ confirm: true }),
+    });
+  }
+
+  it('push した変更が、他端末の pull に seq 順で届く', async () => {
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string; inviteCode: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+    const joined = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const jj = (await joined.json()) as { data: { deviceId: string; deviceSecret: string } };
+    member = { deviceId: jj.data.deviceId, secret: jj.data.deviceSecret };
+
+    const push = await post(
+      '/api/v1/sync/push',
+      {
+        changes: [
+          {
+            entityType: 'recipe',
+            entityId: 'r1',
+            payload: JSON.stringify({ title: '肉じゃが', schemaVersion: 13 }),
+            clientUpdatedAt: '2026-08-21T12:00:00.000Z',
+            deleted: false,
+          },
+          {
+            entityType: 'recipe_book',
+            entityId: 'b1',
+            payload: JSON.stringify({ title: '週末の帖', recipeIds: ['r1'] }),
+            clientUpdatedAt: '2026-08-21T12:00:01.000Z',
+            deleted: false,
+          },
+        ],
+      },
+      authHeader(owner.deviceId, owner.secret),
+    );
+    expect(push.status).toBe(200);
+    const pj = (await push.json()) as { data: { applied: number; latestSeq: number } };
+    expect(pj.data.applied).toBe(2);
+
+    const pull = await app.request('/api/v1/sync/pull?since=0', {
+      headers: authHeader(member.deviceId, member.secret),
+    });
+    expect(pull.status).toBe(200);
+    const plj = (await pull.json()) as {
+      data: {
+        changes: { entityId: string; seq: number; updatedByDevice: string }[];
+        hasMore: boolean;
+        latestSeq: number;
+      };
+    };
+    expect(plj.data.changes.map((chg) => chg.entityId)).toEqual(['r1', 'b1']);
+    expect(plj.data.changes[0]?.updatedByDevice).toBe(owner.deviceId);
+    expect(plj.data.hasMore).toBe(false);
+  });
+
+  it('LWW: 古い変更は捨てられ、新しい変更は置き換える', async () => {
+    const stale = await post(
+      '/api/v1/sync/push',
+      {
+        changes: [
+          {
+            entityType: 'recipe',
+            entityId: 'r1',
+            payload: JSON.stringify({ title: '古い肉じゃが' }),
+            clientUpdatedAt: '2026-08-21T11:00:00.000Z',
+            deleted: false,
+          },
+        ],
+      },
+      authHeader(member.deviceId, member.secret),
+    );
+    expect(((await stale.json()) as { data: { applied: number } }).data.applied).toBe(0);
+
+    const fresh = await post(
+      '/api/v1/sync/push',
+      {
+        changes: [
+          {
+            entityType: 'recipe',
+            entityId: 'r1',
+            payload: JSON.stringify({ title: '新しい肉じゃが' }),
+            clientUpdatedAt: '2026-08-21T13:00:00.000Z',
+            deleted: false,
+          },
+        ],
+      },
+      authHeader(member.deviceId, member.secret),
+    );
+    expect(((await fresh.json()) as { data: { applied: number } }).data.applied).toBe(1);
+
+    const pull = await app.request('/api/v1/sync/pull?since=0', {
+      headers: authHeader(owner.deviceId, owner.secret),
+    });
+    const pj = (await pull.json()) as {
+      data: { changes: { entityId: string; payload: string | null }[] };
+    };
+    const r1 = pj.data.changes.find((chg) => chg.entityId === 'r1');
+    expect(JSON.parse(r1?.payload ?? '{}').title).toBe('新しい肉じゃが');
+  });
+
+  it('削除は tombstone として届く', async () => {
+    await post(
+      '/api/v1/sync/push',
+      {
+        changes: [
+          {
+            entityType: 'recipe',
+            entityId: 'r1',
+            payload: null,
+            clientUpdatedAt: '2026-08-21T14:00:00.000Z',
+            deleted: true,
+          },
+        ],
+      },
+      authHeader(owner.deviceId, owner.secret),
+    );
+    const pull = await app.request('/api/v1/sync/pull?since=0', {
+      headers: authHeader(member.deviceId, member.secret),
+    });
+    const pj = (await pull.json()) as {
+      data: { changes: { entityId: string; deleted: boolean; payload: string | null }[] };
+    };
+    const r1 = pj.data.changes.find((chg) => chg.entityId === 'r1');
+    expect(r1?.deleted).toBe(true);
+    expect(r1?.payload).toBeNull();
+    await cleanup();
+  });
+});
+
 describe.runIf(Boolean(TEST_DB))('実 PostgreSQL での一気通貫', () => {
   beforeAll(() => {
     process.env['SYNC_DATABASE_URL'] = TEST_DB as string;

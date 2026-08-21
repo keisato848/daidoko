@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   INVITE_ALPHABET,
+  lwwIncomingWins,
   INVITE_CODE_LENGTH,
   generateDeviceSecret,
   generateId,
@@ -84,5 +85,21 @@ describe('parseAuthHeader', () => {
     expect(parseAuthHeader('Bearer .secretonly')).toBeNull();
     expect(parseAuthHeader('Bearer idonly.')).toBeNull();
     expect(parseAuthHeader('Basic a.b')).toBeNull();
+  });
+});
+
+describe('lwwIncomingWins（LWW の勝敗判定）', () => {
+  it('新しい clientUpdatedAt が勝つ', () => {
+    expect(lwwIncomingWins('2026-08-21T12:00:01Z', 'a', '2026-08-21T12:00:00Z', 'b')).toBe(true);
+    expect(lwwIncomingWins('2026-08-21T11:59:59Z', 'z', '2026-08-21T12:00:00Z', 'a')).toBe(false);
+  });
+  it('同時刻は deviceId の辞書順で決定的（どちらの端末で計算しても同じ）', () => {
+    const ts = '2026-08-21T12:00:00Z';
+    expect(lwwIncomingWins(ts, 'deviceB', ts, 'deviceA')).toBe(true);
+    expect(lwwIncomingWins(ts, 'deviceA', ts, 'deviceB')).toBe(false);
+  });
+  it('壊れたタイムスタンプは既存を守る側に倒す', () => {
+    expect(lwwIncomingWins('not-a-date', 'a', '2026-08-21T12:00:00Z', 'b')).toBe(false);
+    expect(lwwIncomingWins('2026-08-21T12:00:00Z', 'a', 'broken', 'b')).toBe(true);
   });
 });
