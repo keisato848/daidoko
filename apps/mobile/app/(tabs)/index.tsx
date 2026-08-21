@@ -8,6 +8,7 @@ import {
   Bookmark,
   CalendarDays,
   Camera,
+  ChefHat,
   LayoutGrid,
   MessagesSquare,
   ShoppingCart,
@@ -40,6 +41,7 @@ import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { t, tCount } from '../../src/i18n';
 import { formatMonthDay, formatMonthLabel } from '../../src/i18n/format';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
+import { getInStockNormalizedNames } from '../../src/services/pantry.service';
 import { getWantToCookRecipes } from '../../src/services/recipe.service';
 import { getTimeline } from '../../src/services/timeline.service';
 import type { RecipeListItem, TimelineEntry } from '../../src/services/types';
@@ -118,11 +120,21 @@ export default function HomeScreen() {
   );
 
   const [wantList, setWantList] = useState<RecipeListItem[]>([]);
+  /**
+   * 在庫に何か入っているか。**入っているときだけ**「在庫で作れるレシピ」を出す。
+   * 在庫を使っていない人のホームは変えない（0 件のときに出しても押した先が空になるだけ）。
+   */
+  const [hasStock, setHasStock] = useState(false);
 
   const loadTimeline = useCallback(async () => {
-    const [entries, want] = await Promise.all([getTimeline(), getWantToCookRecipes()]);
+    const [entries, want, inStock] = await Promise.all([
+      getTimeline(),
+      getWantToCookRecipes(),
+      getInStockNormalizedNames().catch((): string[] => []),
+    ]);
     setAllEntries(entries);
     setWantList(want);
+    setHasStock(inStock.length > 0);
     setLoading(false);
   }, []);
 
@@ -353,6 +365,22 @@ export default function HomeScreen() {
                   <MessagesSquare size={18} color={Colors.paperDim} />
                   <Text style={styles.consultText}>{t('home.consult')}</Text>
                 </PressableScale>
+
+                {/* 在庫ループ（在庫 → 作れるレシピ → 足りない材料 → 買い物リスト）の入口。
+                    在庫タブを開かないと存在に気づけなかったので、**在庫に何か入っている
+                    ときだけ**ホームからも直行させる（2026-08-21 の導線確認） */}
+                {hasStock && (
+                  <PressableScale
+                    style={styles.consultButton}
+                    scaleTo={0.98}
+                    onPress={() => router.push('/(tabs)/cookable')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('home.cookable')}
+                  >
+                    <ChefHat size={18} color={Colors.paperDim} />
+                    <Text style={styles.consultText}>{t('home.cookable')}</Text>
+                  </PressableScale>
+                )}
 
                 {wantList.length > 0 && (
                   <View style={styles.wantSection}>
