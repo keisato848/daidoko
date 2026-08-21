@@ -223,6 +223,11 @@ export interface ShoppingItem {
   checked: boolean;
   source: ShoppingItemSource;
   recipeId: string | null;
+  /** 買う場所のグループ（v13・任意）。例: スーパー / ドラッグストア。null = 未設定 */
+  storeGroup: string | null;
+  /** 入れた人・チェックした人（v13）。家族で共有したとき「誰が」を辿れるように */
+  createdBy: string | null;
+  checkedBy: string | null;
 }
 
 export interface PantryItem {

@@ -220,6 +220,10 @@ export async function addPantryItem(
   return item;
 }
 
+/**
+ * 行を直す。**置き場所を変えると合算の鍵が変わる**ので、移した先に同じ品があればそこへ寄せる
+ * （寄せずに残すと「冷蔵庫の卵」を「〇〇の卵」へ移した瞬間、同じ品が 2 行に並んでしまう）。
+ */
 export async function updatePantryItem(
   id: string,
   patch: {
@@ -227,12 +231,28 @@ export async function updatePantryItem(
     quantity?: number | null;
     unit?: string | null;
     lowStockThreshold?: number | null;
+    groupName?: string | null;
+    expiresOn?: string | null;
   },
 ): Promise<void> {
   if (!isNativePlatform) return;
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
+
+  const db = getDb();
+  const groupName =
+    patch.groupName === undefined
+      ? undefined
+      : patch.groupName?.trim()
+        ? patch.groupName.trim()
+        : null;
+  const expiresOn =
+    patch.expiresOn === undefined
+      ? undefined
+      : patch.expiresOn?.trim()
+        ? patch.expiresOn.trim()
+        : null;
 
   const set = {
     updatedAt: new Date().toISOString(),
@@ -244,9 +264,90 @@ export async function updatePantryItem(
     ...(patch.lowStockThreshold !== undefined
       ? { lowStockThreshold: patch.lowStockThreshold }
       : {}),
+    ...(groupName !== undefined ? { groupName } : {}),
+    ...(expiresOn !== undefined ? { expiresOn } : {}),
   };
 
-  await getDb().update(schema.pantryItems).set(set).where(eq(schema.pantryItems.id, id));
+  if (groupName !== undefined) {
+    const merged = await mergeIntoGroup(id, groupName);
+    if (merged) return;
+  }
+
+  await db.update(schema.pantryItems).set(set).where(eq(schema.pantryItems.id, id));
+}
+
+/**
+ * 置き場所の移動先に同じ品があれば、そこへ足し込んで元の行を消す。寄せたら true。
+ * 期限は**近い方（早い日付）**を残す（先に食べるべき日付を失わないため）。
+ */
+async function mergeIntoGroup(id: string, groupName: string | null): Promise<boolean> {
+  const { and, eq, isNull, ne } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const rows = await db
+    .select({
+      familyId: schema.pantryItems.familyId,
+      nameNormalized: schema.pantryItems.nameNormalized,
+      unit: schema.pantryItems.unit,
+      janCode: schema.pantryItems.janCode,
+      quantity: schema.pantryItems.quantity,
+      lowStockThreshold: schema.pantryItems.lowStockThreshold,
+      expiresOn: schema.pantryItems.expiresOn,
+      groupName: schema.pantryItems.groupName,
+    })
+    .from(schema.pantryItems)
+    .where(eq(schema.pantryItems.id, id))
+    .limit(1);
+  const self = rows[0];
+  if (!self || self.groupName === groupName) return false;
+
+  const groupMatch =
+    groupName == null
+      ? isNull(schema.pantryItems.groupName)
+      : eq(schema.pantryItems.groupName, groupName);
+  const match = self.janCode
+    ? and(
+        eq(schema.pantryItems.familyId, self.familyId),
+        eq(schema.pantryItems.janCode, self.janCode),
+        groupMatch,
+        ne(schema.pantryItems.id, id),
+      )
+    : and(
+        eq(schema.pantryItems.familyId, self.familyId),
+        eq(schema.pantryItems.nameNormalized, self.nameNormalized),
+        self.unit == null
+          ? isNull(schema.pantryItems.unit)
+          : eq(schema.pantryItems.unit, self.unit),
+        groupMatch,
+        ne(schema.pantryItems.id, id),
+      );
+
+  const target = await db
+    .select({
+      id: schema.pantryItems.id,
+      quantity: schema.pantryItems.quantity,
+      lowStockThreshold: schema.pantryItems.lowStockThreshold,
+      expiresOn: schema.pantryItems.expiresOn,
+    })
+    .from(schema.pantryItems)
+    .where(match)
+    .limit(1);
+  if (target.length === 0) return false;
+
+  const into = target[0];
+  await db
+    .update(schema.pantryItems)
+    .set({
+      quantity: sumQuantity(into.quantity, self.quantity),
+      lowStockThreshold: into.lowStockThreshold ?? self.lowStockThreshold,
+      expiresOn: nearerExpiry(into.expiresOn, self.expiresOn),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(schema.pantryItems.id, into.id));
+  await db.delete(schema.pantryItems).where(eq(schema.pantryItems.id, id));
+  return true;
 }
 
 export async function removePantryItem(id: string): Promise<void> {

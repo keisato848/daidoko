@@ -5,11 +5,23 @@
  * docs/買い物リスト・在庫設計.md §5.2 / §5.5
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Bell, ChefHat, Minus, Plus, Receipt, ScanLine, Utensils, X } from 'lucide-react-native';
+import {
+  Bell,
+  ChefHat,
+  Minus,
+  Plus,
+  Receipt,
+  ScanLine,
+  Tag,
+  Utensils,
+  X,
+} from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AdBanner } from '../../src/components/AdBanner';
+import { GroupChips } from '../../src/components/GroupChips';
+import { GroupPicker } from '../../src/components/GroupPicker';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
@@ -22,6 +34,7 @@ import {
   addPantryItem,
   getPantryItems,
   removePantryItem,
+  UNGROUPED,
   updatePantryItem,
 } from '../../src/services/pantry.service';
 import type { PantryItem } from '../../src/services/types';
@@ -34,6 +47,15 @@ export default function PantryScreen() {
   const [unit, setUnit] = useState('');
   const [thresholdEditId, setThresholdEditId] = useState<string | null>(null);
   const [thresholdInput, setThresholdInput] = useState('');
+  /** 絞り込み。null = すべて、UNGROUPED = 未設定 */
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  /** 追加行で選んでいる置き場所（null = 未設定のまま） */
+  const [addGroup, setAddGroup] = useState<string | null>(null);
+  const [groupPickerFor, setGroupPickerFor] = useState<'add' | string | null>(null);
+  /** 行の「置き場所・賞味期限」エディタ（しきい値エディタとは排他） */
+  const [detailEditId, setDetailEditId] = useState<string | null>(null);
+  const [expiryInput, setExpiryInput] = useState('');
+  const [expiryError, setExpiryError] = useState(false);
 
   const refresh = useCallback(() => {
     getPantryItems()
@@ -52,9 +74,10 @@ export default function PantryScreen() {
     await addPantryItem(trimmed, {
       quantity: quantity != null && Number.isFinite(quantity) ? quantity : null,
       unit: unit.trim() || null,
+      groupName: addGroup,
     }).catch(() => undefined);
     refresh();
-  }, [name, qty, unit, refresh]);
+  }, [name, qty, unit, addGroup, refresh]);
 
   const handleAdjust = useCallback(
     async (item: PantryItem, delta: number) => {
@@ -68,9 +91,43 @@ export default function PantryScreen() {
   );
 
   const handleToggleThresholdEdit = useCallback((item: PantryItem) => {
+    setDetailEditId(null);
     setThresholdEditId((prev) => (prev === item.id ? null : item.id));
     setThresholdInput(item.lowStockThreshold != null ? String(item.lowStockThreshold) : '');
   }, []);
+
+  const handleToggleDetailEdit = useCallback((item: PantryItem) => {
+    setThresholdEditId(null);
+    setExpiryError(false);
+    setDetailEditId((prev) => (prev === item.id ? null : item.id));
+    setExpiryInput(item.expiresOn ?? '');
+  }, []);
+
+  const handleSaveExpiry = useCallback(
+    async (item: PantryItem) => {
+      const raw = expiryInput.trim();
+      // 任意入力なので空＝消す。書式が違うときだけ止めて直してもらう
+      if (raw && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        setExpiryError(true);
+        return;
+      }
+      setExpiryError(false);
+      setDetailEditId(null);
+      await updatePantryItem(item.id, { expiresOn: raw || null }).catch(() => undefined);
+      refresh();
+    },
+    [expiryInput, refresh],
+  );
+
+  /** 行の置き場所を変える。**合算の鍵なので**、変えた先に同じ品があれば service 側で寄せられる */
+  const handleChangeGroup = useCallback(
+    async (item: PantryItem, group: string | null) => {
+      setGroupPickerFor(null);
+      await updatePantryItem(item.id, { groupName: group }).catch(() => undefined);
+      refresh();
+    },
+    [refresh],
+  );
 
   const handleSaveThreshold = useCallback(
     async (item: PantryItem) => {
@@ -117,6 +174,16 @@ export default function PantryScreen() {
       text: t('pantry.coach.cookableText'),
     },
   ]);
+
+  // 画面にあるグループの一覧（未設定は GroupChips 側で足す）
+  const groups = [...new Set(items.map((it) => it.groupName).filter((g): g is string => !!g))].sort(
+    (a, b) => a.localeCompare(b),
+  );
+  const visible = items.filter((it) => {
+    if (groupFilter == null) return true;
+    if (groupFilter === UNGROUPED) return it.groupName == null;
+    return it.groupName === groupFilter;
+  });
 
   return (
     <KeyboardAvoider style={styles.container}>
@@ -191,6 +258,19 @@ export default function PantryScreen() {
         </Pressable>
       </View>
 
+      {groups.length > 0 && (
+        <Pressable
+          style={styles.addGroupRow}
+          onPress={() => setGroupPickerFor('add')}
+          accessibilityLabel={t('pantry.group.pickerTitle')}
+        >
+          <Tag size={13} color={Colors.muted} />
+          <Text style={styles.addGroupText} numberOfLines={1}>
+            {t('pantry.group.label')}: {addGroup ?? t('pantry.group.ungrouped')}
+          </Text>
+        </Pressable>
+      )}
+
       {items.length > 0 && (
         <Pressable style={styles.cookableButton} onPress={() => router.push('/(tabs)/cookable')}>
           <ChefHat size={16} color={Colors.gold} />
@@ -198,9 +278,22 @@ export default function PantryScreen() {
         </Pressable>
       )}
 
+      <GroupChips
+        groups={groups}
+        selected={groupFilter}
+        onSelect={(group) => {
+          setGroupFilter(group);
+          // 絞り込み中に足した品がその場から消えないよう、追加先も合わせる
+          setAddGroup(group === UNGROUPED ? null : group);
+        }}
+        allLabel={t('pantry.group.all')}
+        ungroupedLabel={t('pantry.group.ungrouped')}
+        ungroupedValue={UNGROUPED}
+      />
+
       <FlatList
         keyboardShouldPersistTaps="handled"
-        data={items}
+        data={visible}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={<Text style={styles.empty}>{t('pantry.empty')}</Text>}
@@ -210,6 +303,16 @@ export default function PantryScreen() {
               <View style={styles.rowText}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <View style={styles.badgeRow}>
+                  {item.groupName != null && (
+                    <Text style={styles.groupBadge} numberOfLines={1}>
+                      {item.groupName}
+                    </Text>
+                  )}
+                  {item.expiresOn != null && (
+                    <Text style={styles.expiryBadge}>
+                      {t('pantry.expiry.on', { date: item.expiresOn })}
+                    </Text>
+                  )}
                   {isLow(item) && <Text style={styles.lowBadge}>{t('pantry.lowStockBadge')}</Text>}
                   {item.lowStockThreshold != null && (
                     <Text style={styles.thresholdBadge}>
@@ -240,6 +343,18 @@ export default function PantryScreen() {
                 </Pressable>
               </View>
               <Pressable
+                onPress={() => handleToggleDetailEdit(item)}
+                hitSlop={8}
+                accessibilityLabel={t('pantry.group.editLabel')}
+              >
+                <Tag
+                  size={16}
+                  color={
+                    item.groupName != null || item.expiresOn != null ? Colors.gold : Colors.muted
+                  }
+                />
+              </Pressable>
+              <Pressable
                 onPress={() => handleToggleThresholdEdit(item)}
                 hitSlop={8}
                 accessibilityLabel={t('pantry.thresholdSet')}
@@ -257,6 +372,49 @@ export default function PantryScreen() {
                 <X size={16} color={Colors.muted} />
               </Pressable>
             </View>
+            {detailEditId === item.id && (
+              <View style={styles.detailEditor}>
+                <View style={styles.detailLine}>
+                  <Text style={styles.thresholdLabel}>{t('pantry.group.label')}</Text>
+                  <Pressable
+                    style={styles.groupButton}
+                    onPress={() => setGroupPickerFor(item.id)}
+                    accessibilityLabel={t('pantry.group.pickerTitle')}
+                  >
+                    <Text style={styles.groupButtonText} numberOfLines={1}>
+                      {item.groupName ?? t('pantry.group.ungrouped')}
+                    </Text>
+                  </Pressable>
+                </View>
+                <View style={styles.detailLine}>
+                  <Text style={styles.thresholdLabel}>{t('pantry.expiry.label')}</Text>
+                  <TextInput
+                    style={styles.expiryInput}
+                    value={expiryInput}
+                    onChangeText={(text) => {
+                      setExpiryInput(text);
+                      setExpiryError(false);
+                    }}
+                    placeholder={t('pantry.expiry.placeholder')}
+                    placeholderTextColor={Colors.muted}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={10}
+                  />
+                  <Pressable
+                    style={styles.thresholdSave}
+                    onPress={() => handleSaveExpiry(item)}
+                    accessibilityLabel={t('common.save')}
+                  >
+                    <Text style={styles.thresholdSaveText}>
+                      {expiryInput.trim() ? t('common.save') : t('pantry.expiry.clear')}
+                    </Text>
+                  </Pressable>
+                </View>
+                {expiryError && (
+                  <Text style={styles.expiryError}>{t('pantry.expiry.invalid')}</Text>
+                )}
+              </View>
+            )}
             {thresholdEditId === item.id && (
               <View style={styles.thresholdEditor}>
                 <Text style={styles.thresholdLabel}>{t('pantry.thresholdTitle')}</Text>
@@ -283,6 +441,31 @@ export default function PantryScreen() {
             )}
           </View>
         )}
+      />
+
+      <GroupPicker
+        visible={groupPickerFor != null}
+        title={t('pantry.group.pickerTitle')}
+        groups={groups}
+        value={
+          groupPickerFor === 'add'
+            ? addGroup
+            : (items.find((it) => it.id === groupPickerFor)?.groupName ?? null)
+        }
+        noneLabel={t('pantry.group.none')}
+        newPlaceholder={t('pantry.group.newPlaceholder')}
+        createLabel={t('pantry.group.create')}
+        onSelect={(group) => {
+          if (groupPickerFor === 'add') {
+            setAddGroup(group);
+            setGroupPickerFor(null);
+            return;
+          }
+          const target = items.find((it) => it.id === groupPickerFor);
+          if (target) handleChangeGroup(target, group);
+          else setGroupPickerFor(null);
+        }}
+        onClose={() => setGroupPickerFor(null)}
       />
 
       <AdBanner />
@@ -392,9 +575,43 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rowText: { flex: 1, gap: 2 },
-  badgeRow: { flexDirection: 'row', gap: 8 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   itemName: { fontSize: 15, color: Colors.paper },
   lowBadge: { fontSize: 11, color: '#C97A4A' },
+  groupBadge: { fontSize: 11, color: Colors.goldDim, maxWidth: 120 },
+  expiryBadge: { fontSize: 11, color: Colors.muted },
+  addGroupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  addGroupText: { fontSize: 12, color: Colors.muted, flexShrink: 1 },
+  detailEditor: { gap: 8, paddingBottom: 12, paddingLeft: 4 },
+  detailLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  groupButton: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    maxWidth: 180,
+  },
+  groupButtonText: { fontSize: 13, color: Colors.paper },
+  expiryInput: {
+    width: 120,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: '#130E08',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: Colors.paper,
+    textAlign: 'center',
+  },
+  expiryError: { fontSize: 11, color: '#C97A4A', paddingLeft: 2 },
   thresholdBadge: { fontSize: 11, color: Colors.goldDim },
   thresholdEditor: {
     flexDirection: 'row',

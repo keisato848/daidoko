@@ -22,11 +22,16 @@ import {
   View,
 } from 'react-native';
 
+import { GroupMultiChips } from '../../../src/components/GroupMultiChips';
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
-import { getInStockNormalizedNames } from '../../../src/services/pantry.service';
+import {
+  getInStockNormalizedNames,
+  getPantryGroups,
+  UNGROUPED,
+} from '../../../src/services/pantry.service';
 import {
   ConsultError,
   consultRecipe,
@@ -58,6 +63,23 @@ export default function ConsultScreen() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [usePantry, setUsePantry] = useState(false);
+  const [pantryGroups, setPantryGroups] = useState<string[]>([]);
+  /** 送る置き場所。**空 = すべて**（置き場所を使っていない人は何も選ばずに済む） */
+  const [pantryGroupFilter, setPantryGroupFilter] = useState<string[]>([]);
+
+  // 在庫を送るときだけグループを出す。切ってあるうちは在庫に触らない
+  useEffect(() => {
+    if (!usePantry) return;
+    let mounted = true;
+    getPantryGroups()
+      .then((names) => {
+        if (mounted) setPantryGroups(names);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, [usePantry]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -86,7 +108,11 @@ export default function ConsultScreen() {
     setErrorMsg(null);
     setBusy(true);
     try {
-      const pantry = usePantry ? await getInStockNormalizedNames().catch(() => []) : undefined;
+      const pantry = usePantry
+        ? await getInStockNormalizedNames(
+            pantryGroupFilter.length > 0 ? pantryGroupFilter : undefined,
+          ).catch(() => [])
+        : undefined;
       const turn = await consultRecipe({
         messages: next,
         draft,
@@ -105,7 +131,7 @@ export default function ConsultScreen() {
     } finally {
       setBusy(false);
     }
-  }, [input, busy, messages, draft, usePantry, router]);
+  }, [input, busy, messages, draft, usePantry, pantryGroupFilter, router]);
 
   const handleRestart = () => {
     Alert.alert(t('recipeImport.consult.restart'), t('recipeImport.consult.restartConfirm'), [
@@ -231,6 +257,20 @@ export default function ConsultScreen() {
           thumbColor={Colors.paper}
         />
       </View>
+
+      {usePantry && (
+        <GroupMultiChips
+          groups={pantryGroups}
+          selected={pantryGroupFilter}
+          onToggle={(group) =>
+            setPantryGroupFilter((prev) =>
+              prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group],
+            )
+          }
+          ungroupedLabel={t('pantry.group.ungrouped')}
+          ungroupedValue={UNGROUPED}
+        />
+      )}
 
       <View style={styles.composer}>
         <TextInput

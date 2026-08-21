@@ -21,6 +21,9 @@ interface ShoppingRow {
   checked: number;
   source: string;
   recipeId: string | null;
+  storeGroup?: string | null;
+  createdBy?: string | null;
+  checkedBy?: string | null;
 }
 
 function rowToItem(row: ShoppingRow): ShoppingItem {
@@ -31,6 +34,9 @@ function rowToItem(row: ShoppingRow): ShoppingItem {
     checked: row.checked === 1,
     source: row.source as ShoppingItemSource,
     recipeId: row.recipeId,
+    storeGroup: row.storeGroup ?? null,
+    createdBy: row.createdBy ?? null,
+    checkedBy: row.checkedBy ?? null,
   };
 }
 
@@ -54,6 +60,9 @@ export async function getShoppingItems(): Promise<ShoppingItem[]> {
       checked: schema.shoppingItems.checked,
       source: schema.shoppingItems.source,
       recipeId: schema.shoppingItems.recipeId,
+      storeGroup: schema.shoppingItems.storeGroup,
+      createdBy: schema.shoppingItems.createdBy,
+      checkedBy: schema.shoppingItems.checkedBy,
     })
     .from(schema.shoppingItems)
     .where(eq(schema.shoppingItems.familyId, await currentFamilyId()))
@@ -127,6 +136,9 @@ export async function addShoppingItem(
     checked: false,
     source,
     recipeId: options?.recipeId ?? null,
+    storeGroup: options?.storeGroup?.trim() ? options.storeGroup.trim() : null,
+    createdBy: getCurrentUser().id,
+    checkedBy: null,
   };
 }
 
@@ -235,6 +247,41 @@ export async function addMissingRecipeIngredientsToList(
   return result;
 }
 
+/**
+ * 買い物リストの未チェック行のうち、買った品と当たるものを返す（**書き込まない**）。
+ * レシート確認画面で「◯件を消し込みます」と先に見せるために、照合だけ切り出してある。
+ */
+export async function matchPendingByNames(
+  boughtNames: readonly string[],
+): Promise<{ id: string; name: string }[]> {
+  if (!isNativePlatform || boughtNames.length === 0) return [];
+
+  const { and, eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const { getAliasMap } = await import('./name-alias.service');
+  const { itemNamesMatch } = await import('../utils/itemMatch');
+
+  const familyId = await currentFamilyId();
+  const [pending, aliases] = await Promise.all([
+    getDb()
+      .select({
+        id: schema.shoppingItems.id,
+        name: schema.shoppingItems.name,
+        nameNormalized: schema.shoppingItems.nameNormalized,
+      })
+      .from(schema.shoppingItems)
+      .where(and(eq(schema.shoppingItems.familyId, familyId), eq(schema.shoppingItems.checked, 0))),
+    getAliasMap(),
+  ]);
+  if (pending.length === 0) return [];
+
+  const bought = boughtNames.map((name) => normalizeItemName(name)).filter(Boolean);
+  return pending
+    .filter((item) => bought.some((name) => itemNamesMatch(item.nameNormalized, name, aliases)))
+    .map((item) => ({ id: item.id, name: item.name }));
+}
+
 /** レシート消し込みの結果。確認画面に「◯件を消し込みます」と出すために名前も返す。 */
 export interface CheckOffResult {
   count: number;
@@ -253,34 +300,13 @@ export interface CheckOffResult {
  */
 export async function checkOffByNames(boughtNames: readonly string[]): Promise<CheckOffResult> {
   const empty: CheckOffResult = { count: 0, names: [] };
-  if (!isNativePlatform || boughtNames.length === 0) return empty;
+  const hit = await matchPendingByNames(boughtNames);
+  if (hit.length === 0) return empty;
 
-  const { and, eq, inArray } = await import('drizzle-orm');
+  const { inArray } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
-  const { getAliasMap } = await import('./name-alias.service');
-  const { itemNamesMatch } = await import('../utils/itemMatch');
   const db = getDb();
-
-  const familyId = await currentFamilyId();
-  const [pending, aliases] = await Promise.all([
-    db
-      .select({
-        id: schema.shoppingItems.id,
-        name: schema.shoppingItems.name,
-        nameNormalized: schema.shoppingItems.nameNormalized,
-      })
-      .from(schema.shoppingItems)
-      .where(and(eq(schema.shoppingItems.familyId, familyId), eq(schema.shoppingItems.checked, 0))),
-    getAliasMap(),
-  ]);
-  if (pending.length === 0) return empty;
-
-  const bought = boughtNames.map((name) => normalizeItemName(name)).filter(Boolean);
-  const hit = pending.filter((item) =>
-    bought.some((name) => itemNamesMatch(item.nameNormalized, name, aliases)),
-  );
-  if (hit.length === 0) return empty;
 
   const now = new Date().toISOString();
   await db
@@ -293,6 +319,39 @@ export async function checkOffByNames(boughtNames: readonly string[]): Promise<C
       ),
     );
   return { count: hit.length, names: hit.map((item) => item.name) };
+}
+
+/**
+ * チェックを付ける・外す。レシートの消し込みを**取り消せる**ようにするために要る
+ * （誤照合で消えたままだと買い忘れる）。
+ */
+export async function setShoppingItemChecked(id: string, checked: boolean): Promise<void> {
+  if (!isNativePlatform) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  await getDb()
+    .update(schema.shoppingItems)
+    .set(
+      checked
+        ? { checked: 1, checkedAt: new Date().toISOString(), checkedBy: getCurrentUser().id }
+        : { checked: 0, checkedAt: null, checkedBy: null },
+    )
+    .where(eq(schema.shoppingItems.id, id));
+}
+
+/** 買う場所を変える（空文字・null は未設定に戻す） */
+export async function setShoppingItemStore(id: string, storeGroup: string | null): Promise<void> {
+  if (!isNativePlatform) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  await getDb()
+    .update(schema.shoppingItems)
+    .set({ storeGroup: storeGroup?.trim() ? storeGroup.trim() : null })
+    .where(eq(schema.shoppingItems.id, id));
 }
 
 export async function removeShoppingItem(id: string): Promise<void> {

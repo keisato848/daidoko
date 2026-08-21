@@ -27,6 +27,29 @@ const pantry = {
   lowStockBadge: '残りわずか',
   thresholdBadge: '通知 ≤',
   thresholdSet: '残量通知のしきい値を設定',
+  /** 置き場所・用途のグループ（v13）。任意 — 使わない人はそのまま使える */
+  group: {
+    all: 'すべて',
+    ungrouped: '未設定',
+    label: '置き場所',
+    /** グループを選ぶ・作る シート */
+    pickerTitle: '置き場所を選ぶ',
+    none: '未設定のまま',
+    newPlaceholder: '新しい置き場所（例: 冷蔵庫）',
+    create: '追加',
+    editLabel: '置き場所と賞味期限を編集',
+  },
+
+  /** 賞味期限（v13）。**任意入力**で、通知で追い立てない */
+  expiry: {
+    label: '賞味期限',
+    placeholder: '2026-09-30',
+    clear: '消す',
+    /** 一覧の行に出す短い表示 */
+    on: '期限 {{date}}',
+    invalid: '日付は 2026-09-30 の形式で入力してください。',
+  },
+
   thresholdTitle: '残りいくつ以下で通知する？',
   thresholdPlaceholder: '例: 1',
   thresholdSaveLabel: 'しきい値を保存',
@@ -49,7 +72,21 @@ const pantry = {
     empty: '買い物リストは空です。品目を追加してください。',
     addPlaceholder: '品目を追加（例: 牛乳）',
     movedToPantry: '{{name}} を在庫に入れました',
+    /**
+     * 買う場所のグループ（v13）。**在庫の置き場所とは別物** — こちらは
+     * 「スーパーで買うもの / ドラッグストアで買うもの」の仕分け。任意。
+     */
+    storeGroup: {
+      all: 'すべて',
+      ungrouped: '未設定',
+      label: '買う場所',
+      pickerTitle: '買う場所を選ぶ',
+      none: '未設定のまま',
+      newPlaceholder: '新しい買う場所（例: スーパー）',
+      editLabel: '買う場所を変える',
+    },
     buyLabel: '{{name}}を買った（在庫に入れる）',
+    uncheckLabel: '{{name}}のチェックを外す',
     coach: {
       linkTitle: '在庫とつながっています',
       linkText:
@@ -126,6 +163,19 @@ const pantry = {
       one: '在庫に追加（{{count}}）',
       other: '在庫に追加（{{count}}）',
     } satisfies PluralMessage,
+    /** 買い物リストの消し込み（v13）。**先に見せてから**やる — 黙って消すと誤照合に気づけない */
+    checkOff: {
+      one: '買い物リストの {{count}} 件を消し込みます',
+      other: '買い物リストの {{count}} 件を消し込みます',
+    } satisfies PluralMessage,
+    checkedOff: {
+      one: '買い物リストの {{count}} 件にチェックを付けました',
+      other: '買い物リストの {{count}} 件にチェックを付けました',
+    } satisfies PluralMessage,
+    /** 店名 → 買い物グループ の対応（初めての店のときだけ聞く） */
+    storeGroupTitle: '{{store}} で買うものは？',
+    storeGroupLabel: '買う場所',
+    storeGroupUnset: '未設定',
     notRecognized: 'レシートを認識できませんでした。レシート全体が写るように撮り直してください。',
     noItems: 'レシートから品目を読み取れませんでした。明るく正面から撮り直してください。',
     failed: '読み取りに失敗しました',

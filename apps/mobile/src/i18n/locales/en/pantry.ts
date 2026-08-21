@@ -23,6 +23,25 @@ const pantry: typeof ja = {
   lowStockBadge: 'Running low',
   thresholdBadge: 'Notify ≤',
   thresholdSet: 'Set a low-stock alert',
+  group: {
+    all: 'All',
+    ungrouped: 'Unsorted',
+    label: 'Location',
+    pickerTitle: 'Choose a location',
+    none: 'Leave unsorted',
+    newPlaceholder: 'New location (e.g. Fridge)',
+    create: 'Add',
+    editLabel: 'Edit place and best-by',
+  },
+
+  expiry: {
+    label: 'Best before',
+    placeholder: '2026-09-30',
+    clear: 'Clear',
+    on: 'Best before {{date}}',
+    invalid: 'Enter the date as 2026-09-30.',
+  },
+
   thresholdTitle: 'Notify me when it drops to?',
   thresholdPlaceholder: 'e.g. 1',
   thresholdSaveLabel: 'Save threshold',
@@ -45,7 +64,17 @@ const pantry: typeof ja = {
     empty: 'Your shopping list is empty. Add something.',
     addPlaceholder: 'Add an item (e.g. milk)',
     movedToPantry: 'Moved {{name}} to the pantry',
+    storeGroup: {
+      all: 'All',
+      ungrouped: 'Not set',
+      label: 'Shop',
+      pickerTitle: 'Choose a shop',
+      none: 'Leave it unset',
+      newPlaceholder: 'New shop (e.g. Supermarket)',
+      editLabel: 'Change the shop',
+    },
     buyLabel: 'Bought {{name}} (move to pantry)',
+    uncheckLabel: 'Uncheck {{name}}',
     coach: {
       linkTitle: 'Connected to your pantry',
       linkText:
@@ -111,6 +140,17 @@ const pantry: typeof ja = {
       one: 'Add to pantry ({{count}})',
       other: 'Add to pantry ({{count}})',
     },
+    checkOff: {
+      one: 'Checking off {{count}} item on your shopping list',
+      other: 'Checking off {{count}} items on your shopping list',
+    },
+    checkedOff: {
+      one: 'Checked off {{count}} item on your shopping list',
+      other: 'Checked off {{count}} items on your shopping list',
+    },
+    storeGroupTitle: 'Where do you shop at {{store}}?',
+    storeGroupLabel: 'Shop',
+    storeGroupUnset: 'Not set',
     notRecognized: "We couldn't read that receipt. Retake it with the whole receipt in frame.",
     noItems: "We couldn't find any items on that receipt. Retake it head-on in good light.",
     failed: 'Reading failed',
