@@ -106,14 +106,14 @@ export function collectUnmatchedNames(
   return [...unmatched];
 }
 
-export async function getCookableRecipes(): Promise<CookableRecipe[]> {
+export async function getCookableRecipes(groups?: readonly string[]): Promise<CookableRecipe[]> {
   if (!isNativePlatform) return [];
   const { getRecipeList } = await import('./recipe.service');
   const { getInStockNormalizedNames } = await import('./pantry.service');
   const { getAliasMap } = await import('./name-alias.service');
   const [recipes, inStock, aliases] = await Promise.all([
     getRecipeList(),
-    getInStockNormalizedNames(),
+    getInStockNormalizedNames(groups),
     getAliasMap(),
   ]);
   return rankByCoverage(recipes, inStock, aliases);

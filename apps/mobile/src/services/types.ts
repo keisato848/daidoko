@@ -223,6 +223,11 @@ export interface ShoppingItem {
   checked: boolean;
   source: ShoppingItemSource;
   recipeId: string | null;
+  /** 買う場所のグループ（v13・任意）。例: スーパー / ドラッグストア。null = 未設定 */
+  storeGroup: string | null;
+  /** 入れた人・チェックした人（v13）。家族で共有したとき「誰が」を辿れるように */
+  createdBy: string | null;
+  checkedBy: string | null;
 }
 
 export interface PantryItem {
@@ -232,4 +237,8 @@ export interface PantryItem {
   unit: string | null;
   lowStockThreshold: number | null;
   janCode: string | null;
+  /** 置き場所・用途のグループ（v13）。null = 未設定バケツ */
+  groupName: string | null;
+  /** 賞味期限 YYYY-MM-DD（v13・任意）。合算時は近い方を残す */
+  expiresOn: string | null;
 }

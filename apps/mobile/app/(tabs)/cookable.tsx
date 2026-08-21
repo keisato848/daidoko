@@ -6,31 +6,68 @@
  */
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Sparkles, X } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { GroupChips } from '../../src/components/GroupChips';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
 import { getAdRewardProvider, isAdRewardAvailable } from '../../src/services/ad-reward.service';
 import { getCookableRecipes, type CookableRecipe } from '../../src/services/cookable.service';
+import { getAppMeta, setAppMeta } from '../../src/services/app-meta.service';
 import {
   grantResolveAdBonus,
   resolveUnmatchedNames,
 } from '../../src/services/name-resolve.service';
+import { getPantryGroups, UNGROUPED } from '../../src/services/pantry.service';
+
+/** 直前に選んだ絞り込みを覚えておく（毎回「冷蔵庫」を選び直させない） */
+const GROUP_FILTER_KEY = 'cookable_group_filter';
 
 export default function CookableScreen() {
   const router = useRouter();
   const [recipes, setRecipes] = useState<CookableRecipe[]>([]);
   const [resolving, setResolving] = useState(false);
   const [adRemaining, setAdRemaining] = useState<number | null>(null);
+  const [groups, setGroups] = useState<string[]>([]);
+  /** null = すべての置き場所から探す */
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const [filterLoaded, setFilterLoaded] = useState(false);
+
+  // 覚えている絞り込みを復元してから照合する（復元前に「すべて」で走らせない）
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      getPantryGroups().catch((): string[] => []),
+      getAppMeta(GROUP_FILTER_KEY).catch(() => null),
+    ])
+      .then(([names, saved]) => {
+        if (!mounted) return;
+        setGroups(names);
+        // 消えたグループを覚えたままだと 0 件の画面から抜けられない
+        if (saved && (saved === UNGROUPED || names.includes(saved))) setGroupFilter(saved);
+        setFilterLoaded(true);
+      })
+      .catch(() => {
+        if (mounted) setFilterLoaded(true);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleSelectGroup = useCallback((group: string | null) => {
+    setGroupFilter(group);
+    void setAppMeta(GROUP_FILTER_KEY, group ?? '').catch(() => undefined);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
-      setRecipes(await getCookableRecipes());
+      setRecipes(await getCookableRecipes(groupFilter ? [groupFilter] : undefined));
     } catch {
       setRecipes([]);
     }
-  }, []);
+  }, [groupFilter]);
 
   const autoResolve = useCallback(async () => {
     setResolving(true);
@@ -47,6 +84,7 @@ export default function CookableScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!filterLoaded) return;
       let active = true;
       void (async () => {
         await refresh();
@@ -55,7 +93,7 @@ export default function CookableScreen() {
       return () => {
         active = false;
       };
-    }, [refresh, autoResolve]),
+    }, [filterLoaded, refresh, autoResolve]),
   );
 
   const handleWatchAd = useCallback(async () => {
@@ -83,6 +121,15 @@ export default function CookableScreen() {
         <Text style={styles.headerTitle}>{t('pantry.cookable.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
+
+      <GroupChips
+        groups={groups}
+        selected={groupFilter}
+        onSelect={handleSelectGroup}
+        allLabel={t('pantry.group.all')}
+        ungroupedLabel={t('pantry.group.ungrouped')}
+        ungroupedValue={UNGROUPED}
+      />
 
       {resolving && (
         <View style={styles.banner}>

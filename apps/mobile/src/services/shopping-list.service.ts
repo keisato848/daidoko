@@ -11,6 +11,7 @@ import { generateId } from '../utils/id';
 import { isInStock } from '../utils/itemMatch';
 import { normalizeItemName } from '../utils/itemName';
 import { getRecipeDetail } from './recipe.service';
+import { getCurrentUser } from './user.service';
 import type { ShoppingItem, ShoppingItemSource } from './types';
 
 interface ShoppingRow {
@@ -20,6 +21,9 @@ interface ShoppingRow {
   checked: number;
   source: string;
   recipeId: string | null;
+  storeGroup?: string | null;
+  createdBy?: string | null;
+  checkedBy?: string | null;
 }
 
 function rowToItem(row: ShoppingRow): ShoppingItem {
@@ -30,6 +34,9 @@ function rowToItem(row: ShoppingRow): ShoppingItem {
     checked: row.checked === 1,
     source: row.source as ShoppingItemSource,
     recipeId: row.recipeId,
+    storeGroup: row.storeGroup ?? null,
+    createdBy: row.createdBy ?? null,
+    checkedBy: row.checkedBy ?? null,
   };
 }
 
@@ -53,6 +60,9 @@ export async function getShoppingItems(): Promise<ShoppingItem[]> {
       checked: schema.shoppingItems.checked,
       source: schema.shoppingItems.source,
       recipeId: schema.shoppingItems.recipeId,
+      storeGroup: schema.shoppingItems.storeGroup,
+      createdBy: schema.shoppingItems.createdBy,
+      checkedBy: schema.shoppingItems.checkedBy,
     })
     .from(schema.shoppingItems)
     .where(eq(schema.shoppingItems.familyId, await currentFamilyId()))
@@ -72,7 +82,7 @@ export async function getShoppingItems(): Promise<ShoppingItem[]> {
 export async function addShoppingItem(
   name: string,
   amount?: string,
-  options?: { source?: ShoppingItemSource; recipeId?: string },
+  options?: { source?: ShoppingItemSource; recipeId?: string; storeGroup?: string | null },
 ): Promise<ShoppingItem | null> {
   const trimmed = name.trim();
   if (!trimmed || !isNativePlatform) return null;
@@ -111,6 +121,10 @@ export async function addShoppingItem(
     source,
     recipeId: options?.recipeId ?? null,
     sortOrder: 0,
+    storeGroup: options?.storeGroup?.trim() ? options.storeGroup.trim() : null,
+    // 誰が入れたか（v13）。同期すると「これ誰が要るって言ったの？」が起きるので記録する。
+    // 列が無い間に作られた行は後から復元できないので、同期より先に記録を始める
+    createdBy: getCurrentUser().id,
     createdAt: new Date().toISOString(),
     checkedAt: null,
   });
@@ -122,6 +136,9 @@ export async function addShoppingItem(
     checked: false,
     source,
     recipeId: options?.recipeId ?? null,
+    storeGroup: options?.storeGroup?.trim() ? options.storeGroup.trim() : null,
+    createdBy: getCurrentUser().id,
+    checkedBy: null,
   };
 }
 
@@ -228,6 +245,113 @@ export async function addMissingRecipeIngredientsToList(
     else result.alreadyOnList += 1;
   }
   return result;
+}
+
+/**
+ * 買い物リストの未チェック行のうち、買った品と当たるものを返す（**書き込まない**）。
+ * レシート確認画面で「◯件を消し込みます」と先に見せるために、照合だけ切り出してある。
+ */
+export async function matchPendingByNames(
+  boughtNames: readonly string[],
+): Promise<{ id: string; name: string }[]> {
+  if (!isNativePlatform || boughtNames.length === 0) return [];
+
+  const { and, eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const { getAliasMap } = await import('./name-alias.service');
+  const { itemNamesMatch } = await import('../utils/itemMatch');
+
+  const familyId = await currentFamilyId();
+  const [pending, aliases] = await Promise.all([
+    getDb()
+      .select({
+        id: schema.shoppingItems.id,
+        name: schema.shoppingItems.name,
+        nameNormalized: schema.shoppingItems.nameNormalized,
+      })
+      .from(schema.shoppingItems)
+      .where(and(eq(schema.shoppingItems.familyId, familyId), eq(schema.shoppingItems.checked, 0))),
+    getAliasMap(),
+  ]);
+  if (pending.length === 0) return [];
+
+  const bought = boughtNames.map((name) => normalizeItemName(name)).filter(Boolean);
+  return pending
+    .filter((item) => bought.some((name) => itemNamesMatch(item.nameNormalized, name, aliases)))
+    .map((item) => ({ id: item.id, name: item.name }));
+}
+
+/** レシート消し込みの結果。確認画面に「◯件を消し込みます」と出すために名前も返す。 */
+export interface CheckOffResult {
+  count: number;
+  names: string[];
+}
+
+/**
+ * 買った品を買い物リストから**消し込む**（レシート取り込みから呼ぶ）。
+ *
+ * 決めごと:
+ * - **消さずにチェックを付ける。** 誤照合で行が消えると気づけないが、チェックなら取り消せる
+ * - **照合は品目名（正規化＋名寄せ辞書）だけ。** 店（`store_group`）は表示の絞り込み専用で、
+ *   照合には使わない — 同じ品を別の店で買うことは普通にあり、店で絞ると取りこぼす
+ * - **数量は不問。** 「牛乳2本」必要で1本だけ買った場合もチェックは付く（外すのは利用者の判断）
+ * - 対象は**未チェックの行だけ**
+ */
+export async function checkOffByNames(boughtNames: readonly string[]): Promise<CheckOffResult> {
+  const empty: CheckOffResult = { count: 0, names: [] };
+  const hit = await matchPendingByNames(boughtNames);
+  if (hit.length === 0) return empty;
+
+  const { inArray } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const now = new Date().toISOString();
+  await db
+    .update(schema.shoppingItems)
+    .set({ checked: 1, checkedAt: now, checkedBy: getCurrentUser().id })
+    .where(
+      inArray(
+        schema.shoppingItems.id,
+        hit.map((item) => item.id),
+      ),
+    );
+  return { count: hit.length, names: hit.map((item) => item.name) };
+}
+
+/**
+ * チェックを付ける・外す。レシートの消し込みを**取り消せる**ようにするために要る
+ * （誤照合で消えたままだと買い忘れる）。
+ */
+export async function setShoppingItemChecked(id: string, checked: boolean): Promise<void> {
+  if (!isNativePlatform) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  await getDb()
+    .update(schema.shoppingItems)
+    .set(
+      checked
+        ? { checked: 1, checkedAt: new Date().toISOString(), checkedBy: getCurrentUser().id }
+        : { checked: 0, checkedAt: null, checkedBy: null },
+    )
+    .where(eq(schema.shoppingItems.id, id));
+}
+
+/** 買う場所を変える（空文字・null は未設定に戻す） */
+export async function setShoppingItemStore(id: string, storeGroup: string | null): Promise<void> {
+  if (!isNativePlatform) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  await getDb()
+    .update(schema.shoppingItems)
+    .set({ storeGroup: storeGroup?.trim() ? storeGroup.trim() : null })
+    .where(eq(schema.shoppingItems.id, id));
 }
 
 export async function removeShoppingItem(id: string): Promise<void> {

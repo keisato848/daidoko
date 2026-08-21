@@ -28,7 +28,7 @@ import { t } from '../i18n';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 12; // v11: レシピ帖（recipe_books, S4）/ v12: レシピの店名
+export const CURRENT_SCHEMA_VERSION = 13; // v12: レシピの店名 / v13: 在庫・買い物のグループ、賞味期限、誰が
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -341,6 +341,17 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE UNIQUE INDEX IF NOT EXISTS idx_recipe_book_items_book_recipe ON recipe_book_items(book_id, recipe_id);
+
+  CREATE TABLE IF NOT EXISTS store_group_aliases (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL REFERENCES families(id),
+    store_name TEXT NOT NULL,
+    group_name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_store_group_aliases_family_store ON store_group_aliases(family_id, store_name);
 `;
 
 // Columns added after a table first shipped (SQLite has no ADD COLUMN IF NOT
@@ -356,6 +367,14 @@ const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   // 「その日どこで食べたか」の事実で、後から入力しても過去の記録は変わらない。
   // 表示は常にレシピ側を使う（未入力のまま作られた記録が後から直らないため）。
   { table: 'recipes', columnDdl: 'place_name TEXT' },
+  // v13: 在庫は置き場所・用途で束ねる（合算の鍵に入る）。賞味期限は任意で、行に1つだけ持つ
+  { table: 'pantry_items', columnDdl: 'group_name TEXT' },
+  { table: 'pantry_items', columnDdl: 'expires_on TEXT' },
+  // v13: 買い物リストは「買う場所」で束ねる。誰が入れた/買ったかは**同期の前に**記録を始める
+  // （列が無い間に作られた行は、あとから誰のものか復元できない）
+  { table: 'shopping_items', columnDdl: 'store_group TEXT' },
+  { table: 'shopping_items', columnDdl: 'created_by TEXT' },
+  { table: 'shopping_items', columnDdl: 'checked_by TEXT' },
 ];
 
 /**

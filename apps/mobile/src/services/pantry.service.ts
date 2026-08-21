@@ -20,6 +20,8 @@ interface PantryRow {
   unit: string | null;
   lowStockThreshold: number | null;
   janCode: string | null;
+  groupName: string | null;
+  expiresOn: string | null;
 }
 
 function rowToItem(row: PantryRow): PantryItem {
@@ -30,6 +32,8 @@ function rowToItem(row: PantryRow): PantryItem {
     unit: row.unit,
     lowStockThreshold: row.lowStockThreshold,
     janCode: row.janCode,
+    groupName: row.groupName,
+    expiresOn: row.expiresOn,
   };
 }
 
@@ -38,10 +42,31 @@ async function currentFamilyId(): Promise<string> {
   return getCurrentFamily().id;
 }
 
+/**
+ * 「未設定」グループを絞り込みで指す番兵。DB は null で持つが、選択状態は
+ * 文字列の集合で扱いたいので、UI と service の間だけこの値を使う。
+ */
+export const UNGROUPED = '__ungrouped__';
+
 /** Sum two optional quantities; null + null stays null (= unmanaged). */
 function sumQuantity(a: number | null, b: number | null): number | null {
   if (a == null && b == null) return null;
   return (a ?? 0) + (b ?? 0);
+}
+
+/**
+ * 賞味期限のマージ規則（v13）。**近い方（早い日付）を残す。**
+ *
+ * 在庫は同じ品目を 1 行に合算するので、期限は行に 1 つしか持てない。先に使い切るのは
+ * 古い方なので、早い日付を残しておけば「そろそろ使ったほうがいい」の判断には足りる。
+ * 片方が未設定なら、入っている方を採る（せっかく入れた情報を捨てない）。
+ *
+ * 判断が入っている箇所なのでテストから触れるよう export する（外から呼ぶ用途は無い）。
+ */
+export function nearerExpiry(a: string | null, b: string | null): string | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a <= b ? a : b;
 }
 
 export interface AddPantryOptions {
@@ -49,6 +74,10 @@ export interface AddPantryOptions {
   unit?: string | null;
   lowStockThreshold?: number | null;
   janCode?: string | null;
+  /** 置き場所・用途のグループ（未指定 = 未設定バケツ）。合算の鍵に入る */
+  groupName?: string | null;
+  /** 賞味期限 YYYY-MM-DD（任意） */
+  expiresOn?: string | null;
 }
 
 export async function getPantryItems(): Promise<PantryItem[]> {
@@ -65,6 +94,8 @@ export async function getPantryItems(): Promise<PantryItem[]> {
       unit: schema.pantryItems.unit,
       lowStockThreshold: schema.pantryItems.lowStockThreshold,
       janCode: schema.pantryItems.janCode,
+      groupName: schema.pantryItems.groupName,
+      expiresOn: schema.pantryItems.expiresOn,
     })
     .from(schema.pantryItems)
     .where(eq(schema.pantryItems.familyId, await currentFamilyId()))
@@ -92,16 +123,31 @@ export async function addPantryItem(
   const familyId = await currentFamilyId();
   const nameNormalized = normalizeItemName(trimmed);
   const unit = options.unit?.trim() ? options.unit.trim() : null;
+  const groupName = options.groupName?.trim() ? options.groupName.trim() : null;
+  const expiresOn = options.expiresOn?.trim() ? options.expiresOn.trim() : null;
   const now = new Date().toISOString();
 
   // Find a match to merge into.
+  //
+  // **グループも鍵に入れる（v13）。** 同じ米が「パントリー」と「〇〇の米」に別々にあるのは
+  // 正常なので、鍵から外すと勝手に 1 行へまとめられてしまう。JAN 一致でも同じ理由でグループを見る
+  // （同じ商品を備蓄と冷蔵庫に分けて持つことがある）。未設定（null）同士は同じバケツ。
+  const groupMatch =
+    groupName == null
+      ? isNull(schema.pantryItems.groupName)
+      : eq(schema.pantryItems.groupName, groupName);
   const janCode = options.janCode?.trim() ? options.janCode.trim() : null;
   const match = janCode
-    ? and(eq(schema.pantryItems.familyId, familyId), eq(schema.pantryItems.janCode, janCode))
+    ? and(
+        eq(schema.pantryItems.familyId, familyId),
+        eq(schema.pantryItems.janCode, janCode),
+        groupMatch,
+      )
     : and(
         eq(schema.pantryItems.familyId, familyId),
         eq(schema.pantryItems.nameNormalized, nameNormalized),
         unit == null ? isNull(schema.pantryItems.unit) : eq(schema.pantryItems.unit, unit),
+        groupMatch,
       );
 
   const existing = await db
@@ -112,6 +158,8 @@ export async function addPantryItem(
       unit: schema.pantryItems.unit,
       lowStockThreshold: schema.pantryItems.lowStockThreshold,
       janCode: schema.pantryItems.janCode,
+      groupName: schema.pantryItems.groupName,
+      expiresOn: schema.pantryItems.expiresOn,
     })
     .from(schema.pantryItems)
     .where(match)
@@ -120,6 +168,7 @@ export async function addPantryItem(
   if (existing.length > 0) {
     const prev = existing[0];
     const quantity = sumQuantity(prev.quantity, options.quantity ?? null);
+    const mergedExpiry = nearerExpiry(prev.expiresOn, expiresOn);
     await db
       .update(schema.pantryItems)
       .set({
@@ -127,6 +176,7 @@ export async function addPantryItem(
         unit: unit ?? prev.unit,
         lowStockThreshold: options.lowStockThreshold ?? prev.lowStockThreshold,
         janCode: janCode ?? prev.janCode,
+        expiresOn: mergedExpiry,
         updatedAt: now,
       })
       .where(eq(schema.pantryItems.id, prev.id));
@@ -137,6 +187,8 @@ export async function addPantryItem(
       unit: unit ?? prev.unit,
       lowStockThreshold: options.lowStockThreshold ?? prev.lowStockThreshold,
       janCode: janCode ?? prev.janCode,
+      groupName: prev.groupName,
+      expiresOn: mergedExpiry,
     };
   }
 
@@ -148,6 +200,8 @@ export async function addPantryItem(
     unit,
     lowStockThreshold: options.lowStockThreshold ?? null,
     janCode,
+    groupName,
+    expiresOn,
   };
   await db.insert(schema.pantryItems).values({
     id,
@@ -158,12 +212,18 @@ export async function addPantryItem(
     unit,
     lowStockThreshold: item.lowStockThreshold,
     janCode,
+    groupName,
+    expiresOn,
     createdAt: now,
     updatedAt: now,
   });
   return item;
 }
 
+/**
+ * 行を直す。**置き場所を変えると合算の鍵が変わる**ので、移した先に同じ品があればそこへ寄せる
+ * （寄せずに残すと「冷蔵庫の卵」を「〇〇の卵」へ移した瞬間、同じ品が 2 行に並んでしまう）。
+ */
 export async function updatePantryItem(
   id: string,
   patch: {
@@ -171,12 +231,28 @@ export async function updatePantryItem(
     quantity?: number | null;
     unit?: string | null;
     lowStockThreshold?: number | null;
+    groupName?: string | null;
+    expiresOn?: string | null;
   },
 ): Promise<void> {
   if (!isNativePlatform) return;
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
+
+  const db = getDb();
+  const groupName =
+    patch.groupName === undefined
+      ? undefined
+      : patch.groupName?.trim()
+        ? patch.groupName.trim()
+        : null;
+  const expiresOn =
+    patch.expiresOn === undefined
+      ? undefined
+      : patch.expiresOn?.trim()
+        ? patch.expiresOn.trim()
+        : null;
 
   const set = {
     updatedAt: new Date().toISOString(),
@@ -188,9 +264,90 @@ export async function updatePantryItem(
     ...(patch.lowStockThreshold !== undefined
       ? { lowStockThreshold: patch.lowStockThreshold }
       : {}),
+    ...(groupName !== undefined ? { groupName } : {}),
+    ...(expiresOn !== undefined ? { expiresOn } : {}),
   };
 
-  await getDb().update(schema.pantryItems).set(set).where(eq(schema.pantryItems.id, id));
+  if (groupName !== undefined) {
+    const merged = await mergeIntoGroup(id, groupName);
+    if (merged) return;
+  }
+
+  await db.update(schema.pantryItems).set(set).where(eq(schema.pantryItems.id, id));
+}
+
+/**
+ * 置き場所の移動先に同じ品があれば、そこへ足し込んで元の行を消す。寄せたら true。
+ * 期限は**近い方（早い日付）**を残す（先に食べるべき日付を失わないため）。
+ */
+async function mergeIntoGroup(id: string, groupName: string | null): Promise<boolean> {
+  const { and, eq, isNull, ne } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const rows = await db
+    .select({
+      familyId: schema.pantryItems.familyId,
+      nameNormalized: schema.pantryItems.nameNormalized,
+      unit: schema.pantryItems.unit,
+      janCode: schema.pantryItems.janCode,
+      quantity: schema.pantryItems.quantity,
+      lowStockThreshold: schema.pantryItems.lowStockThreshold,
+      expiresOn: schema.pantryItems.expiresOn,
+      groupName: schema.pantryItems.groupName,
+    })
+    .from(schema.pantryItems)
+    .where(eq(schema.pantryItems.id, id))
+    .limit(1);
+  const self = rows[0];
+  if (!self || self.groupName === groupName) return false;
+
+  const groupMatch =
+    groupName == null
+      ? isNull(schema.pantryItems.groupName)
+      : eq(schema.pantryItems.groupName, groupName);
+  const match = self.janCode
+    ? and(
+        eq(schema.pantryItems.familyId, self.familyId),
+        eq(schema.pantryItems.janCode, self.janCode),
+        groupMatch,
+        ne(schema.pantryItems.id, id),
+      )
+    : and(
+        eq(schema.pantryItems.familyId, self.familyId),
+        eq(schema.pantryItems.nameNormalized, self.nameNormalized),
+        self.unit == null
+          ? isNull(schema.pantryItems.unit)
+          : eq(schema.pantryItems.unit, self.unit),
+        groupMatch,
+        ne(schema.pantryItems.id, id),
+      );
+
+  const target = await db
+    .select({
+      id: schema.pantryItems.id,
+      quantity: schema.pantryItems.quantity,
+      lowStockThreshold: schema.pantryItems.lowStockThreshold,
+      expiresOn: schema.pantryItems.expiresOn,
+    })
+    .from(schema.pantryItems)
+    .where(match)
+    .limit(1);
+  if (target.length === 0) return false;
+
+  const into = target[0];
+  await db
+    .update(schema.pantryItems)
+    .set({
+      quantity: sumQuantity(into.quantity, self.quantity),
+      lowStockThreshold: into.lowStockThreshold ?? self.lowStockThreshold,
+      expiresOn: nearerExpiry(into.expiresOn, self.expiresOn),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(schema.pantryItems.id, into.id));
+  await db.delete(schema.pantryItems).where(eq(schema.pantryItems.id, id));
+  return true;
 }
 
 export async function removePantryItem(id: string): Promise<void> {
@@ -201,8 +358,67 @@ export async function removePantryItem(id: string): Promise<void> {
   await getDb().delete(schema.pantryItems).where(eq(schema.pantryItems.id, id));
 }
 
+/**
+ * 在庫に今あるグループ名の一覧（未設定は含まない・名前順）。
+ * チップでの絞り込みや、レシートの既定グループ選択に使う。
+ */
+export async function getPantryGroups(): Promise<string[]> {
+  if (!isNativePlatform) return [];
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  const rows = await getDb()
+    .select({ groupName: schema.pantryItems.groupName })
+    .from(schema.pantryItems)
+    .where(eq(schema.pantryItems.familyId, await currentFamilyId()));
+
+  const names = new Set<string>();
+  for (const row of rows) if (row.groupName) names.add(row.groupName);
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * レシートや手入力で品を足すときの**既定グループ**を推測する。
+ *
+ * 同一判定にグループが入った以上、既定を決めないと、レシートから入る品はすべて
+ * 未設定バケツに落ち、既存の「〇〇の米」とは**永遠に合算されない別行**になる
+ * （表記違いが重複して積まれるのと同じ形の再発）。
+ *
+ * 規則は素直に:**同名×同単位の既存行がちょうど 1 つならそのグループ**。
+ * 無い／複数あるときは決め打ちしない（null を返し、画面で選ばせる）。
+ * 推測で確定させず、確認画面で直せることが前提。
+ */
+export async function defaultGroupFor(name: string, unit?: string | null): Promise<string | null> {
+  if (!isNativePlatform) return null;
+  const normalized = normalizeItemName(name);
+  if (!normalized) return null;
+
+  const { and, eq, isNull } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  const trimmedUnit = unit?.trim() ? unit.trim() : null;
+  const rows = await getDb()
+    .select({ groupName: schema.pantryItems.groupName })
+    .from(schema.pantryItems)
+    .where(
+      and(
+        eq(schema.pantryItems.familyId, await currentFamilyId()),
+        eq(schema.pantryItems.nameNormalized, normalized),
+        trimmedUnit == null
+          ? isNull(schema.pantryItems.unit)
+          : eq(schema.pantryItems.unit, trimmedUnit),
+      ),
+    )
+    .limit(2);
+
+  if (rows.length !== 1) return null;
+  return rows[0].groupName ?? null;
+}
+
 /** Normalized names currently in stock (quantity null = unmanaged-but-present, or > 0). */
-export async function getInStockNormalizedNames(): Promise<string[]> {
+export async function getInStockNormalizedNames(groups?: readonly string[]): Promise<string[]> {
   if (!isNativePlatform) return [];
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
@@ -212,11 +428,19 @@ export async function getInStockNormalizedNames(): Promise<string[]> {
     .select({
       nameNormalized: schema.pantryItems.nameNormalized,
       quantity: schema.pantryItems.quantity,
+      groupName: schema.pantryItems.groupName,
     })
     .from(schema.pantryItems)
     .where(eq(schema.pantryItems.familyId, await currentFamilyId()));
 
-  return rows.filter((r) => r.quantity == null || r.quantity > 0).map((r) => r.nameNormalized);
+  // グループ指定は**使うときに選ぶ**もの（グループ自身の属性にはしない）。
+  // 「普段は冷蔵庫だけ、旅行前は全部」のように、そのときやりたいこと次第で変わるため。
+  // 未指定 = 全グループ（従来どおり）。
+  const selected = groups && groups.length > 0 ? new Set(groups) : null;
+  return rows
+    .filter((r) => r.quantity == null || r.quantity > 0)
+    .filter((r) => (selected ? selected.has(r.groupName ?? UNGROUPED) : true))
+    .map((r) => r.nameNormalized);
 }
 
 /**

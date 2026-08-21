@@ -24,6 +24,8 @@ function item(partial: Partial<PantryItem>): PantryItem {
     unit: null,
     lowStockThreshold: null,
     janCode: null,
+    groupName: null,
+    expiresOn: null,
     ...partial,
   };
 }
@@ -141,5 +143,46 @@ describe('addAllLowStockToShoppingList', () => {
     mockGetPantryItems.mockResolvedValue([item({ quantity: 5, lowStockThreshold: 1 })]);
     expect(await addAllLowStockToShoppingList()).toBe(0);
     expect(mockAddShoppingItem).not.toHaveBeenCalled();
+  });
+
+  // 置き場所（v13）で同じ品が別行に分かれる。買う側に要るのは「米を買う」ことだけ
+  it('置き場所違いで分かれた同じ品は、買い物リストに1行だけ入れる', async () => {
+    mockGetPantryItems.mockResolvedValue([
+      item({ id: 'a', name: '米', quantity: 0, lowStockThreshold: 1, groupName: '冷蔵庫' }),
+      item({ id: 'b', name: '米', quantity: 0, lowStockThreshold: 1, groupName: '備蓄' }),
+    ]);
+    mockAddShoppingItem.mockResolvedValue({
+      id: 'shop-1',
+      name: '米',
+      amount: null,
+      checked: false,
+      source: 'low_stock',
+      recipeId: null,
+      storeGroup: null,
+      createdBy: null,
+      checkedBy: null,
+    });
+
+    expect(await addAllLowStockToShoppingList()).toBe(1);
+    expect(mockAddShoppingItem).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('通知の本文', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('置き場所違いの同じ品を並べない（「米、米」にしない）', async () => {
+    mockGetPantryItems.mockResolvedValue([
+      item({ id: 'a', name: '米', quantity: 0, lowStockThreshold: 1, groupName: '冷蔵庫' }),
+      item({ id: 'b', name: '米', quantity: 0, lowStockThreshold: 1, groupName: '備蓄' }),
+    ]);
+    mockGetAppMeta.mockResolvedValue(null);
+    mockPresent.mockResolvedValue('notif-1');
+
+    await checkAndNotifyLowStock();
+
+    const body = mockPresent.mock.calls[0][0];
+    expect(body).toContain('米');
+    expect(body).not.toContain('米、米');
   });
 });

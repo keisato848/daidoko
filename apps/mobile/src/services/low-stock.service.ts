@@ -7,6 +7,7 @@
  * consumption, threshold edit). See docs/買い物リスト・在庫設計.md §5.5.
  */
 import { isNativePlatform } from '../db/client';
+import { normalizeItemName } from '../utils/itemName';
 import { getAppMeta, setAppMeta } from './app-meta.service';
 import { presentLowStockNotification } from './notification.service';
 import { getPantryItems } from './pantry.service';
@@ -30,6 +31,22 @@ export function filterLowStock(items: PantryItem[]): PantryItem[] {
     (it) =>
       it.quantity != null && it.lowStockThreshold != null && it.quantity <= it.lowStockThreshold,
   );
+}
+
+/**
+ * 同じ品を正規化名で 1 つに畳む（v13）。置き場所が入ったことで「冷蔵庫の米」と
+ * 「〇〇の米」が別行になり、両方が残りわずかだと通知にも買い物リストにも二重に出る。
+ * 買う側に要るのは「米を買う」ことだけなので畳む。
+ */
+export function dedupeByName(items: PantryItem[]): PantryItem[] {
+  const seen = new Set<string>();
+  return items.filter((it) => {
+    const key = normalizeItemName(it.name);
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** One batched message: 「卵、牛乳 ほか2件 の残りが少なくなっています。…」 */
@@ -56,7 +73,9 @@ export async function checkAndNotifyLowStock(): Promise<boolean> {
   const today = dayKey();
   if ((await getAppMeta(NOTIFIED_DAY_KEY)) === today) return false;
 
-  const id = await presentLowStockNotification(buildLowStockBody(low.map((it) => it.name)));
+  const id = await presentLowStockNotification(
+    buildLowStockBody(dedupeByName(low).map((it) => it.name)),
+  );
   if (id == null) return false;
 
   await setAppMeta(NOTIFIED_DAY_KEY, today);
@@ -75,7 +94,7 @@ export async function addAllLowStockToShoppingList(): Promise<number> {
   const low = filterLowStock(await getPantryItems());
 
   let added = 0;
-  for (const it of low) {
+  for (const it of dedupeByName(low)) {
     const result = await addShoppingItem(it.name, undefined, { source: 'low_stock' });
     if (result) added += 1;
   }

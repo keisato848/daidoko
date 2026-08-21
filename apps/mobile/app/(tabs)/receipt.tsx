@@ -10,10 +10,11 @@
  * 端末内OCRが転ぶ条件（モデル未取得・認識失敗・文字なし）はすべて画像経路へ落とす。
  */
 import { useRouter } from 'expo-router';
-import { Camera, Check, ImageIcon, X } from 'lucide-react-native';
+import { Camera, Check, ImageIcon, Store, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { GroupPicker } from '../../src/components/GroupPicker';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
 import { Loading } from '../../src/components/Loading';
 import { Colors } from '../../src/constants/theme';
@@ -25,7 +26,7 @@ import {
 import { expoImageManipulatorPreprocessAdapter } from '../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../src/services/expo-photo-capture.adapter';
 import { preprocessImageForOcr } from '../../src/services/image-preprocess.service';
-import { addPantryItem } from '../../src/services/pantry.service';
+import { addPantryItem, defaultGroupFor } from '../../src/services/pantry.service';
 import {
   capturePhoto,
   PhotoCaptureCancelledError,
@@ -36,6 +37,12 @@ import {
   inferReceiptFromVision,
   type ReceiptInference,
 } from '../../src/services/receipt-vision.provider';
+import { checkOffByNames, matchPendingByNames } from '../../src/services/shopping-list.service';
+import {
+  getShoppingStoreGroups,
+  getStoreGroupFor,
+  learnStoreGroup,
+} from '../../src/services/store-group.service';
 import { formatQuantityInput, parseQuantityInput } from '../../src/utils/receiptQuantity';
 
 /**
@@ -84,6 +91,14 @@ export default function ReceiptScreen() {
    */
   const [ocrReady, setOcrReady] = useState(false);
 
+  /** レシートが読めた店名（v13）。買い物グループの対応付けに使う */
+  const [store, setStore] = useState<string | null>(null);
+  const [storeGroup, setStoreGroup] = useState<string | null>(null);
+  const [storeGroups, setStoreGroups] = useState<string[]>([]);
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
+  /** 「買い物リストの◯件を消し込みます」の先読み。**黙って消さない**ための表示 */
+  const [checkOffCount, setCheckOffCount] = useState(0);
+
   useEffect(() => {
     let mounted = true;
     isClientOcrAvailable()
@@ -108,10 +123,18 @@ export default function ReceiptScreen() {
       let inference: ReceiptInference | null = null;
       const ocrText = await readTextOnDevice(photo.localPath);
       if (ocrText) {
-        inference = await inferReceiptFromText({ ocrText });
-        // レシートと認識されない／1件も取れないのは OCR が崩れたということ。
-        // 写真ならまだ読める見込みがあるので、画像経路をもう一度だけ試す
-        if (!inference.isReceipt || inference.items.length === 0) inference = null;
+        try {
+          inference = await inferReceiptFromText({ ocrText });
+          // レシートと認識されない／1件も取れないのは OCR が崩れたということ。
+          // 写真ならまだ読める見込みがあるので、画像経路をもう一度だけ試す
+          if (!inference.isReceipt || inference.items.length === 0) inference = null;
+        } catch {
+          // **テキスト経路が転んでも、画像経路で読めるなら読む。**
+          // ここで投げ返すと、アプリだけ新しくてサーバーがまだ古い（テキストの口が無く 400 を返す）
+          // ときにレシート取り込みが丸ごと使えなくなる。実機で踏んだ（2026-08-21）。
+          // 経路が 1 本落ちただけで機能を止めないのが §3.4 の設計意図。
+          inference = null;
+        }
       }
 
       // ② 端末内OCRが使えない・読めなかった → 画像を AI へ（BYOKキーがあれば直接 Gemini）
@@ -141,6 +164,14 @@ export default function ReceiptScreen() {
           include: true,
         })),
       );
+
+      // 店名は「次に同じ品を買い物リストへ入れるときの既定の店」を決めるためだけに使う。
+      // 初めての店なら未設定のまま出し、利用者がその場で結び付けられるようにする
+      const storeName = inference.store?.trim() || null;
+      setStore(storeName);
+      setStoreGroup(storeName ? await getStoreGroupFor(storeName).catch(() => null) : null);
+      setStoreGroups(await getShoppingStoreGroups().catch(() => []));
+
       setPhase('review');
     } catch (error) {
       if (error instanceof PhotoCaptureCancelledError) {
@@ -152,17 +183,49 @@ export default function ReceiptScreen() {
     }
   }, []);
 
+  const includedNames = items
+    .filter((it) => it.include && it.name.trim())
+    .map((it) => it.name.trim())
+    .join('\u0000');
+
+  // 品目名を直すたびに追従させる（名前を直して初めて当たることがある）
+  useEffect(() => {
+    if (phase !== 'review') return;
+    let mounted = true;
+    matchPendingByNames(includedNames ? includedNames.split('\u0000') : [])
+      .then((hit) => {
+        if (mounted) setCheckOffCount(hit.length);
+      })
+      .catch(() => {
+        if (mounted) setCheckOffCount(0);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [phase, includedNames]);
+
   const handleAdd = useCallback(async () => {
     const chosen = items.filter((it) => it.include && it.name.trim());
     for (const it of chosen) {
+      const name = it.name.trim();
+      const unit = it.unit.trim() || null;
+      // 既にその品が 1 か所だけに置いてあるなら、そこへ足す。置き場所を使っている人の
+      // 買い足しが「未設定」に別行で積まれるのを防ぐ（使っていない人には常に null）
+      const groupName = await defaultGroupFor(name, unit).catch(() => null);
       // 空欄の数量は null のまま渡す＝在庫は「数量未管理」で持つ（§6）
-      await addPantryItem(it.name.trim(), {
+      await addPantryItem(name, {
         quantity: parseQuantityInput(it.quantity),
-        unit: it.unit.trim() || null,
+        unit,
+        groupName,
       }).catch(() => undefined);
     }
+
+    // 買った品を買い物リストから消し込む（消さずにチェックを付けるだけ＝取り消せる）
+    await checkOffByNames(chosen.map((it) => it.name.trim())).catch(() => undefined);
+    if (store && storeGroup) await learnStoreGroup(store, storeGroup).catch(() => undefined);
+
     router.back();
-  }, [items, router]);
+  }, [items, router, store, storeGroup]);
 
   const chosenCount = items.filter((it) => it.include && it.name.trim()).length;
 
@@ -208,6 +271,19 @@ export default function ReceiptScreen() {
       {phase === 'review' && (
         <>
           <Text style={styles.reviewHint}>{t('pantry.receipt.resultHint')}</Text>
+          {store != null && (
+            <Pressable
+              style={styles.storeRow}
+              onPress={() => setStorePickerOpen(true)}
+              accessibilityLabel={t('pantry.receipt.storeGroupTitle', { store })}
+            >
+              <Store size={14} color={Colors.muted} />
+              <Text style={styles.storeText} numberOfLines={1}>
+                {store} / {t('pantry.receipt.storeGroupLabel')}:{' '}
+                {storeGroup ?? t('pantry.receipt.storeGroupUnset')}
+              </Text>
+            </Pressable>
+          )}
           <FlatList
             data={items}
             keyExtractor={(item) => item.id}
@@ -275,6 +351,11 @@ export default function ReceiptScreen() {
               </View>
             )}
           />
+          {checkOffCount > 0 && (
+            <Text style={styles.checkOffNote}>
+              {tCount('pantry.receipt.checkOff', checkOffCount)}
+            </Text>
+          )}
           <View style={styles.footer}>
             <Pressable style={styles.linkButton} onPress={() => setPhase('select')}>
               <Text style={styles.linkText}>{t('pantry.receipt.retry')}</Text>
@@ -291,12 +372,42 @@ export default function ReceiptScreen() {
           </View>
         </>
       )}
+
+      <GroupPicker
+        visible={storePickerOpen}
+        title={store ? t('pantry.receipt.storeGroupTitle', { store }) : ''}
+        groups={storeGroups}
+        value={storeGroup}
+        noneLabel={t('pantry.receipt.storeGroupUnset')}
+        newPlaceholder={t('pantry.shopping.storeGroup.newPlaceholder')}
+        createLabel={t('pantry.group.create')}
+        onSelect={(group) => {
+          setStoreGroup(group);
+          if (group && !storeGroups.includes(group)) setStoreGroups((prev) => [...prev, group]);
+          setStorePickerOpen(false);
+        }}
+        onClose={() => setStorePickerOpen(false)}
+      />
     </KeyboardAvoider>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
+  storeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  storeText: { fontSize: 12, color: Colors.muted, flexShrink: 1 },
+  checkOffNote: {
+    fontSize: 12,
+    color: Colors.goldDim,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
