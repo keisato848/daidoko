@@ -24,11 +24,15 @@ import { ADMOB_REWARDED_UNIT_ID } from '../config';
 import {
   AdUnavailableError,
   type AdRewardProvider,
+  type PreparedRewardedAd,
   type RewardedAdResult,
 } from './ad-reward.types';
 import { t } from '../i18n';
 
 const UNIT_ID = ADMOB_REWARDED_UNIT_ID || TestIds.REWARDED;
+
+/** ロード待ちの上限。超えたら「広告なし」として扱う（ボタンを出さない側に倒す） */
+const LOAD_TIMEOUT_MS = 12_000;
 
 export class AdMobRewardProvider implements AdRewardProvider {
   private initialized = false;
@@ -70,41 +74,70 @@ export class AdMobRewardProvider implements AdRewardProvider {
     await AdsConsent.showPrivacyOptionsForm();
   }
 
-  async showRewardedAd(): Promise<RewardedAdResult> {
+  /**
+   * ロードと表示を分離した本体。ロード失敗（no-fill・タイムアウト）は
+   * AdUnavailableError — 画面は広告ボタンを出さないだけで、エラー表示はしない。
+   */
+  async loadRewardedAd(): Promise<PreparedRewardedAd> {
     await this.ensureInitialized();
-    return new Promise<RewardedAdResult>((resolve, reject) => {
-      const ad = RewardedAd.createForAdRequest(UNIT_ID);
-      let earned = false;
+    const ad = RewardedAd.createForAdRequest(UNIT_ID);
+
+    await new Promise<void>((resolve, reject) => {
       const cleanups: Array<() => void> = [];
       const cleanup = (): void => cleanups.forEach((off) => off());
-
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new AdUnavailableError());
+      }, LOAD_TIMEOUT_MS);
+      cleanups.push(() => clearTimeout(timer));
       cleanups.push(
         ad.addAdEventListener(RewardedAdEventType.LOADED, () => {
+          cleanup();
+          resolve();
+        }),
+      );
+      cleanups.push(
+        ad.addAdEventListener(AdEventType.ERROR, () => {
+          cleanup();
+          reject(new AdUnavailableError());
+        }),
+      );
+      ad.load();
+    });
+
+    return {
+      show: () =>
+        new Promise<RewardedAdResult>((resolve, reject) => {
+          let earned = false;
+          const cleanups: Array<() => void> = [];
+          const cleanup = (): void => cleanups.forEach((off) => off());
+          cleanups.push(
+            ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
+              earned = true;
+            }),
+          );
+          cleanups.push(
+            ad.addAdEventListener(AdEventType.CLOSED, () => {
+              cleanup();
+              resolve({ rewarded: earned });
+            }),
+          );
+          cleanups.push(
+            ad.addAdEventListener(AdEventType.ERROR, (error: unknown) => {
+              cleanup();
+              reject(error instanceof Error ? error : new Error(t('ads.showFailed')));
+            }),
+          );
           ad.show().catch((error: unknown) => {
             cleanup();
             reject(error instanceof Error ? error : new Error(t('ads.showFailed')));
           });
         }),
-      );
-      cleanups.push(
-        ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => {
-          earned = true;
-        }),
-      );
-      cleanups.push(
-        ad.addAdEventListener(AdEventType.CLOSED, () => {
-          cleanup();
-          resolve({ rewarded: earned });
-        }),
-      );
-      cleanups.push(
-        ad.addAdEventListener(AdEventType.ERROR, (error: unknown) => {
-          cleanup();
-          reject(error instanceof Error ? error : new Error(t('ads.loadFailed')));
-        }),
-      );
+    };
+  }
 
-      ad.load();
-    });
+  async showRewardedAd(): Promise<RewardedAdResult> {
+    const prepared = await this.loadRewardedAd();
+    return prepared.show();
   }
 }

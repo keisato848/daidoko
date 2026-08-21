@@ -7,7 +7,12 @@ import { Platform } from 'react-native';
 
 import { AdMobRewardProvider } from './ad-reward.admob';
 import { ADMOB_ENABLED, ADMOB_REWARDED_UNIT_ID } from '../config';
-import type { AdRewardProvider, RewardedAdResult } from './ad-reward.types';
+import {
+  AdUnavailableError,
+  type AdRewardProvider,
+  type PreparedRewardedAd,
+  type RewardedAdResult,
+} from './ad-reward.types';
 
 const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -15,6 +20,9 @@ const isNative = Platform.OS === 'ios' || Platform.OS === 'android';
 export class StubAdRewardProvider implements AdRewardProvider {
   isAvailable(): boolean {
     return false;
+  }
+  async loadRewardedAd(): Promise<PreparedRewardedAd> {
+    throw new AdUnavailableError();
   }
   async showRewardedAd(): Promise<RewardedAdResult> {
     return { rewarded: false };

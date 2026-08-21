@@ -22,7 +22,8 @@ import {
 import { EULA_URL, PRIVACY_POLICY_URL } from '../../../src/constants/legal';
 import { Colors } from '../../../src/constants/theme';
 import { t, tCount } from '../../../src/i18n';
-import { getAdRewardProvider } from '../../../src/services/ad-reward.service';
+import { getAdRewardProvider, isAdRewardAvailable } from '../../../src/services/ad-reward.service';
+import type { PreparedRewardedAd } from '../../../src/services/ad-reward.types';
 import {
   getEntitlementProvider,
   isEntitlementConfigured,
@@ -54,6 +55,22 @@ export default function PaywallScreen() {
   const [busy, setBusy] = useState(false);
   const [canWatchAd, setCanWatchAd] = useState(false);
   const [tokenBalance, setTokenBalance] = useState(0);
+  /**
+   * ロード済みの広告。**null のあいだ広告ボタンは出さない** — 公開直後の iOS は
+   * no-fill がほぼ確実で、押すと必ず失敗するボタンを出すと審査に落ちる
+   * （Guideline 2.1 却下 2026-08-21）。ロードできたときだけボタンが現れる。
+   */
+  const [preparedAd, setPreparedAd] = useState<PreparedRewardedAd | null>(null);
+
+  const loadAd = useCallback(async () => {
+    if (!isAdRewardAvailable()) return;
+    try {
+      const ad = await getAdRewardProvider().loadRewardedAd();
+      setPreparedAd(ad);
+    } catch {
+      setPreparedAd(null); // no-fill 等 — ボタンを出さないだけでエラーは出さない
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -83,22 +100,32 @@ export default function PaywallScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (canWatchAd) void loadAd();
+  }, [canWatchAd, loadAd]);
+
   const handleWatchAd = useCallback(async () => {
+    const ad = preparedAd;
+    if (!ad) return;
     setBusy(true);
+    setPreparedAd(null); // 1 枚のロード済み広告は 1 回しか出せない
     try {
-      const { rewarded } = await getAdRewardProvider().showRewardedAd();
+      const { rewarded } = await ad.show();
       if (rewarded) {
         const newBalance = await grantAdBonus();
         setTokenBalance(newBalance);
         Alert.alert(t('paywall.thanksTitle'), tCount('paywall.adGranted', newBalance));
         router.back();
+        return;
       }
+      void loadAd(); // 途中で閉じた — 次の 1 枚を用意する
     } catch {
       Alert.alert(t('paywall.noticeTitle'), t('paywall.adFailed'));
+      void loadAd();
     } finally {
       setBusy(false);
     }
-  }, [router]);
+  }, [preparedAd, loadAd, router]);
 
   const handleSubscribe = useCallback(async () => {
     setBusy(true);
@@ -201,7 +228,7 @@ export default function PaywallScreen() {
           </>
         )}
 
-        {canWatchAd && (
+        {canWatchAd && preparedAd !== null && (
           <>
             {/* 「または」は購入ボタンとの二択で初めて意味を持つ。課金が使えない
                 プラットフォームでは前段が無く、接続詞だけが浮いて読めなくなる。 */}

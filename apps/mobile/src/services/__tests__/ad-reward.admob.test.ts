@@ -46,6 +46,44 @@ function consentInfo(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+describe('loadRewardedAd（プリロード方式）', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (AdsConsent.gatherConsent as jest.Mock).mockResolvedValue({
+      canRequestAds: true,
+      privacyOptionsRequirementStatus: 'NOT_REQUIRED',
+    });
+    (AdsConsent.getConsentInfo as jest.Mock).mockResolvedValue({
+      canRequestAds: true,
+      privacyOptionsRequirementStatus: 'NOT_REQUIRED',
+    });
+  });
+
+  it('ロード成功 → show で報酬まで通る', async () => {
+    (RewardedAd.createForAdRequest as jest.Mock).mockReturnValue(makeFakeAd({ earnReward: true }));
+    const provider = new AdMobRewardProvider();
+    const prepared = await provider.loadRewardedAd();
+    const result = await prepared.show();
+    expect(result).toEqual({ rewarded: true });
+  });
+
+  it('no-fill（ERROR）は AdUnavailableError — 画面はボタンを出さないだけで済む', async () => {
+    const listeners: Record<string, (arg?: unknown) => void> = {};
+    (RewardedAd.createForAdRequest as jest.Mock).mockReturnValue({
+      addAdEventListener: jest.fn((type: string, cb: (arg?: unknown) => void) => {
+        listeners[type] = cb;
+        return () => {};
+      }),
+      load: jest.fn(() => {
+        listeners['error']?.(new Error('no-fill'));
+      }),
+      show: jest.fn(),
+    });
+    const provider = new AdMobRewardProvider();
+    await expect(provider.loadRewardedAd()).rejects.toBeInstanceOf(AdUnavailableError);
+  });
+});
+
 describe('AdMobRewardProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
