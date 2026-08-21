@@ -123,10 +123,18 @@ export default function ReceiptScreen() {
       let inference: ReceiptInference | null = null;
       const ocrText = await readTextOnDevice(photo.localPath);
       if (ocrText) {
-        inference = await inferReceiptFromText({ ocrText });
-        // レシートと認識されない／1件も取れないのは OCR が崩れたということ。
-        // 写真ならまだ読める見込みがあるので、画像経路をもう一度だけ試す
-        if (!inference.isReceipt || inference.items.length === 0) inference = null;
+        try {
+          inference = await inferReceiptFromText({ ocrText });
+          // レシートと認識されない／1件も取れないのは OCR が崩れたということ。
+          // 写真ならまだ読める見込みがあるので、画像経路をもう一度だけ試す
+          if (!inference.isReceipt || inference.items.length === 0) inference = null;
+        } catch {
+          // **テキスト経路が転んでも、画像経路で読めるなら読む。**
+          // ここで投げ返すと、アプリだけ新しくてサーバーがまだ古い（テキストの口が無く 400 を返す）
+          // ときにレシート取り込みが丸ごと使えなくなる。実機で踏んだ（2026-08-21）。
+          // 経路が 1 本落ちただけで機能を止めないのが §3.4 の設計意図。
+          inference = null;
+        }
       }
 
       // ② 端末内OCRが使えない・読めなかった → 画像を AI へ（BYOKキーがあれば直接 Gemini）

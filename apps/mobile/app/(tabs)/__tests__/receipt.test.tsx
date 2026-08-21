@@ -223,6 +223,22 @@ describe('ReceiptScreen', () => {
       expect(screen.getByDisplayValue('卵')).toBeTruthy();
     });
 
+    it('テキスト経路が失敗しても（サーバーが古い等）、写真経路で読み切る', async () => {
+      // アプリだけ先に新しくなってサーバーにテキストの口が無いと 400 が返る。
+      // ここで投げ返すとレシート取り込みが丸ごと使えなくなる（実機で踏んだ 2026-08-21）
+      mockRecognizeTextOnDevice.mockResolvedValue('マックスバリュ松山店\nクリスタルガイザー 88');
+      mockInferFromText.mockRejectedValue(new Error('server receipt infer failed: 400'));
+      mockInferFromVision.mockResolvedValue(
+        inference([{ name: 'クリスタルガイザー', quantity: 1, unit: '本' }]),
+      );
+
+      await capture();
+      await waitFor(() => expect(screen.getByText(t('pantry.receipt.retry'))).toBeTruthy());
+      expect(screen.getByDisplayValue('クリスタルガイザー')).toBeTruthy();
+      // 生のエラー文字列を画面に出さない
+      expect(screen.queryByText(/failed: 400/)).toBeNull();
+    });
+
     it('テキストからは1件も取れなかったときも写真経路をやり直す', async () => {
       mockRecognizeTextOnDevice.mockResolvedValue('小計 1,280\n合計 1,382');
       mockInferFromText.mockResolvedValue(inference([]));
