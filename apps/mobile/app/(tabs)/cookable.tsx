@@ -13,6 +13,7 @@ import { GroupChips } from '../../src/components/GroupChips';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
 import { getAdRewardProvider, isAdRewardAvailable } from '../../src/services/ad-reward.service';
+import type { PreparedRewardedAd } from '../../src/services/ad-reward.types';
 import { getCookableRecipes, type CookableRecipe } from '../../src/services/cookable.service';
 import { getAppMeta, setAppMeta } from '../../src/services/app-meta.service';
 import {
@@ -29,6 +30,17 @@ export default function CookableScreen() {
   const [recipes, setRecipes] = useState<CookableRecipe[]>([]);
   const [resolving, setResolving] = useState(false);
   const [adRemaining, setAdRemaining] = useState<number | null>(null);
+  /** ロード済みの広告。null のあいだバナーは出さない（押すと失敗するボタンを出さない） */
+  const [preparedAd, setPreparedAd] = useState<PreparedRewardedAd | null>(null);
+
+  const loadAd = useCallback(async () => {
+    if (!isAdRewardAvailable()) return;
+    try {
+      setPreparedAd(await getAdRewardProvider().loadRewardedAd());
+    } catch {
+      setPreparedAd(null);
+    }
+  }, []);
   const [groups, setGroups] = useState<string[]>([]);
   /** null = すべての置き場所から探す */
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
@@ -75,12 +87,13 @@ export default function CookableScreen() {
       const result = await resolveUnmatchedNames();
       if (result.resolved > 0) await refresh();
       setAdRemaining(result.canWatchAd ? result.remaining : null);
+      if (result.canWatchAd && result.remaining > 0) void loadAd();
     } catch {
       setAdRemaining(null);
     } finally {
       setResolving(false);
     }
-  }, [refresh]);
+  }, [refresh, loadAd]);
 
   useFocusEffect(
     useCallback(() => {
@@ -97,16 +110,22 @@ export default function CookableScreen() {
   );
 
   const handleWatchAd = useCallback(async () => {
+    const ad = preparedAd;
+    if (!ad) return;
+    setPreparedAd(null);
     try {
-      const { rewarded } = await getAdRewardProvider().showRewardedAd();
+      const { rewarded } = await ad.show();
       if (rewarded) {
         await grantResolveAdBonus();
-        await autoResolve();
+        await autoResolve(); // 成功すれば autoResolve が次の 1 枚をロードする
+        return;
       }
+      void loadAd();
     } catch {
       // ignore — matching still works with what is already resolved
+      void loadAd();
     }
-  }, [autoResolve]);
+  }, [preparedAd, loadAd, autoResolve]);
 
   return (
     <View style={styles.container}>
@@ -137,7 +156,7 @@ export default function CookableScreen() {
           <Text style={styles.bannerText}>{t('pantry.cookable.matching')}</Text>
         </View>
       )}
-      {!resolving && adRemaining != null && adRemaining > 0 && isAdRewardAvailable() && (
+      {!resolving && adRemaining != null && adRemaining > 0 && preparedAd !== null && (
         <Pressable
           style={styles.banner}
           onPress={handleWatchAd}
