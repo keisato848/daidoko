@@ -71,6 +71,21 @@ describe('database migrations', () => {
     expect(backfill).toMatch(/WHERE \(place_name IS NULL OR TRIM\(place_name\) = ''\)/);
   });
 
+  it('v13: 在庫・買い物のグループ、賞味期限、誰が の列を足す', () => {
+    const statements: string[] = [];
+
+    runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    expect(statements).toContain('ALTER TABLE pantry_items ADD COLUMN group_name TEXT');
+    expect(statements).toContain('ALTER TABLE pantry_items ADD COLUMN expires_on TEXT');
+    expect(statements).toContain('ALTER TABLE shopping_items ADD COLUMN store_group TEXT');
+    expect(statements).toContain('ALTER TABLE shopping_items ADD COLUMN created_by TEXT');
+    expect(statements).toContain('ALTER TABLE shopping_items ADD COLUMN checked_by TEXT');
+    // 店名 → 買い物グループ の対応表
+    expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS store_group_aliases');
+    expect(statements[0]).toContain('idx_store_group_aliases_family_store');
+  });
+
   it('店名の引き継ぎが失敗しても移行は止まらない（列がまだ無い等）', () => {
     const result = runMigrations({
       execSync: (statement) => {

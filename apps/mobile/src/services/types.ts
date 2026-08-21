@@ -232,4 +232,8 @@ export interface PantryItem {
   unit: string | null;
   lowStockThreshold: number | null;
   janCode: string | null;
+  /** 置き場所・用途のグループ（v13）。null = 未設定バケツ */
+  groupName: string | null;
+  /** 賞味期限 YYYY-MM-DD（v13・任意）。合算時は近い方を残す */
+  expiresOn: string | null;
 }

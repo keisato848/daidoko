@@ -60,6 +60,7 @@ describe('バックアップ対象の取りこぼし防止', () => {
         'shopping_items',
         'sources',
         'steps',
+        'store_group_aliases',
         'sync_meta',
         'tags',
         'users',
@@ -73,6 +74,17 @@ describe('バックアップ対象の取りこぼし防止', () => {
 
   it('v12 の recipes.place_name が入っている（復元でお店の名前が消えないため）', () => {
     expect(columnsOf('recipes')).toContain('place_name');
+  });
+
+  it('v13 のグループ・賞味期限・誰が が入っている（復元で消えないため）', () => {
+    expect(columnsOf('pantry_items')).toEqual(expect.arrayContaining(['group_name', 'expires_on']));
+    expect(columnsOf('shopping_items')).toEqual(
+      expect.arrayContaining(['store_group', 'created_by', 'checked_by']),
+    );
+    // 店の学習（レシートの店名→買い物グループ）も消えては困る
+    expect(columnsOf('store_group_aliases')).toEqual(
+      expect.arrayContaining(['store_name', 'group_name']),
+    );
   });
 
   it('写真パスの列が入っている（復元後に写真が見えなくなるのを防ぐ）', () => {

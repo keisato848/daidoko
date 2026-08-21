@@ -334,6 +334,18 @@ export const shoppingItems = sqliteTable(
     source: text('source').notNull().default('manual'), // 'manual' | 'recipe' | 'low_stock' | 'receipt'
     recipeId: text('recipe_id').references(() => recipes.id),
     sortOrder: integer('sort_order').notNull().default(0),
+    /**
+     * 買う場所のグループ（v13・任意）。例: スーパー / ドラッグストア。
+     *
+     * 在庫のグループ（**どこにしまうか**）とは**軸が別**。「スーパーで買って冷蔵庫にしまう」は
+     * 普通なので、片方から他方は決まらない。店内で「今いる店の分だけ見たい」ための絞り込みで、
+     * **照合には使わない**（同じ品を別の店で買うことがあるため — レシート消し込みは品目名だけで判定）。
+     */
+    storeGroup: text('store_group'),
+    /** 入れた人（v13）。同期すると「これ誰が要るって言ったの？」が起きるので記録する */
+    createdBy: text('created_by').references(() => users.id),
+    /** チェックした（買った）人（v13）。`checked_at` と対で「いつ・誰が」になる */
+    checkedBy: text('checked_by').references(() => users.id),
     createdAt: text('created_at').notNull(),
     checkedAt: text('checked_at'),
   },
@@ -357,6 +369,24 @@ export const pantryItems = sqliteTable(
     unit: text('unit'),
     lowStockThreshold: real('low_stock_threshold'),
     janCode: text('jan_code'),
+    /**
+     * 置き場所・用途のグループ（v13・任意）。例: 冷蔵庫 / 〇〇の米 / 災害用備蓄。
+     *
+     * **合算の鍵に入る。** 同じ米が「パントリー」と「〇〇の米」に別々にあるのは正常なので、
+     * 鍵に含めないと勝手に 1 行へまとめられてしまう（`addPantryItem` の同一判定を参照）。
+     * null（未設定）は**それ自体がひとつのバケツ**として扱う。
+     */
+    groupName: text('group_name'),
+    /**
+     * 賞味期限（v13・任意・YYYY-MM-DD）。**メインの機能ではない**ので入力は強制せず、
+     * push 通知でも追い立てない（2026-07-07 に「入力が続かない・通知疲れ」で一度取り下げ、
+     * 2026-08-19 に「記録できるようにしてよい」と再開した経緯）。
+     *
+     * 在庫は同じ品目を 1 行に合算するので、**期限は行に 1 つだけ**持ち、合算時は
+     * **近い方（早い日付）を残す**。買った回ごとに行を分ける（ロット）案は、合算をやめる
+     * 代償（一覧が「牛乳 1本」「牛乳 1本」と並ぶ・充足判定の取り直し）が大きすぎるため採らない。
+     */
+    expiresOn: text('expires_on'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
@@ -409,6 +439,38 @@ export const nameAliases = sqliteTable(
 // ─── RecipeBook（レシピ帖, S4 — docs/Web共有設計.md §7）───────────────────────
 // 帖はローカルの実体。共有は任意の後続で、share_* が NULL なら未共有。
 // share_delete_token は取り消し＋更新（PATCH）の鍵 — 端末外に出さない。
+/**
+ * 店名 → 買い物グループ の対応表（v13）。
+ *
+ * レシートは店名を読めるのに使っていなかった。ここに覚えておくと、次に同じ品を
+ * 買い物リストへ入れたとき店を既定で埋められる。**毎回選ばせる形だと続かない**ので、
+ * 初めての店名のときだけ確認して覚える。対応は名寄せ辞書と同じく後から直せる。
+ *
+ * 照合は**レシートの生の店名で完全一致**。「マックスバリュ松山店」と「マックスバリュ空港店」は
+ * 別エントリになるが、どちらも同じグループ（例: スーパー）に向ければ利用者の目的には足りる。
+ */
+export const storeGroupAliases = sqliteTable(
+  'store_group_aliases',
+  {
+    id: text('id').primaryKey(),
+    familyId: text('family_id')
+      .notNull()
+      .references(() => families.id),
+    /** レシートから読んだ店名（生の文字列） */
+    storeName: text('store_name').notNull(),
+    /** 対応させる買い物グループ名（`shopping_items.store_group` と同じ値） */
+    groupName: text('group_name').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    familyStoreIdx: uniqueIndex('idx_store_group_aliases_family_store').on(
+      table.familyId,
+      table.storeName,
+    ),
+  }),
+);
+
 export const recipeBooks = sqliteTable('recipe_books', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
