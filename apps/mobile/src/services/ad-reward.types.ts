@@ -14,10 +14,28 @@ export interface RewardedAdResult {
   rewarded: boolean;
 }
 
+/**
+ * ロード済みのリワード広告。**画面はロードに成功したときだけ広告ボタンを出す**。
+ *
+ * 旧来はタップしてから load() していたため、在庫が無い（no-fill — 公開直後の
+ * iOS はほぼ確実）と「押すと必ずエラーになるボタン」が出ていた。App Review に
+ * Guideline 2.1 で却下された実例あり（2026-08-21・iPad）。押せないボタンを
+ * 出さないため、ロードと表示を分離する。
+ */
+export interface PreparedRewardedAd {
+  /** Show the loaded ad; resolves rewarded:true only on full completion. */
+  show(): Promise<RewardedAdResult>;
+}
+
 export interface AdRewardProvider {
   /** Whether rewarded ads are configured and can be shown. */
   isAvailable(): boolean;
-  /** Show a rewarded ad; resolves rewarded:true only on full completion. */
+  /**
+   * Load a rewarded ad ahead of time. Rejects (AdUnavailableError) on no-fill
+   * or timeout — the screen then simply doesn't render the ad button.
+   */
+  loadRewardedAd(): Promise<PreparedRewardedAd>;
+  /** Load + show in one go (kept for tests / simple callers). */
   showRewardedAd(): Promise<RewardedAdResult>;
   /**
    * Whether the UMP privacy-options form must be offered to this user

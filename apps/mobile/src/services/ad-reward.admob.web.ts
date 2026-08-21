@@ -2,11 +2,19 @@
  * Web has no AdMob — this sibling keeps react-native-google-mobile-ads out of
  * web bundles. Metro resolves this for web; ad-reward.admob.ts is used natively.
  */
-import type { AdRewardProvider, RewardedAdResult } from './ad-reward.types';
+import {
+  AdUnavailableError,
+  type AdRewardProvider,
+  type PreparedRewardedAd,
+  type RewardedAdResult,
+} from './ad-reward.types';
 
 export class AdMobRewardProvider implements AdRewardProvider {
   isAvailable(): boolean {
     return false;
+  }
+  async loadRewardedAd(): Promise<PreparedRewardedAd> {
+    throw new AdUnavailableError();
   }
   async showRewardedAd(): Promise<RewardedAdResult> {
     return { rewarded: false };
