@@ -86,6 +86,19 @@ describe('database migrations', () => {
     expect(statements[0]).toContain('idx_store_group_aliases_family_store');
   });
 
+  it('v14: クラウド同期の送信待ち（sync_queue）を作る', () => {
+    const statements: string[] = [];
+
+    const result = runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    expect(result.schemaVersion).toBe(14);
+    expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS sync_queue');
+    // 主キーが (entity_type, entity_id) であることが「連続編集が 1 回に合流する」の実体。
+    // ここが崩れると同じレシピの編集が何通も送られる
+    expect(statements[0]).toContain('PRIMARY KEY (entity_type, entity_id)');
+    expect(statements[0]).toContain('idx_sync_queue_queued');
+  });
+
   it('店名の引き継ぎが失敗しても移行は止まらない（列がまだ無い等）', () => {
     const result = runMigrations({
       execSync: (statement) => {

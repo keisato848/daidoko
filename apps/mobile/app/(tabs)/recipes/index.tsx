@@ -29,6 +29,7 @@ import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
+import { useSyncRefresh } from '../../../src/hooks/useSyncRefresh';
 import { t, tCount } from '../../../src/i18n';
 import { getAliasMap } from '../../../src/services/name-alias.service';
 import { deleteRecipe, getRecipeList } from '../../../src/services/recipe.service';
@@ -100,6 +101,13 @@ export default function RecipeListScreen() {
   );
 
   useFocusEffect(
+    useCallback(() => {
+      void loadRecipes();
+    }, [loadRecipes]),
+  );
+
+  // 一覧を開いたまま家族の変更が届いたときに読み直す（クラウド同期 S1）
+  useSyncRefresh(
     useCallback(() => {
       void loadRecipes();
     }, [loadRecipes]),

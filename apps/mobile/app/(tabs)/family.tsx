@@ -36,6 +36,7 @@ import {
   type SyncErrorCode,
   type SyncMe,
 } from '../../src/services/sync-client.service';
+import { onSyncGroupJoined, onSyncGroupLeft } from '../../src/services/sync-runner.service';
 import {
   addFamilyMember,
   getCurrentFamily,
@@ -225,6 +226,8 @@ export default function FamilyScreen() {
         onPress: () => {
           void runSyncAction(async () => {
             await createSyncGroup(currentUser.displayName.trim() || null);
+            // 参加した瞬間から共有が始まる。いまある蔵書を全部送信待ちへ積む（§5-2）
+            await onSyncGroupJoined();
             await loadCloud();
             Alert.alert(t('family.sync.createdTitle'), t('family.sync.createdBody'));
           });
@@ -244,6 +247,7 @@ export default function FamilyScreen() {
           void runSyncAction(async () => {
             await joinSyncGroup(code, currentUser.displayName.trim() || null);
             setJoinCode('');
+            await onSyncGroupJoined();
             await loadCloud();
             Alert.alert(t('family.sync.joinedTitle'), t('family.sync.joinedBody'));
           });
@@ -274,6 +278,7 @@ export default function FamilyScreen() {
         onPress: () => {
           void runSyncAction(async () => {
             await leaveSyncGroup();
+            await onSyncGroupLeft();
             await loadCloud();
           });
         },
@@ -290,6 +295,7 @@ export default function FamilyScreen() {
         onPress: () => {
           void runSyncAction(async () => {
             await deleteSyncGroup();
+            await onSyncGroupLeft();
             await loadCloud();
           });
         },

@@ -20,8 +20,10 @@ import {
 } from '../src/services/low-stock.service';
 import {
   addLowStockTapListener,
+  addSyncPushListener,
   consumeLowStockLaunchTap,
 } from '../src/services/notification.service';
+import { initSync, runSync } from '../src/services/sync-runner.service';
 import { loadUnitSystem } from '../src/stores/unitSystem.store';
 import { decideLaunchDestination } from '../src/utils/launchDestination';
 
@@ -52,6 +54,8 @@ export default function RootLayout() {
       checkAndNotifyLowStock().catch(() => undefined);
       maybeCreateAutoSnapshot().catch(() => undefined);
       initAppOpenAds().catch(() => undefined);
+      // クラウド同期（家族と共有中の端末だけ動く。未参加なら何もしない）
+      initSync();
     }
   }, [isReady]);
 
@@ -61,6 +65,16 @@ export default function RootLayout() {
     const sub = addLowStockTapListener(handleLowStockTap);
     return () => sub.remove();
   }, [isReady, handleLowStockTap]);
+
+  // 家族の端末が何か変えた合図（内容を持たない通知）で同期する。
+  // 通知が届かなくても起動時とフォアグラウンド復帰の同期で追いつく
+  useEffect(() => {
+    if (!isReady) return;
+    const sub = addSyncPushListener(() => {
+      void runSync();
+    });
+    return () => sub.remove();
+  }, [isReady]);
 
   // 起動時の行き先を **1 回だけ** 決める。
   // 通知タップ（明示的な操作）が最優先、次に「アプリを開いたらすぐ撮影」（R3・既定オフ）。
@@ -91,6 +105,7 @@ export default function RootLayout() {
       if (state === 'background') noteAppBackgrounded();
       if (state === 'active') {
         maybeShowAppOpenAdOnForeground(pathnameRef.current).catch(() => undefined);
+        void runSync();
       }
     });
     return () => sub.remove();

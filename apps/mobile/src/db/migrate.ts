@@ -28,7 +28,8 @@ import { t } from '../i18n';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 13; // v12: レシピの店名 / v13: 在庫・買い物のグループ、賞味期限、誰が
+// v12: レシピの店名 / v13: 在庫・買い物のグループ、賞味期限、誰が / v14: クラウド同期の送信待ち
+export const CURRENT_SCHEMA_VERSION = 14;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -246,6 +247,16 @@ const CREATE_TABLES_SQL = `
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS sync_queue (
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    queued_at TEXT NOT NULL,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (entity_type, entity_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sync_queue_queued ON sync_queue(queued_at);
 
   CREATE TABLE IF NOT EXISTS ingredient_nutrition (
     id TEXT PRIMARY KEY,

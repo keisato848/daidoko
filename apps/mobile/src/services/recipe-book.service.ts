@@ -15,6 +15,8 @@ import { getLocale } from '../i18n';
 import { generateId } from '../utils/id';
 import { getAppMeta, setAppMeta } from './app-meta.service';
 import { getRecipeDetail } from './recipe.service';
+import { SYNC_ENTITY_RECIPE_BOOK } from './sync-payload';
+import { enqueueSyncEntity } from './sync-queue.service';
 import {
   buildShareRecipeBody,
   getUrlImportedRecipeIds,
@@ -69,6 +71,7 @@ export async function createRecipeBook(title: string, recipeIds: string[]): Prom
   for (const [position, recipeId] of recipeIds.entries()) {
     await database.insert(recipeBookItems).values({ bookId: id, recipeId, position });
   }
+  await enqueueSyncEntity(SYNC_ENTITY_RECIPE_BOOK, id);
   return id;
 }
 
@@ -140,6 +143,7 @@ export async function renameRecipeBook(id: string, title: string): Promise<void>
     .update(recipeBooks)
     .set({ title, updatedAt: nowIso() })
     .where(eq(recipeBooks.id, id));
+  await enqueueSyncEntity(SYNC_ENTITY_RECIPE_BOOK, id);
 }
 
 export async function setBookRecipes(id: string, recipeIds: string[]): Promise<void> {
@@ -151,6 +155,7 @@ export async function setBookRecipes(id: string, recipeIds: string[]): Promise<v
     await database.insert(recipeBookItems).values({ bookId: id, recipeId, position });
   }
   await database.update(recipeBooks).set({ updatedAt: nowIso() }).where(eq(recipeBooks.id, id));
+  await enqueueSyncEntity(SYNC_ENTITY_RECIPE_BOOK, id);
 }
 
 /** 帖を削除する。共有中なら先に停止を試みる（失敗しても削除は続行） */
@@ -164,6 +169,8 @@ export async function deleteRecipeBook(id: string): Promise<void> {
   const { eq } = await import('drizzle-orm');
   await database.delete(recipeBookItems).where(eq(recipeBookItems.bookId, id));
   await database.delete(recipeBooks).where(eq(recipeBooks.id, id));
+  // 帖は物理削除。送信時に行が無いことを見て tombstone になる（sync-entities.service）
+  await enqueueSyncEntity(SYNC_ENTITY_RECIPE_BOOK, id);
 }
 
 // ── 共有（S4-1: リンク不変の更新 / S4-2: 公開の強度）────────────────────────

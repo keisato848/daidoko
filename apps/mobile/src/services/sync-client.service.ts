@@ -112,7 +112,7 @@ const KNOWN_CODES: readonly SyncErrorCode[] = [
 ];
 
 interface RequestOptions {
-  method: 'GET' | 'POST' | 'DELETE';
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   auth?: SyncCredentials;
 }
@@ -156,6 +156,23 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
     throw new SyncError(code as SyncErrorCode);
   }
   throw new SyncError('SERVER');
+}
+
+/**
+ * 認証つき呼び出し。401 ならローカルの鍵を破棄して AUTH_INVALID を投げる
+ * （グループが消えた・この端末が外された ＝ 持っていても意味の無い鍵を残さない）。
+ */
+async function authedRequest<T>(
+  path: string,
+  options: Omit<RequestOptions, 'auth'>,
+  credentials: SyncCredentials,
+): Promise<T> {
+  try {
+    return await request<T>(path, { ...options, auth: credentials });
+  } catch (err) {
+    if (err instanceof SyncError && err.code === 'AUTH_INVALID') await clearCredentials();
+    throw err;
+  }
 }
 
 /** グループ新設。発行されたクレデンシャルを secure-store に保存して返す */
@@ -250,4 +267,70 @@ export async function deleteSyncGroup(): Promise<void> {
     throw err;
   }
   await clearCredentials();
+}
+
+// ── S1: push / pull（設計 §5-1b） ────────────────────────────────────────────
+
+export interface SyncPushChange {
+  entityType: string;
+  entityId: string;
+  /** null = tombstone（削除） */
+  payload: string | null;
+  clientUpdatedAt: string;
+  deleted: boolean;
+}
+
+export interface SyncPullChange extends SyncPushChange {
+  seq: number;
+  /** この変更を書いた端末。自分の ID なら適用しない（押し返しの防止） */
+  updatedByDevice: string;
+}
+
+export interface SyncPullResult {
+  changes: SyncPullChange[];
+  /** 数量デルタ（S2 で使う）。S1 では常に空 */
+  deltas: unknown[];
+  latestSeq: number;
+  hasMore: boolean;
+}
+
+export interface SyncPushResult {
+  /** サーバーが LWW で採用した件数。古くて捨てられた分は含まれない（エラーではない） */
+  applied: number;
+  latestSeq: number;
+}
+
+/** 変更をまとめて送る。呼び出し側はグループ参加済みであることを確かめてから呼ぶ */
+export async function pushSyncChanges(changes: readonly SyncPushChange[]): Promise<SyncPushResult> {
+  const credentials = await getStoredCredentials();
+  if (!credentials) throw new SyncError('AUTH_INVALID');
+  if (changes.length === 0) return { applied: 0, latestSeq: 0 };
+  return authedRequest<SyncPushResult>('/push', { method: 'POST', body: { changes } }, credentials);
+}
+
+/** since より後の変更を取る。`hasMore` が立っていれば呼び出し側が繰り返す */
+export async function pullSyncChanges(since: number, limit = 500): Promise<SyncPullResult> {
+  const credentials = await getStoredCredentials();
+  if (!credentials) throw new SyncError('AUTH_INVALID');
+  return authedRequest<SyncPullResult>(
+    `/pull?since=${encodeURIComponent(String(since))}&limit=${encodeURIComponent(String(limit))}`,
+    { method: 'GET' },
+    credentials,
+  );
+}
+
+/**
+ * Expo Push トークンの登録（変更通知の宛先）。
+ *
+ * 通知は**内容を持たない同期のきっかけ**でしかない（設計 §0-2 — 利用者名もデータ内容も
+ * 載せない）。登録できなくても、起動時とフォアグラウンド復帰の pull で追いつく。
+ */
+export async function registerSyncPushToken(expoPushToken: string | null): Promise<void> {
+  const credentials = await getStoredCredentials();
+  if (!credentials) throw new SyncError('AUTH_INVALID');
+  await authedRequest<unknown>(
+    '/devices/me',
+    { method: 'PATCH', body: { expoPushToken } },
+    credentials,
+  );
 }

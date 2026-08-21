@@ -37,6 +37,7 @@ import {
   restoreLatestLocalBackup,
   type BackupFileSummary,
 } from '../../src/services/backup.service';
+import { onLocalDataReplaced } from '../../src/services/sync-runner.service';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -127,8 +128,11 @@ export default function BackupScreen() {
           onPress: () => {
             setBusy(true);
             void restoreLatestLocalBackup()
-              .then((result) => {
+              .then(async (result) => {
                 setToastMessage(t('backup.restore.done', { name: result.fileName }));
+                // 復元でローカルが丸ごと入れ替わった。同期のカーソルを戻して
+                // サーバーと取り直す（どちらが残るかは LWW が決める）
+                await onLocalDataReplaced().catch(() => undefined);
                 return refresh();
               })
               .catch((error) => {
@@ -242,8 +246,9 @@ export default function BackupScreen() {
             onPress: () => {
               setBusy(true);
               void restoreMigrationBackupPackage(asset.uri)
-                .then((result) => {
+                .then(async (result) => {
                   setToastMessage(tCount('backup.migration.imported', result.restoredPhotoCount));
+                  await onLocalDataReplaced().catch(() => undefined);
                   return refresh();
                 })
                 .catch((error) => {

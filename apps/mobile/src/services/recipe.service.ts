@@ -19,6 +19,8 @@ import { generateId } from '../utils/id';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
 import { getAliasMap } from './name-alias.service';
 import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
+import { SYNC_ENTITY_RECIPE } from './sync-payload';
+import { enqueueSyncEntity } from './sync-queue.service';
 import type {
   MemoItem,
   RecipeDetail,
@@ -249,10 +251,14 @@ export async function setRecipePinned(recipeId: string, pinned: boolean): Promis
   const schema = await import('../db/schema');
   const db = getDb();
 
+  // updatedAt も進める。同期の勝敗は updatedAt で決まるので、ここを据え置くと
+  // 「ピンを外したのに他端末のピンが勝って戻る」が起きる（設計 §5-1b の LWW）
   await db
     .update(schema.recipes)
-    .set({ pinnedAt: pinned ? nowIso() : null })
+    .set({ pinnedAt: pinned ? nowIso() : null, updatedAt: nowIso() })
     .where(eq(schema.recipes.id, recipeId));
+
+  await enqueueSyncEntity(SYNC_ENTITY_RECIPE, recipeId);
 }
 
 /** 作りたいリスト: ピン留め済みレシピ（新しくピンした順） */
@@ -414,6 +420,9 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
   // Update FTS index
   await updateFtsForRecipe(recipeId, input);
 
+  // 家族と共有中なら送信待ちへ（未参加なら積まれるだけで何も起きない）
+  await enqueueSyncEntity(SYNC_ENTITY_RECIPE, recipeId);
+
   return recipeId;
 }
 
@@ -563,6 +572,8 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
   // Update FTS index
   await updateFtsForRecipe(recipeId, input);
 
+  await enqueueSyncEntity(SYNC_ENTITY_RECIPE, recipeId);
+
   return revId;
 }
 
@@ -590,6 +601,9 @@ export async function deleteRecipe(recipeId: string): Promise<void> {
   } catch {
     // FTS table may not exist yet
   }
+
+  // 削除は論理削除（status='archived'）。同期でも行は消さず archived を配る
+  await enqueueSyncEntity(SYNC_ENTITY_RECIPE, recipeId);
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────

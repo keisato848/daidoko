@@ -6,7 +6,15 @@
  *           Tag, RecipeTag, Source, CookingLog, CookingPhoto, Memo, SyncMeta, AppMeta
  */
 import { sql } from 'drizzle-orm';
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 // ─── User ──────────────────────���────────────────────────────────────────────
 export const users = sqliteTable('users', {
@@ -281,6 +289,33 @@ export const syncMeta = sqliteTable('sync_meta', {
   deletedAt: text('deleted_at'),
   lastSyncedAt: text('last_synced_at'),
 });
+
+// ─── SyncQueue（クラウド同期の送信待ち, v14 — docs/クラウド同期設計.md §5-1b）──
+/**
+ * 「この行が変わった」という**印だけ**を積むキュー。payload は持たない。
+ *
+ * 送信時に最新の DB から payload を作り直すので、連続編集は自然に 1 回の送信へ合流する
+ * （3 回直したら 3 通送る、にならない）。主キーを (entity_type, entity_id) にしてあるのは
+ * その合流をテーブル側で保証するため — キューの行数はエンティティ数を超えない。
+ *
+ * **バックアップには含めない**（`backup.service.ts` の BACKUP_TABLES に入れない）。
+ * 他人のバックアップを復元した端末が、その人の送信待ちを自分のグループへ流してしまう。
+ */
+export const syncQueue = sqliteTable(
+  'sync_queue',
+  {
+    /** 'recipe' | 'recipe_book'（S2 で買い物・在庫が増える） */
+    entityType: text('entity_type').notNull(),
+    entityId: text('entity_id').notNull(),
+    queuedAt: text('queued_at').notNull(),
+    /** 送信に失敗した回数。増えても捨てはしない（次の起動で再挑戦する） */
+    retryCount: integer('retry_count').notNull().default(0),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.entityType, table.entityId] }),
+    queuedIdx: index('idx_sync_queue_queued').on(table.queuedAt),
+  }),
+);
 
 // ─── AppMeta ────────────────────────────────────────────────────────────────
 export const appMeta = sqliteTable('app_meta', {
