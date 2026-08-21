@@ -4,7 +4,7 @@
  * **「未設定」は常に表示する。** 絞り込みで未設定の品が消えると、振り分け忘れが
  * 埋もれて買い忘れ・二重買いになる。レシピ一覧のタグチップと同じ操作感に揃えてある。
  */
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
 
@@ -38,35 +38,41 @@ export function GroupChips({
   ];
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.row}
-      keyboardShouldPersistTaps="handled"
-    >
-      {chips.map((chip) => {
-        const active = selected === chip.value;
-        return (
-          <Pressable
-            key={chip.label}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            style={[styles.chip, active && styles.chipActive]}
-            onPress={() => onSelect(chip.value)}
-          >
-            <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-              {chip.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    // ScrollView を素の View で包む。列レイアウトの直下に置くと縦いっぱいまで伸び、
+    // チップが縦長の帯になってしまう（レシピ一覧のタグチップと同じ組み方に揃えてある）
+    <View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.row}
+        keyboardShouldPersistTaps="handled"
+      >
+        {chips.map((chip) => {
+          const active = selected === chip.value;
+          return (
+            <Pressable
+              key={chip.label}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => onSelect(chip.value)}
+            >
+              <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
+                {chip.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
+    // stretch のままだとチップが ScrollView の高さいっぱいに伸びる
+    alignItems: 'center',
     gap: 8,
     paddingHorizontal: 20,
     paddingBottom: 10,
