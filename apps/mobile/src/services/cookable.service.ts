@@ -5,7 +5,8 @@
  * See docs/買い物リスト・在庫設計.md §5.4.
  */
 import { isNativePlatform } from '../db/client';
-import { isInStock } from '../utils/itemMatch';
+import { isInStock, itemNamesMatch } from '../utils/itemMatch';
+import { normalizeItemName } from '../utils/itemName';
 import type { RecipeListItem } from './types';
 
 export interface CookableRecipe {
@@ -59,6 +60,50 @@ export function rankByCoverage(
       a.title.localeCompare(b.title),
   );
   return ranked;
+}
+
+/**
+ * 突合で**どちらにも当たらなかった**正規化名を集める（AI に解決を頼む候補）。
+ *
+ * 名寄せ辞書は当初「在庫名 → canonical」だけを持ち、埋めるのも cookable 画面だけだった。
+ * 突合は 在庫 × レシピ材料 の**両側**で起きるので、片側しか写していないと
+ * 「AI が選んだ表記とレシピの表記が偶然揃ったときだけ効く」状態になる
+ * （docs/買い物リスト・在庫設計.md §6）。
+ *
+ * ここでは**ルール（完全一致・部分一致）と現在の辞書で当たらなかった名前だけ**を返す。
+ * 「玉ねぎ」のように素直な名前はルールで当たるので AI に投げない — 解決の対象を
+ * 「解決する価値があった名前」に絞ると、呼び出し回数は語彙数へ自然に収束する。
+ */
+export function collectUnmatchedNames(
+  recipes: RecipeListItem[],
+  pantryNames: string[],
+  aliases: Record<string, string> = {},
+): string[] {
+  const ingredients = new Set<string>();
+  for (const recipe of recipes) {
+    for (const name of recipe.ingredientNames) {
+      const normalized = normalizeItemName(name);
+      if (normalized) ingredients.add(normalized);
+    }
+  }
+  const pantry = pantryNames.map((name) => normalizeItemName(name)).filter(Boolean);
+
+  const unmatched = new Set<string>();
+  for (const ingredient of ingredients) {
+    if (!pantry.some((item) => itemNamesMatch(ingredient, item, aliases)))
+      unmatched.add(ingredient);
+  }
+  for (const item of pantry) {
+    let matched = false;
+    for (const ingredient of ingredients) {
+      if (itemNamesMatch(item, ingredient, aliases)) {
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) unmatched.add(item);
+  }
+  return [...unmatched];
 }
 
 export async function getCookableRecipes(): Promise<CookableRecipe[]> {

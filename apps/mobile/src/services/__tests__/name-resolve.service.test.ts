@@ -3,15 +3,19 @@ jest.mock('../../db/client', () => ({
   getDb: jest.fn(),
 }));
 
-import { getResolveMode, grantResolveAdBonus, resolvePantryNames } from '../name-resolve.service';
+import {
+  getResolveMode,
+  grantResolveAdBonus,
+  resolveUnmatchedNames,
+} from '../name-resolve.service';
 
 describe('name-resolve.service (web / non-native)', () => {
   it('reports mode "none" when not native', async () => {
     expect(await getResolveMode()).toBe('none');
   });
 
-  it('resolvePantryNames is a safe no-op on web', async () => {
-    expect(await resolvePantryNames()).toEqual({
+  it('resolveUnmatchedNames is a safe no-op on web', async () => {
+    expect(await resolveUnmatchedNames()).toEqual({
       resolved: 0,
       remaining: 0,
       mode: 'none',
