@@ -7,14 +7,20 @@
  * 2. **実 PostgreSQL での一気通貫**（`TEST_DATABASE_URL` があるときだけ）—
  *    作成 → 参加 → 認証 → ローテーション → 離脱 → 削除。
  *    ローカルは `docker compose -f docker-compose.dev.yml up -d postgres` で
- *    `TEST_DATABASE_URL=postgres://daidoko:password@localhost:5432/daidoko_dev`。
+ *    `TEST_DATABASE_URL=postgres://daidoko:password@localhost:5433/daidoko_dev（5432 は他プロジェクトが使用中）`。
  *    CI には PostgreSQL が無いのでスキップされる（純関数は sync-auth.test.ts が常時カバー）。
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import app from '../index.js';
 import { closeSyncStoreForTesting } from '../lib/sync-store.js';
-import { resetSyncRateLimitForTesting } from '../routes/sync.js';
+import {
+  SYNC_NOTIFICATION_TEXT,
+  notificationTextFor,
+  resetSyncNotifyDebounceForTesting,
+  resetSyncRateLimitForTesting,
+  takeNotifySlot,
+} from '../routes/sync.js';
 
 const TEST_DB = process.env['TEST_DATABASE_URL'];
 
@@ -339,5 +345,42 @@ describe.runIf(Boolean(TEST_DB))('実 PostgreSQL での一気通貫', () => {
       headers: authHeader(owner.deviceId, owner.secret),
     });
     expect(after.status).toBe(401);
+  });
+});
+
+/**
+ * 変更通知は「中身を持たない同期のきっかけ」だけ（設計 §0-2）。
+ * ここが崩れると、電気通信事業の該当性判定の前提そのものが変わる。
+ */
+describe('変更通知の文面と間引き', () => {
+  beforeEach(() => {
+    resetSyncNotifyDebounceForTesting();
+  });
+
+  it('文面は固定で、利用者名・件数・データの内容を含まない', () => {
+    for (const text of Object.values(SYNC_NOTIFICATION_TEXT)) {
+      const joined = `${text.title} ${text.body}`;
+      // 差し込み（テンプレート）が無い＝内容を載せる余地が無い
+      expect(joined).not.toMatch(/[{}$%]|\d/);
+    }
+  });
+
+  it('端末の表示言語で文面を選ぶ（未登録は日本語）', () => {
+    expect(notificationTextFor('en')).toEqual(SYNC_NOTIFICATION_TEXT.en);
+    expect(notificationTextFor('ja')).toEqual(SYNC_NOTIFICATION_TEXT.ja);
+    expect(notificationTextFor(null)).toEqual(SYNC_NOTIFICATION_TEXT.ja);
+  });
+
+  it('同じグループへは 5 分に 1 回まで（通知疲れを作らない）', () => {
+    const base = Date.parse('2026-08-21T10:00:00.000Z');
+    expect(takeNotifySlot('group-1', base)).toBe(true);
+    expect(takeNotifySlot('group-1', base + 60_000)).toBe(false);
+    expect(takeNotifySlot('group-1', base + 5 * 60_000)).toBe(true);
+  });
+
+  it('グループごとに独立して数える', () => {
+    const base = Date.parse('2026-08-21T10:00:00.000Z');
+    expect(takeNotifySlot('group-1', base)).toBe(true);
+    expect(takeNotifySlot('group-2', base)).toBe(true);
   });
 });

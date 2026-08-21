@@ -17,7 +17,7 @@ import {
   createGroup,
   deleteGroup,
   getGroupInfo,
-  getOtherDevicePushTokens,
+  getOtherDevicePushTargets,
   isSyncEnabled,
   joinGroup,
   leaveGroup,
@@ -212,22 +212,56 @@ const pushSchema = z.object({
 });
 
 /**
+ * 変更通知の文面。**固定文しか無い**（§0-2 の判定）。
+ * 利用者名も件数も種別も入れない — 内容を運んだ時点で「他人の情報を媒介して伝える」側に寄る。
+ */
+export const SYNC_NOTIFICATION_TEXT = {
+  ja: { title: 'だいどこ', body: '家族の共有データが更新されました' },
+  en: { title: 'DAIDOKO', body: 'Your family library was updated' },
+} as const;
+
+export function notificationTextFor(locale: string | null): { title: string; body: string } {
+  return locale === 'en' ? SYNC_NOTIFICATION_TEXT.en : SYNC_NOTIFICATION_TEXT.ja;
+}
+
+/**
+ * 通知のデバウンス（グループ単位）。
+ *
+ * 通知は同期のきっかけでしかないので、続けて何度も鳴らす意味が無い。
+ * 5 分に 1 回までに絞る（設計 §7）。この窓で落ちた通知の分は、次に相手が
+ * アプリを開いたときの pull で必ず追いつく。
+ */
+const NOTIFY_DEBOUNCE_MS = 5 * 60 * 1000;
+const lastNotifiedAt = new Map<string, number>();
+
+export function takeNotifySlot(groupId: string, now = Date.now()): boolean {
+  const last = lastNotifiedAt.get(groupId);
+  if (last !== undefined && now - last < NOTIFY_DEBOUNCE_MS) return false;
+  lastNotifiedAt.set(groupId, now);
+  return true;
+}
+
+export function resetSyncNotifyDebounceForTesting(): void {
+  lastNotifiedAt.clear();
+}
+
+/**
  * 変更を受けたら同グループの他端末へ Expo Push（**内容を持たない同期トリガー** —
  * 文言に利用者名・データ内容を含めない。§0-2 の該当性判定）。ベストエフォートで
  * 失敗は握る — 通知が落ちても次回起動時の pull で追いつく。
  */
 async function notifyGroupDevices(device: AuthedDevice): Promise<void> {
   try {
-    const tokens = await getOtherDevicePushTokens(device);
-    if (tokens.length === 0) return;
+    if (!takeNotifySlot(device.groupId)) return;
+    const targets = await getOtherDevicePushTargets(device);
+    if (targets.length === 0) return;
     await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(
-        tokens.map((to) => ({
-          to,
-          title: 'だいどこ',
-          body: '家族の共有データが更新されました',
+        targets.map((target) => ({
+          to: target.token,
+          ...notificationTextFor(target.locale),
           data: { type: 'sync' },
         })),
       ),
@@ -259,9 +293,11 @@ syncRouter.get('/pull', requireDevice, async (c) => {
 
 const deviceUpdateSchema = z.object({
   expoPushToken: z.string().max(200).nullable().optional(),
+  /** 通知の文面の言語だけに使う。他の用途には持たない */
+  locale: z.enum(['ja', 'en']).optional(),
 });
 
-/** 端末情報の更新（現状は push トークンのみ） */
+/** 端末情報の更新（push トークンと、通知文面の言語） */
 syncRouter.patch(
   '/devices/me',
   requireDevice,
@@ -270,7 +306,7 @@ syncRouter.patch(
     const device = c.get('device');
     const body = c.req.valid('json');
     if (body.expoPushToken !== undefined) {
-      await setDevicePushToken(device, body.expoPushToken);
+      await setDevicePushToken(device, body.expoPushToken, body.locale ?? null);
     }
     return c.json({ ok: true });
   },

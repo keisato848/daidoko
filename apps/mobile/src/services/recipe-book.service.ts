@@ -249,13 +249,15 @@ export async function shareRecipeBook(id: string, access: ShareAccessOptions): P
     if (!res.ok || !json?.ok) {
       throw new Error(json?.error?.message ?? `book update failed (${res.status})`);
     }
+    // **updatedAt は触らない。** 共有は帖の内容の変更ではないうえ、ここで進めると
+    // 同期の LWW の時計だけがローカルで先へ行き、他端末の収録追加が無視される
+    // （しかも同期には積まないのでサーバーの時計は進まない）。
     await database
       .update(recipeBooks)
       .set({
         sharePasscode: access.passcode,
         shareExpiresAt: json.expiresAt ?? null,
         shareLocale: getLocale(),
-        updatedAt: nowIso(),
       })
       .where(eq(recipeBooks.id, id));
     return;
@@ -281,7 +283,6 @@ export async function shareRecipeBook(id: string, access: ShareAccessOptions): P
       sharePasscode: access.passcode,
       shareExpiresAt: json.expiresAt ?? null,
       isLegacyShare: 0,
-      updatedAt: nowIso(),
     })
     .where(eq(recipeBooks.id, id));
 }
@@ -312,7 +313,6 @@ export async function revokeSharedBook(id: string): Promise<void> {
       sharePasscode: null,
       shareExpiresAt: null,
       isLegacyShare: 0,
-      updatedAt: nowIso(),
     })
     .where(eq(recipeBooks.id, id));
 }

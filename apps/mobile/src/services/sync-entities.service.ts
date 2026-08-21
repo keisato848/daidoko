@@ -26,6 +26,7 @@ import { getDb, getExpoDb, isNativePlatform } from '../db/client';
 import { shouldHideSeedRecipe } from '../db/sampleData';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
+import { revokeSharedBook } from './recipe-book.service';
 import {
   SYNC_ENTITY_RECIPE,
   SYNC_ENTITY_RECIPE_BOOK,
@@ -43,10 +44,6 @@ import { withRemoteApply } from './sync-queue.service';
 const FAMILY_ID = 'family-001';
 const USER_ID = 'user-kei';
 
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
 export interface OutgoingChange {
   entityType: string;
   entityId: string;
@@ -55,6 +52,27 @@ export interface OutgoingChange {
   clientUpdatedAt: string;
   deleted: boolean;
 }
+
+/**
+ * 送信 1 件の組み立て結果。
+ *
+ * `unsupported`（＝知らない種別）と `error`（＝一時的な失敗）を分けるのが要点。
+ * 両方を null に潰すと、DB が一瞬掴めなかっただけで**利用者の編集が待ち行列から
+ * 消えて永久に送られない**。捨てていいのは「送りようが無い」ときだけ。
+ */
+export type OutgoingChangeResult =
+  | { kind: 'change'; change: OutgoingChange }
+  | { kind: 'unsupported' }
+  | { kind: 'error' };
+
+/**
+ * 受信 1 件の適用結果。
+ *
+ * `skipped`（LWW で負けた・持っていない・読めない payload）はカーソルを進めてよい。
+ * `failed`（書き込み中の例外）は**カーソルを進めてはいけない** — 進めると、
+ * 材料が欠けたまま二度と直らないレシピが残る。
+ */
+export type ApplyOutcome = 'applied' | 'skipped' | 'failed';
 
 export interface IncomingChange {
   entityType: string;
@@ -68,7 +86,7 @@ export interface IncomingChange {
 
 // ── 送信: DB → payload ───────────────────────────────────────────────────────
 
-async function buildRecipeChange(recipeId: string): Promise<OutgoingChange | null> {
+async function buildRecipeChange(recipeId: string, deletedAt: string): Promise<OutgoingChange> {
   const db = getDb();
   const rows = await db
     .select()
@@ -77,12 +95,14 @@ async function buildRecipeChange(recipeId: string): Promise<OutgoingChange | nul
     .limit(1);
   const recipe = rows[0];
   if (!recipe) {
-    // 行ごと消えている（バックアップ復元など）。他端末からも消す
+    // 行ごと消えている（バックアップ復元など）。他端末からも消す。
+    // 時刻は**待ち行列に積んだ時刻**（＝消した時刻）を使う。送信時刻にすると、
+    // オフライン中の削除が、その後に他端末がした更新に勝ってしまう
     return {
       entityType: SYNC_ENTITY_RECIPE,
       entityId: recipeId,
       payload: null,
-      clientUpdatedAt: nowIso(),
+      clientUpdatedAt: deletedAt,
       deleted: true,
     };
   }
@@ -136,7 +156,6 @@ async function buildRecipeChange(recipeId: string): Promise<OutgoingChange | nul
       titleReading: recipe.titleReading,
       status: recipe.status,
       placeName: recipe.placeName,
-      pinnedAt: recipe.pinnedAt,
       createdAt: recipe.createdAt,
       updatedAt: recipe.updatedAt,
     },
@@ -190,7 +209,7 @@ async function buildRecipeChange(recipeId: string): Promise<OutgoingChange | nul
   };
 }
 
-async function buildRecipeBookChange(bookId: string): Promise<OutgoingChange | null> {
+async function buildRecipeBookChange(bookId: string, deletedAt: string): Promise<OutgoingChange> {
   const db = getDb();
   const rows = await db
     .select()
@@ -199,11 +218,12 @@ async function buildRecipeBookChange(bookId: string): Promise<OutgoingChange | n
     .limit(1);
   const book = rows[0];
   if (!book) {
+    // 帖は物理削除。時刻は積んだ時刻（＝消した時刻）— レシピ側と同じ理由
     return {
       entityType: SYNC_ENTITY_RECIPE_BOOK,
       entityId: bookId,
       payload: null,
-      clientUpdatedAt: nowIso(),
+      clientUpdatedAt: deletedAt,
       deleted: true,
     };
   }
@@ -235,18 +255,29 @@ async function buildRecipeBookChange(bookId: string): Promise<OutgoingChange | n
   };
 }
 
-/** 送信 1 件分を組み立てる。組み立てられなければ null（その 1 件は送らない） */
+/**
+ * 送信 1 件分を組み立てる。
+ *
+ * `deletedAt` は待ち行列に積んだ時刻。ローカルに行が無い（＝消された）ときの
+ * tombstone の時刻に使う（送信時刻ではなく、消した時刻で勝敗を決めるため）。
+ */
 export async function buildOutgoingChange(
   entityType: string,
   entityId: string,
-): Promise<OutgoingChange | null> {
-  if (!isNativePlatform) return null;
+  deletedAt: string,
+): Promise<OutgoingChangeResult> {
+  if (!isNativePlatform) return { kind: 'unsupported' };
   try {
-    if (entityType === SYNC_ENTITY_RECIPE) return await buildRecipeChange(entityId);
-    if (entityType === SYNC_ENTITY_RECIPE_BOOK) return await buildRecipeBookChange(entityId);
-    return null;
+    if (entityType === SYNC_ENTITY_RECIPE) {
+      return { kind: 'change', change: await buildRecipeChange(entityId, deletedAt) };
+    }
+    if (entityType === SYNC_ENTITY_RECIPE_BOOK) {
+      return { kind: 'change', change: await buildRecipeBookChange(entityId, deletedAt) };
+    }
+    return { kind: 'unsupported' };
   } catch {
-    return null;
+    // DB が一瞬掴めなかった等。**捨てずに待ち行列へ残す**
+    return { kind: 'error' };
   }
 }
 
@@ -314,7 +345,7 @@ function updateFtsForRecipe(payload: RecipeSyncPayload): void {
   }
 }
 
-async function applyRecipePayload(payload: RecipeSyncPayload): Promise<boolean> {
+async function applyRecipePayload(payload: RecipeSyncPayload): Promise<ApplyOutcome> {
   const db = getDb();
 
   const localRows = await db
@@ -323,7 +354,7 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<boolean> 
     .where(eq(schema.recipes.id, payload.recipe.id))
     .limit(1);
   const local = localRows[0] ?? null;
-  if (!incomingChangeWins(payload.recipe.updatedAt, local?.updatedAt ?? null)) return false;
+  if (!incomingChangeWins(payload.recipe.updatedAt, local?.updatedAt ?? null)) return 'skipped';
 
   // 1. 出所（外部キーの親なので先に）
   if (payload.source) {
@@ -354,7 +385,8 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<boolean> 
       currentRevId: payload.revision?.id ?? null,
       status: payload.recipe.status,
       coverPhotoPath: null,
-      pinnedAt: payload.recipe.pinnedAt,
+      // 作りたいリストは人ごとの都合なので運ばない（新規受信は未ピンで入る）
+      pinnedAt: null,
       placeName: payload.recipe.placeName,
       createdBy: USER_ID,
       createdAt: payload.recipe.createdAt,
@@ -367,7 +399,7 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<boolean> 
         titleReading: payload.recipe.titleReading,
         currentRevId: payload.revision?.id ?? null,
         status: payload.recipe.status,
-        pinnedAt: payload.recipe.pinnedAt,
+        // pinnedAt は set に入れない ＝ ローカルのピンを消さない
         placeName: payload.recipe.placeName,
         updatedAt: payload.recipe.updatedAt,
       },
@@ -453,14 +485,17 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<boolean> 
   }
 
   updateFtsForRecipe(payload);
-  return true;
+  return 'applied';
 }
 
 /**
  * レシピの受信 tombstone。**行は消さず archived に倒す**
  * （子テーブルが `recipes.id` を参照しているので DELETE は外部キーで落ちる）。
  */
-async function applyRecipeTombstone(entityId: string, clientUpdatedAt: string): Promise<boolean> {
+async function applyRecipeTombstone(
+  entityId: string,
+  clientUpdatedAt: string,
+): Promise<ApplyOutcome> {
   const db = getDb();
   const localRows = await db
     .select({ updatedAt: schema.recipes.updatedAt })
@@ -468,8 +503,8 @@ async function applyRecipeTombstone(entityId: string, clientUpdatedAt: string): 
     .where(eq(schema.recipes.id, entityId))
     .limit(1);
   const local = localRows[0];
-  if (!local) return false; // そもそも持っていない
-  if (!incomingChangeWins(clientUpdatedAt, local.updatedAt)) return false;
+  if (!local) return 'skipped'; // そもそも持っていない
+  if (!incomingChangeWins(clientUpdatedAt, local.updatedAt)) return 'skipped';
 
   await db
     .update(schema.recipes)
@@ -480,10 +515,10 @@ async function applyRecipeTombstone(entityId: string, clientUpdatedAt: string): 
   } catch {
     // 検索索引だけの話
   }
-  return true;
+  return 'applied';
 }
 
-async function applyRecipeBookPayload(payload: RecipeBookSyncPayload): Promise<boolean> {
+async function applyRecipeBookPayload(payload: RecipeBookSyncPayload): Promise<ApplyOutcome> {
   const db = getDb();
   const localRows = await db
     .select({ updatedAt: schema.recipeBooks.updatedAt })
@@ -491,7 +526,7 @@ async function applyRecipeBookPayload(payload: RecipeBookSyncPayload): Promise<b
     .where(eq(schema.recipeBooks.id, payload.book.id))
     .limit(1);
   const local = localRows[0] ?? null;
-  if (!incomingChangeWins(payload.book.updatedAt, local?.updatedAt ?? null)) return false;
+  if (!incomingChangeWins(payload.book.updatedAt, local?.updatedAt ?? null)) return 'skipped';
 
   // 共有（slug・トークン・パスコード・期限）はローカルのまま。列を set に入れない
   await db
@@ -516,40 +551,64 @@ async function applyRecipeBookPayload(payload: RecipeBookSyncPayload): Promise<b
     await db.insert(schema.recipeBookItems).values({ bookId: payload.book.id, recipeId, position });
     position += 1;
   }
-  return true;
+  return 'applied';
 }
 
-/** 帖は元々物理削除なので、受信 tombstone も DELETE（子 → 親の順） */
+/**
+ * 帖は元々物理削除なので、受信 tombstone も DELETE（子 → 親の順）。
+ *
+ * ただし**この端末が Web 共有している帖は、先に公開を止めてからでないと消さない**。
+ * 共有の鍵（`share_delete_token`）はこの端末のローカル行にしかなく（同期しない）、
+ * 行ごと消すと**公開中のページを二度と止められなくなる**。他端末には共有中かどうかが
+ * 見えない（受信側の行は share 列が空）ので、消した人はこの危険に気づけない。
+ * 止められなかった（オフライン等）ときは**行を残す**— 消えるより、止める手段が残る方がよい。
+ */
 async function applyRecipeBookTombstone(
   entityId: string,
   clientUpdatedAt: string,
-): Promise<boolean> {
+): Promise<ApplyOutcome> {
   const db = getDb();
   const localRows = await db
-    .select({ updatedAt: schema.recipeBooks.updatedAt })
+    .select({
+      updatedAt: schema.recipeBooks.updatedAt,
+      shareSlug: schema.recipeBooks.shareSlug,
+      shareDeleteToken: schema.recipeBooks.shareDeleteToken,
+    })
     .from(schema.recipeBooks)
     .where(eq(schema.recipeBooks.id, entityId))
     .limit(1);
   const local = localRows[0];
-  if (!local) return false;
-  if (!incomingChangeWins(clientUpdatedAt, local.updatedAt)) return false;
+  if (!local) return 'skipped';
+  if (!incomingChangeWins(clientUpdatedAt, local.updatedAt)) return 'skipped';
+
+  if (local.shareSlug && local.shareDeleteToken) {
+    const revoked = await revokeSharedBook(entityId).then(
+      () => true,
+      () => false,
+    );
+    if (!revoked) return 'skipped'; // 停止できないうちは消さない
+  }
 
   await db.delete(schema.recipeBookItems).where(eq(schema.recipeBookItems.bookId, entityId));
   await db.delete(schema.recipeBooks).where(eq(schema.recipeBooks.id, entityId));
-  return true;
+  return 'applied';
 }
 
 /**
- * 受信 1 件をローカルへ適用する。適用したら true。
+ * 受信 1 件をローカルへ適用する。
  *
- * **1 件の失敗で同期全体を止めない** — 壊れた payload・想定外のエンティティは
- * false を返して読み飛ばす（`last_pull_seq` は進むので同期は先へ進む）。
- * 適用中は `sync_queue` に積まない（受け取った変更を押し返さないため）。
+ * - `applied` … 書き込んだ
+ * - `skipped` … 書く必要が無い/書けない（LWW で負けた・持っていない・読めない payload）。
+ *   呼び出し側はカーソルを進めてよい
+ * - `failed`  … 書き込みの途中で落ちた。**カーソルを進めてはいけない**
+ *   （材料が欠けたレシピが残ったまま、次の pull で直る機会を失う）
+ *
+ * 適用中はその行だけ `sync_queue` に積まない（受け取った変更を押し返さないため）。
  */
-export async function applyIncomingChange(change: IncomingChange): Promise<boolean> {
-  if (!isNativePlatform) return false;
+export async function applyIncomingChange(change: IncomingChange): Promise<ApplyOutcome> {
+  if (!isNativePlatform) return 'skipped';
   try {
-    return await withRemoteApply(async () => {
+    return await withRemoteApply(change.entityType, change.entityId, async () => {
       if (change.deleted) {
         if (change.entityType === SYNC_ENTITY_RECIPE) {
           return applyRecipeTombstone(change.entityId, change.clientUpdatedAt);
@@ -557,22 +616,23 @@ export async function applyIncomingChange(change: IncomingChange): Promise<boole
         if (change.entityType === SYNC_ENTITY_RECIPE_BOOK) {
           return applyRecipeBookTombstone(change.entityId, change.clientUpdatedAt);
         }
-        return false;
+        return 'skipped';
       }
 
       const payload = parseSyncPayload(change.entityType, change.payload);
-      if (!payload) return false;
+      if (!payload) return 'skipped';
       if (payload.entity === SYNC_ENTITY_RECIPE) {
-        if (payload.recipe.id !== change.entityId) return false; // 封筒と中身の食い違い
+        if (payload.recipe.id !== change.entityId) return 'skipped'; // 封筒と中身の食い違い
         return applyRecipePayload(payload);
       }
       if (payload.entity === SYNC_ENTITY_RECIPE_BOOK) {
-        if (payload.book.id !== change.entityId) return false;
+        if (payload.book.id !== change.entityId) return 'skipped';
         return applyRecipeBookPayload(payload);
       }
-      return false;
+      return 'skipped';
     });
   } catch {
-    return false;
+    // 書き込みの途中で落ちた可能性がある。カーソルを進めさせない
+    return 'failed';
   }
 }

@@ -30,6 +30,12 @@ export type SyncErrorCode =
   /** 既にグループに入っている（先に離脱が必要 — 旧グループのクレデンシャルを黙って捨てない） */
   | 'ALREADY_JOINED'
   | 'NETWORK'
+  /**
+   * サーバーが**この内容を受け付けない**と確定した（HTTP 400）。
+   * 送り直しても通らないので、送信待ちから捨ててよい唯一のケース。
+   */
+  | 'SERVER_REJECTED'
+  /** それ以外のサーバー側の失敗（502/504/HTML 応答など）。**一時障害として扱う** */
   | 'SERVER';
 
 export class SyncError extends Error {
@@ -155,6 +161,9 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
   if (code && (KNOWN_CODES as readonly string[]).includes(code)) {
     throw new SyncError(code as SyncErrorCode);
   }
+  // 400 だけが「この内容では受理されない」。502/504/HTML 応答（Railway の再デプロイ中）は
+  // 一時障害なので区別する — ここを一緒くたにすると、送信待ちを捨ててよいかの判断ができない
+  if (res.status === 400) throw new SyncError('SERVER_REJECTED');
   throw new SyncError('SERVER');
 }
 
@@ -324,13 +333,18 @@ export async function pullSyncChanges(since: number, limit = 500): Promise<SyncP
  *
  * 通知は**内容を持たない同期のきっかけ**でしかない（設計 §0-2 — 利用者名もデータ内容も
  * 載せない）。登録できなくても、起動時とフォアグラウンド復帰の pull で追いつく。
+ *
+ * `locale` は通知の文面（固定文）をどちらの言語で出すかだけに使う。個人情報ではない。
  */
-export async function registerSyncPushToken(expoPushToken: string | null): Promise<void> {
+export async function registerSyncPushToken(
+  expoPushToken: string | null,
+  locale?: 'ja' | 'en',
+): Promise<void> {
   const credentials = await getStoredCredentials();
   if (!credentials) throw new SyncError('AUTH_INVALID');
   await authedRequest<unknown>(
     '/devices/me',
-    { method: 'PATCH', body: { expoPushToken } },
+    { method: 'PATCH', body: locale ? { expoPushToken, locale } : { expoPushToken } },
     credentials,
   );
 }

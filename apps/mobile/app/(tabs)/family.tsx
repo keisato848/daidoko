@@ -225,7 +225,9 @@ export default function FamilyScreen() {
         text: t('family.sync.create'),
         onPress: () => {
           void runSyncAction(async () => {
-            await createSyncGroup(currentUser.displayName.trim() || null);
+            // 表示名は送らない。サーバーは返さないので使い道が無く、
+            // 「サーバーに個人情報を置かない」（設計 §2）に反するだけになる
+            await createSyncGroup(null);
             // 参加した瞬間から共有が始まる。いまある蔵書を全部送信待ちへ積む（§5-2）
             await onSyncGroupJoined();
             await loadCloud();
@@ -245,7 +247,7 @@ export default function FamilyScreen() {
         text: t('family.sync.join'),
         onPress: () => {
           void runSyncAction(async () => {
-            await joinSyncGroup(code, currentUser.displayName.trim() || null);
+            await joinSyncGroup(code, null);
             setJoinCode('');
             await onSyncGroupJoined();
             await loadCloud();

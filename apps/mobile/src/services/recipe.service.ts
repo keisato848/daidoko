@@ -251,14 +251,14 @@ export async function setRecipePinned(recipeId: string, pinned: boolean): Promis
   const schema = await import('../db/schema');
   const db = getDb();
 
-  // updatedAt も進める。同期の勝敗は updatedAt で決まるので、ここを据え置くと
-  // 「ピンを外したのに他端末のピンが勝って戻る」が起きる（設計 §5-1b の LWW）
+  // **同期には載せない。** 「今度これを作りたい」は人ごとの都合で、家族で 1 つに
+  // 揃うものではない。加えて updated_at を進めると、1 タップのブックマークが
+  // レシピ丸ごとのスナップショットを LWW で勝たせてしまい、オフライン端末の
+  // ピン 1 回で他端末の編集が巻き戻る（docs/クラウド同期設計.md §5-1b）。
   await db
     .update(schema.recipes)
-    .set({ pinnedAt: pinned ? nowIso() : null, updatedAt: nowIso() })
+    .set({ pinnedAt: pinned ? nowIso() : null })
     .where(eq(schema.recipes.id, recipeId));
-
-  await enqueueSyncEntity(SYNC_ENTITY_RECIPE, recipeId);
 }
 
 /** 作りたいリスト: ピン留め済みレシピ（新しくピンした順） */
@@ -506,6 +506,19 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
   const revId = generateId();
   const now = nowIso();
 
+  // 出所は引き継ぐ。編集で落とすと **URL 取り込みの印が消え、Web 共有の出所ゲート
+  // （sources.type='url' で判定）が外れて他人のサイト由来のレシピを公開できてしまう**。
+  // 同期でも現行リビジョンの出所しか運ばないので、ここで切れると受信側で素通りになる。
+  let carriedSourceId = input.sourceId ?? null;
+  if (!carriedSourceId && recipe[0].currentRevId) {
+    const previous = await db
+      .select({ sourceId: schema.recipeRevisions.sourceId })
+      .from(schema.recipeRevisions)
+      .where(eq(schema.recipeRevisions.id, recipe[0].currentRevId))
+      .limit(1);
+    carriedSourceId = previous[0]?.sourceId ?? null;
+  }
+
   // Insert new revision
   await db.insert(schema.recipeRevisions).values({
     id: revId,
@@ -517,7 +530,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
     prepTimeMin: input.prepTimeMin ?? null,
     description: input.description ?? null,
     authorNote: input.authorNote ?? null,
-    sourceId: input.sourceId ?? null,
+    sourceId: carriedSourceId,
     createdBy: USER_ID,
     createdAt: now,
   });

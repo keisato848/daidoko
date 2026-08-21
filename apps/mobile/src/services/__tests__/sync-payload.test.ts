@@ -28,7 +28,6 @@ function recipePayload(overrides: Partial<RecipeSyncPayload> = {}): RecipeSyncPa
       titleReading: 'にくじゃが',
       status: 'active',
       placeName: null,
-      pinnedAt: null,
       createdAt: '2026-08-20T10:00:00.000Z',
       updatedAt: '2026-08-21T10:00:00.000Z',
     },
@@ -98,6 +97,8 @@ describe('sync-payload — レシピ', () => {
     // 所属・作成者も運ばない（受信側のローカル値を使う）
     expect(json).not.toContain('familyId');
     expect(json).not.toContain('createdBy');
+    // 作りたいリストのピンも運ばない（人ごとの都合・LWW の時計を汚さないため）
+    expect(json).not.toContain('pinnedAt');
   });
 
   it('出所（URL 取り込みの印）は運ぶ — 受信側の共有ゲートが素通りしないため', () => {

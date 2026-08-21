@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS sync_devices (
   last_pull_seq   BIGINT NOT NULL DEFAULT 0,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- 通知の文面をどちらの言語で出すかだけに使う（'ja' | 'en'）。後から足した列
+ALTER TABLE sync_devices ADD COLUMN IF NOT EXISTS locale TEXT;
 CREATE INDEX IF NOT EXISTS idx_sync_devices_group ON sync_devices (group_id);
 CREATE TABLE IF NOT EXISTS sync_entities (
   group_id          TEXT NOT NULL REFERENCES sync_groups(id) ON DELETE CASCADE,
@@ -445,17 +447,31 @@ export async function pullChanges(
 export async function setDevicePushToken(
   device: AuthedDevice,
   expoPushToken: string | null,
+  locale?: string | null,
 ): Promise<void> {
   const sql = await db();
-  await sql`UPDATE sync_devices SET expo_push_token = ${expoPushToken}
+  if (locale === undefined) {
+    await sql`UPDATE sync_devices SET expo_push_token = ${expoPushToken}
+              WHERE id = ${device.deviceId}`;
+    return;
+  }
+  await sql`UPDATE sync_devices SET expo_push_token = ${expoPushToken}, locale = ${locale}
             WHERE id = ${device.deviceId}`;
 }
 
-/** 同グループの他端末の push トークン（変更通知の宛先） */
-export async function getOtherDevicePushTokens(device: AuthedDevice): Promise<string[]> {
+export interface PushTarget {
+  token: string;
+  /** 'ja' | 'en' | null（未登録）。**文面の言語を選ぶためだけ**に使う */
+  locale: string | null;
+}
+
+/** 同グループの他端末の push 宛先（変更通知の宛先） */
+export async function getOtherDevicePushTargets(device: AuthedDevice): Promise<PushTarget[]> {
   const sql = await db();
-  const rows = await sql<{ expo_push_token: string | null }[]>`
-    SELECT expo_push_token FROM sync_devices
+  const rows = await sql<{ expo_push_token: string | null; locale: string | null }[]>`
+    SELECT expo_push_token, locale FROM sync_devices
     WHERE group_id = ${device.groupId} AND id != ${device.deviceId}`;
-  return rows.map((r) => r.expo_push_token).filter((t): t is string => !!t);
+  return rows
+    .filter((r): r is { expo_push_token: string; locale: string | null } => !!r.expo_push_token)
+    .map((r) => ({ token: r.expo_push_token, locale: r.locale }));
 }

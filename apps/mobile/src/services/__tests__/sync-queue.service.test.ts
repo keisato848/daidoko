@@ -22,7 +22,7 @@ jest.mock('../../db/client', () => ({
 import {
   clearSyncQueue,
   enqueueSyncEntity,
-  isApplyingRemoteChanges,
+  isApplyingRemoteChange,
   listSyncQueue,
   removeSentSyncQueueEntries,
   setSyncQueueListener,
@@ -73,11 +73,11 @@ describe('enqueueSyncEntity', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
-  it('受信適用中は積まない（押し返しの往復を作らない）', async () => {
+  it('受信適用中は「その行だけ」積まない（押し返しの往復を作らない）', async () => {
     const listener = jest.fn();
     setSyncQueueListener(listener);
 
-    await withRemoteApply(async () => {
+    await withRemoteApply('recipe', 'recipe-1', async () => {
       await enqueueSyncEntity('recipe', 'recipe-1');
     });
 
@@ -85,8 +85,17 @@ describe('enqueueSyncEntity', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
+  it('適用中でも別の行の編集は積む（利用者の保存を落とさない）', async () => {
+    await withRemoteApply('recipe', 'recipe-1', async () => {
+      await enqueueSyncEntity('recipe', 'recipe-2');
+      await enqueueSyncEntity('recipe_book', 'recipe-1');
+    });
+
+    expect(inserts.map((entry) => entry.values['entityId'])).toEqual(['recipe-2', 'recipe-1']);
+  });
+
   it('適用が終われば また積める', async () => {
-    await withRemoteApply(async () => undefined);
+    await withRemoteApply('recipe', 'recipe-1', async () => undefined);
     await enqueueSyncEntity('recipe', 'recipe-1');
 
     expect(inserts).toHaveLength(1);
@@ -94,26 +103,26 @@ describe('enqueueSyncEntity', () => {
 
   it('適用中に例外が出ても抑止は必ず戻る', async () => {
     await expect(
-      withRemoteApply(async () => {
+      withRemoteApply('recipe', 'recipe-1', async () => {
         throw new Error('apply failed');
       }),
     ).rejects.toThrow('apply failed');
 
-    expect(isApplyingRemoteChanges()).toBe(false);
+    expect(isApplyingRemoteChange('recipe', 'recipe-1')).toBe(false);
     await enqueueSyncEntity('recipe', 'recipe-1');
     expect(inserts).toHaveLength(1);
   });
 
   it('入れ子でも正しく戻る', async () => {
-    await withRemoteApply(async () => {
-      await withRemoteApply(async () => {
-        expect(isApplyingRemoteChanges()).toBe(true);
+    await withRemoteApply('recipe', 'recipe-1', async () => {
+      await withRemoteApply('recipe', 'recipe-1', async () => {
+        expect(isApplyingRemoteChange('recipe', 'recipe-1')).toBe(true);
       });
       // 内側が終わっても外側はまだ適用中
-      expect(isApplyingRemoteChanges()).toBe(true);
+      expect(isApplyingRemoteChange('recipe', 'recipe-1')).toBe(true);
     });
 
-    expect(isApplyingRemoteChanges()).toBe(false);
+    expect(isApplyingRemoteChange('recipe', 'recipe-1')).toBe(false);
   });
 
   it('DB が失敗しても投げない（レシピ保存を巻き添えにしない）', async () => {

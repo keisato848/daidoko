@@ -1,12 +1,12 @@
 /**
  * 同期の実行役（S1 — docs/クラウド同期設計.md §5-1b）。
  *
- * 固定したいこと:
+ * 固定したいこと（多くはレビューで見つかった実際の欠陥の再発防止）:
  * - 未参加なら何もしない（サーバーを叩かない）
- * - 送れた分だけ待ち行列から消す。失敗した分は残す（＝取りこぼさない）
- * - **自端末が押した変更は適用しない**（押し返しの往復を作らない）
- * - カーソルは進み、別グループのカーソルは引き継がない
- * - 1 件がサーバーに弾かれても、残りが永久に詰まらない
+ * - 送れた分だけ待ち行列から消す。**一時障害では絶対に捨てない**
+ * - **自端末が押した変更は適用しない**。ただし 0 から取り直すときは適用する
+ * - カーソルは**受け取った変更の seq までしか進めない**（latestSeq へ飛ばさない）
+ * - 書き込みに失敗した変更より先へカーソルを進めない
  */
 jest.mock('../../db/client', () => ({ isNativePlatform: true, getDb: jest.fn() }));
 
@@ -76,6 +76,7 @@ jest.mock('../notification.service', () => ({
 }));
 
 import { SyncError } from '../sync-client.service';
+import { SYNC_PAYLOAD_SCHEMA_VERSION } from '../sync-payload';
 import {
   onLocalDataReplaced,
   onSyncGroupJoined,
@@ -87,17 +88,24 @@ import { useSyncStore } from '../../stores/sync.store';
 
 const CREDENTIALS = { groupId: 'group-1', deviceId: 'device-me', deviceSecret: 'secret' };
 
-function queueEntry(entityId: string, entityType = 'recipe') {
-  return { entityType, entityId, queuedAt: '2026-08-21T10:00:00.000Z', retryCount: 0 };
+function queueEntry(
+  entityId: string,
+  entityType = 'recipe',
+  queuedAt = '2026-08-21T10:00:00.000Z',
+) {
+  return { entityType, entityId, queuedAt, retryCount: 0 };
 }
 
 function outgoing(entityId: string, entityType = 'recipe') {
   return {
-    entityType,
-    entityId,
-    payload: JSON.stringify({ schemaVersion: 1, entity: entityType, id: entityId }),
-    clientUpdatedAt: '2026-08-21T10:00:00.000Z',
-    deleted: false,
+    kind: 'change' as const,
+    change: {
+      entityType,
+      entityId,
+      payload: JSON.stringify({ schemaVersion: 1, entity: entityType, id: entityId }),
+      clientUpdatedAt: '2026-08-21T10:00:00.000Z',
+      deleted: false,
+    },
   };
 }
 
@@ -117,6 +125,14 @@ function emptyPull(latestSeq = 0) {
   return { changes: [], deltas: [], latestSeq, hasMore: false };
 }
 
+function storedCursor(): { groupId: string; seq: number; payloadVersion: number } {
+  return JSON.parse(mockMeta['sync_cursor']);
+}
+
+function cursorValue(groupId: string, seq: number, payloadVersion = SYNC_PAYLOAD_SCHEMA_VERSION) {
+  return JSON.stringify({ groupId, seq, payloadVersion });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockMeta = {};
@@ -126,7 +142,7 @@ beforeEach(() => {
   mockListSyncQueue.mockResolvedValue([]);
   mockPullSyncChanges.mockResolvedValue(emptyPull());
   mockPushSyncChanges.mockResolvedValue({ applied: 0, latestSeq: 0 });
-  mockApplyIncomingChange.mockResolvedValue(true);
+  mockApplyIncomingChange.mockResolvedValue('applied');
   mockListAllSyncableEntities.mockResolvedValue([]);
   mockGetExpoPushToken.mockResolvedValue(null);
   mockRemoveSent.mockResolvedValue(undefined);
@@ -148,10 +164,9 @@ describe('runSync — 未参加', () => {
 
 describe('runSync — push', () => {
   it('待ち行列を payload にして送り、送れた分を消す', async () => {
-    mockListSyncQueue.mockResolvedValue([
-      queueEntry('recipe-1'),
-      queueEntry('book-1', 'recipe_book'),
-    ]);
+    mockListSyncQueue
+      .mockResolvedValueOnce([queueEntry('recipe-1'), queueEntry('book-1', 'recipe_book')])
+      .mockResolvedValue([]);
     mockBuildOutgoingChange
       .mockResolvedValueOnce(outgoing('recipe-1'))
       .mockResolvedValueOnce(outgoing('book-1', 'recipe_book'));
@@ -168,9 +183,26 @@ describe('runSync — push', () => {
     ]);
   });
 
-  it('組み立てられない行は送らずに捨てる（詰まらせない）', async () => {
-    mockListSyncQueue.mockResolvedValue([queueEntry('gone', 'unknown_kind')]);
-    mockBuildOutgoingChange.mockResolvedValue(null);
+  it('積んだ時刻を組み立てへ渡す（削除の時刻＝消した時刻にするため）', async () => {
+    mockListSyncQueue
+      .mockResolvedValueOnce([queueEntry('book-1', 'recipe_book', '2026-08-20T01:02:03.000Z')])
+      .mockResolvedValue([]);
+    mockBuildOutgoingChange.mockResolvedValue(outgoing('book-1', 'recipe_book'));
+
+    await runSync();
+
+    expect(mockBuildOutgoingChange).toHaveBeenCalledWith(
+      'recipe_book',
+      'book-1',
+      '2026-08-20T01:02:03.000Z',
+    );
+  });
+
+  it('種別が分からない行だけ捨てる', async () => {
+    mockListSyncQueue
+      .mockResolvedValueOnce([queueEntry('gone', 'unknown_kind')])
+      .mockResolvedValue([]);
+    mockBuildOutgoingChange.mockResolvedValue({ kind: 'unsupported' });
 
     await runSync();
 
@@ -178,10 +210,25 @@ describe('runSync — push', () => {
     expect(mockRemoveSent).toHaveBeenCalledWith([expect.objectContaining({ entityId: 'gone' })]);
   });
 
+  it('組み立ての一時的な失敗では捨てない（次の同期でやり直す）', async () => {
+    mockListSyncQueue.mockResolvedValueOnce([queueEntry('recipe-1')]).mockResolvedValue([]);
+    mockBuildOutgoingChange.mockResolvedValue({ kind: 'error' });
+
+    await runSync();
+
+    expect(mockPushSyncChanges).not.toHaveBeenCalled();
+    expect(mockRemoveSent).not.toHaveBeenCalled();
+  });
+
   it('大きすぎる 1 件は送らない（バッチ全体を巻き添えにしない）', async () => {
-    mockListSyncQueue.mockResolvedValue([queueEntry('huge'), queueEntry('recipe-1')]);
+    mockListSyncQueue
+      .mockResolvedValueOnce([queueEntry('huge'), queueEntry('recipe-1')])
+      .mockResolvedValue([]);
     mockBuildOutgoingChange
-      .mockResolvedValueOnce({ ...outgoing('huge'), payload: 'x'.repeat(300_000) })
+      .mockResolvedValueOnce({
+        kind: 'change',
+        change: { ...outgoing('huge').change, payload: 'x'.repeat(300_000) },
+      })
       .mockResolvedValueOnce(outgoing('recipe-1'));
 
     await runSync();
@@ -204,14 +251,31 @@ describe('runSync — push', () => {
     expect(mockPullSyncChanges).not.toHaveBeenCalled();
   });
 
-  it('サーバーに弾かれたら 1 件ずつ送り直し、通らない 1 件だけ捨てる', async () => {
-    mockListSyncQueue.mockResolvedValue([queueEntry('poison'), queueEntry('good')]);
+  it('サーバーの一時障害（502 等）では 1 件も捨てない', async () => {
+    mockListSyncQueue.mockResolvedValue([queueEntry('recipe-1'), queueEntry('recipe-2')]);
+    mockBuildOutgoingChange
+      .mockResolvedValueOnce(outgoing('recipe-1'))
+      .mockResolvedValueOnce(outgoing('recipe-2'));
+    mockPushSyncChanges.mockRejectedValue(new SyncError('SERVER'));
+
+    await runSync();
+
+    expect(mockRemoveSent).not.toHaveBeenCalled();
+    expect(mockBumpRetry).toHaveBeenCalled();
+    // 1 件ずつのやり直しにも入らない（一時障害は分割しても通らない）
+    expect(mockPushSyncChanges).toHaveBeenCalledTimes(1);
+  });
+
+  it('内容を拒否されたら 1 件ずつ送り直し、通らない 1 件だけ捨てる', async () => {
+    mockListSyncQueue
+      .mockResolvedValueOnce([queueEntry('poison'), queueEntry('good')])
+      .mockResolvedValue([]);
     mockBuildOutgoingChange
       .mockResolvedValueOnce(outgoing('poison'))
       .mockResolvedValueOnce(outgoing('good'));
     mockPushSyncChanges
-      .mockRejectedValueOnce(new SyncError('SERVER')) // バッチ
-      .mockRejectedValueOnce(new SyncError('SERVER')) // poison 単体
+      .mockRejectedValueOnce(new SyncError('SERVER_REJECTED')) // バッチ
+      .mockRejectedValueOnce(new SyncError('SERVER_REJECTED')) // poison 単体
       .mockResolvedValueOnce({ applied: 1, latestSeq: 1 }); // good 単体
 
     await runSync();
@@ -223,14 +287,30 @@ describe('runSync — push', () => {
       'good',
     ]);
   });
+
+  it('待ち行列が 1 バッチに収まらなければ続きも送る（参加直後に一部だけ届く、を作らない）', async () => {
+    mockListSyncQueue
+      .mockResolvedValueOnce([queueEntry('recipe-1')])
+      .mockResolvedValueOnce([queueEntry('recipe-2')])
+      .mockResolvedValue([]);
+    mockBuildOutgoingChange
+      .mockResolvedValueOnce(outgoing('recipe-1'))
+      .mockResolvedValueOnce(outgoing('recipe-2'));
+
+    await runSync();
+
+    expect(mockPushSyncChanges).toHaveBeenCalledTimes(2);
+    expect(mockPushSyncChanges.mock.calls[1][0][0].entityId).toBe('recipe-2');
+  });
 });
 
 describe('runSync — pull', () => {
   it('自端末が押した変更は適用しない', async () => {
+    mockMeta['sync_cursor'] = cursorValue('group-1', 1);
     mockPullSyncChanges.mockResolvedValue({
-      changes: [incoming('recipe-1', 1, 'device-me'), incoming('recipe-2', 2, 'device-other')],
+      changes: [incoming('recipe-1', 2, 'device-me'), incoming('recipe-2', 3, 'device-other')],
       deltas: [],
-      latestSeq: 2,
+      latestSeq: 3,
       hasMore: false,
     });
 
@@ -239,6 +319,21 @@ describe('runSync — pull', () => {
     expect(mockApplyIncomingChange).toHaveBeenCalledTimes(1);
     expect(mockApplyIncomingChange).toHaveBeenCalledWith(
       expect.objectContaining({ entityId: 'recipe-2' }),
+    );
+  });
+
+  it('0 から取り直すときは自端末の分も適用する（バックアップ復元で食い違わない）', async () => {
+    mockPullSyncChanges.mockResolvedValue({
+      changes: [incoming('recipe-1', 1, 'device-me')],
+      deltas: [],
+      latestSeq: 1,
+      hasMore: false,
+    });
+
+    await runSync();
+
+    expect(mockApplyIncomingChange).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: 'recipe-1' }),
     );
   });
 
@@ -253,11 +348,65 @@ describe('runSync — pull', () => {
     await runSync();
 
     expect(mockPullSyncChanges).toHaveBeenCalledWith(0);
-    expect(JSON.parse(mockMeta['sync_cursor'])).toEqual({ groupId: 'group-1', seq: 7 });
+    expect(storedCursor()).toEqual({
+      groupId: 'group-1',
+      seq: 7,
+      payloadVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+    });
+  });
+
+  it('受け取っていない seq へは飛ばさない（pull 中の他端末の push を飛び越さない）', async () => {
+    mockMeta['sync_cursor'] = cursorValue('group-1', 5);
+    mockPullSyncChanges.mockResolvedValue({
+      changes: [incoming('recipe-2', 6, 'device-other')],
+      deltas: [],
+      latestSeq: 9, // pull の最中に他端末が 7〜9 を押した
+      hasMore: false,
+    });
+
+    await runSync();
+
+    expect(storedCursor().seq).toBe(6);
+  });
+
+  it('変更が 1 件も無ければカーソルは据え置き', async () => {
+    mockMeta['sync_cursor'] = cursorValue('group-1', 4);
+    mockPullSyncChanges.mockResolvedValue({
+      changes: [],
+      deltas: [],
+      latestSeq: 9,
+      hasMore: false,
+    });
+
+    await runSync();
+
+    expect(storedCursor().seq).toBe(4);
+  });
+
+  it('書き込みに失敗した変更より先へは進めない', async () => {
+    mockMeta['sync_cursor'] = cursorValue('group-1', 1);
+    mockPullSyncChanges.mockResolvedValue({
+      changes: [
+        incoming('recipe-a', 2, 'device-other'),
+        incoming('recipe-b', 3, 'device-other'),
+        incoming('recipe-c', 4, 'device-other'),
+      ],
+      deltas: [],
+      latestSeq: 4,
+      hasMore: false,
+    });
+    mockApplyIncomingChange
+      .mockResolvedValueOnce('applied')
+      .mockResolvedValueOnce('failed')
+      .mockResolvedValueOnce('applied');
+
+    await runSync();
+
+    expect(storedCursor().seq).toBe(2);
   });
 
   it('保存済みカーソルの続きから取る', async () => {
-    mockMeta['sync_cursor'] = JSON.stringify({ groupId: 'group-1', seq: 12 });
+    mockMeta['sync_cursor'] = cursorValue('group-1', 12);
 
     await runSync();
 
@@ -265,7 +414,15 @@ describe('runSync — pull', () => {
   });
 
   it('別グループのカーソルは使わない（他人のバックアップ復元対策）', async () => {
-    mockMeta['sync_cursor'] = JSON.stringify({ groupId: 'group-other', seq: 99 });
+    mockMeta['sync_cursor'] = cursorValue('group-other', 99);
+
+    await runSync();
+
+    expect(mockPullSyncChanges).toHaveBeenCalledWith(0);
+  });
+
+  it('payload の版が変わったら取り直す（更新前に読み飛ばした分を拾う）', async () => {
+    mockMeta['sync_cursor'] = cursorValue('group-1', 42, SYNC_PAYLOAD_SCHEMA_VERSION - 1);
 
     await runSync();
 
@@ -273,6 +430,7 @@ describe('runSync — pull', () => {
   });
 
   it('hasMore なら続きを取りに行く', async () => {
+    mockMeta['sync_cursor'] = cursorValue('group-1', 1);
     mockPullSyncChanges
       .mockResolvedValueOnce({
         changes: [incoming('recipe-1', 5, 'device-other')],
@@ -289,12 +447,13 @@ describe('runSync — pull', () => {
 
     await runSync();
 
-    expect(mockPullSyncChanges).toHaveBeenNthCalledWith(1, 0);
+    expect(mockPullSyncChanges).toHaveBeenNthCalledWith(1, 1);
     expect(mockPullSyncChanges).toHaveBeenNthCalledWith(2, 5);
-    expect(JSON.parse(mockMeta['sync_cursor'])).toEqual({ groupId: 'group-1', seq: 9 });
+    expect(storedCursor().seq).toBe(9);
   });
 
   it('適用が 1 件でもあれば画面に読み直しの合図を出す', async () => {
+    mockMeta['sync_cursor'] = cursorValue('group-1', 0);
     mockPullSyncChanges.mockResolvedValue({
       changes: [incoming('recipe-2', 1, 'device-other')],
       deltas: [],
@@ -307,13 +466,15 @@ describe('runSync — pull', () => {
     expect(useSyncStore.getState().lastAppliedAt).toBeGreaterThan(0);
   });
 
-  it('自端末由来だけなら合図は出さない（画面のちらつきを作らない）', async () => {
+  it('LWW で負けただけなら合図は出さない（画面のちらつきを作らない）', async () => {
+    mockMeta['sync_cursor'] = cursorValue('group-1', 1);
     mockPullSyncChanges.mockResolvedValue({
-      changes: [incoming('recipe-1', 1, 'device-me')],
+      changes: [incoming('recipe-2', 2, 'device-other')],
       deltas: [],
-      latestSeq: 1,
+      latestSeq: 2,
       hasMore: false,
     });
+    mockApplyIncomingChange.mockResolvedValue('skipped');
 
     await runSync();
 
@@ -334,14 +495,25 @@ describe('runSync — pull', () => {
 });
 
 describe('runSync — push トークン', () => {
-  it('取れたら登録し、同じトークンなら二度目は登録しない', async () => {
+  it('取れたら言語つきで登録し、同じトークンなら二度目は登録しない', async () => {
     mockGetExpoPushToken.mockResolvedValue('ExponentPushToken[abc]');
 
     await runSync();
     await runSync();
 
     expect(mockRegisterSyncPushToken).toHaveBeenCalledTimes(1);
-    expect(mockRegisterSyncPushToken).toHaveBeenCalledWith('ExponentPushToken[abc]');
+    expect(mockRegisterSyncPushToken).toHaveBeenCalledWith(
+      'ExponentPushToken[abc]',
+      expect.stringMatching(/^(ja|en)$/),
+    );
+  });
+
+  it('トークンは DB に残さない（バックアップに出さない）', async () => {
+    mockGetExpoPushToken.mockResolvedValue('ExponentPushToken[abc]');
+
+    await runSync();
+
+    expect(Object.keys(mockMeta)).not.toContain('sync_push_token');
   });
 
   it('トークンが取れなくても同期は成立する', async () => {
@@ -360,7 +532,7 @@ describe('グループの出入り', () => {
       { entityType: 'recipe', entityId: 'recipe-1' },
       { entityType: 'recipe_book', entityId: 'book-1' },
     ]);
-    mockMeta['sync_cursor'] = JSON.stringify({ groupId: 'group-old', seq: 42 });
+    mockMeta['sync_cursor'] = cursorValue('group-old', 42);
 
     await onSyncGroupJoined();
 
@@ -372,7 +544,7 @@ describe('グループの出入り', () => {
   });
 
   it('離脱したら送信待ちとカーソルを捨てる', async () => {
-    mockMeta['sync_cursor'] = JSON.stringify({ groupId: 'group-1', seq: 42 });
+    mockMeta['sync_cursor'] = cursorValue('group-1', 42);
 
     await onSyncGroupLeft();
 
@@ -382,7 +554,7 @@ describe('グループの出入り', () => {
 
   it('バックアップ復元後は取り直し（カーソル 0）＋全件積み直し', async () => {
     mockListAllSyncableEntities.mockResolvedValue([{ entityType: 'recipe', entityId: 'recipe-1' }]);
-    mockMeta['sync_cursor'] = JSON.stringify({ groupId: 'group-1', seq: 42 });
+    mockMeta['sync_cursor'] = cursorValue('group-1', 42);
 
     await onLocalDataReplaced();
 

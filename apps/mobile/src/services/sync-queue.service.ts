@@ -31,20 +31,35 @@ export const SYNC_PUSH_BATCH_SIZE = 200;
 // ── 受信適用中の抑止 ─────────────────────────────────────────────────────────
 // 受信した変更をローカルへ書くときも DB の書き込みなので、素直に配線すると
 // 「受け取った変更をそのまま押し返す」無限往復になる。適用中はキューに積まない。
+//
+// **抑止は「いま適用しているその 1 行」だけに効かせる。** 全体を止めると、適用の
+// await の合間に利用者が別のレシピを保存したとき、その編集が積まれず永久に送られない
+// （適用は 1 件ごとに数回 await するので、窓は小さいが確実に存在する）。
 
-let applying = 0;
+const applyingKeys = new Map<string, number>();
 
-export function isApplyingRemoteChanges(): boolean {
-  return applying > 0;
+function applyKey(entityType: string, entityId: string): string {
+  return `${entityType}::${entityId}`;
 }
 
-/** 受信適用の間だけ enqueue を止める。ネストしても正しく戻る */
-export async function withRemoteApply<T>(fn: () => Promise<T>): Promise<T> {
-  applying += 1;
+export function isApplyingRemoteChange(entityType: string, entityId: string): boolean {
+  return (applyingKeys.get(applyKey(entityType, entityId)) ?? 0) > 0;
+}
+
+/** その 1 行の受信適用の間だけ enqueue を止める。ネストしても正しく戻る */
+export async function withRemoteApply<T>(
+  entityType: string,
+  entityId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const key = applyKey(entityType, entityId);
+  applyingKeys.set(key, (applyingKeys.get(key) ?? 0) + 1);
   try {
     return await fn();
   } finally {
-    applying -= 1;
+    const depth = (applyingKeys.get(key) ?? 1) - 1;
+    if (depth <= 0) applyingKeys.delete(key);
+    else applyingKeys.set(key, depth);
   }
 }
 
@@ -65,7 +80,7 @@ export async function enqueueSyncEntity(
   entityType: SyncEntityType,
   entityId: string,
 ): Promise<void> {
-  if (!isNativePlatform || isApplyingRemoteChanges() || !entityId) return;
+  if (!isNativePlatform || !entityId || isApplyingRemoteChange(entityType, entityId)) return;
   try {
     const queuedAt = new Date().toISOString();
     await getDb()

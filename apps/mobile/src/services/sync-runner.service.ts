@@ -32,6 +32,7 @@ import {
   buildOutgoingChange,
   listAllSyncableEntities,
 } from './sync-entities.service';
+import { SYNC_PAYLOAD_SCHEMA_VERSION } from './sync-payload';
 import {
   SYNC_PUSH_BATCH_SIZE,
   bumpSyncQueueRetry,
@@ -43,10 +44,10 @@ import {
   type SyncQueueEntry,
 } from './sync-queue.service';
 import { isNativePlatform } from '../db/client';
+import { getLocale } from '../i18n';
 import { notifySyncApplied, setSyncing } from '../stores/sync.store';
 
 const CURSOR_KEY = 'sync_cursor';
-const PUSH_TOKEN_KEY = 'sync_push_token';
 
 /** ローカル書き込みから送信までの待ち。連続編集を 1 回の送信にまとめる */
 export const SYNC_DEBOUNCE_MS = 3000;
@@ -57,11 +58,22 @@ const MAX_PAYLOAD_CHARS = 280_000;
 /** pull の繰り返し上限（1 回の同期で取り込むページ数）。無限ループの保険 */
 const MAX_PULL_PAGES = 20;
 
+/** push の繰り返し上限（1 回の同期で送るバッチ数）。200 件 × 20 = 4000 件 */
+const MAX_PUSH_BATCHES = 20;
+
 // ── 同期カーソル ─────────────────────────────────────────────────────────────
 
 interface SyncCursor {
   groupId: string;
   seq: number;
+  /**
+   * このカーソルを進めたときの payload の版。
+   *
+   * 読めなかった受信（＝自分より新しい版）はカーソルを進めて読み飛ばすので、
+   * そのままではアプリを更新しても届かない。版が上がったら**カーソルを 0 に戻して
+   * 取り直す**ことで、更新前に読み飛ばした分を拾い直す。
+   */
+  payloadVersion: number;
 }
 
 async function readCursor(groupId: string): Promise<number> {
@@ -70,6 +82,7 @@ async function readCursor(groupId: string): Promise<number> {
   try {
     const parsed = JSON.parse(raw) as Partial<SyncCursor>;
     if (parsed.groupId !== groupId) return 0; // 別のグループのカーソルは使わない
+    if (parsed.payloadVersion !== SYNC_PAYLOAD_SCHEMA_VERSION) return 0; // 版が変わった
     return typeof parsed.seq === 'number' && parsed.seq >= 0 ? parsed.seq : 0;
   } catch {
     return 0;
@@ -77,9 +90,12 @@ async function readCursor(groupId: string): Promise<number> {
 }
 
 async function writeCursor(groupId: string, seq: number): Promise<void> {
-  await setAppMeta(CURSOR_KEY, JSON.stringify({ groupId, seq } satisfies SyncCursor)).catch(
-    () => undefined,
-  );
+  const cursor: SyncCursor = {
+    groupId,
+    seq,
+    payloadVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+  };
+  await setAppMeta(CURSOR_KEY, JSON.stringify(cursor)).catch(() => undefined);
 }
 
 async function resetCursor(): Promise<void> {
@@ -103,26 +119,35 @@ async function preparePush(): Promise<PreparedPush> {
   const dropped: SyncQueueEntry[] = [];
 
   for (const entry of queued) {
-    const change = await buildOutgoingChange(entry.entityType, entry.entityId);
-    if (!change) {
-      dropped.push(entry); // 知らないエンティティ種別・読み出し不能
+    // 積んだ時刻を渡す（行が消えていたときの tombstone の時刻＝消した時刻になる）
+    const built = await buildOutgoingChange(entry.entityType, entry.entityId, entry.queuedAt);
+    if (built.kind === 'unsupported') {
+      dropped.push(entry); // 知らないエンティティ種別。送りようが無い
       continue;
     }
-    if (change.payload !== null && change.payload.length > MAX_PAYLOAD_CHARS) {
+    if (built.kind === 'error') {
+      // 一時的な失敗。**捨てずに残す**（次の同期でやり直す）
+      continue;
+    }
+    if (built.change.payload !== null && built.change.payload.length > MAX_PAYLOAD_CHARS) {
       // 1 件が大きすぎるとバッチ全体が弾かれ、以後の同期が永久に詰まる。
       // その 1 件だけ諦める（写真を含まない S1 では現実には起きない大きさ）
       dropped.push(entry);
       continue;
     }
-    changes.push(change);
+    changes.push(built.change);
     entries.push(entry);
   }
   return { changes, entries, dropped };
 }
 
 /**
- * 1 件ずつ送り直す（バッチが SERVER エラーで弾かれたときだけ通る道）。
+ * 1 件ずつ送り直す（バッチが**サーバーに内容を拒否された**ときだけ通る道）。
  * 壊れた 1 件のせいで残り全部が永久に送れない、を避ける。
+ *
+ * 捨てるのは `SERVER_REJECTED`（HTTP 400 ＝ この内容では受理されないと確定した）だけ。
+ * 502/504/HTML の応答は**一時障害**なので捨てない — 捨てると、再デプロイ中に
+ * たまたま同期した端末の編集が丸ごと消える。
  */
 async function pushOneByOne(prepared: PreparedPush): Promise<void> {
   for (let index = 0; index < prepared.changes.length; index += 1) {
@@ -133,53 +158,91 @@ async function pushOneByOne(prepared: PreparedPush): Promise<void> {
       await pushSyncChanges([change]);
       await removeSentSyncQueueEntries([entry]);
     } catch (err) {
-      if (err instanceof SyncError && err.code === 'SERVER') {
+      if (err instanceof SyncError && err.code === 'SERVER_REJECTED') {
         await removeSentSyncQueueEntries([entry]); // この 1 件はサーバーが受け取れない
         continue;
       }
-      throw err; // ネットワーク断・認証切れは全体をやり直す
+      throw err; // ネットワーク断・一時障害・認証切れは全体をやり直す
     }
   }
 }
 
+/**
+ * 送信待ちを空になるまで送る。
+ *
+ * 1 バッチ（200 件）で終わると、蔵書の多い端末がグループに参加した直後に
+ * 「一部のレシピだけ家族に見えている」状態が次の起動まで続く。
+ */
 async function pushPending(): Promise<void> {
-  const prepared = await preparePush();
-  if (prepared.dropped.length > 0) await removeSentSyncQueueEntries(prepared.dropped);
-  if (prepared.changes.length === 0) return;
+  for (let batch = 0; batch < MAX_PUSH_BATCHES; batch += 1) {
+    const prepared = await preparePush();
+    if (prepared.dropped.length > 0) await removeSentSyncQueueEntries(prepared.dropped);
+    if (prepared.changes.length === 0) return;
 
-  try {
-    await pushSyncChanges(prepared.changes);
-    await removeSentSyncQueueEntries(prepared.entries);
-  } catch (err) {
-    await bumpSyncQueueRetry(prepared.entries);
-    if (err instanceof SyncError && err.code === 'SERVER' && prepared.changes.length > 1) {
-      await pushOneByOne(prepared);
-      return;
+    try {
+      await pushSyncChanges(prepared.changes);
+      await removeSentSyncQueueEntries(prepared.entries);
+    } catch (err) {
+      await bumpSyncQueueRetry(prepared.entries);
+      if (
+        err instanceof SyncError &&
+        err.code === 'SERVER_REJECTED' &&
+        prepared.changes.length > 1
+      ) {
+        await pushOneByOne(prepared);
+        continue;
+      }
+      throw err;
     }
-    throw err;
   }
 }
 
 // ── pull ─────────────────────────────────────────────────────────────────────
 
+/**
+ * 受信して適用する。
+ *
+ * カーソルは**実際に受け取った変更の seq までしか進めない**。サーバーが返す
+ * `latestSeq` まで飛ばすと、「変更一覧を読んだ後・最新 seq を読む前」に他端末が
+ * push した分を飛び越してしまい、その変更が二度と届かなくなる（サーバーは
+ * 1 エンティティ 1 行なので、再送のきっかけはその行が再編集されるまで無い）。
+ *
+ * カーソルを 0 から取り直すとき（初参加・再参加・バックアップ復元）は、
+ * **自端末が押した分も適用する**。ローカルが古い（復元直後など）可能性があり、
+ * サーバーは自分の古い push を LWW で捨てるので、取り直さないと永久に食い違う。
+ */
 async function pullAndApply(credentials: SyncCredentials): Promise<number> {
-  let cursor = await readCursor(credentials.groupId);
+  const startCursor = await readCursor(credentials.groupId);
+  const applyOwnChanges = startCursor === 0;
+  let cursor = startCursor;
   let applied = 0;
 
   for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
     const result = await pullSyncChanges(cursor);
+    let nextCursor = cursor;
+    // 書き込みに失敗した変更より先へは進めない（次回の pull でやり直す）
+    let blocked = false;
+
     for (const change of result.changes) {
-      // 自分が押した変更は適用しない（同じ内容を書き戻して updatedAt を汚さない）
-      if (change.updatedByDevice === credentials.deviceId) continue;
-      if (await applyIncomingChange(change)) applied += 1;
+      if (!applyOwnChanges && change.updatedByDevice === credentials.deviceId) {
+        // 自分が押した変更（同じ内容を書き戻して updatedAt を汚さない）
+        if (!blocked) nextCursor = Math.max(nextCursor, change.seq);
+        continue;
+      }
+      const outcome = await applyIncomingChange(change);
+      if (outcome === 'failed') {
+        blocked = true;
+        continue;
+      }
+      if (outcome === 'applied') applied += 1;
+      if (!blocked) nextCursor = Math.max(nextCursor, change.seq);
     }
 
-    const maxSeq = result.changes.reduce((max, change) => Math.max(max, change.seq), cursor);
-    const next = result.hasMore ? maxSeq : Math.max(maxSeq, result.latestSeq);
-    if (next > cursor) {
-      cursor = next;
+    if (nextCursor > cursor) {
+      cursor = nextCursor;
       await writeCursor(credentials.groupId, cursor);
     }
+    if (blocked) break;
     if (!result.hasMore || result.changes.length === 0) break;
   }
 
@@ -188,13 +251,23 @@ async function pullAndApply(credentials: SyncCredentials): Promise<number> {
 
 // ── push トークン ────────────────────────────────────────────────────────────
 
+/**
+ * この起動で 1 回だけトークンを登録する。
+ *
+ * **DB（app_meta）には残さない。** app_meta はバックアップ・移行 ZIP に入るので、
+ * 端末に紐づく push トークンが端末外へ出てしまう（トークンを持つ人はその端末へ
+ * 通知を送れる）。起動ごとに 1 回 PATCH するだけなら通信量も無視できる。
+ *
+ * 表示言語も一緒に渡す。通知の文面をサーバー側で選ぶために要る（内容は持たない）。
+ */
+let registeredPushToken: string | null = null;
+
 async function ensurePushTokenRegistered(): Promise<void> {
   try {
     const token = await getExpoPushToken();
-    if (!token) return;
-    if ((await getAppMeta(PUSH_TOKEN_KEY)) === token) return;
-    await registerSyncPushToken(token);
-    await setAppMeta(PUSH_TOKEN_KEY, token);
+    if (!token || token === registeredPushToken) return;
+    await registerSyncPushToken(token, getLocale());
+    registeredPushToken = token;
   } catch {
     // 通知が来ないだけ。起動時とフォアグラウンド復帰の pull で追いつく
   }
@@ -268,7 +341,7 @@ export function initSync(): void {
 export async function onSyncGroupJoined(): Promise<void> {
   if (!isNativePlatform) return;
   await resetCursor();
-  await setAppMeta(PUSH_TOKEN_KEY, '').catch(() => undefined); // 別グループへの登録は無効
+  registeredPushToken = null; // 新しいグループへ登録し直す
   await enqueueSyncEntities(await listAllSyncableEntities());
   await runSync();
 }
@@ -282,7 +355,7 @@ export async function onSyncGroupLeft(): Promise<void> {
   }
   await clearSyncQueue();
   await resetCursor();
-  await setAppMeta(PUSH_TOKEN_KEY, '').catch(() => undefined);
+  registeredPushToken = null;
 }
 
 /**
@@ -305,6 +378,7 @@ export async function onLocalDataReplaced(): Promise<void> {
 export function resetSyncRunnerForTesting(): void {
   running = null;
   rerunRequested = false;
+  registeredPushToken = null;
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = null;
 }

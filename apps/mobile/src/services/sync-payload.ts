@@ -12,6 +12,10 @@
  *   受信適用でローカルの写真列を消さないための「含めない」でもある
  * - `familyId` / `createdBy` も含めない。全端末で `family-001` / `user-kei` 固定なので
  *   運ぶ意味が無く、運ぶと受信側の外部キーを壊しうる（適用側がローカルの値を入れる）
+ * - **`pinnedAt`（作りたいリスト）も含めない。** 「今度これを作りたい」は人ごとの都合で、
+ *   家族で 1 つに揃うものではない。加えて、ピンを同期に載せると **1 タップの
+ *   ブックマークがレシピ丸ごとのスナップショットを勝たせる**（LWW の時計を進める）ため、
+ *   オフライン端末のピン 1 回で他端末の編集が巻き戻る。端末ローカルのままにする
  */
 import { z } from 'zod';
 
@@ -45,7 +49,6 @@ export interface RecipeSyncPayload {
     /** 'active' | 'archived'。**削除は archived**（行は消さない — 下の tombstone の項参照） */
     status: string;
     placeName: string | null;
-    pinnedAt: string | null;
     createdAt: string;
     updatedAt: string;
   };
@@ -133,7 +136,6 @@ const recipePayloadSchema = z.object({
     titleReading: nullableText,
     status: z.string().min(1),
     placeName: nullableText,
-    pinnedAt: nullableText,
     createdAt: z.string().min(1),
     updatedAt: z.string().min(1),
   }),
