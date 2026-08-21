@@ -116,8 +116,13 @@ export default function ShoppingListScreen() {
     },
   ]);
 
+  // **作りかけの買う場所（addStore）も混ぜる** — シートで作った直後はまだ品が 1 つも
+  // 入っていないので、混ぜないと作った先が候補からもチップからも消えてしまう
   const stores = [
-    ...new Set(items.map((it) => it.storeGroup).filter((g): g is string => !!g)),
+    ...new Set([
+      ...items.map((it) => it.storeGroup).filter((g): g is string => !!g),
+      ...(addStore ? [addStore] : []),
+    ]),
   ].sort((a, b) => a.localeCompare(b));
   const visible = items.filter((it) => {
     if (storeFilter == null) return true;

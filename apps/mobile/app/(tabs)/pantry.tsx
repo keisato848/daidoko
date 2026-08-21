@@ -175,10 +175,15 @@ export default function PantryScreen() {
     },
   ]);
 
-  // 画面にあるグループの一覧（未設定は GroupChips 側で足す）
-  const groups = [...new Set(items.map((it) => it.groupName).filter((g): g is string => !!g))].sort(
-    (a, b) => a.localeCompare(b),
-  );
+  // 画面にあるグループの一覧（未設定は GroupChips 側で足す）。
+  // **作りかけの置き場所（addGroup）も混ぜる** — シートで作った直後はまだ品が 1 つも
+  // 入っていないので、混ぜないと作った先が候補からもチップからも消えてしまう
+  const groups = [
+    ...new Set([
+      ...items.map((it) => it.groupName).filter((g): g is string => !!g),
+      ...(addGroup ? [addGroup] : []),
+    ]),
+  ].sort((a, b) => a.localeCompare(b));
   const visible = items.filter((it) => {
     if (groupFilter == null) return true;
     if (groupFilter === UNGROUPED) return it.groupName == null;
