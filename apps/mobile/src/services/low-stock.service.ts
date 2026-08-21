@@ -33,6 +33,22 @@ export function filterLowStock(items: PantryItem[]): PantryItem[] {
   );
 }
 
+/**
+ * 同じ品を正規化名で 1 つに畳む（v13）。置き場所が入ったことで「冷蔵庫の米」と
+ * 「〇〇の米」が別行になり、両方が残りわずかだと通知にも買い物リストにも二重に出る。
+ * 買う側に要るのは「米を買う」ことだけなので畳む。
+ */
+export function dedupeByName(items: PantryItem[]): PantryItem[] {
+  const seen = new Set<string>();
+  return items.filter((it) => {
+    const key = normalizeItemName(it.name);
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** One batched message: 「卵、牛乳 ほか2件 の残りが少なくなっています。…」 */
 export function buildLowStockBody(names: string[]): string {
   const head = names.slice(0, MAX_NAMES_IN_BODY).join('、');
@@ -57,7 +73,9 @@ export async function checkAndNotifyLowStock(): Promise<boolean> {
   const today = dayKey();
   if ((await getAppMeta(NOTIFIED_DAY_KEY)) === today) return false;
 
-  const id = await presentLowStockNotification(buildLowStockBody(low.map((it) => it.name)));
+  const id = await presentLowStockNotification(
+    buildLowStockBody(dedupeByName(low).map((it) => it.name)),
+  );
   if (id == null) return false;
 
   await setAppMeta(NOTIFIED_DAY_KEY, today);
@@ -75,15 +93,8 @@ export async function addAllLowStockToShoppingList(): Promise<number> {
   if (!isNativePlatform) return 0;
   const low = filterLowStock(await getPantryItems());
 
-  // **正規化名で畳んでから追加する（v13）。** グループが入ったことで「冷蔵庫の米」と
-  // 「〇〇の米」が別行として在庫に並ぶようになった。両方が残りわずかだと、そのままでは
-  // 買い物リストに「米」が2行入る。買う側に必要なのは「米を買う」ことだけなので畳む。
-  const seen = new Set<string>();
   let added = 0;
-  for (const it of low) {
-    const key = normalizeItemName(it.name);
-    if (key && seen.has(key)) continue;
-    if (key) seen.add(key);
+  for (const it of dedupeByName(low)) {
     const result = await addShoppingItem(it.name, undefined, { source: 'low_stock' });
     if (result) added += 1;
   }
