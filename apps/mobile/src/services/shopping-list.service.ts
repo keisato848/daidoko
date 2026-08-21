@@ -11,6 +11,7 @@ import { generateId } from '../utils/id';
 import { isInStock } from '../utils/itemMatch';
 import { normalizeItemName } from '../utils/itemName';
 import { getRecipeDetail } from './recipe.service';
+import { getCurrentUser } from './user.service';
 import type { ShoppingItem, ShoppingItemSource } from './types';
 
 interface ShoppingRow {
@@ -72,7 +73,7 @@ export async function getShoppingItems(): Promise<ShoppingItem[]> {
 export async function addShoppingItem(
   name: string,
   amount?: string,
-  options?: { source?: ShoppingItemSource; recipeId?: string },
+  options?: { source?: ShoppingItemSource; recipeId?: string; storeGroup?: string | null },
 ): Promise<ShoppingItem | null> {
   const trimmed = name.trim();
   if (!trimmed || !isNativePlatform) return null;
@@ -111,6 +112,10 @@ export async function addShoppingItem(
     source,
     recipeId: options?.recipeId ?? null,
     sortOrder: 0,
+    storeGroup: options?.storeGroup?.trim() ? options.storeGroup.trim() : null,
+    // 誰が入れたか（v13）。同期すると「これ誰が要るって言ったの？」が起きるので記録する。
+    // 列が無い間に作られた行は後から復元できないので、同期より先に記録を始める
+    createdBy: getCurrentUser().id,
     createdAt: new Date().toISOString(),
     checkedAt: null,
   });
@@ -228,6 +233,66 @@ export async function addMissingRecipeIngredientsToList(
     else result.alreadyOnList += 1;
   }
   return result;
+}
+
+/** レシート消し込みの結果。確認画面に「◯件を消し込みます」と出すために名前も返す。 */
+export interface CheckOffResult {
+  count: number;
+  names: string[];
+}
+
+/**
+ * 買った品を買い物リストから**消し込む**（レシート取り込みから呼ぶ）。
+ *
+ * 決めごと:
+ * - **消さずにチェックを付ける。** 誤照合で行が消えると気づけないが、チェックなら取り消せる
+ * - **照合は品目名（正規化＋名寄せ辞書）だけ。** 店（`store_group`）は表示の絞り込み専用で、
+ *   照合には使わない — 同じ品を別の店で買うことは普通にあり、店で絞ると取りこぼす
+ * - **数量は不問。** 「牛乳2本」必要で1本だけ買った場合もチェックは付く（外すのは利用者の判断）
+ * - 対象は**未チェックの行だけ**
+ */
+export async function checkOffByNames(boughtNames: readonly string[]): Promise<CheckOffResult> {
+  const empty: CheckOffResult = { count: 0, names: [] };
+  if (!isNativePlatform || boughtNames.length === 0) return empty;
+
+  const { and, eq, inArray } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const { getAliasMap } = await import('./name-alias.service');
+  const { itemNamesMatch } = await import('../utils/itemMatch');
+  const db = getDb();
+
+  const familyId = await currentFamilyId();
+  const [pending, aliases] = await Promise.all([
+    db
+      .select({
+        id: schema.shoppingItems.id,
+        name: schema.shoppingItems.name,
+        nameNormalized: schema.shoppingItems.nameNormalized,
+      })
+      .from(schema.shoppingItems)
+      .where(and(eq(schema.shoppingItems.familyId, familyId), eq(schema.shoppingItems.checked, 0))),
+    getAliasMap(),
+  ]);
+  if (pending.length === 0) return empty;
+
+  const bought = boughtNames.map((name) => normalizeItemName(name)).filter(Boolean);
+  const hit = pending.filter((item) =>
+    bought.some((name) => itemNamesMatch(item.nameNormalized, name, aliases)),
+  );
+  if (hit.length === 0) return empty;
+
+  const now = new Date().toISOString();
+  await db
+    .update(schema.shoppingItems)
+    .set({ checked: 1, checkedAt: now, checkedBy: getCurrentUser().id })
+    .where(
+      inArray(
+        schema.shoppingItems.id,
+        hit.map((item) => item.id),
+      ),
+    );
+  return { count: hit.length, names: hit.map((item) => item.name) };
 }
 
 export async function removeShoppingItem(id: string): Promise<void> {

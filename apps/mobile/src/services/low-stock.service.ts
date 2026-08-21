@@ -7,6 +7,7 @@
  * consumption, threshold edit). See docs/買い物リスト・在庫設計.md §5.5.
  */
 import { isNativePlatform } from '../db/client';
+import { normalizeItemName } from '../utils/itemName';
 import { getAppMeta, setAppMeta } from './app-meta.service';
 import { presentLowStockNotification } from './notification.service';
 import { getPantryItems } from './pantry.service';
@@ -74,8 +75,15 @@ export async function addAllLowStockToShoppingList(): Promise<number> {
   if (!isNativePlatform) return 0;
   const low = filterLowStock(await getPantryItems());
 
+  // **正規化名で畳んでから追加する（v13）。** グループが入ったことで「冷蔵庫の米」と
+  // 「〇〇の米」が別行として在庫に並ぶようになった。両方が残りわずかだと、そのままでは
+  // 買い物リストに「米」が2行入る。買う側に必要なのは「米を買う」ことだけなので畳む。
+  const seen = new Set<string>();
   let added = 0;
   for (const it of low) {
+    const key = normalizeItemName(it.name);
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
     const result = await addShoppingItem(it.name, undefined, { source: 'low_stock' });
     if (result) added += 1;
   }
