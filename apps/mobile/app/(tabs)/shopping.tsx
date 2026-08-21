@@ -19,6 +19,7 @@ import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { moveShoppingItemToPantry, UNGROUPED } from '../../src/services/pantry.service';
+import { getShoppingStoreGroups } from '../../src/services/store-group.service';
 import {
   addShoppingItem,
   setShoppingItemChecked,
@@ -37,11 +38,20 @@ export default function ShoppingListScreen() {
   /** 追加行で選んでいる買う場所 */
   const [addStore, setAddStore] = useState<string | null>(null);
   const [storePickerFor, setStorePickerFor] = useState<'add' | string | null>(null);
+  /**
+   * 選べる買う場所。**リストに出ている品から作るだけでは足りない** —
+   * レシートで「この店で買うもの = スーパー」と覚えさせても、まだその場所の品が
+   * 1 つも無いと候補に出てこない（実機で踏んだ 2026-08-21）。対応表も混ぜる。
+   */
+  const [knownStores, setKnownStores] = useState<string[]>([]);
 
   const refresh = useCallback(() => {
     getShoppingItems()
       .then(setItems)
       .catch(() => setItems([]));
+    getShoppingStoreGroups()
+      .then(setKnownStores)
+      .catch(() => setKnownStores([]));
   }, []);
   useFocusEffect(refresh);
 
@@ -116,14 +126,18 @@ export default function ShoppingListScreen() {
     },
   ]);
 
-  // **作りかけの買う場所（addStore）も混ぜる** — シートで作った直後はまだ品が 1 つも
-  // 入っていないので、混ぜないと作った先が候補からもチップからも消えてしまう
+  // **チップは「いま並んでいる品の買う場所」だけ。** 品が 1 つも無い場所のチップを出しても
+  // 押した先が空になるだけで、絞り込みの役に立たない。
+  // 作りかけの買う場所（addStore）だけは混ぜる — シートで作った直後はまだ品が無いので、
+  // 混ぜないと作った先が消えてしまう
   const stores = [
     ...new Set([
       ...items.map((it) => it.storeGroup).filter((g): g is string => !!g),
       ...(addStore ? [addStore] : []),
     ]),
   ].sort((a, b) => a.localeCompare(b));
+  // **選ぶときは覚えている場所も全部出す**（レシートで覚えた店の対応先を含む）
+  const storeChoices = [...new Set([...knownStores, ...stores])].sort((a, b) => a.localeCompare(b));
   const visible = items.filter((it) => {
     if (storeFilter == null) return true;
     if (storeFilter === UNGROUPED) return it.storeGroup == null;
@@ -176,7 +190,7 @@ export default function ShoppingListScreen() {
         </Pressable>
       </View>
 
-      {stores.length > 0 && (
+      {storeChoices.length > 0 && (
         <Pressable
           style={styles.addStoreRow}
           onPress={() => setStorePickerFor('add')}
@@ -263,7 +277,7 @@ export default function ShoppingListScreen() {
       <GroupPicker
         visible={storePickerFor != null}
         title={t('pantry.shopping.storeGroup.pickerTitle')}
-        groups={stores}
+        groups={storeChoices}
         value={
           storePickerFor === 'add'
             ? addStore

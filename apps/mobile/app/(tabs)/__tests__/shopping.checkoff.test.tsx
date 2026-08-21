@@ -14,6 +14,7 @@ import type { ShoppingItem } from '../../../src/services/types';
 const mockGetShoppingItems = jest.fn(async () => [] as ShoppingItem[]);
 const mockSetChecked = jest.fn(async () => undefined);
 const mockMoveToPantry = jest.fn(async () => true);
+const mockGetStoreGroups = jest.fn(async () => [] as string[]);
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
@@ -26,6 +27,10 @@ jest.mock('expo-router', () => ({
 jest.mock('../../../src/services/pantry.service', () => ({
   moveShoppingItemToPantry: (...args: unknown[]) => mockMoveToPantry(...(args as [])),
   UNGROUPED: '__ungrouped__',
+}));
+
+jest.mock('../../../src/services/store-group.service', () => ({
+  getShoppingStoreGroups: (...args: unknown[]) => mockGetStoreGroups(...(args as [])),
 }));
 
 jest.mock('../../../src/services/shopping-list.service', () => ({
@@ -54,6 +59,7 @@ describe('ShoppingListScreen — 消し込み済みの行', () => {
     mockGetShoppingItems.mockReset().mockResolvedValue([]);
     mockSetChecked.mockReset().mockResolvedValue(undefined);
     mockMoveToPantry.mockReset().mockResolvedValue(true);
+    mockGetStoreGroups.mockReset().mockResolvedValue([]);
   });
 
   it('チェック済みの行をタップすると、在庫へ移さずチェックを外す', async () => {
@@ -80,6 +86,29 @@ describe('ShoppingListScreen — 消し込み済みの行', () => {
 
     expect(mockMoveToPantry).toHaveBeenCalled();
     expect(mockSetChecked).not.toHaveBeenCalled();
+  });
+
+  it('レシートで覚えた買う場所は、まだ品が無くても選べる', async () => {
+    // 対応表にしかない場所（レシートで「この店 = スーパー」と覚えた直後）。
+    // 品から作った一覧だけだと候補に出ず、覚えた意味が無くなる
+    mockGetShoppingItems.mockResolvedValue([item({ id: 's1', name: '牛乳' })]);
+    mockGetStoreGroups.mockResolvedValue(['スーパー']);
+    render(<ShoppingListScreen />);
+    await waitFor(() => expect(screen.getByText('牛乳')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(t('pantry.shopping.storeGroup.editLabel')));
+    });
+    expect(screen.getByText('スーパー')).toBeTruthy();
+  });
+
+  it('品が 1 つも無い買う場所のチップは出さない（押しても空になるだけ）', async () => {
+    mockGetShoppingItems.mockResolvedValue([item({ id: 's1', name: '牛乳' })]);
+    mockGetStoreGroups.mockResolvedValue(['スーパー']);
+    render(<ShoppingListScreen />);
+    await waitFor(() => expect(screen.getByText('牛乳')).toBeTruthy());
+
+    expect(screen.queryByText(t('pantry.shopping.storeGroup.all'))).toBeNull();
   });
 
   it('買う場所で絞り込める。未設定は常に覗ける（振り分け忘れを埋もれさせない）', async () => {
