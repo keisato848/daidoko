@@ -7,6 +7,8 @@
  */
 import { isNativePlatform } from '../db/client';
 import { generateId } from '../utils/id';
+import { SYNC_ENTITY_NAME_ALIAS } from './sync-payload';
+import { enqueueSyncEntity } from './sync-queue.service';
 
 export interface AliasEntry {
   sourceNormalized: string;
@@ -88,6 +90,7 @@ export async function updateAliasCanonical(id: string, canonical: string): Promi
     .update(schema.nameAliases)
     .set({ canonical: trimmed, updatedAt: new Date().toISOString() })
     .where(eq(schema.nameAliases.id, id));
+  await enqueueSyncEntity(SYNC_ENTITY_NAME_ALIAS, id);
 }
 
 /** Remove a cached entry — it will be re-resolved by AI next time it's seen. */
@@ -97,6 +100,7 @@ export async function deleteAlias(id: string): Promise<void> {
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
   await getDb().delete(schema.nameAliases).where(eq(schema.nameAliases.id, id));
+  await enqueueSyncEntity(SYNC_ENTITY_NAME_ALIAS, id);
 }
 
 /** Upsert resolved aliases. */
@@ -123,19 +127,23 @@ export async function cacheAliases(entries: AliasEntry[]): Promise<void> {
       )
       .limit(1);
 
+    let id: string;
     if (existing.length > 0) {
+      id = existing[0].id;
       await db
         .update(schema.nameAliases)
         .set({ canonical: entry.canonical, updatedAt: now })
-        .where(eq(schema.nameAliases.id, existing[0].id));
+        .where(eq(schema.nameAliases.id, id));
     } else {
+      id = generateId();
       await db.insert(schema.nameAliases).values({
-        id: generateId(),
+        id,
         familyId,
         sourceNormalized: entry.sourceNormalized,
         canonical: entry.canonical,
         updatedAt: now,
       });
     }
+    await enqueueSyncEntity(SYNC_ENTITY_NAME_ALIAS, id);
   }
 }

@@ -32,6 +32,7 @@ import {
   SYNC_ENTITY_RECIPE_BOOK,
   SYNC_PAYLOAD_SCHEMA_VERSION,
   incomingChangeWins,
+  isRowSyncPayload,
   parseSyncPayload,
   serializeSyncPayload,
   type RecipeBookSyncPayload,
@@ -39,6 +40,13 @@ import {
   type SyncEntityType,
 } from './sync-payload';
 import { withRemoteApply } from './sync-queue.service';
+import {
+  applyRowPayload,
+  applyRowTombstone,
+  buildRowOutgoingChange,
+  isRowEntityType,
+  listRowSyncableEntities,
+} from './sync-row-entities.service';
 
 /** レシピ・タグの所属。全端末で同じ固定値（`recipe.service.ts` と揃える） */
 const FAMILY_ID = 'family-001';
@@ -274,6 +282,10 @@ export async function buildOutgoingChange(
     if (entityType === SYNC_ENTITY_RECIPE_BOOK) {
       return { kind: 'change', change: await buildRecipeBookChange(entityId, deletedAt) };
     }
+    // 買い物・在庫・辞書（S2）。1 行で完結する種別は別モジュールが持つ
+    if (isRowEntityType(entityType)) {
+      return buildRowOutgoingChange(entityType, entityId, deletedAt);
+    }
     return { kind: 'unsupported' };
   } catch {
     // DB が一瞬掴めなかった等。**捨てずに待ち行列へ残す**
@@ -302,6 +314,8 @@ export async function listAllSyncableEntities(): Promise<
       ...bookRows.map(
         (row) => ({ entityType: SYNC_ENTITY_RECIPE_BOOK, entityId: row.id }) as const,
       ),
+      // 買い物・在庫・辞書（S2）。**共有していない行は含まれない**
+      ...(await listRowSyncableEntities()),
     ];
   } catch {
     return [];
@@ -616,6 +630,9 @@ export async function applyIncomingChange(change: IncomingChange): Promise<Apply
         if (change.entityType === SYNC_ENTITY_RECIPE_BOOK) {
           return applyRecipeBookTombstone(change.entityId, change.clientUpdatedAt);
         }
+        if (isRowEntityType(change.entityType)) {
+          return applyRowTombstone(change.entityType, change.entityId, change.clientUpdatedAt);
+        }
         return 'skipped';
       }
 
@@ -628,6 +645,10 @@ export async function applyIncomingChange(change: IncomingChange): Promise<Apply
       if (payload.entity === SYNC_ENTITY_RECIPE_BOOK) {
         if (payload.book.id !== change.entityId) return 'skipped';
         return applyRecipeBookPayload(payload);
+      }
+      if (isRowSyncPayload(payload)) {
+        if (payload.item.id !== change.entityId) return 'skipped'; // 封筒と中身の食い違い
+        return applyRowPayload(payload);
       }
       return 'skipped';
     });

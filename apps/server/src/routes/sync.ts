@@ -232,11 +232,27 @@ export function notificationTextFor(locale: string | null): { title: string; bod
  * アプリを開いたときの pull で必ず追いつく。
  */
 const NOTIFY_DEBOUNCE_MS = 5 * 60 * 1000;
+
+/**
+ * 買い物リスト・在庫を含む変更は**もっと短い窓**にする（設計 §5-2b）。
+ * 「片方が買ったら伝わる」が買い物リストの価値そのもので、5 分待たせると意味が無い。
+ * 通知の中身は変えない（固定文のまま — §0-2）。
+ */
+const NOTIFY_DEBOUNCE_URGENT_MS = 60 * 1000;
+
+/** この種別が含まれる push は急ぎ扱い（買い物中に効くもの） */
+const URGENT_ENTITY_TYPES = new Set(['shopping_item', 'pantry_item']);
+
+export function isUrgentChange(entityTypes: readonly string[]): boolean {
+  return entityTypes.some((type) => URGENT_ENTITY_TYPES.has(type));
+}
+
 const lastNotifiedAt = new Map<string, number>();
 
-export function takeNotifySlot(groupId: string, now = Date.now()): boolean {
+export function takeNotifySlot(groupId: string, now = Date.now(), urgent = false): boolean {
+  const window = urgent ? NOTIFY_DEBOUNCE_URGENT_MS : NOTIFY_DEBOUNCE_MS;
   const last = lastNotifiedAt.get(groupId);
-  if (last !== undefined && now - last < NOTIFY_DEBOUNCE_MS) return false;
+  if (last !== undefined && now - last < window) return false;
   lastNotifiedAt.set(groupId, now);
   return true;
 }
@@ -250,9 +266,9 @@ export function resetSyncNotifyDebounceForTesting(): void {
  * 文言に利用者名・データ内容を含めない。§0-2 の該当性判定）。ベストエフォートで
  * 失敗は握る — 通知が落ちても次回起動時の pull で追いつく。
  */
-async function notifyGroupDevices(device: AuthedDevice): Promise<void> {
+async function notifyGroupDevices(device: AuthedDevice, urgent: boolean): Promise<void> {
   try {
-    if (!takeNotifySlot(device.groupId)) return;
+    if (!takeNotifySlot(device.groupId, Date.now(), urgent)) return;
     const targets = await getOtherDevicePushTargets(device);
     if (targets.length === 0) return;
     await fetch('https://exp.host/--/api/v2/push/send', {
@@ -275,7 +291,9 @@ syncRouter.post('/push', requireDevice, zValidator('json', pushSchema), async (c
   const device = c.get('device');
   const { changes } = c.req.valid('json');
   const result = await pushChanges(device, changes);
-  if (result.applied > 0) void notifyGroupDevices(device);
+  if (result.applied > 0) {
+    void notifyGroupDevices(device, isUrgentChange(changes.map((change) => change.entityType)));
+  }
   return c.json({ ok: true, data: result });
 });
 

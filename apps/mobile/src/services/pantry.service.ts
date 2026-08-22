@@ -10,6 +10,8 @@
 import { isNativePlatform } from '../db/client';
 import { parseAmount } from '../utils/amount';
 import { generateId } from '../utils/id';
+import { SYNC_ENTITY_PANTRY_ITEM } from './sync-payload';
+import { enqueueSyncEntity } from './sync-queue.service';
 import { normalizeItemName } from '../utils/itemName';
 import type { PantryItem } from './types';
 
@@ -180,6 +182,7 @@ export async function addPantryItem(
         updatedAt: now,
       })
       .where(eq(schema.pantryItems.id, prev.id));
+    await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, prev.id);
     return {
       id: prev.id,
       name: prev.name,
@@ -274,6 +277,7 @@ export async function updatePantryItem(
   }
 
   await db.update(schema.pantryItems).set(set).where(eq(schema.pantryItems.id, id));
+  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
 }
 
 /**
@@ -347,6 +351,9 @@ async function mergeIntoGroup(id: string, groupName: string | null): Promise<boo
     })
     .where(eq(schema.pantryItems.id, into.id));
   await db.delete(schema.pantryItems).where(eq(schema.pantryItems.id, id));
+  // **寄せ先と、消えた自分の両方**を積む。消えた側を積み忘れると他端末に残り続ける
+  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, into.id);
+  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
   return true;
 }
 
@@ -356,6 +363,7 @@ export async function removePantryItem(id: string): Promise<void> {
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
   await getDb().delete(schema.pantryItems).where(eq(schema.pantryItems.id, id));
+  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
 }
 
 /**

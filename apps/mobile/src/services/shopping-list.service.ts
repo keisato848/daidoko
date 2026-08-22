@@ -8,6 +8,8 @@
  */
 import { isNativePlatform } from '../db/client';
 import { generateId } from '../utils/id';
+import { SYNC_ENTITY_SHOPPING_ITEM } from './sync-payload';
+import { enqueueSyncEntity } from './sync-queue.service';
 import { isInStock } from '../utils/itemMatch';
 import { normalizeItemName } from '../utils/itemName';
 import { getRecipeDetail } from './recipe.service';
@@ -127,7 +129,12 @@ export async function addShoppingItem(
     createdBy: getCurrentUser().id,
     createdAt: new Date().toISOString(),
     checkedAt: null,
+    // 同期の LWW の基準（v15）。**全書き込み経路でセットすること** —
+    // ここが古いままだと、他端末の古い変更に負けて変更が消える
+    updatedAt: new Date().toISOString(),
   });
+
+  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
 
   return {
     id,
@@ -311,13 +318,16 @@ export async function checkOffByNames(boughtNames: readonly string[]): Promise<C
   const now = new Date().toISOString();
   await db
     .update(schema.shoppingItems)
-    .set({ checked: 1, checkedAt: now, checkedBy: getCurrentUser().id })
+    .set({ checked: 1, checkedAt: now, checkedBy: getCurrentUser().id, updatedAt: now })
     .where(
       inArray(
         schema.shoppingItems.id,
         hit.map((item) => item.id),
       ),
     );
+  for (const item of hit) {
+    await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, item.id);
+  }
   return { count: hit.length, names: hit.map((item) => item.name) };
 }
 
@@ -331,14 +341,17 @@ export async function setShoppingItemChecked(id: string, checked: boolean): Prom
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
 
+  const now = new Date().toISOString();
   await getDb()
     .update(schema.shoppingItems)
     .set(
       checked
-        ? { checked: 1, checkedAt: new Date().toISOString(), checkedBy: getCurrentUser().id }
-        : { checked: 0, checkedAt: null, checkedBy: null },
+        ? { checked: 1, checkedAt: now, checkedBy: getCurrentUser().id, updatedAt: now }
+        : { checked: 0, checkedAt: null, checkedBy: null, updatedAt: now },
     )
     .where(eq(schema.shoppingItems.id, id));
+
+  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
 }
 
 /** 買う場所を変える（空文字・null は未設定に戻す） */
@@ -350,8 +363,13 @@ export async function setShoppingItemStore(id: string, storeGroup: string | null
 
   await getDb()
     .update(schema.shoppingItems)
-    .set({ storeGroup: storeGroup?.trim() ? storeGroup.trim() : null })
+    .set({
+      storeGroup: storeGroup?.trim() ? storeGroup.trim() : null,
+      updatedAt: new Date().toISOString(),
+    })
     .where(eq(schema.shoppingItems.id, id));
+
+  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
 }
 
 export async function removeShoppingItem(id: string): Promise<void> {
@@ -360,4 +378,6 @@ export async function removeShoppingItem(id: string): Promise<void> {
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
   await getDb().delete(schema.shoppingItems).where(eq(schema.shoppingItems.id, id));
+  // 物理削除。送信時に行が無いことを見て tombstone になる（sync-row-entities.service）
+  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
 }

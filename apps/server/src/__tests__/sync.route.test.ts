@@ -17,6 +17,7 @@ import { closeSyncStoreForTesting } from '../lib/sync-store.js';
 import {
   SYNC_NOTIFICATION_TEXT,
   notificationTextFor,
+  isUrgentChange,
   resetSyncNotifyDebounceForTesting,
   resetSyncRateLimitForTesting,
   takeNotifySlot,
@@ -382,5 +383,19 @@ describe('変更通知の文面と間引き', () => {
     const base = Date.parse('2026-08-21T10:00:00.000Z');
     expect(takeNotifySlot('group-1', base)).toBe(true);
     expect(takeNotifySlot('group-2', base)).toBe(true);
+  });
+
+  it('買い物・在庫を含む変更は 1 分で通す（買い物中に効くのが価値なので）', () => {
+    const base = Date.parse('2026-08-21T10:00:00.000Z');
+    expect(takeNotifySlot('group-1', base, true)).toBe(true);
+    expect(takeNotifySlot('group-1', base + 30_000, true)).toBe(false);
+    expect(takeNotifySlot('group-1', base + 60_000, true)).toBe(true);
+  });
+
+  it('急ぎ扱いになるのは買い物・在庫だけ', () => {
+    expect(isUrgentChange(['recipe', 'recipe_book'])).toBe(false);
+    expect(isUrgentChange(['recipe', 'shopping_item'])).toBe(true);
+    expect(isUrgentChange(['pantry_item'])).toBe(true);
+    expect(isUrgentChange(['name_alias'])).toBe(false);
   });
 });

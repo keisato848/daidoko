@@ -5,6 +5,8 @@
  */
 import { isNativePlatform } from '../db/client';
 import { generateId } from '../utils/id';
+import { SYNC_ENTITY_JAN_CATALOG } from './sync-payload';
+import { enqueueSyncEntity } from './sync-queue.service';
 
 export interface JanEntry {
   name: string;
@@ -60,14 +62,17 @@ export async function rememberJan(
     .where(and(eq(schema.janCatalog.familyId, familyId), eq(schema.janCatalog.janCode, janCode)))
     .limit(1);
 
+  let id: string;
   if (existing.length > 0) {
+    id = existing[0].id;
     await db
       .update(schema.janCatalog)
       .set({ name: trimmedName, unit: unitValue, updatedAt: now })
-      .where(eq(schema.janCatalog.id, existing[0].id));
+      .where(eq(schema.janCatalog.id, id));
   } else {
+    id = generateId();
     await db.insert(schema.janCatalog).values({
-      id: generateId(),
+      id,
       familyId,
       janCode,
       name: trimmedName,
@@ -75,4 +80,6 @@ export async function rememberJan(
       updatedAt: now,
     });
   }
+
+  await enqueueSyncEntity(SYNC_ENTITY_JAN_CATALOG, id);
 }

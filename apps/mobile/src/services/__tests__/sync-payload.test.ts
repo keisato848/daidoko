@@ -7,9 +7,13 @@
  * - LWW は updatedAt 基準・同値は受信側（サーバー）優先
  */
 import {
+  SYNC_ENTITY_NAME_ALIAS,
+  SYNC_ENTITY_PANTRY_ITEM,
   SYNC_ENTITY_RECIPE,
   SYNC_ENTITY_RECIPE_BOOK,
+  SYNC_ENTITY_SHOPPING_ITEM,
   SYNC_PAYLOAD_SCHEMA_VERSION,
+  hasNaturalKey,
   incomingChangeWins,
   isSyncEntityType,
   parseSyncPayload,
@@ -173,9 +177,11 @@ describe('sync-payload — 壊れた入力', () => {
   });
 
   it('知らないエンティティ種別は捨てる', () => {
-    expect(parseSyncPayload('pantry_item', serializeSyncPayload(recipePayload()))).toBeNull();
-    expect(isSyncEntityType('pantry_item')).toBe(false);
+    // cooking_log は S3 の種別。いまのアプリは知らない
+    expect(parseSyncPayload('cooking_log', serializeSyncPayload(recipePayload()))).toBeNull();
+    expect(isSyncEntityType('cooking_log')).toBe(false);
     expect(isSyncEntityType(SYNC_ENTITY_RECIPE)).toBe(true);
+    expect(isSyncEntityType('pantry_item')).toBe(true);
   });
 
   it('欠けている任意の列は null に寄せる（旧版の端末からの受信）', () => {
@@ -224,5 +230,119 @@ describe('sync-payload — LWW', () => {
   it('壊れた時刻はローカルを守る', () => {
     expect(incomingChangeWins('not-a-date', older)).toBe(false);
     expect(incomingChangeWins(older, 'not-a-date')).toBe(true);
+  });
+});
+
+describe('sync-payload — 買い物・在庫・辞書（S2）', () => {
+  function shoppingPayload() {
+    return {
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: SYNC_ENTITY_SHOPPING_ITEM,
+      item: {
+        id: 'shop-1',
+        name: '牛乳',
+        nameNormalized: 'ぎゅうにゅう',
+        amount: '1本',
+        checked: 0,
+        source: 'manual',
+        sortOrder: 3,
+        storeGroup: 'スーパー',
+        createdAt: '2026-08-20T10:00:00.000Z',
+        checkedAt: null,
+        updatedAt: '2026-08-22T10:00:00.000Z',
+      },
+    } as const;
+  }
+
+  function pantryPayload() {
+    return {
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: SYNC_ENTITY_PANTRY_ITEM,
+      item: {
+        id: 'pantry-1',
+        name: '卵',
+        nameNormalized: 'たまご',
+        quantity: 5,
+        unit: '個',
+        lowStockThreshold: 2,
+        janCode: null,
+        groupName: '冷蔵庫',
+        expiresOn: '2026-09-01',
+        createdAt: '2026-08-20T10:00:00.000Z',
+        updatedAt: '2026-08-22T10:00:00.000Z',
+      },
+    } as const;
+  }
+
+  it('買い物の項目が往復しても変わらない', () => {
+    const payload = shoppingPayload();
+    expect(parseSyncPayload(SYNC_ENTITY_SHOPPING_ITEM, serializeSyncPayload(payload))).toEqual(
+      payload,
+    );
+  });
+
+  it('在庫の項目が往復しても変わらない（数量も運ぶ — S2-A は LWW）', () => {
+    const payload = pantryPayload();
+    const parsed = parseSyncPayload(SYNC_ENTITY_PANTRY_ITEM, serializeSyncPayload(payload));
+    expect(parsed).toEqual(payload);
+    expect(parsed && 'item' in parsed ? parsed.item : null).toMatchObject({ quantity: 5 });
+  });
+
+  it('所属・入れた人・共有フラグは運ばない', () => {
+    for (const json of [
+      serializeSyncPayload(shoppingPayload()),
+      serializeSyncPayload(pantryPayload()),
+    ]) {
+      expect(json).not.toContain('familyId');
+      expect(json).not.toContain('createdBy');
+      expect(json).not.toContain('checkedBy');
+      // サーバーに行があること自体が「共有中」を意味するので shared は運ばない
+      expect(json).not.toContain('shared');
+      // 受信側に無いレシピを指すと外部キーで落ちるので運ばない
+      expect(json).not.toContain('recipeId');
+    }
+  });
+
+  it('辞書系（名寄せ）も運べる', () => {
+    const payload = {
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: SYNC_ENTITY_NAME_ALIAS,
+      item: {
+        id: 'alias-1',
+        sourceNormalized: 'たまご',
+        canonical: '卵',
+        updatedAt: '2026-08-22T10:00:00.000Z',
+      },
+    } as const;
+    expect(parseSyncPayload(SYNC_ENTITY_NAME_ALIAS, serializeSyncPayload(payload))).toEqual(
+      payload,
+    );
+  });
+
+  it('封筒と中身の食い違いは捨てる', () => {
+    expect(
+      parseSyncPayload(SYNC_ENTITY_PANTRY_ITEM, serializeSyncPayload(shoppingPayload())),
+    ).toBeNull();
+  });
+
+  it('自然キーを持つ種別が分かる（id で upsert すると一意制約で落ちるもの）', () => {
+    expect(hasNaturalKey(SYNC_ENTITY_NAME_ALIAS)).toBe(true);
+    expect(hasNaturalKey(SYNC_ENTITY_SHOPPING_ITEM)).toBe(false);
+    expect(hasNaturalKey(SYNC_ENTITY_RECIPE)).toBe(false);
+  });
+});
+
+describe('sync-payload — 版を上げても古い payload が読めること', () => {
+  it('v1 のレシピ payload は v2 のアプリでもそのまま読める', () => {
+    const v1 = JSON.stringify({ ...recipePayload(), schemaVersion: 1 });
+
+    const parsed = parseSyncPayload(SYNC_ENTITY_RECIPE, v1);
+
+    expect(parsed).not.toBeNull();
+    expect(parsed && 'recipe' in parsed ? parsed.recipe.title : null).toBe('肉じゃが');
+  });
+
+  it('版は 2（S2 で種別を増やしたため）', () => {
+    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(2);
   });
 });

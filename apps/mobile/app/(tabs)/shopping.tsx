@@ -8,6 +8,7 @@ import { Check, Plus, Store, X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
 import { AdBanner } from '../../src/components/AdBanner';
 import { GroupChips } from '../../src/components/GroupChips';
 import { GroupPicker } from '../../src/components/GroupPicker';
@@ -54,6 +55,8 @@ export default function ShoppingListScreen() {
       .catch(() => setKnownStores([]));
   }, []);
   useFocusEffect(refresh);
+  // 開いたまま家族の変更が届いたときに読み直す（クラウド同期 S2）
+  useSyncRefresh(refresh);
 
   const handleAdd = useCallback(async () => {
     const name = input.trim();

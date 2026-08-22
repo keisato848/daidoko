@@ -19,18 +19,57 @@
  */
 import { z } from 'zod';
 
-/** payload の版。列を増やしたら上げる（受信側は自分より新しい版を読み飛ばす） */
-export const SYNC_PAYLOAD_SCHEMA_VERSION = 1;
+/**
+ * payload の版。列を増やしたら上げる（受信側は自分より新しい版を読み飛ばす）。
+ *
+ * **上げるとカーソルが 0 に戻り、全端末が一度だけ全量を取り直す**（`sync-runner`）。
+ * 種別を増やしたときも上げること — 上げないと、古い版のまま動いている端末が
+ * 新種別を読み飛ばしたのに**カーソルだけ進んで二度と拾えない**（設計 §5-2b）。
+ *
+ * v2: S2 で買い物・在庫・辞書の 5 種別を追加（レシピ・帖の形は変えていないので、
+ * v1 の payload はそのまま読める）
+ */
+export const SYNC_PAYLOAD_SCHEMA_VERSION = 2;
 
 export const SYNC_ENTITY_RECIPE = 'recipe';
 export const SYNC_ENTITY_RECIPE_BOOK = 'recipe_book';
+export const SYNC_ENTITY_SHOPPING_ITEM = 'shopping_item';
+export const SYNC_ENTITY_PANTRY_ITEM = 'pantry_item';
+export const SYNC_ENTITY_NAME_ALIAS = 'name_alias';
+export const SYNC_ENTITY_JAN_CATALOG = 'jan_catalog';
+export const SYNC_ENTITY_STORE_GROUP_ALIAS = 'store_group_alias';
 
-/** S1 の同期対象。S2 で買い物・在庫が増える */
-export type SyncEntityType = typeof SYNC_ENTITY_RECIPE | typeof SYNC_ENTITY_RECIPE_BOOK;
+/** 同期対象の種別（S1: レシピ・帖 / S2: 買い物・在庫・辞書） */
+export type SyncEntityType =
+  | typeof SYNC_ENTITY_RECIPE
+  | typeof SYNC_ENTITY_RECIPE_BOOK
+  | typeof SYNC_ENTITY_SHOPPING_ITEM
+  | typeof SYNC_ENTITY_PANTRY_ITEM
+  | typeof SYNC_ENTITY_NAME_ALIAS
+  | typeof SYNC_ENTITY_JAN_CATALOG
+  | typeof SYNC_ENTITY_STORE_GROUP_ALIAS;
 
 export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = [
   SYNC_ENTITY_RECIPE,
   SYNC_ENTITY_RECIPE_BOOK,
+  SYNC_ENTITY_SHOPPING_ITEM,
+  SYNC_ENTITY_PANTRY_ITEM,
+  SYNC_ENTITY_NAME_ALIAS,
+  SYNC_ENTITY_JAN_CATALOG,
+  SYNC_ENTITY_STORE_GROUP_ALIAS,
+];
+
+/**
+ * 自然キー（内容で一意に決まる鍵）を持つ辞書系の種別。
+ *
+ * これらは `(family_id, …)` の UNIQUE 索引があるので、**受信を id で upsert すると
+ * 一意制約で落ちる**（同じ「たまご→卵」を両端末が別 id で持っているのが普通）。
+ * 適用は id ではなく**自然キーで引き当てて中身だけ更新**する（`sync-pantry-entities`）。
+ */
+export const NATURAL_KEY_ENTITY_TYPES: readonly SyncEntityType[] = [
+  SYNC_ENTITY_NAME_ALIAS,
+  SYNC_ENTITY_JAN_CATALOG,
+  SYNC_ENTITY_STORE_GROUP_ALIAS,
 ];
 
 export function isSyncEntityType(value: string): value is SyncEntityType {
@@ -112,7 +151,104 @@ export interface RecipeBookSyncPayload {
   recipeIds: string[];
 }
 
-export type SyncPayload = RecipeSyncPayload | RecipeBookSyncPayload;
+// ── 買い物・在庫・辞書（S2 — 設計 §5-2b）─────────────────────────────────────
+//
+// 共通の約束:
+// - `familyId` は運ばない（全端末 `family-001` 固定 — S1 と同じ理由）
+// - `createdBy` / `checkedBy` も運ばない（全端末 `user-kei` 固定で区別が付かない）
+// - **`shared` も運ばない。** サーバーに行があること自体が「共有されている」を意味する。
+//   1→0（共有をやめる）は tombstone として送る（設計 §5-2b）
+// - **数量は行の一部として LWW で運ぶ（S2-A）。** デルタ化は S2-B
+
+export interface ShoppingItemSyncPayload {
+  schemaVersion: number;
+  entity: typeof SYNC_ENTITY_SHOPPING_ITEM;
+  item: {
+    id: string;
+    name: string;
+    nameNormalized: string;
+    amount: string | null;
+    /** 0 = 未チェック / 1 = 買った */
+    checked: number;
+    source: string;
+    sortOrder: number;
+    storeGroup: string | null;
+    createdAt: string;
+    checkedAt: string | null;
+    updatedAt: string;
+  };
+}
+
+export interface PantryItemSyncPayload {
+  schemaVersion: number;
+  entity: typeof SYNC_ENTITY_PANTRY_ITEM;
+  item: {
+    id: string;
+    name: string;
+    nameNormalized: string;
+    /** S2-A では LWW。同時に別々の端末で減らすと片方が失われる（既知・§5-2b） */
+    quantity: number | null;
+    unit: string | null;
+    lowStockThreshold: number | null;
+    janCode: string | null;
+    groupName: string | null;
+    expiresOn: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
+export interface NameAliasSyncPayload {
+  schemaVersion: number;
+  entity: typeof SYNC_ENTITY_NAME_ALIAS;
+  item: {
+    id: string;
+    sourceNormalized: string;
+    canonical: string;
+    updatedAt: string;
+  };
+}
+
+export interface JanCatalogSyncPayload {
+  schemaVersion: number;
+  entity: typeof SYNC_ENTITY_JAN_CATALOG;
+  item: {
+    id: string;
+    janCode: string;
+    name: string;
+    unit: string | null;
+    updatedAt: string;
+  };
+}
+
+export interface StoreGroupAliasSyncPayload {
+  schemaVersion: number;
+  entity: typeof SYNC_ENTITY_STORE_GROUP_ALIAS;
+  item: {
+    id: string;
+    storeName: string;
+    groupName: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
+export type SyncPayload =
+  | RecipeSyncPayload
+  | RecipeBookSyncPayload
+  | ShoppingItemSyncPayload
+  | PantryItemSyncPayload
+  | NameAliasSyncPayload
+  | JanCatalogSyncPayload
+  | StoreGroupAliasSyncPayload;
+
+/** 行を 1 つ運ぶだけの種別が共通で持つ形（適用側の分岐を薄くするため） */
+export type RowSyncPayload =
+  | ShoppingItemSyncPayload
+  | PantryItemSyncPayload
+  | NameAliasSyncPayload
+  | JanCatalogSyncPayload
+  | StoreGroupAliasSyncPayload;
 
 // ── 受信 payload の検証 ──────────────────────────────────────────────────────
 // 他端末が送ってきた文字列は信用しない。壊れていたら**その 1 件だけ捨てる**
@@ -198,6 +334,88 @@ const recipeBookPayloadSchema = z.object({
   recipeIds: z.array(z.string().min(1)),
 });
 
+const shoppingItemPayloadSchema = z.object({
+  schemaVersion: z.number(),
+  entity: z.literal(SYNC_ENTITY_SHOPPING_ITEM),
+  item: z.object({
+    id: z.string().min(1),
+    name: z.string(),
+    nameNormalized: z.string(),
+    amount: nullableText,
+    checked: z.number(),
+    source: z.string(),
+    sortOrder: z.number(),
+    storeGroup: nullableText,
+    createdAt: z.string().min(1),
+    checkedAt: nullableText,
+    updatedAt: z.string().min(1),
+  }),
+});
+
+const pantryItemPayloadSchema = z.object({
+  schemaVersion: z.number(),
+  entity: z.literal(SYNC_ENTITY_PANTRY_ITEM),
+  item: z.object({
+    id: z.string().min(1),
+    name: z.string(),
+    nameNormalized: z.string(),
+    quantity: nullableNumber,
+    unit: nullableText,
+    lowStockThreshold: nullableNumber,
+    janCode: nullableText,
+    groupName: nullableText,
+    expiresOn: nullableText,
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1),
+  }),
+});
+
+const nameAliasPayloadSchema = z.object({
+  schemaVersion: z.number(),
+  entity: z.literal(SYNC_ENTITY_NAME_ALIAS),
+  item: z.object({
+    id: z.string().min(1),
+    sourceNormalized: z.string().min(1),
+    canonical: z.string().min(1),
+    updatedAt: z.string().min(1),
+  }),
+});
+
+const janCatalogPayloadSchema = z.object({
+  schemaVersion: z.number(),
+  entity: z.literal(SYNC_ENTITY_JAN_CATALOG),
+  item: z.object({
+    id: z.string().min(1),
+    janCode: z.string().min(1),
+    name: z.string(),
+    unit: nullableText,
+    updatedAt: z.string().min(1),
+  }),
+});
+
+const storeGroupAliasPayloadSchema = z.object({
+  schemaVersion: z.number(),
+  entity: z.literal(SYNC_ENTITY_STORE_GROUP_ALIAS),
+  item: z.object({
+    id: z.string().min(1),
+    storeName: z.string().min(1),
+    groupName: z.string().min(1),
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1),
+  }),
+});
+
+/** entityType → zod スキーマ。増やすのはここだけで済むようにしておく */
+const PAYLOAD_SCHEMAS = {
+  [SYNC_ENTITY_RECIPE]: recipePayloadSchema,
+  [SYNC_ENTITY_RECIPE_BOOK]: recipeBookPayloadSchema,
+  [SYNC_ENTITY_SHOPPING_ITEM]: shoppingItemPayloadSchema,
+  [SYNC_ENTITY_PANTRY_ITEM]: pantryItemPayloadSchema,
+  [SYNC_ENTITY_NAME_ALIAS]: nameAliasPayloadSchema,
+  [SYNC_ENTITY_JAN_CATALOG]: janCatalogPayloadSchema,
+  [SYNC_ENTITY_STORE_GROUP_ALIAS]: storeGroupAliasPayloadSchema,
+} as const;
+
 function parseJson(raw: string): unknown {
   try {
     return JSON.parse(raw);
@@ -219,15 +437,20 @@ export function parseSyncPayload(entityType: string, raw: string | null): SyncPa
   const version = (json as { schemaVersion?: unknown }).schemaVersion;
   if (typeof version !== 'number' || version > SYNC_PAYLOAD_SCHEMA_VERSION) return null;
 
-  if (entityType === SYNC_ENTITY_RECIPE) {
-    const parsed = recipePayloadSchema.safeParse(json);
-    return parsed.success ? parsed.data : null;
-  }
-  if (entityType === SYNC_ENTITY_RECIPE_BOOK) {
-    const parsed = recipeBookPayloadSchema.safeParse(json);
-    return parsed.success ? parsed.data : null;
-  }
-  return null;
+  const schema = (PAYLOAD_SCHEMAS as Record<string, z.ZodTypeAny | undefined>)[entityType];
+  if (!schema) return null; // 知らない種別（古いアプリが新しい種別を受けたとき）
+  const parsed = schema.safeParse(json);
+  return parsed.success ? (parsed.data as SyncPayload) : null;
+}
+
+/** 行を 1 つ運ぶだけの種別か（適用側が共通処理へ振り分けるのに使う） */
+export function isRowSyncPayload(payload: SyncPayload): payload is RowSyncPayload {
+  return payload.entity !== SYNC_ENTITY_RECIPE && payload.entity !== SYNC_ENTITY_RECIPE_BOOK;
+}
+
+/** 自然キーで引き当てる辞書系か */
+export function hasNaturalKey(entityType: string): boolean {
+  return (NATURAL_KEY_ENTITY_TYPES as readonly string[]).includes(entityType);
 }
 
 export function serializeSyncPayload(payload: SyncPayload): string {
