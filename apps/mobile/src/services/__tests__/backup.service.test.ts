@@ -77,6 +77,7 @@ describe('バックアップ対象の取りこぼし防止', () => {
         'memos',
         'name_aliases',
         'pantry_items',
+        'pantry_quantity_parts',
         'recipe_book_items',
         'recipe_books',
         'recipe_revisions',

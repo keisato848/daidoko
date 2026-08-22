@@ -27,6 +27,11 @@ export function useDatabase() {
           await seedDatabase(getDb());
           // 旧データの絶対パスを相対へ揃える（冪等・photo-path.ts）
           await normalizePhotoPaths(getDb());
+          // v16: 在庫数量のベースライン化（未移行の行だけ）と自己修復の再実体化（設計 §5-3-1）
+          const { ensureQuantityBaseline, rematerializeAll } =
+            await import('../services/pantry-quantity.db');
+          await ensureQuantityBaseline();
+          await rematerializeAll();
         }
         // Web: no DB, screens use mock data
         setIsReady(true);

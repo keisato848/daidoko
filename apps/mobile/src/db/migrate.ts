@@ -30,7 +30,7 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 
 // v12: レシピの店名 / v13: 在庫・買い物のグループ、賞味期限、誰が / v14: クラウド同期の送信待ち
 // v15: 買い物・在庫の同期（LWW の基準となる updated_at と、個人/家族の shared フラグ）
-export const CURRENT_SCHEMA_VERSION = 15;
+export const CURRENT_SCHEMA_VERSION = 16;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -259,6 +259,18 @@ const CREATE_TABLES_SQL = `
 
   CREATE INDEX IF NOT EXISTS idx_sync_queue_queued ON sync_queue(queued_at);
 
+  -- v16: per-device quantity parts (S2-B, design section 5-3). Value columns are all nullable.
+  CREATE TABLE IF NOT EXISTS pantry_quantity_parts (
+    item_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    net REAL,
+    epoch INTEGER,
+    updated_at TEXT,
+    PRIMARY KEY (item_id, device_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pantry_quantity_parts_item ON pantry_quantity_parts(item_id);
+
   CREATE TABLE IF NOT EXISTS ingredient_nutrition (
     id TEXT PRIMARY KEY,
     ingredient_id TEXT NOT NULL UNIQUE REFERENCES ingredients(id),
@@ -393,6 +405,9 @@ export const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   { table: 'shopping_items', columnDdl: 'updated_at TEXT' },
   { table: 'shopping_items', columnDdl: 'shared INTEGER' },
   { table: 'pantry_items', columnDdl: 'shared INTEGER' },
+  // v16: 数量のベースライン（S2-B・設計 §5-3）。NULL = 未移行（quantity が権威）
+  { table: 'pantry_items', columnDdl: 'quantity_base REAL' },
+  { table: 'pantry_items', columnDdl: 'quantity_epoch INTEGER' },
 ];
 
 /**

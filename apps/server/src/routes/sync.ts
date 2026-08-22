@@ -265,7 +265,8 @@ const pushSchema = z.object({
       z
         .object({
           entityType: z.string().min(1).max(40),
-          entityId: z.string().min(1).max(64),
+          // 在庫の持ち分は `<品目 id>:<端末 id>`（59 字）。64 では余裕が 5 字しか無い（設計 §5-3 審査⑦）
+          entityId: z.string().min(1).max(128),
           payload: z.string().max(MAX_PAYLOAD_CHARS).nullable(),
           clientUpdatedAt: z.string().datetime({ offset: true }),
           deleted: z.boolean(),
@@ -311,7 +312,8 @@ const NOTIFY_DEBOUNCE_MS = 5 * 60 * 1000;
 const NOTIFY_DEBOUNCE_URGENT_MS = 60 * 1000;
 
 /** この種別が含まれる push は急ぎ扱い（買い物中に効くもの） */
-const URGENT_ENTITY_TYPES = new Set(['shopping_item', 'pantry_item']);
+// 在庫の持ち分（S2-B・設計 §5-3）はタップだけの push に行を含まないので、急ぎ側に入れる
+const URGENT_ENTITY_TYPES = new Set(['shopping_item', 'pantry_item', 'pantry_quantity']);
 
 export function isUrgentChange(entityTypes: readonly string[]): boolean {
   return entityTypes.some((type) => URGENT_ENTITY_TYPES.has(type));

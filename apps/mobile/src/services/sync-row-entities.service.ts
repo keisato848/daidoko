@@ -23,9 +23,24 @@ import { getDb } from '../db/client';
 import { shouldHideSeedShoppingItem } from '../db/sampleData';
 import * as schema from '../db/schema';
 import {
+  decideQuantityAdoption,
+  legacyBaseline,
+  parsePartEntityId,
+  partEntityId,
+} from './pantry-quantity';
+import {
+  deleteParts,
+  deletePartsNotInEpoch,
+  ensureRowBaseline,
+  readPart,
+  rematerialize,
+  upsertPart,
+} from './pantry-quantity.db';
+import {
   SYNC_ENTITY_JAN_CATALOG,
   SYNC_ENTITY_NAME_ALIAS,
   SYNC_ENTITY_PANTRY_ITEM,
+  SYNC_ENTITY_PANTRY_QUANTITY,
   SYNC_ENTITY_SHOPPING_ITEM,
   SYNC_ENTITY_STORE_GROUP_ALIAS,
   SYNC_PAYLOAD_SCHEMA_VERSION,
@@ -46,7 +61,8 @@ export function isRowEntityType(entityType: string): boolean {
     entityType === SYNC_ENTITY_PANTRY_ITEM ||
     entityType === SYNC_ENTITY_NAME_ALIAS ||
     entityType === SYNC_ENTITY_JAN_CATALOG ||
-    entityType === SYNC_ENTITY_STORE_GROUP_ALIAS
+    entityType === SYNC_ENTITY_STORE_GROUP_ALIAS ||
+    entityType === SYNC_ENTITY_PANTRY_QUANTITY
   );
 }
 
@@ -118,6 +134,13 @@ async function buildPantryItemChange(id: string, deletedAt: string): Promise<Out
   if (!row) return tombstone(SYNC_ENTITY_PANTRY_ITEM, id, deletedAt);
   if (!isShared(row.shared)) return tombstone(SYNC_ENTITY_PANTRY_ITEM, id, row.updatedAt);
 
+  // S2-B: ベースラインを必ず解決して載せる（未移行の行は quantity を updated_at 世代の base と読む）
+  const baseline = legacyBaseline({
+    quantity: row.quantity,
+    updatedAt: row.updatedAt,
+    quantityBase: row.quantityBase,
+    quantityEpoch: row.quantityEpoch,
+  });
   return {
     entityType: SYNC_ENTITY_PANTRY_ITEM,
     entityId: id,
@@ -136,10 +159,51 @@ async function buildPantryItemChange(id: string, deletedAt: string): Promise<Out
         expiresOn: row.expiresOn,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        quantityBase: baseline.base,
+        quantityEpoch: baseline.epoch,
       },
     }),
     clientUpdatedAt: row.updatedAt,
     deleted: false,
+  };
+}
+
+/**
+ * 在庫数量の持ち分（S2-B・§5-3-2）。行が無い／`shared = 0`／持ち分が無い → **送らずに捨てる**
+ * （tombstone にしない — part の tombstone は設計上存在せず、行の tombstone か繰り上げで消える）。
+ */
+async function buildPantryQuantityChange(entityId: string): Promise<OutgoingChangeResult> {
+  const parsed = parsePartEntityId(entityId);
+  if (!parsed) return { kind: 'unsupported' };
+  const part = await readPart(parsed.itemId, parsed.deviceId);
+  if (!part || part.updatedAt == null) return { kind: 'unsupported' };
+  const rows = await getDb()
+    .select({ shared: schema.pantryItems.shared })
+    .from(schema.pantryItems)
+    .where(eq(schema.pantryItems.id, parsed.itemId))
+    .limit(1);
+  const row = rows[0];
+  if (!row || !isShared(row.shared)) return { kind: 'unsupported' };
+  return {
+    kind: 'change',
+    change: {
+      entityType: SYNC_ENTITY_PANTRY_QUANTITY,
+      entityId,
+      payload: serializeSyncPayload({
+        schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+        entity: SYNC_ENTITY_PANTRY_QUANTITY,
+        item: {
+          id: entityId,
+          itemId: parsed.itemId,
+          deviceId: parsed.deviceId,
+          net: part.net ?? 0,
+          epoch: part.epoch ?? 0,
+          updatedAt: part.updatedAt,
+        },
+      }),
+      clientUpdatedAt: part.updatedAt,
+      deleted: false,
+    },
   };
 }
 
@@ -244,6 +308,8 @@ export async function buildRowOutgoingChange(
         return { kind: 'change', change: await buildJanCatalogChange(entityId, deletedAt) };
       case SYNC_ENTITY_STORE_GROUP_ALIAS:
         return { kind: 'change', change: await buildStoreGroupAliasChange(entityId, deletedAt) };
+      case SYNC_ENTITY_PANTRY_QUANTITY:
+        return buildPantryQuantityChange(entityId);
       default:
         return { kind: 'unsupported' };
     }
@@ -270,6 +336,18 @@ export async function listRowSyncableEntities(): Promise<
     db.select({ id: schema.storeGroupAliases.id }).from(schema.storeGroupAliases),
   ]);
 
+  // 共有中の行の持ち分を**全部**（自端末分も他端末分も）積む（§5-3-2 参加時）。
+  // 他端末の持ち分を元の updated_at のまま押すのは LWW で冪等。別グループへ移ったとき Σ が欠けない
+  const sharedPantryIds = new Set(
+    pantry.filter((row) => isShared(row.shared)).map((row) => row.id),
+  );
+  const parts = await db
+    .select({
+      itemId: schema.pantryQuantityParts.itemId,
+      deviceId: schema.pantryQuantityParts.deviceId,
+    })
+    .from(schema.pantryQuantityParts);
+
   return [
     ...shopping
       // サンプルの品目は送らない（レシピと同じ扱い）。id が全端末で同じなので、
@@ -279,6 +357,15 @@ export async function listRowSyncableEntities(): Promise<
     ...pantry
       .filter((row) => isShared(row.shared))
       .map((row) => ({ entityType: SYNC_ENTITY_PANTRY_ITEM, entityId: row.id }) as const),
+    ...parts
+      .filter((part) => sharedPantryIds.has(part.itemId))
+      .map(
+        (part) =>
+          ({
+            entityType: SYNC_ENTITY_PANTRY_QUANTITY,
+            entityId: partEntityId(part.itemId, part.deviceId),
+          }) as const,
+      ),
     ...aliases.map((row) => ({ entityType: SYNC_ENTITY_NAME_ALIAS, entityId: row.id }) as const),
     ...jan.map((row) => ({ entityType: SYNC_ENTITY_JAN_CATALOG, entityId: row.id }) as const),
     ...storeGroups.map(
@@ -353,17 +440,24 @@ async function applyPantryItem(payload: RowSyncPayload): Promise<ApplyOutcome> {
   const db = getDb();
   const item = payload.item;
   const localRows = await db
-    .select({ updatedAt: schema.pantryItems.updatedAt, shared: schema.pantryItems.shared })
+    .select({
+      updatedAt: schema.pantryItems.updatedAt,
+      shared: schema.pantryItems.shared,
+      quantity: schema.pantryItems.quantity,
+      quantityBase: schema.pantryItems.quantityBase,
+      quantityEpoch: schema.pantryItems.quantityEpoch,
+    })
     .from(schema.pantryItems)
     .where(eq(schema.pantryItems.id, item.id))
     .limit(1);
   const local = localRows[0];
-  if (local && !incomingChangeWins(item.updatedAt, local.updatedAt)) return 'skipped';
   if (local && !isShared(local.shared)) return 'skipped';
 
-  await db
-    .insert(schema.pantryItems)
-    .values({
+  // S2-B（§5-3-3）: 数量の権威は base/epoch。v2 の行は「その時刻の世代の絶対値」と読む
+  const incoming = legacyBaseline(item);
+
+  if (!local) {
+    await db.insert(schema.pantryItems).values({
       id: item.id,
       familyId: FAMILY_ID,
       name: item.name,
@@ -377,22 +471,69 @@ async function applyPantryItem(payload: RowSyncPayload): Promise<ApplyOutcome> {
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
       shared: 1,
-    })
-    .onConflictDoUpdate({
-      target: schema.pantryItems.id,
-      set: {
-        name: item.name,
-        nameNormalized: item.nameNormalized,
-        quantity: item.quantity,
-        unit: item.unit,
-        lowStockThreshold: item.lowStockThreshold,
-        janCode: item.janCode,
-        groupName: item.groupName,
-        expiresOn: item.expiresOn,
-        updatedAt: item.updatedAt,
-        // shared は更新しない（買い物と同じ理由）
-      },
+      quantityBase: incoming.base,
+      quantityEpoch: incoming.epoch,
     });
+    await rematerialize(item.id); // 先に届いていた持ち分（同じ世代）を足す
+    return 'applied';
+  }
+
+  const based = await ensureRowBaseline({ id: item.id, ...local });
+  const lwwWins = incomingChangeWins(item.updatedAt, based.updatedAt);
+  const adoptQty = decideQuantityAdoption(incoming.epoch, based.quantityEpoch, lwwWins);
+  if (!lwwWins && !adoptQty) return 'skipped';
+
+  await db
+    .update(schema.pantryItems)
+    .set({
+      ...(lwwWins
+        ? {
+            name: item.name,
+            nameNormalized: item.nameNormalized,
+            unit: item.unit,
+            lowStockThreshold: item.lowStockThreshold,
+            janCode: item.janCode,
+            groupName: item.groupName,
+            expiresOn: item.expiresOn,
+            updatedAt: item.updatedAt,
+          }
+        : {}),
+      ...(adoptQty ? { quantityBase: incoming.base, quantityEpoch: incoming.epoch } : {}),
+      // shared は更新しない（買い物と同じ理由）
+    })
+    .where(eq(schema.pantryItems.id, item.id));
+  // 繰り上げを受けたら、古い世代の持ち分はもう効かない（§5-3 審査③）
+  if (incoming.epoch > (based.quantityEpoch ?? 0)) {
+    await deletePartsNotInEpoch(item.id, incoming.epoch);
+  }
+  await rematerialize(item.id);
+  return 'applied';
+}
+
+/**
+ * 在庫数量の持ち分の適用（S2-B・§5-3-3）。行が無くても保存する（行が後から来る）。
+ * ローカル行が `shared = 0` なら保存もしない。
+ */
+async function applyPantryQuantity(payload: RowSyncPayload): Promise<ApplyOutcome> {
+  if (payload.entity !== SYNC_ENTITY_PANTRY_QUANTITY) return 'skipped';
+  const part = payload.item;
+  const rows = await getDb()
+    .select({ shared: schema.pantryItems.shared })
+    .from(schema.pantryItems)
+    .where(eq(schema.pantryItems.id, part.itemId))
+    .limit(1);
+  const local = rows[0];
+  if (local && !isShared(local.shared)) return 'skipped';
+  const existing = await readPart(part.itemId, part.deviceId);
+  if (existing && !incomingChangeWins(part.updatedAt, existing.updatedAt)) return 'skipped';
+  await upsertPart({
+    itemId: part.itemId,
+    deviceId: part.deviceId,
+    net: part.net,
+    epoch: part.epoch,
+    updatedAt: part.updatedAt,
+  });
+  if (local) await rematerialize(part.itemId);
   return 'applied';
 }
 
@@ -513,6 +654,8 @@ export async function applyRowPayload(payload: RowSyncPayload): Promise<ApplyOut
       return applyJanCatalog(payload);
     case SYNC_ENTITY_STORE_GROUP_ALIAS:
       return applyStoreGroupAlias(payload);
+    case SYNC_ENTITY_PANTRY_QUANTITY:
+      return applyPantryQuantity(payload);
     default:
       return 'skipped';
   }
@@ -569,6 +712,23 @@ export async function applyRowTombstone(
       if (!isShared(local.shared)) return 'skipped';
       if (!incomingChangeWins(clientUpdatedAt, local.updatedAt)) return 'skipped';
       await db.delete(schema.pantryItems).where(eq(schema.pantryItems.id, entityId));
+      await deleteParts(entityId); // 持ち分も一緒に（§5-3-3）
+      return 'applied';
+    }
+    case SYNC_ENTITY_PANTRY_QUANTITY: {
+      // 設計上は送られない。受けたら当該の持ち分だけ消して再実体化（防御）
+      const parsed = parsePartEntityId(entityId);
+      if (!parsed) return 'skipped';
+      const { and: andOp } = await import('drizzle-orm');
+      await db
+        .delete(schema.pantryQuantityParts)
+        .where(
+          andOp(
+            eq(schema.pantryQuantityParts.itemId, parsed.itemId),
+            eq(schema.pantryQuantityParts.deviceId, parsed.deviceId),
+          ),
+        );
+      await rematerialize(parsed.itemId);
       return 'applied';
     }
     case SYNC_ENTITY_NAME_ALIAS:

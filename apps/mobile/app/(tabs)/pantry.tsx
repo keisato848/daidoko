@@ -38,6 +38,7 @@ import {
   removePantryItem,
   setPantryItemShared,
   UNGROUPED,
+  adjustPantryQuantity,
   updatePantryItem,
 } from '../../src/services/pantry.service';
 import type { PantryItem } from '../../src/services/types';
@@ -88,7 +89,9 @@ export default function PantryScreen() {
     async (item: PantryItem, delta: number) => {
       const next = Math.max(0, (item.quantity ?? 0) + delta);
       setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, quantity: next } : it)));
-      await updatePantryItem(item.id, { quantity: next }).catch(() => undefined);
+      // δ だけ渡す（S2-B・設計 §5-3-2）。React の item.quantity は pull 直後に古いことがあるので、
+      // 絶対値を作ってはいけない。現在値は service が DB から読む
+      await adjustPantryQuantity(item.id, delta).catch(() => undefined);
       refresh();
       if (delta < 0) checkAndNotifyLowStock().catch(() => undefined);
     },

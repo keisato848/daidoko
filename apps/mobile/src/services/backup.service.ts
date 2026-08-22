@@ -185,7 +185,16 @@ export const BACKUP_TABLES = [
       'created_at',
       'updated_at',
       'shared', // v15（nullable。理由は shopping_items 側のコメント）
+      'quantity_base', // v16（S2-B・nullable）
+      'quantity_epoch', // v16（S2-B・nullable。NULL = 未移行）
     ],
+    optional: true,
+  },
+  // 在庫数量の持ち分（v16・S2-B）。**復元する** — `quantity` と対になる中身そのもの。
+  // `sync_cursor`（位置）・`sync_queue`（印）とは扱いが逆（設計 §5-3-1 に理由）
+  {
+    name: 'pantry_quantity_parts',
+    columns: ['item_id', 'device_id', 'net', 'epoch', 'updated_at'],
     optional: true,
   },
   {
@@ -397,6 +406,7 @@ function createEmptyBackupTables(): BackupTables {
     sync_meta: [],
     app_meta: [],
     pantry_items: [],
+    pantry_quantity_parts: [],
     shopping_items: [],
     store_group_aliases: [],
     jan_catalog: [],
@@ -932,6 +942,13 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
  */
 const NON_RESTORABLE_APP_META_KEYS: readonly string[] = ['sync_cursor'];
 
+/** 復元直後: 未移行の在庫行をベースライン化し、持ち分から表示値を導出し直す（S2-B） */
+async function rebaselineQuantities(): Promise<void> {
+  const { ensureQuantityBaseline, rematerializeAll } = await import('./pantry-quantity.db');
+  await ensureQuantityBaseline();
+  await rematerializeAll();
+}
+
 function replaceDatabase(payload: LocalBackupPayload): void {
   const expoDb = getExpoDb();
 
@@ -977,6 +994,7 @@ export async function restoreLocalBackup(uri: string): Promise<BackupOperationRe
 
   replaceDatabase(payload);
   await rebuildFts(getDb());
+  await rebaselineQuantities(); // v16: 旧 ZIP の在庫にベースラインを与え、表示値を導出し直す（§5-3-1）
 
   const fileName = uri.split('/').pop() ?? 'backup.json';
   return {

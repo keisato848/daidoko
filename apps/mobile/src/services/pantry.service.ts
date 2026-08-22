@@ -10,7 +10,23 @@
 import { isNativePlatform } from '../db/client';
 import { parseAmount } from '../utils/amount';
 import { generateId } from '../utils/id';
-import { SYNC_ENTITY_PANTRY_ITEM } from './sync-payload';
+import {
+  effectiveDelta,
+  epochOf,
+  monotonicStamp,
+  nextEpoch,
+  partEntityId,
+} from './pantry-quantity';
+import {
+  deleteParts,
+  ensureRowBaseline,
+  readPart,
+  readParts,
+  readQuantityRow,
+  rematerialize,
+  upsertPart,
+} from './pantry-quantity.db';
+import { SYNC_ENTITY_PANTRY_ITEM, SYNC_ENTITY_PANTRY_QUANTITY } from './sync-payload';
 import { enqueueSyncEntity, initialSharedValue } from './sync-queue.service';
 import { normalizeItemName } from '../utils/itemName';
 import type { PantryItem } from './types';
@@ -54,11 +70,6 @@ async function currentFamilyId(): Promise<string> {
 export const UNGROUPED = '__ungrouped__';
 
 /** Sum two optional quantities; null + null stays null (= unmanaged). */
-function sumQuantity(a: number | null, b: number | null): number | null {
-  if (a == null && b == null) return null;
-  return (a ?? 0) + (b ?? 0);
-}
-
 /**
  * 賞味期限のマージ規則（v13）。**近い方（早い日付）を残す。**
  *
@@ -187,27 +198,42 @@ export async function addPantryItem(
 
   if (existing.length > 0) {
     const prev = existing[0];
-    const quantity = sumQuantity(prev.quantity, options.quantity ?? null);
     const mergedExpiry = nearerExpiry(prev.expiresOn, expiresOn);
-    await db
-      .update(schema.pantryItems)
-      .set({
-        quantity,
-        unit: unit ?? prev.unit,
-        lowStockThreshold: options.lowStockThreshold ?? prev.lowStockThreshold,
-        janCode: janCode ?? prev.janCode,
-        expiresOn: mergedExpiry,
-        updatedAt: now,
-      })
-      .where(eq(schema.pantryItems.id, prev.id));
-    await enqueueIfShared(prev.id, prev.shared);
+    const nextUnit = unit ?? prev.unit;
+    const nextThreshold = options.lowStockThreshold ?? prev.lowStockThreshold;
+    const nextJan = janCode ?? prev.janCode;
+    // 他列は**実際に変わるときだけ**更新して積む（設計 §5-3-2 — 無条件に updated_at を
+    // 進めると、他端末の名前編集との LWW で不要に勝ってしまう）
+    const changed =
+      nextUnit !== prev.unit ||
+      nextThreshold !== prev.lowStockThreshold ||
+      nextJan !== prev.janCode ||
+      mergedExpiry !== prev.expiresOn;
+    if (changed) {
+      await db
+        .update(schema.pantryItems)
+        .set({
+          unit: nextUnit,
+          lowStockThreshold: nextThreshold,
+          janCode: nextJan,
+          expiresOn: mergedExpiry,
+          updatedAt: now,
+        })
+        .where(eq(schema.pantryItems.id, prev.id));
+      await enqueueIfShared(prev.id, prev.shared);
+    }
+    // 数量は持ち分（δ）として足す（S2-B・設計 §5-3-2）
+    const quantity =
+      options.quantity != null
+        ? await adjustPantryQuantity(prev.id, options.quantity)
+        : prev.quantity;
     return {
       id: prev.id,
       name: prev.name,
       quantity,
-      unit: unit ?? prev.unit,
-      lowStockThreshold: options.lowStockThreshold ?? prev.lowStockThreshold,
-      janCode: janCode ?? prev.janCode,
+      unit: nextUnit,
+      lowStockThreshold: nextThreshold,
+      janCode: nextJan,
       groupName: prev.groupName,
       expiresOn: mergedExpiry,
       shared: prev.shared !== 0,
@@ -242,6 +268,9 @@ export async function addPantryItem(
     // 参加中なら「共有すると決まっている」1。未参加なら null（参加時に聞く）。
     // 買い物から移すときは元の行の決定（options.shared）
     shared: sharedValue,
+    // S2-B: ベースラインを明示して作る（NULL で作ると起動時のベースライン化の対象に見える）
+    quantityBase: item.quantity,
+    quantityEpoch: epochOf(now),
   });
   // **これを忘れると新しい在庫が一度も同期されない。** 合算経路にはあって挿入経路に
   // 無い、という形で抜けていた（実機では「買った→在庫」で品目が消えたように見える）
@@ -274,7 +303,7 @@ export async function updatePantryItem(
   id: string,
   patch: {
     name?: string;
-    quantity?: number | null;
+    /** 数量はここでは変えない。増減は `adjustPantryQuantity`、数え直しは `setPantryQuantity`（S2-B） */
     unit?: string | null;
     lowStockThreshold?: number | null;
     groupName?: string | null;
@@ -305,7 +334,6 @@ export async function updatePantryItem(
     ...(patch.name !== undefined
       ? { name: patch.name.trim(), nameNormalized: normalizeItemName(patch.name) }
       : {}),
-    ...(patch.quantity !== undefined ? { quantity: patch.quantity } : {}),
     ...(patch.unit !== undefined ? { unit: patch.unit?.trim() ? patch.unit.trim() : null } : {}),
     ...(patch.lowStockThreshold !== undefined
       ? { lowStockThreshold: patch.lowStockThreshold }
@@ -396,18 +424,126 @@ async function mergeIntoGroup(id: string, groupName: string | null): Promise<boo
   await db
     .update(schema.pantryItems)
     .set({
-      quantity: sumQuantity(into.quantity, self.quantity),
       lowStockThreshold: into.lowStockThreshold ?? self.lowStockThreshold,
       expiresOn: nearerExpiry(into.expiresOn, self.expiresOn),
       updatedAt: new Date().toISOString(),
     })
     .where(eq(schema.pantryItems.id, into.id));
+  // 数量は寄せ先の持ち分として足す（S2-B）。消える自分の持ち分はローカルで捨てる
+  //（part の tombstone は設計上存在しない — 行の tombstone で足りる）
+  if (self.quantity != null && self.quantity !== 0) {
+    await adjustPantryQuantity(into.id, self.quantity);
+  }
   await db.delete(schema.pantryItems).where(eq(schema.pantryItems.id, id));
+  await deleteParts(id);
   // **寄せ先と、消えた自分の両方**を積む。消えた側を積み忘れると他端末に残り続ける
   //（両方とも同じ共有状態なので、判定は self.shared で足りる）
   await enqueueIfShared(into.id, self.shared);
   await enqueueIfShared(id, self.shared);
   return true;
+}
+
+/**
+ * 数量の増減（S2-B・設計 §5-3-2）。UI から**絶対値を渡さない** — React の `item.quantity` は
+ * pull 直後に古いことがある。δ だけ渡し、現在値は DB から読む。戻り値は新しい表示値。
+ *
+ * - 参加中かつ共有中の行 → 自端末の持ち分（part）に足し、part だけを積む。行の `updated_at` は
+ *   **進めない**（ピンと同じ教訓 — §5-1b）
+ * - 未参加・「自分だけ」の行 → base に足す（現行の絶対値更新と同じ挙動）
+ */
+export async function adjustPantryQuantity(id: string, delta: number): Promise<number | null> {
+  if (!isNativePlatform) return null;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const rowRaw = await readQuantityRow(id);
+  if (!rowRaw) return null;
+  const row = await ensureRowBaseline(rowRaw);
+  const sharedRows = await db
+    .select({ shared: schema.pantryItems.shared })
+    .from(schema.pantryItems)
+    .where(eq(schema.pantryItems.id, id))
+    .limit(1);
+  const shared = sharedRows[0]?.shared ?? null;
+  const epoch = row.quantityEpoch ?? 0;
+  const parts = await readParts(id);
+  const { computeRaw } = await import('./pantry-quantity');
+  const raw = computeRaw(row.quantityBase, parts, epoch);
+  const effective = effectiveDelta(raw, delta);
+  if (effective == null) return row.quantity; // 見た目が変わらないタップは書かない
+
+  const { getStoredCredentials } = await import('./sync-client.service');
+  const credentials = await getStoredCredentials();
+  const nowMs = Date.now();
+  if (credentials && shared !== 0) {
+    const own = await readPart(id, credentials.deviceId);
+    // epoch が違う持ち分は「前の世代」。0 から始める（§5-3 審査③）
+    const base = own && (own.epoch ?? 0) === epoch ? (own.net ?? 0) : 0;
+    await upsertPart({
+      itemId: id,
+      deviceId: credentials.deviceId,
+      net: base + effective,
+      epoch,
+      updatedAt: monotonicStamp(own?.updatedAt, nowMs),
+    });
+    await enqueueSyncEntity(SYNC_ENTITY_PANTRY_QUANTITY, partEntityId(id, credentials.deviceId));
+  } else {
+    await db
+      .update(schema.pantryItems)
+      .set({
+        quantityBase: (row.quantityBase ?? 0) + effective,
+        updatedAt: new Date(nowMs).toISOString(),
+      })
+      .where(eq(schema.pantryItems.id, id));
+    await enqueueIfShared(id, shared);
+  }
+  const after = await rematerialize(id);
+  return after == null ? null : Math.max(0, after);
+}
+
+/**
+ * 数量の**数え直し**（絶対値セット）= ベースラインの繰り上げ（S2-B・設計 §5-3-2）。
+ * 同時に他端末が足していた δ は意図的に上書きする。現 UI に呼び手は無い。
+ */
+export async function setPantryQuantity(id: string, value: number | null): Promise<void> {
+  if (!isNativePlatform) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const rowRaw = await readQuantityRow(id);
+  if (!rowRaw) return;
+  const row = await ensureRowBaseline(rowRaw);
+  await bumpQuantityEpoch(id, value, row.quantityEpoch);
+  const sharedRows = await getDb()
+    .select({ shared: schema.pantryItems.shared })
+    .from(schema.pantryItems)
+    .where(eq(schema.pantryItems.id, id))
+    .limit(1);
+  await enqueueIfShared(id, sharedRows[0]?.shared);
+}
+
+/** 繰り上げ: base := value、epoch := 新しい世代、ローカルの持ち分を全削除、行の updated_at を進める */
+async function bumpQuantityEpoch(
+  id: string,
+  base: number | null,
+  previousEpoch: number | null,
+): Promise<void> {
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const nowMs = Date.now();
+  await deleteParts(id);
+  await getDb()
+    .update(schema.pantryItems)
+    .set({
+      quantityBase: base,
+      quantityEpoch: nextEpoch(previousEpoch, nowMs),
+      quantity: base == null ? null : Math.max(0, base),
+      updatedAt: new Date(nowMs).toISOString(),
+    })
+    .where(eq(schema.pantryItems.id, id));
 }
 
 /** この品目を家族と共有するか（設計 §5-2）。やめると他端末からは消える */
@@ -416,8 +552,36 @@ export async function setPantryItemShared(id: string, shared: boolean): Promise<
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
+  const db = getDb();
 
-  await getDb()
+  const before = await db
+    .select({ shared: schema.pantryItems.shared })
+    .from(schema.pantryItems)
+    .where(eq(schema.pantryItems.id, id))
+    .limit(1);
+  const prevShared = before[0]?.shared;
+
+  // S2-B（設計 §5-3-6）: 共有をやめる/始めるときに持ち分を畳む・繰り上げる。
+  // - 1→0: base := 生の合計に畳み、ローカルの持ち分を消す（以後この端末では base だけが動く）
+  // - 0→1: 世代を上げる。共有をやめていた間にサーバーへ残った旧世代の持ち分は二度と効かない
+  // NULL→1/0（参加プロンプト）は世代を触らない
+  const rowRaw = await readQuantityRow(id);
+  if (rowRaw) {
+    const row = await ensureRowBaseline(rowRaw);
+    if (!shared && prevShared !== 0) {
+      const { computeRaw } = await import('./pantry-quantity');
+      const raw = computeRaw(row.quantityBase, await readParts(id), row.quantityEpoch ?? 0);
+      await deleteParts(id);
+      await db
+        .update(schema.pantryItems)
+        .set({ quantityBase: raw, quantity: raw == null ? null : Math.max(0, raw) })
+        .where(eq(schema.pantryItems.id, id));
+    } else if (shared && prevShared === 0) {
+      await bumpQuantityEpoch(id, row.quantityBase, row.quantityEpoch);
+    }
+  }
+
+  await db
     .update(schema.pantryItems)
     .set({ shared: shared ? 1 : 0, updatedAt: new Date().toISOString() })
     .where(eq(schema.pantryItems.id, id));
@@ -495,6 +659,7 @@ export async function removePantryItem(id: string): Promise<void> {
     .delete(schema.pantryItems)
     .where(eq(schema.pantryItems.id, id))
     .returning({ shared: schema.pantryItems.shared });
+  await deleteParts(id); // 持ち分はローカルで捨てる（行の tombstone で他端末も消す — §5-3-2）
   await enqueueIfShared(id, removed[0]?.shared);
 }
 

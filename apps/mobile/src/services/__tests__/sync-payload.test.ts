@@ -342,7 +342,7 @@ describe('sync-payload — 版を上げても古い payload が読めること',
     expect(parsed && 'recipe' in parsed ? parsed.recipe.title : null).toBe('肉じゃが');
   });
 
-  it('版は 2（S2 で種別を増やしたため）', () => {
-    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(2);
+  it('版は 3（S2-B で在庫数量の持ち分を足したため — 上げると全端末がカーソル 0 から取り直す）', () => {
+    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(3);
   });
 });

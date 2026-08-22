@@ -29,7 +29,7 @@ import { z } from 'zod';
  * v2: S2 で買い物・在庫・辞書の 5 種別を追加（レシピ・帖の形は変えていないので、
  * v1 の payload はそのまま読める）
  */
-export const SYNC_PAYLOAD_SCHEMA_VERSION = 2;
+export const SYNC_PAYLOAD_SCHEMA_VERSION = 3; // v3: 在庫数量の持ち分（S2-B・§5-3）
 
 export const SYNC_ENTITY_RECIPE = 'recipe';
 export const SYNC_ENTITY_RECIPE_BOOK = 'recipe_book';
@@ -38,6 +38,8 @@ export const SYNC_ENTITY_PANTRY_ITEM = 'pantry_item';
 export const SYNC_ENTITY_NAME_ALIAS = 'name_alias';
 export const SYNC_ENTITY_JAN_CATALOG = 'jan_catalog';
 export const SYNC_ENTITY_STORE_GROUP_ALIAS = 'store_group_alias';
+/** 在庫数量の持ち分（S2-B・設計 §5-3）。entity_id = `<品目 id>:<端末 id>` */
+export const SYNC_ENTITY_PANTRY_QUANTITY = 'pantry_quantity';
 
 /** 同期対象の種別（S1: レシピ・帖 / S2: 買い物・在庫・辞書） */
 export type SyncEntityType =
@@ -47,7 +49,8 @@ export type SyncEntityType =
   | typeof SYNC_ENTITY_PANTRY_ITEM
   | typeof SYNC_ENTITY_NAME_ALIAS
   | typeof SYNC_ENTITY_JAN_CATALOG
-  | typeof SYNC_ENTITY_STORE_GROUP_ALIAS;
+  | typeof SYNC_ENTITY_STORE_GROUP_ALIAS
+  | typeof SYNC_ENTITY_PANTRY_QUANTITY;
 
 export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = [
   SYNC_ENTITY_RECIPE,
@@ -57,6 +60,7 @@ export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = [
   SYNC_ENTITY_NAME_ALIAS,
   SYNC_ENTITY_JAN_CATALOG,
   SYNC_ENTITY_STORE_GROUP_ALIAS,
+  SYNC_ENTITY_PANTRY_QUANTITY,
 ];
 
 /**
@@ -196,7 +200,7 @@ export interface PantryItemSyncPayload {
     id: string;
     name: string;
     nameNormalized: string;
-    /** S2-A では LWW。同時に別々の端末で減らすと片方が失われる（既知・§5-2b） */
+    /** 表示値（目視用）。v3 からは権威ではない — 権威は quantityBase/quantityEpoch ＋ 持ち分（§5-3） */
     quantity: number | null;
     unit: string | null;
     lowStockThreshold: number | null;
@@ -204,6 +208,23 @@ export interface PantryItemSyncPayload {
     groupName: string | null;
     expiresOn: string | null;
     createdAt: string;
+    updatedAt: string;
+    /** v3: ベースライン。送信側は必ず解決して書く。v2 の受信では未定義 */
+    quantityBase?: number | null;
+    quantityEpoch?: number;
+  };
+}
+
+/** 在庫数量の持ち分（S2-B・§5-3）。`item.id` は封筒の entityId と同じ `<品目 id>:<端末 id>` */
+export interface PantryQuantitySyncPayload {
+  schemaVersion: number;
+  entity: typeof SYNC_ENTITY_PANTRY_QUANTITY;
+  item: {
+    id: string;
+    itemId: string;
+    deviceId: string;
+    net: number;
+    epoch: number;
     updatedAt: string;
   };
 }
@@ -250,6 +271,7 @@ export type SyncPayload =
   | PantryItemSyncPayload
   | NameAliasSyncPayload
   | JanCatalogSyncPayload
+  | PantryQuantitySyncPayload
   | StoreGroupAliasSyncPayload;
 
 /** 行を 1 つ運ぶだけの種別が共通で持つ形（適用側の分岐を薄くするため） */
@@ -258,7 +280,8 @@ export type RowSyncPayload =
   | PantryItemSyncPayload
   | NameAliasSyncPayload
   | JanCatalogSyncPayload
-  | StoreGroupAliasSyncPayload;
+  | StoreGroupAliasSyncPayload
+  | PantryQuantitySyncPayload;
 
 // ── 受信 payload の検証 ──────────────────────────────────────────────────────
 // 他端末が送ってきた文字列は信用しない。壊れていたら**その 1 件だけ捨てる**
@@ -378,6 +401,21 @@ const pantryItemPayloadSchema = z.object({
     expiresOn: nullableText,
     createdAt: z.string().min(1),
     updatedAt: z.string().min(1),
+    quantityBase: nullableNumber.optional(),
+    quantityEpoch: z.number().optional(),
+  }),
+});
+
+const pantryQuantityPayloadSchema = z.object({
+  schemaVersion: z.number(),
+  entity: z.literal(SYNC_ENTITY_PANTRY_QUANTITY),
+  item: z.object({
+    id: z.string().min(3),
+    itemId: z.string().min(1),
+    deviceId: z.string().min(1),
+    net: z.number(),
+    epoch: z.number(),
+    updatedAt: z.string().min(1),
   }),
 });
 
@@ -425,6 +463,7 @@ const PAYLOAD_SCHEMAS = {
   [SYNC_ENTITY_NAME_ALIAS]: nameAliasPayloadSchema,
   [SYNC_ENTITY_JAN_CATALOG]: janCatalogPayloadSchema,
   [SYNC_ENTITY_STORE_GROUP_ALIAS]: storeGroupAliasPayloadSchema,
+  [SYNC_ENTITY_PANTRY_QUANTITY]: pantryQuantityPayloadSchema,
 } as const;
 
 function parseJson(raw: string): unknown {

@@ -409,6 +409,46 @@ describe.runIf(Boolean(TEST_DB))('S1: push / pull（実 PostgreSQL）', () => {
     await cleanup();
   });
 
+  it('在庫の持ち分（entity_id が 59 字）を push/pull できる（S2-B・設計 §5-3）', async () => {
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string; inviteCode: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+    const joined = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const jj = (await joined.json()) as { data: { deviceId: string; deviceSecret: string } };
+    member = { deviceId: jj.data.deviceId, secret: jj.data.deviceSecret };
+
+    const itemId = '0f3a2a1c-5b6d-4e7f-8a9b-0c1d2e3f4a5b';
+    const partId = `${itemId}:${owner.deviceId}`;
+    expect(partId.length).toBeGreaterThanOrEqual(59);
+    const push = await post(
+      '/api/v1/sync/push',
+      {
+        changes: [
+          {
+            entityType: 'pantry_quantity',
+            entityId: partId,
+            payload: JSON.stringify({ itemId, deviceId: owner.deviceId, net: -3, epoch: 1 }),
+            clientUpdatedAt: '2026-08-22T12:00:00.000Z',
+            deleted: false,
+          },
+        ],
+      },
+      authHeader(owner.deviceId, owner.secret),
+    );
+    expect(push.status).toBe(200);
+    const pull = await app.request('/api/v1/sync/pull?since=0', {
+      headers: authHeader(member.deviceId, member.secret),
+    });
+    const plj = (await pull.json()) as {
+      data: { changes: { entityType: string; entityId: string }[] };
+    };
+    expect(plj.data.changes.find((c) => c.entityType === 'pantry_quantity')?.entityId).toBe(partId);
+
+    await cleanup();
+  });
+
   it('push した変更が、他端末の pull に seq 順で届く', async () => {
     const created = await post('/api/v1/sync/groups', {});
     const cj = (await created.json()) as {
@@ -711,10 +751,11 @@ describe('変更通知の文面と間引き', () => {
     expect(takeNotifySlot('group-1', base + 60_000, true)).toBe(true);
   });
 
-  it('急ぎ扱いになるのは買い物・在庫だけ', () => {
+  it('急ぎ扱いになるのは買い物・在庫（持ち分を含む）だけ', () => {
     expect(isUrgentChange(['recipe', 'recipe_book'])).toBe(false);
     expect(isUrgentChange(['recipe', 'shopping_item'])).toBe(true);
     expect(isUrgentChange(['pantry_item'])).toBe(true);
+    expect(isUrgentChange(['pantry_quantity'])).toBe(true); // S2-B: タップだけの push
     expect(isUrgentChange(['name_alias'])).toBe(false);
   });
 });

@@ -445,9 +445,40 @@ export const pantryItems = sqliteTable(
      * null の扱いと nullable にした理由は `shopping_items.shared` と同じ。
      */
     shared: integer('shared'),
+    /**
+     * 数量のベースライン（v16・S2-B・設計 §5-3）。`quantity` は
+     * `max(0, quantity_base + Σ pantry_quantity_parts.net)` から**導出**する表示値。
+     * `quantity_epoch` が NULL の行は v16 未移行（`quantity` をそのまま base と読む）。
+     */
+    quantityBase: real('quantity_base'),
+    quantityEpoch: integer('quantity_epoch'),
   },
   (table) => ({
     familyNameIdx: index('idx_pantry_items_family_name').on(table.familyId, table.nameNormalized),
+  }),
+);
+
+/**
+ * 在庫数量の持ち分（v16・S2-B・設計 §5-3）。`(品目, 端末)` ごとの累計増減。
+ * 書き手は 1 台だけなので LWW が競合せず、状態なので再適用が冪等。
+ * 外部キーは持たない — 行が part より**後の seq** で届くことがある。
+ * バックアップに**入れる**（`quantity` と対になる中身そのもの。§5-3-1）。
+ */
+export const pantryQuantityParts = sqliteTable(
+  'pantry_quantity_parts',
+  {
+    itemId: text('item_id').notNull(),
+    deviceId: text('device_id').notNull(),
+    /** NULL = 0 */
+    net: real('net'),
+    /** どの世代（`pantry_items.quantity_epoch`）の持ち分か。NULL = 0 */
+    epoch: integer('epoch'),
+    /** part の LWW 基準（端末内で単調） */
+    updatedAt: text('updated_at'),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.itemId, table.deviceId] }),
+    itemIdx: index('idx_pantry_quantity_parts_item').on(table.itemId),
   }),
 );
 
