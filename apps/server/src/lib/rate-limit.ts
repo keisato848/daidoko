@@ -113,6 +113,29 @@ export const HARVEST_POOL: RateLimitPool = {
   clientDefault: 60,
 };
 
+/**
+ * さいえん手帳の栽培登録の写真読み取り（`/garden/identify`）。
+ *
+ * **相談とも収穫とも分ける。** 頻度の形がまったく違う:
+ * 相談は毎日ありうる、収穫は収穫期に毎日、**登録は年に数回 × 株数**で、
+ * しかも**インストール直後に集中する**（何も登録されていない状態から始めるため）。
+ *
+ * 集中するぶん client 側は緩めに取る（初回に庭を 10 枚撮るのは普通の使い方）。
+ * 一方で全体は絞る — 登録は一度きりの操作なので、
+ * 全体が伸び続けるなら誤用か流出を疑うべき数字。
+ *
+ * 既定 300 は「1 日 30 人が初回に 10 枚ずつ登録しても収まる」。
+ * 単価は収穫と同じ ¥0.07 程度（出力が短い）なので ¥0.07 × 300 × 30 = 月 ¥630。
+ */
+export const IDENTIFY_POOL: RateLimitPool = {
+  key: '__global_identify__',
+  label: 'さいえん手帳 栽培登録',
+  globalEnv: 'IDENTIFY_GLOBAL_DAILY_LIMIT',
+  globalDefault: 300,
+  clientEnv: 'IDENTIFY_DAILY_LIMIT',
+  clientDefault: 30,
+};
+
 interface Bucket {
   count: number;
   resetAt: number;
