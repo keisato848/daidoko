@@ -53,8 +53,3 @@ export const INVESTIGATION_SIGNALS = [
 /** 記録が増えたと見なすパス（ドキュメント・Skill・エージェント定義） */
 export const KNOWLEDGE_PATH_HINT =
   /^(docs\/|\.claude\/(skills|agents)\/|\.github\/(skills|agents)\/|CLAUDE\.md$)/;
-
-/** session-start に出す索引テキスト（1 行 1 項目） */
-export function knowledgeIndexLines() {
-  return KNOWLEDGE_TARGETS.map((entry) => `  - ${entry.kind} → ${entry.path} ${entry.section}`);
-}
