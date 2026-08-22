@@ -5,6 +5,10 @@ description: Android エミュレータ/実機での画面・機能検証の定�
 
 # Android エミュレータ/実機 検証の定型
 
+**着手前に `docs/開発ハーネス.md` §4 を読むこと。** 過去に踏んだ罠（キーボードに隠れた欄を叩くと
+キーが押される・日本語 IME のかな混入・平文 HTTP の遮断など）がそこに集約されている。
+検証中に新しく分かったことは `record-finding` Skill の作法で §4 か本 Skill へ書き足す。
+
 実機操作の細則は `.claude/agents/android-verifier.md`、リリース検証は `release-play` / `release-verify` Skill。
 
 ## 1. エミュレータ準備
