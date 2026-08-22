@@ -7,11 +7,12 @@ import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'ex
 import { useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
+import { dialog } from '../../src/services/dialog.service';
 import { lookupJan, rememberJan } from '../../src/services/jan.service';
 import { addPantryItem } from '../../src/services/pantry.service';
 
@@ -34,9 +35,11 @@ export default function ScanBarcodeScreen() {
         await addPantryItem(known.name, { janCode: code, unit: known.unit, quantity: 1 }).catch(
           () => undefined,
         );
-        Alert.alert(t('pantry.title'), t('pantry.scan.added', { name: known.name }), [
-          { text: 'OK', onPress: () => router.back() },
-        ]);
+        await dialog.alert({
+          title: t('pantry.title'),
+          message: t('pantry.scan.added', { name: known.name }),
+        });
+        router.back();
       } else {
         setScannedCode(code); // switch to naming mode (lock stays held)
       }
