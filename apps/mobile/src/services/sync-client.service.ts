@@ -137,8 +137,20 @@ interface RequestOptions {
  * - 401 → AUTH_INVALID（呼び出し側でクレデンシャル破棄を判断）
  * - ネットワーク断 → NETWORK
  */
+/**
+ * 1 リクエストの上限。
+ *
+ * fetch は既定では**いつまでも待つ**。接続は受け付けられたのに相手が一切返さない経路
+ * （実機検証で adb のトンネルがそうなった）では、参加ボタンが押されたまま画面が
+ * 20 分以上「処理中」で固まった。打ち切れば NETWORK として扱えて、利用者はやり直せる。
+ * 参加直後の全件 push（200 件 × 数百 KB）でも 30 秒あれば足りる。
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 async function request<T>(path: string, options: RequestOptions): Promise<T> {
   let res: Response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     res = await fetch(`${API_V1}/sync${path}`, {
       method: options.method,
@@ -149,9 +161,12 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
           : {}),
       },
       ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+      signal: controller.signal,
     });
   } catch {
     throw new SyncError('NETWORK');
+  } finally {
+    clearTimeout(timer);
   }
 
   let json: { ok?: boolean; error?: string; data?: T } | null = null;
