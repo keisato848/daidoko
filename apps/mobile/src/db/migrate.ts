@@ -29,7 +29,8 @@ import { t } from '../i18n';
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
 // v12: レシピの店名 / v13: 在庫・買い物のグループ、賞味期限、誰が / v14: クラウド同期の送信待ち
-export const CURRENT_SCHEMA_VERSION = 14;
+// v15: 買い物・在庫の同期（LWW の基準となる updated_at と、個人/家族の shared フラグ）
+export const CURRENT_SCHEMA_VERSION = 15;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -386,6 +387,12 @@ const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   { table: 'shopping_items', columnDdl: 'store_group TEXT' },
   { table: 'shopping_items', columnDdl: 'created_by TEXT' },
   { table: 'shopping_items', columnDdl: 'checked_by TEXT' },
+  // v15: 買い物・在庫の同期（設計 §5-2b）。**すべて nullable**にすること —
+  // NOT NULL にすると、その列を持たない古いバックアップの復元が丸ごと失敗する
+  // （`replaceDatabase` が明示的に NULL を渡すため DEFAULT が効かない）
+  { table: 'shopping_items', columnDdl: 'updated_at TEXT' },
+  { table: 'shopping_items', columnDdl: 'shared INTEGER' },
+  { table: 'pantry_items', columnDdl: 'shared INTEGER' },
 ];
 
 /**
@@ -421,6 +428,25 @@ function backfillRecipePlaceName(expoDb: { execSync: (sql: string) => void }): v
   }
 }
 
+/**
+ * v15: 買い物リストの `updated_at` を埋める。
+ *
+ * 同期の勝敗（LWW）はこの列で決まるので、列を足しただけだと**既存の行が全部 null**になり、
+ * 「ローカルに時刻が無い＝受信が常に勝つ」形になってしまう。既にある情報から一番近い
+ * 時刻（チェックした時刻、無ければ作った時刻）で埋める。**冪等**（null の行だけ触る）。
+ */
+function backfillShoppingUpdatedAt(expoDb: { execSync: (sql: string) => void }): void {
+  try {
+    expoDb.execSync(`
+      UPDATE shopping_items
+      SET updated_at = COALESCE(checked_at, created_at)
+      WHERE updated_at IS NULL
+    `);
+  } catch {
+    // 列がまだ無い等（新規インストール直後）。次回の起動で埋まる
+  }
+}
+
 /** Run migrations (create tables + additive column changes) */
 export function runMigrations(expoDb: { execSync: (sql: string) => void }): MigrationResult {
   expoDb.execSync(CREATE_TABLES_SQL);
@@ -432,6 +458,7 @@ export function runMigrations(expoDb: { execSync: (sql: string) => void }): Migr
     }
   }
   backfillRecipePlaceName(expoDb);
+  backfillShoppingUpdatedAt(expoDb);
   expoDb.execSync(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   return { schemaVersion: CURRENT_SCHEMA_VERSION };
 }

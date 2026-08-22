@@ -173,6 +173,7 @@ export const BACKUP_TABLES = [
       'expires_on',
       'created_at',
       'updated_at',
+      'shared', // v15（nullable。理由は shopping_items 側のコメント）
     ],
     optional: true,
   },
@@ -198,6 +199,10 @@ export const BACKUP_TABLES = [
       'checked_by',
       'created_at',
       'checked_at',
+      // v15。**nullable な列だけを足すこと** — NOT NULL を足すと、その列を持たない
+      // 古い ZIP の復元が INSERT の制約違反で丸ごと失敗する（下の restore を参照）
+      'updated_at',
+      'shared',
     ],
     optional: true,
   },

@@ -78,6 +78,9 @@ describe('バックアップ対象の取りこぼし防止', () => {
 
   it('v13 のグループ・賞味期限・誰が が入っている（復元で消えないため）', () => {
     expect(columnsOf('pantry_items')).toEqual(expect.arrayContaining(['group_name', 'expires_on']));
+    // v15: 同期の列もバックアップに含める（落とすと復元で共有設定が消える）
+    expect(columnsOf('pantry_items')).toEqual(expect.arrayContaining(['shared']));
+    expect(columnsOf('shopping_items')).toEqual(expect.arrayContaining(['updated_at', 'shared']));
     expect(columnsOf('shopping_items')).toEqual(
       expect.arrayContaining(['store_group', 'created_by', 'checked_by']),
     );

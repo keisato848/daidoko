@@ -383,6 +383,22 @@ export const shoppingItems = sqliteTable(
     checkedBy: text('checked_by').references(() => users.id),
     createdAt: text('created_at').notNull(),
     checkedAt: text('checked_at'),
+    /**
+     * 最終更新（v15）。**同期の LWW の基準**（`docs/クラウド同期設計.md` §5-2b）。
+     *
+     * `checked_at` は代用できない — チェックを外すと null に戻り、時計が巻き戻るため。
+     * **nullable にしてある**: `NOT NULL` にすると、この列を持たない古いバックアップの
+     * 復元が丸ごと失敗する（`replaceDatabase` が明示的に NULL を渡すので DEFAULT が効かない）。
+     * null のときは `checked_at ?? created_at` を代用する。
+     */
+    updatedAt: text('updated_at'),
+    /**
+     * 家族と共有するか（v15・0 = 自分だけ / 1 = 家族と共有 / **null = 共有**）。
+     *
+     * null を「共有」と読むのは、列を持たない古いデータ・古いバックアップが
+     * 現行どおり（全部共有）に見えるようにするため（設計 §5-2b の「守る約束」2・3）。
+     */
+    shared: integer('shared'),
   },
   (table) => ({
     familyCheckedIdx: index('idx_shopping_items_family_checked').on(table.familyId, table.checked),
@@ -424,6 +440,11 @@ export const pantryItems = sqliteTable(
     expiresOn: text('expires_on'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
+    /**
+     * 家族と共有するか（v15・0 = 自分だけ / 1 = 家族と共有 / **null = 共有**）。
+     * null の扱いと nullable にした理由は `shopping_items.shared` と同じ。
+     */
+    shared: integer('shared'),
   },
   (table) => ({
     familyNameIdx: index('idx_pantry_items_family_name').on(table.familyId, table.nameNormalized),
