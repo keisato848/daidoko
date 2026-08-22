@@ -25,6 +25,12 @@ import {
 const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const payload = await readStdinJson();
 
+// 「記録が直近で増えたか」を見る幅。作業セッションのつもりで長めに取る。
+// **モジュール本体より前に置くこと** — const はホイストされないので、下に置くと
+// 実行時に TDZ で落ちる（フックが例外で死ぬと督促そのものが機能しない）
+const RECENT_WINDOW = '18 hours ago';
+const RECENT_COMMIT_LIMIT = 30;
+
 // 直前の Stop ブロックから続行してきた場合は再ブロックしない（無限ループ防止）
 if (payload?.stop_hook_active) {
   allow();
@@ -65,10 +71,13 @@ allow();
 
 /**
  * 記録（docs/・Skill・CLAUDE.md）が直近で増えたか。
- * 作業ツリーの変更と、直近コミットの両方を見る（書いてすぐコミットした場合を拾う）。
+ *
+ * **直近コミット 1 件だけを見てはいけない。** 記録をコミットした後に無関係な
+ * 小さい修正（未使用 export の削除など）を 1 つ積むだけで「記録していない」と誤判定し、
+ * 督促が出る（2026-08-22 に自分で踏んだ）。作業ツリー＋**直近 18 時間のコミット**で見る。
  */
 function recordedRecently() {
-  const files = [...worktreeFiles(), ...lastCommitFiles()];
+  const files = [...worktreeFiles(), ...recentCommitFiles()];
   return files.some((file) => KNOWLEDGE_PATH_HINT.test(file));
 }
 
@@ -81,12 +90,20 @@ function worktreeFiles() {
     .filter(Boolean);
 }
 
-function lastCommitFiles() {
-  const show = runCommand('git', ['show', '--name-only', '--pretty=format:', 'HEAD'], {
-    cwd: rootDir,
-  });
-  if (!show.ok) return [];
-  return show.stdout
+function recentCommitFiles() {
+  const log = runCommand(
+    'git',
+    [
+      'log',
+      `--since=${RECENT_WINDOW}`,
+      `--max-count=${RECENT_COMMIT_LIMIT}`,
+      '--name-only',
+      '--pretty=format:',
+    ],
+    { cwd: rootDir },
+  );
+  if (!log.ok) return [];
+  return log.stdout
     .split(/\r?\n/)
     .map((line) => line.trim().replace(/\\/g, '/'))
     .filter(Boolean);
