@@ -90,6 +90,155 @@ describe.runIf(Boolean(TEST_DB))('S1: push / pull（実 PostgreSQL）', () => {
     });
   }
 
+  it('LWW で負けた push も seq が動き、送り主が勝者を pull し直せる', async () => {
+    // **黙って捨てない**のがここの主題。捨てるだけだと、負けた端末のカーソルが
+    // 既に勝者の seq を越えている場合、勝者が二度と降りてこない（設計 §5-2d）
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string; inviteCode: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+    const joined = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const jj = (await joined.json()) as { data: { deviceId: string; deviceSecret: string } };
+    member = { deviceId: jj.data.deviceId, secret: jj.data.deviceSecret };
+
+    // 勝者（新しい）を owner が push
+    await post(
+      '/api/v1/sync/push',
+      {
+        changes: [
+          {
+            entityType: 'recipe',
+            entityId: 'lww1',
+            payload: JSON.stringify({ title: 'あたらしい' }),
+            clientUpdatedAt: '2026-08-21T12:00:10.000Z',
+            deleted: false,
+          },
+        ],
+      },
+      authHeader(owner.deviceId, owner.secret),
+    );
+
+    // member が受け取ってカーソルを進める
+    const first = await app.request('/api/v1/sync/pull?since=0', {
+      headers: authHeader(member.deviceId, member.secret),
+    });
+    const fj = (await first.json()) as { data: { changes: { seq: number }[] } };
+    const cursor = Math.max(...fj.data.changes.map((chg) => chg.seq));
+
+    // member が古い版を push → 採用されない
+    const push = await post(
+      '/api/v1/sync/push',
+      {
+        changes: [
+          {
+            entityType: 'recipe',
+            entityId: 'lww1',
+            payload: JSON.stringify({ title: 'ふるい' }),
+            clientUpdatedAt: '2026-08-21T12:00:00.000Z',
+            deleted: false,
+          },
+        ],
+      },
+      authHeader(member.deviceId, member.secret),
+    );
+    const pj = (await push.json()) as { data: { applied: number } };
+    expect(pj.data.applied).toBe(0);
+
+    // **カーソルの先に勝者がもう一度現れる**（中身は勝者のまま）
+    const again = await app.request(`/api/v1/sync/pull?since=${cursor}`, {
+      headers: authHeader(member.deviceId, member.secret),
+    });
+    const aj = (await again.json()) as {
+      data: { changes: { entityId: string; payload: string; updatedByDevice: string }[] };
+    };
+    const recovered = aj.data.changes.find((chg) => chg.entityId === 'lww1');
+    expect(recovered).toBeDefined();
+    if (!recovered) throw new Error('unreachable');
+    expect(JSON.parse(recovered.payload) as { title: string }).toEqual({ title: 'あたらしい' });
+    expect(recovered.updatedByDevice).toBe(owner.deviceId);
+
+    await cleanup();
+  });
+
+  it('進みすぎた端末の時計は頭打ちにする（1台の狂った時計で永久に凍らせない）', async () => {
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string; inviteCode: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+
+    await post(
+      '/api/v1/sync/push',
+      {
+        changes: [
+          {
+            entityType: 'recipe',
+            entityId: 'skew1',
+            payload: JSON.stringify({ title: '未来' }),
+            clientUpdatedAt: '2099-01-01T00:00:00.000Z',
+            deleted: false,
+          },
+        ],
+      },
+      authHeader(owner.deviceId, owner.secret),
+    );
+
+    const pull = await app.request('/api/v1/sync/pull?since=0', {
+      headers: authHeader(owner.deviceId, owner.secret),
+    });
+    const plj = (await pull.json()) as {
+      data: { changes: { entityId: string; clientUpdatedAt: string }[] };
+    };
+    const stored = plj.data.changes.find((chg) => chg.entityId === 'skew1');
+    expect(stored).toBeDefined();
+    if (!stored) throw new Error('unreachable');
+    // 5 分の余裕まで。2099 年がそのまま入っていたら以後どの編集も勝てなくなる
+    expect(Date.parse(stored.clientUpdatedAt)).toBeLessThanOrEqual(Date.now() + 6 * 60_000);
+
+    await cleanup();
+  });
+
+  it('削除でないのに payload が無い変更は 400（読めない行をサーバーに作らない）', async () => {
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+
+    const res = await post(
+      '/api/v1/sync/push',
+      {
+        changes: [
+          {
+            entityType: 'recipe',
+            entityId: 'nopayload',
+            payload: null,
+            clientUpdatedAt: '2026-08-21T12:00:00.000Z',
+            deleted: false,
+          },
+        ],
+      },
+      authHeader(owner.deviceId, owner.secret),
+    );
+    expect(res.status).toBe(400);
+
+    await cleanup();
+  });
+
+  it('since が桁外れなら 400（BIGINT に入らない値で 500 にしない）', async () => {
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as { data: { deviceId: string; deviceSecret: string } };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+
+    const res = await app.request('/api/v1/sync/pull?since=1e30', {
+      headers: authHeader(owner.deviceId, owner.secret),
+    });
+    expect(res.status).toBe(400);
+
+    await cleanup();
+  });
+
   it('push した変更が、他端末の pull に seq 順で届く', async () => {
     const created = await post('/api/v1/sync/groups', {});
     const cj = (await created.json()) as {

@@ -39,7 +39,6 @@ CREATE TABLE IF NOT EXISTS sync_devices (
   id              TEXT PRIMARY KEY,
   group_id        TEXT NOT NULL REFERENCES sync_groups(id) ON DELETE CASCADE,
   secret_hash     TEXT NOT NULL,
-  display_name    TEXT,
   is_owner        BOOLEAN NOT NULL DEFAULT FALSE,
   expo_push_token TEXT,
   last_pull_seq   BIGINT NOT NULL DEFAULT 0,
@@ -47,6 +46,9 @@ CREATE TABLE IF NOT EXISTS sync_devices (
 );
 -- 通知の文面をどちらの言語で出すかだけに使う（'ja' | 'en'）。後から足した列
 ALTER TABLE sync_devices ADD COLUMN IF NOT EXISTS locale TEXT;
+-- 端末の表示名は**保存しない**（設計 §2 — サーバーに個人情報を置かない）。
+-- 読み書きする経路はもう無いので、既存の値ごと落とす
+ALTER TABLE sync_devices DROP COLUMN IF EXISTS display_name;
 CREATE INDEX IF NOT EXISTS idx_sync_devices_group ON sync_devices (group_id);
 CREATE TABLE IF NOT EXISTS sync_entities (
   group_id          TEXT NOT NULL REFERENCES sync_groups(id) ON DELETE CASCADE,
@@ -148,7 +150,7 @@ export interface GroupInfo {
 // ── 操作 ─────────────────────────────────────────────────────────────────────
 
 /** グループ新設。作成した端末がオーナー（招待の再発行とグループ削除ができる） */
-export async function createGroup(displayName: string | null): Promise<GroupCreated> {
+export async function createGroup(): Promise<GroupCreated> {
   const sql = await db();
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const groupId = generateId();
@@ -160,8 +162,8 @@ export async function createGroup(displayName: string | null): Promise<GroupCrea
       await sql.begin(async (tx) => {
         await tx`INSERT INTO sync_groups (id, invite_code, invite_expires_at)
                  VALUES (${groupId}, ${code}, ${expires})`;
-        await tx`INSERT INTO sync_devices (id, group_id, secret_hash, display_name, is_owner)
-                 VALUES (${deviceId}, ${groupId}, ${hashSecret(secret)}, ${displayName}, TRUE)`;
+        await tx`INSERT INTO sync_devices (id, group_id, secret_hash, is_owner)
+                 VALUES (${deviceId}, ${groupId}, ${hashSecret(secret)}, TRUE)`;
       });
       return {
         groupId,
@@ -179,8 +181,14 @@ export async function createGroup(displayName: string | null): Promise<GroupCrea
   throw new Error('invite code collision (unreachable)');
 }
 
-/** 招待コードでグループに参加。定員チェックと挿入は同一トランザクション（競合で定員を超えない） */
-export async function joinGroup(rawCode: string, displayName: string | null): Promise<JoinResult> {
+/**
+ * 招待コードでグループに参加。
+ *
+ * 定員チェックと挿入は同一トランザクションで、**先にグループ行をロックする**。
+ * ロック無しの `count(*)` は READ COMMITTED では競合を防げない（2 台が同時に
+ * 9 を読んで 2 台とも入り、定員を超える）。
+ */
+export async function joinGroup(rawCode: string): Promise<JoinResult> {
   const sql = await db();
   const code = normalizeInviteCode(rawCode);
   const groups = await sql<{ id: string; invite_expires_at: Date }[]>`
@@ -190,6 +198,7 @@ export async function joinGroup(rawCode: string, displayName: string | null): Pr
   if (isInviteExpired(group.invite_expires_at)) return { kind: 'expired' };
 
   return sql.begin(async (tx): Promise<JoinResult> => {
+    await tx`SELECT id FROM sync_groups WHERE id = ${group.id} FOR UPDATE`;
     const rows = await tx<{ count: string }[]>`
       SELECT count(*)::text AS count FROM sync_devices WHERE group_id = ${group.id}`;
     const memberCount = Number(rows[0]?.count ?? '0');
@@ -197,8 +206,8 @@ export async function joinGroup(rawCode: string, displayName: string | null): Pr
 
     const deviceId = generateId();
     const secret = generateDeviceSecret();
-    await tx`INSERT INTO sync_devices (id, group_id, secret_hash, display_name)
-             VALUES (${deviceId}, ${group.id}, ${hashSecret(secret)}, ${displayName})`;
+    await tx`INSERT INTO sync_devices (id, group_id, secret_hash)
+             VALUES (${deviceId}, ${group.id}, ${hashSecret(secret)})`;
     return {
       kind: 'joined',
       groupId: group.id,
@@ -330,6 +339,22 @@ export interface PullResult {
 }
 
 /**
+ * 端末の時計が進んでいても受け付ける上限（分）。
+ *
+ * LWW は端末の時計を基準にするので、**1 台の狂った時計がそのエンティティを永久に凍らせる**。
+ * 2099 年の `clientUpdatedAt` を一度受け付けると、以後どの端末のまともな編集も負けて捨てられ、
+ * 家族の誰も直せなくなる。ここで頭を押さえておけば、遅れて来た正しい編集がいずれ勝つ。
+ * 「少し進んでいる」程度は正常（端末間の時計はふつうにずれる）なので、余裕を持たせる。
+ */
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+function clampClientUpdatedAt(iso: string, now: number): Date {
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) return new Date(now);
+  return new Date(Math.min(parsed, now + MAX_CLOCK_SKEW_MS));
+}
+
+/**
  * 変更の一括受け取り。LWW で採用分だけに seq を採番して保存する。
  * 全体を 1 トランザクションで行う（seq の穴・順序乱れを作らない）。
  */
@@ -338,6 +363,7 @@ export async function pushChanges(
   changes: readonly PushChange[],
 ): Promise<PushResult> {
   const sql = await db();
+  const now = Date.now();
   return sql.begin(async (tx) => {
     let applied = 0;
     for (const change of changes) {
@@ -346,16 +372,31 @@ export async function pushChanges(
         WHERE group_id = ${device.groupId}
           AND entity_type = ${change.entityType} AND entity_id = ${change.entityId}`;
       const existing = rows[0];
+      const clientUpdatedAt = clampClientUpdatedAt(change.clientUpdatedAt, now);
       if (
         existing &&
         !lwwIncomingWins(
-          change.clientUpdatedAt,
+          clientUpdatedAt.toISOString(),
           device.deviceId,
           existing.updated_at.toISOString(),
           existing.updated_by_device,
         )
       ) {
-        continue; // 既存の方が新しい — この変更は捨てる（クライアントは pull で追いつく）
+        // 既存の方が新しい — この変更は採用しない。
+        //
+        // **ただし黙って捨てない。** 1 エンティティ 1 行なので、勝者の seq は動かないまま。
+        // 送ってきた端末のカーソルがすでにその seq を越えていると、**勝者が二度と降りてこず**
+        // 自分の負けた版を永久に表示し続ける（サーバーは再送のきっかけを持たない）。
+        // seq だけ採り直して「新しい変更」に見せれば、次の pull で正しい版が届いて収束する。
+        // payload・updated_at・updated_by_device は勝者のまま触らない。
+        const bumpRows = await tx<{ seq: string }[]>`
+          UPDATE sync_groups SET seq = seq + 1 WHERE id = ${device.groupId} RETURNING seq::text`;
+        const bumped = Number(bumpRows[0]?.seq ?? '0');
+        await tx`
+          UPDATE sync_entities SET seq = ${bumped}
+          WHERE group_id = ${device.groupId}
+            AND entity_type = ${change.entityType} AND entity_id = ${change.entityId}`;
+        continue;
       }
       const seqRows = await tx<{ seq: string }[]>`
         UPDATE sync_groups SET seq = seq + 1 WHERE id = ${device.groupId} RETURNING seq::text`;
@@ -366,7 +407,7 @@ export async function pushChanges(
           (group_id, entity_type, entity_id, payload, deleted_at, seq, updated_at, updated_by_device)
         VALUES
           (${device.groupId}, ${change.entityType}, ${change.entityId}, ${change.payload ?? ''},
-           ${deletedAt}, ${seq}, ${new Date(change.clientUpdatedAt)}, ${device.deviceId})
+           ${deletedAt}, ${seq}, ${clientUpdatedAt}, ${device.deviceId})
         ON CONFLICT (group_id, entity_type, entity_id) DO UPDATE SET
           payload = EXCLUDED.payload,
           deleted_at = EXCLUDED.deleted_at,
@@ -439,7 +480,10 @@ export async function pullChanges(
 
   const latest = await sql<{ seq: string }[]>`
     SELECT seq::text FROM sync_groups WHERE id = ${device.groupId}`;
-  await sql`UPDATE sync_devices SET last_pull_seq = ${since} WHERE id = ${device.deviceId}`;
+  // 到達記録は**実際に届けた**最大 seq。要求された `since` を書くと 1 ページ分ずれる
+  //（いまは読み手が無いが、将来の保持期間・休眠端末の判定がこの値を見る）
+  const delivered = Math.max(since, ...changes.map((chg) => chg.seq), ...deltas.map((d) => d.seq));
+  await sql`UPDATE sync_devices SET last_pull_seq = ${delivered} WHERE id = ${device.deviceId}`;
   return { changes, deltas, latestSeq: Number(latest[0]?.seq ?? '0'), hasMore };
 }
 

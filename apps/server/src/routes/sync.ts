@@ -39,36 +39,64 @@ function syncLimit(name: string, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function takeSyncRateLimit(kind: 'create' | 'join', clientKey: string): boolean {
+/**
+ * 期限切れのバケツを掃く。
+ *
+ * 上書きされるのは同じ鍵が再来したときだけなので、掃かないと 1 日あたり数百〜数千の鍵が
+ * プロセスの寿命ぶん積み上がる。書き込みのたびに軽く掃除する。
+ */
+function sweepSyncBuckets(now: number): void {
+  if (syncBuckets.size < 1000) return; // 小さいうちは走査そのものが無駄
+  for (const [key, bucket] of syncBuckets) {
+    if (now >= bucket.resetAt) syncBuckets.delete(key);
+  }
+}
+
+function takeSyncRateLimit(kind: 'create' | 'join' | 'push', clientKey: string, cost = 1): boolean {
   const now = Date.now();
-  const take = (key: string, limit: number): boolean => {
+  sweepSyncBuckets(now);
+  const take = (key: string, limit: number, amount = 1): boolean => {
     if (limit <= 0) return true; // 0 = 無効
     const existing = syncBuckets.get(key);
     const bucket =
       !existing || now >= existing.resetAt ? { count: 0, resetAt: now + WINDOW_MS } : existing;
     syncBuckets.set(key, bucket);
-    if (bucket.count >= limit) return false;
-    bucket.count += 1;
+    if (bucket.count + amount > limit) return false;
+    bucket.count += amount;
     return true;
   };
+  if (kind === 'push') {
+    // 送信は端末ごとに抑える。**全体枠は置かない** — 置くと 1 台の暴走で
+    // 世界中の同期が止まる（下の create/join の反省）
+    return take(`push:${clientKey}`, syncLimit('SYNC_PUSH_DAILY_LIMIT', 20000), cost);
+  }
   if (kind === 'create') {
-    // グループ新設は 1 人あたり数回で足りる。緩めに置きつつ総量も抑える
-    if (!take('create:__global__', syncLimit('SYNC_CREATE_GLOBAL_DAILY_LIMIT', 200))) return false;
-    return take(`create:${clientKey}`, syncLimit('SYNC_CREATE_DAILY_LIMIT', 10));
+    // グループ新設は 1 人あたり数回で足りる。
+    // **端末ごとの枠を先に取る。** 全体枠を先に取ると、誰か 1 人が全体枠を使い切った時点で
+    // 正規の利用者も作れなくなる（＝自己 DoS）。端末枠で弾かれた分は全体枠を消費しない
+    if (!take(`create:${clientKey}`, syncLimit('SYNC_CREATE_DAILY_LIMIT', 10))) return false;
+    return take('create:__global__', syncLimit('SYNC_CREATE_GLOBAL_DAILY_LIMIT', 200));
   }
   // 参加試行は招待コード総当たりのガード（32^8 ≈ 1.1兆 × 24h 期限 × この上限）
-  if (!take('join:__global__', syncLimit('SYNC_JOIN_GLOBAL_DAILY_LIMIT', 1000))) return false;
-  return take(`join:${clientKey}`, syncLimit('SYNC_JOIN_DAILY_LIMIT', 50));
+  if (!take(`join:${clientKey}`, syncLimit('SYNC_JOIN_DAILY_LIMIT', 50))) return false;
+  return take('join:__global__', syncLimit('SYNC_JOIN_GLOBAL_DAILY_LIMIT', 1000));
 }
 
 export function resetSyncRateLimitForTesting(): void {
   syncBuckets.clear();
 }
 
+/**
+ * レート制限の鍵になる呼び出し元。
+ *
+ * **`X-Forwarded-For` の *最後* を見る。** 先頭は呼び出し側が自由に書ける（好きな値を
+ * 入れれば毎回別人になり、端末ごとの上限が意味を失う）。信頼できるのは自分の直前の
+ * プロキシが**追記した末尾**だけ。Railway もこの形で実 IP を足す。
+ */
 function clientKeyOf(headers: Headers): string {
-  return (
-    headers.get('x-forwarded-for')?.split(',')[0]?.trim() || headers.get('x-real-ip') || 'anonymous'
-  );
+  const forwarded = headers.get('x-forwarded-for');
+  const last = forwarded?.split(',').at(-1)?.trim();
+  return last || headers.get('x-real-ip') || 'anonymous';
 }
 
 // ── ルータ ───────────────────────────────────────────────────────────────────
@@ -92,19 +120,22 @@ const requireDevice = createMiddleware<SyncEnv>(async (c, next) => {
   await next();
 });
 
-const displayNameSchema = z
-  .string()
-  .trim()
-  .max(30)
-  .transform((v) => (v === '' ? null : v));
+/**
+ * `displayName` は **受け取るが保存しない**。
+ *
+ * サーバーに個人情報を置かない（設計 §2）。返しもしないので使い道が無く、
+ * 置けば「人についての自由文がサーバーにある」状態になるだけだった。
+ * スキーマから消さないのは、古い版のアプリが送ってきても 400 にしないため。
+ */
+const ignoredDisplayNameSchema = z.string().trim().max(30);
 
 const createGroupSchema = z.object({
-  displayName: displayNameSchema.optional(),
+  displayName: ignoredDisplayNameSchema.optional(),
 });
 
 const joinGroupSchema = z.object({
   inviteCode: z.string().trim().min(4).max(16),
-  displayName: displayNameSchema.optional(),
+  displayName: ignoredDisplayNameSchema.optional(),
 });
 
 /** グループ新設 → 端末クレデンシャルと招待コードを返す（シークレットはこの応答限り） */
@@ -112,8 +143,7 @@ syncRouter.post('/groups', zValidator('json', createGroupSchema), async (c) => {
   if (!takeSyncRateLimit('create', clientKeyOf(c.req.raw.headers))) {
     return c.json({ ok: false, error: 'RATE_LIMITED' }, 429);
   }
-  const body = c.req.valid('json');
-  const created = await createGroup(body.displayName ?? null);
+  const created = await createGroup();
   return c.json({ ok: true, data: created }, 201);
 });
 
@@ -123,7 +153,7 @@ syncRouter.post('/groups/join', zValidator('json', joinGroupSchema), async (c) =
     return c.json({ ok: false, error: 'RATE_LIMITED' }, 429);
   }
   const body = c.req.valid('json');
-  const result = await joinGroup(body.inviteCode, body.displayName ?? null);
+  const result = await joinGroup(body.inviteCode);
   switch (result.kind) {
     case 'invalid':
       return c.json({ ok: false, error: 'INVITE_INVALID' }, 404);
@@ -187,6 +217,7 @@ syncRouter.delete('/group', requireDevice, zValidator('json', deleteGroupSchema)
   const device = c.get('device');
   if (!device.isOwner) return c.json({ ok: false, error: 'OWNER_ONLY' }, 403);
   await deleteGroup(device.groupId);
+  forgetNotifySlot(device.groupId);
   return c.json({ ok: true });
 });
 
@@ -199,13 +230,20 @@ const MAX_CHANGES_PER_PUSH = 200;
 const pushSchema = z.object({
   changes: z
     .array(
-      z.object({
-        entityType: z.string().min(1).max(40),
-        entityId: z.string().min(1).max(64),
-        payload: z.string().max(MAX_PAYLOAD_CHARS).nullable(),
-        clientUpdatedAt: z.string().datetime({ offset: true }),
-        deleted: z.boolean(),
-      }),
+      z
+        .object({
+          entityType: z.string().min(1).max(40),
+          entityId: z.string().min(1).max(64),
+          payload: z.string().max(MAX_PAYLOAD_CHARS).nullable(),
+          clientUpdatedAt: z.string().datetime({ offset: true }),
+          deleted: z.boolean(),
+        })
+        // **削除でないのに payload が無い変更は受けない。** 受けると空文字が保存され、
+        // 他端末はそのエンティティを永久に読めない（読めない受信はカーソルを進めて
+        // 読み飛ばすので、その行は再 push まで死んだまま）
+        .refine((change) => change.deleted || change.payload !== null, {
+          message: 'payload is required unless deleted',
+        }),
     )
     .min(1)
     .max(MAX_CHANGES_PER_PUSH),
@@ -249,12 +287,26 @@ export function isUrgentChange(entityTypes: readonly string[]): boolean {
 
 const lastNotifiedAt = new Map<string, number>();
 
+/** 期限の切れた記録を捨てる（消えたグループの分が残り続けないように） */
+function sweepNotifySlots(now: number): void {
+  if (lastNotifiedAt.size < 1000) return;
+  for (const [groupId, at] of lastNotifiedAt) {
+    if (now - at >= NOTIFY_DEBOUNCE_MS) lastNotifiedAt.delete(groupId);
+  }
+}
+
 export function takeNotifySlot(groupId: string, now = Date.now(), urgent = false): boolean {
+  sweepNotifySlots(now);
   const window = urgent ? NOTIFY_DEBOUNCE_URGENT_MS : NOTIFY_DEBOUNCE_MS;
   const last = lastNotifiedAt.get(groupId);
   if (last !== undefined && now - last < window) return false;
   lastNotifiedAt.set(groupId, now);
   return true;
+}
+
+/** グループを消したら通知の記録も捨てる */
+export function forgetNotifySlot(groupId: string): void {
+  lastNotifiedAt.delete(groupId);
 }
 
 export function resetSyncNotifyDebounceForTesting(): void {
@@ -287,9 +339,27 @@ async function notifyGroupDevices(device: AuthedDevice, urgent: boolean): Promis
   }
 }
 
+/**
+ * 1 回の push の**合計**サイズ。
+ *
+ * 1 件ごとの上限（300KB）だけだと 200 件 × 300KB = 60MB を 1 回で送れてしまう。
+ * 本文はメモリに載せてから検証されるので、合計でも押さえておく。
+ */
+const MAX_PUSH_TOTAL_CHARS = 4_000_000;
+
 syncRouter.post('/push', requireDevice, zValidator('json', pushSchema), async (c) => {
   const device = c.get('device');
   const { changes } = c.req.valid('json');
+
+  const totalChars = changes.reduce((sum, change) => sum + (change.payload?.length ?? 0), 0);
+  if (totalChars > MAX_PUSH_TOTAL_CHARS) {
+    return c.json({ ok: false, error: 'PAYLOAD_TOO_LARGE' }, 413);
+  }
+  // 端末ごとの日次上限。1 件 = 1 消費なので、ふつうの使い方では当たらない
+  if (!takeSyncRateLimit('push', device.deviceId, changes.length)) {
+    return c.json({ ok: false, error: 'RATE_LIMITED' }, 429);
+  }
+
   const result = await pushChanges(device, changes);
   if (result.applied > 0) {
     void notifyGroupDevices(device, isUrgentChange(changes.map((change) => change.entityType)));
@@ -301,7 +371,8 @@ syncRouter.get('/pull', requireDevice, async (c) => {
   const device = c.get('device');
   const since = Number(c.req.query('since') ?? '0');
   const rawLimit = Number(c.req.query('limit') ?? '500');
-  if (!Number.isInteger(since) || since < 0) {
+  // 上限も見る。`1e30` は Number.isInteger を通るが BIGINT に入らず 500 になる
+  if (!Number.isInteger(since) || since < 0 || since > Number.MAX_SAFE_INTEGER) {
     return c.json({ ok: false, error: 'BAD_REQUEST' }, 400);
   }
   const limit = Number.isInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 500) : 500;
@@ -310,7 +381,16 @@ syncRouter.get('/pull', requireDevice, async (c) => {
 });
 
 const deviceUpdateSchema = z.object({
-  expoPushToken: z.string().max(200).nullable().optional(),
+  /**
+   * Expo の形式だけ受ける。任意の文字列を通すと、グループの誰かが登録した
+   * 無関係なトークンへ（固定文言とはいえ）通知を中継する装置になる
+   */
+  expoPushToken: z
+    .string()
+    .max(200)
+    .regex(/^Expo(nent)?PushToken\[[A-Za-z0-9_-]+\]$/)
+    .nullable()
+    .optional(),
   /** 通知の文面の言語だけに使う。他の用途には持たない */
   locale: z.enum(['ja', 'en']).optional(),
 });
