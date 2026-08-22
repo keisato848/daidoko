@@ -8,11 +8,12 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { BookOpen, ChevronLeft, Share2, Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
+import { dialog } from '../../src/services/dialog.service';
 import {
   deleteRecipeBook,
   getRecipeBooks,
@@ -47,38 +48,42 @@ export default function WebSharesScreen() {
     }
   };
 
-  const handleStop = (book: RecipeBookListItem) => {
-    Alert.alert(t('settings.webShares.stopTitle'), t('settings.webShares.stopConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('settings.webShares.stopAction'),
-        style: 'destructive',
-        onPress: () => {
-          void revokeSharedBook(book.id)
-            .then(load)
-            .catch(() =>
-              Alert.alert(t('settings.webShares.stopTitle'), t('settings.webShares.stopFailed')),
-            );
-        },
-      },
-    ]);
+  const handleStop = async (book: RecipeBookListItem) => {
+    const confirmed = await dialog.confirm({
+      title: t('settings.webShares.stopTitle'),
+      message: t('settings.webShares.stopConfirm'),
+      confirmLabel: t('settings.webShares.stopAction'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await revokeSharedBook(book.id);
+      await load();
+    } catch {
+      void dialog.alert({
+        title: t('settings.webShares.stopTitle'),
+        message: t('settings.webShares.stopFailed'),
+      });
+    }
   };
 
-  const handleDelete = (book: RecipeBookListItem) => {
-    Alert.alert(t('settings.webShares.deleteTitle'), t('settings.webShares.deleteConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.delete'),
-        style: 'destructive',
-        onPress: () => {
-          void deleteRecipeBook(book.id)
-            .then(load)
-            .catch(() =>
-              Alert.alert(t('settings.webShares.deleteTitle'), t('settings.webShares.stopFailed')),
-            );
-        },
-      },
-    ]);
+  const handleDelete = async (book: RecipeBookListItem) => {
+    const confirmed = await dialog.confirm({
+      title: t('settings.webShares.deleteTitle'),
+      message: t('settings.webShares.deleteConfirm'),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteRecipeBook(book.id);
+      await load();
+    } catch {
+      void dialog.alert({
+        title: t('settings.webShares.deleteTitle'),
+        message: t('settings.webShares.stopFailed'),
+      });
+    }
   };
 
   return (
@@ -133,7 +138,7 @@ export default function WebSharesScreen() {
             )}
             {item.shareUrl != null ? (
               <Pressable
-                onPress={() => handleStop(item)}
+                onPress={() => void handleStop(item)}
                 hitSlop={8}
                 style={styles.iconBtn}
                 accessibilityLabel={t('settings.webShares.stopAction')}
@@ -142,7 +147,7 @@ export default function WebSharesScreen() {
               </Pressable>
             ) : (
               <Pressable
-                onPress={() => handleDelete(item)}
+                onPress={() => void handleDelete(item)}
                 hitSlop={8}
                 style={styles.iconBtn}
                 accessibilityLabel={t('common.delete')}
