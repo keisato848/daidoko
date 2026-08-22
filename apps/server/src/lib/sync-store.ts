@@ -49,6 +49,9 @@ ALTER TABLE sync_devices ADD COLUMN IF NOT EXISTS locale TEXT;
 -- 端末の表示名は**保存しない**（設計 §2 — サーバーに個人情報を置かない）。
 -- 読み書きする経路はもう無いので、既存の値ごと落とす
 ALTER TABLE sync_devices DROP COLUMN IF EXISTS display_name;
+-- 最後に pull した時刻（#209）。休眠端末の整理と、オーナー不在時の所有権の引き継ぎに使う。
+-- 時刻しか持たない（何をしたかは記録しない）
+ALTER TABLE sync_devices ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_sync_devices_group ON sync_devices (group_id);
 CREATE TABLE IF NOT EXISTS sync_entities (
   group_id          TEXT NOT NULL REFERENCES sync_groups(id) ON DELETE CASCADE,
@@ -145,7 +148,30 @@ export interface GroupInfo {
   memberCount: number;
   inviteCode: string;
   inviteExpiresAt: string;
+  /** グループの端末（個人情報は持たない — id・役割・最終同期時刻だけ） */
+  devices: DeviceSummary[];
 }
+
+export interface DeviceSummary {
+  id: string;
+  isOwner: boolean;
+  /** 最後に同期した時刻。一度も pull していなければ登録時刻 */
+  lastSeenAt: string;
+}
+
+/**
+ * 休眠の判定（#209）。
+ *
+ * - **オーナーが 14 日**同期していなければ、所有権を最も古い生存端末へ移す。
+ *   端末の紛失・初期化で二度と戻らないオーナーを待ち続けると、招待の再発行も
+ *   グループ削除もできなくなる（＝データ削除手段の約束が果たせない）
+ * - **90 日**同期していない端末は、誰かが参加・離脱・状態確認したときに消す。
+ *   消された端末はもう一度招待コードで入り直せば全データが戻る（§2-2）
+ *
+ * どちらも「誰かの操作のついで」に行う（cron を持たない）。
+ */
+export const OWNER_STALE_DAYS = 14;
+export const DEVICE_STALE_DAYS = 90;
 
 // ── 操作 ─────────────────────────────────────────────────────────────────────
 
@@ -197,6 +223,9 @@ export async function joinGroup(rawCode: string): Promise<JoinResult> {
   if (!group) return { kind: 'invalid' };
   if (isInviteExpired(group.invite_expires_at)) return { kind: 'expired' };
 
+  // 幽霊の端末行が定員を食わないよう、参加の前に休眠端末を整理する（#209）
+  await reapStaleDevices(group.id, null);
+
   return sql.begin(async (tx): Promise<JoinResult> => {
     await tx`SELECT id FROM sync_groups WHERE id = ${group.id} FOR UPDATE`;
     const rows = await tx<{ count: string }[]>`
@@ -234,19 +263,79 @@ export async function authenticateDevice(
   return { deviceId: row.id, groupId: row.group_id, isOwner: row.is_owner };
 }
 
+/**
+ * 休眠端末の整理と所有権の引き継ぎ（#209）。参加・離脱・状態確認のついでに呼ぶ。
+ *
+ * `keepDeviceId` はいま操作している端末（自分を休眠として消さない — 長く開いていなくても
+ * いま開いた時点で生きている）。
+ */
+export async function reapStaleDevices(
+  groupId: string,
+  keepDeviceId: string | null,
+): Promise<void> {
+  const sql = await db();
+  await sql.begin(async (tx) => {
+    await tx`SELECT id FROM sync_groups WHERE id = ${groupId} FOR UPDATE`;
+    if (keepDeviceId) {
+      await tx`UPDATE sync_devices SET last_seen_at = now() WHERE id = ${keepDeviceId}`;
+    }
+    // 1. 90 日休眠の端末を消す（自分以外）
+    await tx`
+      DELETE FROM sync_devices
+      WHERE group_id = ${groupId}
+        AND id <> ${keepDeviceId ?? ''}
+        AND COALESCE(last_seen_at, created_at) < now() - make_interval(days => ${DEVICE_STALE_DAYS})`;
+    // 2. オーナーが居ない、または 14 日休眠なら、最も古い生存端末へ移す
+    const owners = await tx<{ id: string; stale: boolean }[]>`
+      SELECT id,
+             (COALESCE(last_seen_at, created_at) < now() - make_interval(days => ${OWNER_STALE_DAYS})) AS stale
+      FROM sync_devices WHERE group_id = ${groupId} AND is_owner = TRUE`;
+    const owner = owners[0];
+    if (owner && !owner.stale) return;
+    const candidates = await tx<{ id: string }[]>`
+      SELECT id FROM sync_devices
+      WHERE group_id = ${groupId}
+        AND COALESCE(last_seen_at, created_at) >= now() - make_interval(days => ${OWNER_STALE_DAYS})
+      ORDER BY created_at ASC LIMIT 1`;
+    const next = candidates[0];
+    if (!next || next.id === owner?.id) return;
+    await tx`UPDATE sync_devices SET is_owner = FALSE WHERE group_id = ${groupId}`;
+    await tx`UPDATE sync_devices SET is_owner = TRUE WHERE id = ${next.id}`;
+  });
+}
+
 export async function getGroupInfo(groupId: string): Promise<GroupInfo | null> {
   const sql = await db();
-  const rows = await sql<{ invite_code: string; invite_expires_at: Date; count: string }[]>`
-    SELECT g.invite_code, g.invite_expires_at,
-           (SELECT count(*)::text FROM sync_devices d WHERE d.group_id = g.id) AS count
-    FROM sync_groups g WHERE g.id = ${groupId}`;
+  const rows = await sql<{ invite_code: string; invite_expires_at: Date }[]>`
+    SELECT invite_code, invite_expires_at FROM sync_groups WHERE id = ${groupId}`;
   const row = rows[0];
   if (!row) return null;
+  const devices = await sql<{ id: string; is_owner: boolean; seen: Date }[]>`
+    SELECT id, is_owner, COALESCE(last_seen_at, created_at) AS seen
+    FROM sync_devices WHERE group_id = ${groupId} ORDER BY created_at ASC`;
   return {
-    memberCount: Number(row.count),
+    memberCount: devices.length,
     inviteCode: row.invite_code,
     inviteExpiresAt: row.invite_expires_at.toISOString(),
+    devices: devices.map((d) => ({
+      id: d.id,
+      isOwner: d.is_owner,
+      lastSeenAt: d.seen.toISOString(),
+    })),
   };
+}
+
+/**
+ * オーナーが他の端末を外す（設計 §2-2 の `DELETE /sync/devices/:id`）。
+ * 外された端末は次の通信で 401 になり、未参加に戻る。招待コードは呼び出し側で
+ * 回すこと（外した端末が同じコードで入り直せないように）。
+ */
+export async function evictDevice(owner: AuthedDevice, deviceId: string): Promise<boolean> {
+  if (deviceId === owner.deviceId) return false;
+  const sql = await db();
+  const rows = await sql<{ id: string }[]>`
+    DELETE FROM sync_devices WHERE id = ${deviceId} AND group_id = ${owner.groupId} RETURNING id`;
+  return rows.length > 0;
 }
 
 /** 招待コードの再発行（オーナーのみ — ルータ側で制御）。旧コードは即座に無効になる */
@@ -490,7 +579,8 @@ export async function pullChanges(
   // 到達記録は**実際に届けた**最大 seq。要求された `since` を書くと 1 ページ分ずれる
   //（いまは読み手が無いが、将来の保持期間・休眠端末の判定がこの値を見る）
   const delivered = Math.max(since, ...changes.map((chg) => chg.seq), ...deltas.map((d) => d.seq));
-  await sql`UPDATE sync_devices SET last_pull_seq = ${delivered} WHERE id = ${device.deviceId}`;
+  await sql`UPDATE sync_devices SET last_pull_seq = ${delivered}, last_seen_at = now()
+            WHERE id = ${device.deviceId}`;
   return { changes, deltas, latestSeq: Number(latest[0]?.seq ?? '0'), hasMore };
 }
 
@@ -517,6 +607,17 @@ export interface PushTarget {
 }
 
 /** 同グループの他端末の push 宛先（変更通知の宛先） */
+/**
+ * Expo が「もう届かない」と言ったトークンを消す（#207）。
+ * 消さないと、機種変更やアンインストールで死んだトークンが通知のたびに送られ続ける。
+ */
+export async function clearDeadPushTokens(tokens: readonly string[]): Promise<void> {
+  if (tokens.length === 0) return;
+  const sql = await db();
+  await sql`UPDATE sync_devices SET expo_push_token = NULL
+            WHERE expo_push_token IN ${sql([...tokens])}`;
+}
+
 export async function getOtherDevicePushTargets(device: AuthedDevice): Promise<PushTarget[]> {
   const sql = await db();
   const rows = await sql<{ expo_push_token: string | null; locale: string | null }[]>`

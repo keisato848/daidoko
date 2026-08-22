@@ -178,6 +178,19 @@ const recipe = {
     } satisfies PluralMessage,
     selectAll: 'すべて選択',
 
+    /** 蔵書庫の上に出すレシピ帖の棚（S4）。帖の入口はここ */
+    books: {
+      label: 'レシピ帖',
+      count: {
+        one: '{{count}}品',
+        other: '{{count}}品',
+      } satisfies PluralMessage,
+      sharedMark: '・共有中',
+      new: '新しい帖',
+      newBody: '帖の名前を決めてください。レシピはあとから足せます。',
+      create: '帖を作る',
+      openLabel: '{{title}}を開く',
+    },
     bookShare: {
       action: 'レシピ帖',
       title: 'レシピ帖をWebで共有',

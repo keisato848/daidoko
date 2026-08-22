@@ -87,6 +87,7 @@ export default function TabLayout() {
       <Tabs.Screen name="recipes/import-photo" options={{ href: null }} />
       <Tabs.Screen name="recipes/consult" options={{ href: null }} />
       <Tabs.Screen name="recipes/import-ocr" options={{ href: null }} />
+      <Tabs.Screen name="recipes/import-share" options={{ href: null }} />
     </Tabs>
   );
 }

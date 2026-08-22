@@ -47,6 +47,41 @@ app.route('/api/v1/share', shareApiRouter);
 app.route('/r', sharePageRouter);
 app.route('/b', bookPageRouter);
 
+// ── App Links / Universal Links（#198） ───────────────────────────────────────
+// 共有リンク（/r/:slug・/b/:slug）をインストール済みのアプリで開くための検証ファイル。
+// 指紋・Team ID は環境変数（Play App Signing の鍵は Play Console にしか無い）。
+// 未設定なら 404 にして、OS 側は従来どおりブラウザで開く（何も壊れない）。
+app.get('/.well-known/assetlinks.json', (c) => {
+  const raw = process.env['APP_LINKS_SHA256_FINGERPRINTS'] ?? '';
+  const fingerprints = raw
+    .split(',')
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(s));
+  if (fingerprints.length === 0) return c.notFound();
+  return c.json([
+    {
+      relation: ['delegate_permission/common.handle_all_urls'],
+      target: {
+        namespace: 'android_app',
+        package_name: 'com.daidoko.app',
+        sha256_cert_fingerprints: fingerprints,
+      },
+    },
+  ]);
+});
+
+app.get('/.well-known/apple-app-site-association', (c) => {
+  const teamId = process.env['APPLE_TEAM_ID']?.trim();
+  if (!teamId) return c.notFound();
+  // Content-Type は application/json 固定（拡張子が無いので明示する）
+  return c.json({
+    applinks: {
+      apps: [],
+      details: [{ appID: `${teamId}.com.daidoko.app`, paths: ['/r/*', '/b/*'] }],
+    },
+  });
+});
+
 // ─── 404 / Error ─────────────────────────────────────────────────────────────
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));

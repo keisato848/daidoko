@@ -14,9 +14,12 @@ import { z } from 'zod';
 import { parseAuthHeader } from '../lib/sync-auth.js';
 import {
   authenticateDevice,
+  clearDeadPushTokens,
   createGroup,
   deleteGroup,
+  evictDevice,
   getGroupInfo,
+  reapStaleDevices,
   getOtherDevicePushTargets,
   isSyncEnabled,
   joinGroup,
@@ -177,18 +180,27 @@ syncRouter.post('/groups/join', zValidator('json', joinGroupSchema), async (c) =
 /** 自分の状態（認証の疎通確認を兼ねる）。招待コードはオーナーにだけ返す */
 syncRouter.get('/me', requireDevice, async (c) => {
   const device = c.get('device');
+  // 状態確認のついでに休眠端末を整理し、オーナー不在なら引き継ぐ（#209）
+  await reapStaleDevices(device.groupId, device.deviceId);
   const info = await getGroupInfo(device.groupId);
   if (!info) return c.json({ ok: false, error: 'AUTH_INVALID' }, 401);
+  // 引き継ぎで自分がオーナーになった直後は `device.isOwner`（認証時の値）が古い
+  const isOwner = info.devices.some((d) => d.id === device.deviceId && d.isOwner);
   return c.json({
     ok: true,
     data: {
       groupId: device.groupId,
       deviceId: device.deviceId,
-      isOwner: device.isOwner,
+      isOwner,
       memberCount: info.memberCount,
-      ...(device.isOwner
-        ? { inviteCode: info.inviteCode, inviteExpiresAt: info.inviteExpiresAt }
-        : {}),
+      // 端末一覧は id・役割・最終同期時刻だけ（名前も内容も無い — §0-2）
+      devices: info.devices.map((d) => ({
+        id: d.id,
+        isOwner: d.isOwner,
+        isSelf: d.id === device.deviceId,
+        lastSeenAt: d.lastSeenAt,
+      })),
+      ...(isOwner ? { inviteCode: info.inviteCode, inviteExpiresAt: info.inviteExpiresAt } : {}),
     },
   });
 });
@@ -205,6 +217,26 @@ syncRouter.post('/invite/rotate', requireDevice, async (c) => {
 syncRouter.delete('/devices/me', requireDevice, async (c) => {
   await leaveGroup(c.get('device'));
   return c.json({ ok: true });
+});
+
+/**
+ * オーナーが他の端末を外す（#209）。外したあと招待コードを回して、同じコードで
+ * 入り直せないようにする。**`/devices/me` より後ろに登録する**（Hono は登録順に照合するので、
+ * 前に置くと `:id` が 'me' を食って離脱が 403 になる）。
+ */
+syncRouter.delete('/devices/:id', requireDevice, async (c) => {
+  const device = c.get('device');
+  const target = c.req.param('id');
+  // 引き継ぎ直後は認証時の isOwner が古いので、いまの状態で判定する
+  await reapStaleDevices(device.groupId, device.deviceId);
+  const info = await getGroupInfo(device.groupId);
+  const isOwner = info?.devices.some((d) => d.id === device.deviceId && d.isOwner) ?? false;
+  if (!isOwner) return c.json({ ok: false, error: 'OWNER_ONLY' }, 403);
+  if (target === device.deviceId) return c.json({ ok: false, error: 'BAD_REQUEST' }, 400);
+  const removed = await evictDevice({ ...device, isOwner: true }, target);
+  if (!removed) return c.json({ ok: false, error: 'NOT_FOUND' }, 404);
+  const rotated = await rotateInvite(device.groupId);
+  return c.json({ ok: true, data: rotated });
 });
 
 const deleteGroupSchema = z.object({ confirm: z.literal(true) });
@@ -323,7 +355,7 @@ async function notifyGroupDevices(device: AuthedDevice, urgent: boolean): Promis
     if (!takeNotifySlot(device.groupId, Date.now(), urgent)) return;
     const targets = await getOtherDevicePushTargets(device);
     if (targets.length === 0) return;
-    await fetch('https://exp.host/--/api/v2/push/send', {
+    const res = await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(
@@ -334,6 +366,18 @@ async function notifyGroupDevices(device: AuthedDevice, urgent: boolean): Promis
         })),
       ),
     });
+    // 届かないトークンは消す（#207）。応答の tickets は送った順に並ぶ
+    const body = (await res.json().catch(() => null)) as {
+      data?: { status?: string; details?: { error?: string } }[];
+    } | null;
+    const dead = (body?.data ?? [])
+      .map((ticket, index) =>
+        ticket?.status === 'error' && ticket.details?.error === 'DeviceNotRegistered'
+          ? targets[index]?.token
+          : undefined,
+      )
+      .filter((token): token is string => typeof token === 'string');
+    if (dead.length > 0) await clearDeadPushTokens(dead);
   } catch {
     // ベストエフォート
   }

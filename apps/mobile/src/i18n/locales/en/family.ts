@@ -77,6 +77,23 @@ const family: typeof ja = {
       other: 'Devices sharing: {{count}}',
     },
     ownerBadge: 'You created this group',
+    devices: {
+      label: 'Devices sharing',
+      self: 'This device',
+      other: 'Device {{index}}',
+      ownerMark: ' (creator)',
+      lastSeen: 'Last synced: {{when}}',
+      justNow: 'just now',
+      today: 'today',
+      daysAgo: {
+        one: '{{count}} day ago',
+        other: '{{count}} days ago',
+      },
+      evict: 'Remove',
+      evictTitle: 'Remove this device?',
+      evictBody:
+        'This removes the device last synced {{when}} from sharing. Its own data stays on it, but it stops syncing. A new invite code will be issued (the removed device cannot rejoin with the old one).',
+    },
     leave: 'Leave this group',
     leaveConfirmTitle: 'Leave the group?',
     leaveConfirmBody:

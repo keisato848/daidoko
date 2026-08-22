@@ -19,7 +19,8 @@
       "buildNumber": "10027",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "associatedDomains": ["applinks:daidoko-production.up.railway.app"]
     },
     "android": {
       "package": "com.daidoko.app",
@@ -27,7 +28,26 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"
-      }
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "daidoko-production.up.railway.app",
+              "pathPrefix": "/r/"
+            },
+            {
+              "scheme": "https",
+              "host": "daidoko-production.up.railway.app",
+              "pathPrefix": "/b/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",

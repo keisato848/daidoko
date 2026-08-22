@@ -161,6 +161,18 @@ const recipe: typeof ja = {
     },
     selectAll: 'Select all',
 
+    books: {
+      label: 'Recipe books',
+      count: {
+        one: '{{count}} recipe',
+        other: '{{count}} recipes',
+      },
+      sharedMark: ' · shared',
+      new: 'New book',
+      newBody: 'Name the book. You can add recipes later.',
+      create: 'Create book',
+      openLabel: 'Open {{title}}',
+    },
     bookShare: {
       action: 'Recipe book',
       title: 'Share a recipe book on the web',

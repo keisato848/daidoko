@@ -64,9 +64,21 @@ export interface SyncMe {
   deviceId: string;
   isOwner: boolean;
   memberCount: number;
+  /**
+   * グループの端末（#209）。id・役割・最終同期時刻だけで、名前も内容も無い（§0-2）。
+   * 古いサーバーは返さないので省略可
+   */
+  devices?: SyncDeviceSummary[];
   /** オーナーにだけ返る */
   inviteCode?: string;
   inviteExpiresAt?: string;
+}
+
+export interface SyncDeviceSummary {
+  id: string;
+  isOwner: boolean;
+  isSelf: boolean;
+  lastSeenAt: string;
 }
 
 export type SyncState =
@@ -254,6 +266,22 @@ export async function fetchSyncMe(): Promise<SyncMe> {
     if (err instanceof SyncError && err.code === 'AUTH_INVALID') await clearCredentials();
     throw err;
   }
+}
+
+/**
+ * オーナーが他の端末を外す（#209）。外すと招待コードも回る（返ってくる）。
+ * 外された端末は次の通信で 401 になり、自分で未参加に戻る。
+ */
+export async function evictSyncDevice(
+  deviceId: string,
+): Promise<{ inviteCode: string; inviteExpiresAt: string }> {
+  const credentials = await getStoredCredentials();
+  if (!credentials) throw new SyncError('AUTH_INVALID');
+  return authedRequest(
+    `/devices/${encodeURIComponent(deviceId)}`,
+    { method: 'DELETE' },
+    credentials,
+  );
 }
 
 /** 招待コードの再発行（オーナーのみ）。期限切れ・漏えい時のやり直し */

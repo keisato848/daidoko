@@ -87,6 +87,24 @@ const family = {
       other: '共有中の端末: {{count}}台',
     } satisfies PluralMessage,
     ownerBadge: 'このグループの作成者です',
+    /** 端末一覧（#209）。名前は無い — 「この端末」と「最終同期」だけで見分ける */
+    devices: {
+      label: '共有中の端末',
+      self: 'この端末',
+      other: '端末 {{index}}',
+      ownerMark: '（作成者）',
+      lastSeen: '最終同期: {{when}}',
+      justNow: 'たった今',
+      today: '今日',
+      daysAgo: {
+        one: '{{count}}日前',
+        other: '{{count}}日前',
+      } satisfies PluralMessage,
+      evict: '外す',
+      evictTitle: 'この端末を外しますか？',
+      evictBody:
+        '最終同期が{{when}}の端末を共有から外します。外した端末のデータは残りますが、同期は止まります。招待コードは新しく発行されます（外した端末は同じコードで戻れません）。',
+    },
     leave: 'このグループから離脱',
     leaveConfirmTitle: 'グループから離脱しますか？',
     leaveConfirmBody:

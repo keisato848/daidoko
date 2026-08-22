@@ -28,6 +28,7 @@ import {
   SyncError,
   createSyncGroup,
   deleteSyncGroup,
+  evictSyncDevice,
   fetchSyncMe,
   getSyncState,
   joinSyncGroup,
@@ -60,6 +61,15 @@ import {
 } from '../../src/services/user.service';
 import type { CurrentFamily, CurrentUser, FamilyMember } from '../../src/services/types';
 import { formatProfileDisplayName } from '../../src/utils/profile';
+
+/** 「最終同期」の相対表示。日付そのものは個人情報ではないが、細かすぎる時刻は出さない */
+function formatLastSeen(iso: string): string {
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return t('family.sync.devices.justNow');
+  const days = Math.floor(ms / 86_400_000);
+  if (days === 0) return t('family.sync.devices.today');
+  return tCount('family.sync.devices.daysAgo', days);
+}
 
 function roleLabel(role: FamilyMember['role']): string {
   return role === 'owner' ? t('family.role.owner') : t('family.role.member');
@@ -360,6 +370,30 @@ export default function FamilyScreen() {
     });
   };
 
+  /**
+   * 端末を外す（#209）。紛失・初期化した端末の幽霊を消す入口。
+   * 端末には名前が無いので「最終同期 N 日前」だけで見分ける（§0-2: 個人情報を持たない）。
+   */
+  const handleEvictDevice = (deviceId: string, lastSeenAt: string) => {
+    Alert.alert(
+      t('family.sync.devices.evictTitle'),
+      t('family.sync.devices.evictBody', { when: formatLastSeen(lastSeenAt) }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('family.sync.devices.evict'),
+          style: 'destructive',
+          onPress: () => {
+            void runSyncAction(async () => {
+              await evictSyncDevice(deviceId);
+              await loadCloud();
+            });
+          },
+        },
+      ],
+    );
+  };
+
   const handleLeaveGroup = () => {
     Alert.alert(t('family.sync.leaveConfirmTitle'), t('family.sync.leaveConfirmBody'), [
       { text: t('common.cancel'), style: 'cancel' },
@@ -584,6 +618,36 @@ export default function FamilyScreen() {
                   </View>
                   <Text style={styles.syncOwnerBadge}>{t('family.sync.ownerBadge')}</Text>
                 </>
+              )}
+              {cloud.me.devices && cloud.me.devices.length > 1 && (
+                <View style={styles.deviceList}>
+                  <Text style={styles.syncInviteLabel}>{t('family.sync.devices.label')}</Text>
+                  {cloud.me.devices.map((device, index) => (
+                    <View key={device.id} style={styles.deviceRow}>
+                      <Text style={styles.deviceName}>
+                        {device.isSelf
+                          ? t('family.sync.devices.self')
+                          : t('family.sync.devices.other', { index: index + 1 })}
+                        {device.isOwner ? t('family.sync.devices.ownerMark') : ''}
+                      </Text>
+                      <Text style={styles.deviceMeta}>
+                        {t('family.sync.devices.lastSeen', {
+                          when: formatLastSeen(device.lastSeenAt),
+                        })}
+                      </Text>
+                      {cloud.me.isOwner && !device.isSelf && (
+                        <Pressable
+                          onPress={() => handleEvictDevice(device.id, device.lastSeenAt)}
+                          disabled={syncBusy}
+                          hitSlop={8}
+                          accessibilityLabel={t('family.sync.devices.evict')}
+                        >
+                          <Text style={styles.deviceEvict}>{t('family.sync.devices.evict')}</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  ))}
+                </View>
               )}
               <Pressable
                 style={[styles.leaveButton, syncBusy && styles.buttonDisabled]}
@@ -810,6 +874,18 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 4,
   },
+  deviceList: { marginTop: 12, gap: 6 },
+  deviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  deviceName: { color: Colors.paper, fontSize: 13, flex: 1 },
+  deviceMeta: { color: Colors.muted, fontSize: 11 },
+  deviceEvict: { color: '#FF6B6B', fontSize: 12 },
   syncOwnerBadge: {
     fontSize: 12,
     color: Colors.goldDim,

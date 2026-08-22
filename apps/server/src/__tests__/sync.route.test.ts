@@ -291,6 +291,124 @@ describe.runIf(Boolean(TEST_DB))('S1: push / pull（実 PostgreSQL）', () => {
     await cleanup();
   });
 
+  it('オーナーは他の端末を外せる。外された端末は 401 になり、招待コードが回る（#209）', async () => {
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string; inviteCode: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+    const joined = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const jj = (await joined.json()) as { data: { deviceId: string; deviceSecret: string } };
+    member = { deviceId: jj.data.deviceId, secret: jj.data.deviceSecret };
+
+    // /me に端末一覧が載る（id・役割・最終同期だけ）
+    const me = await app.request('/api/v1/sync/me', {
+      headers: authHeader(owner.deviceId, owner.secret),
+    });
+    const mj = (await me.json()) as {
+      data: { devices: { id: string; isOwner: boolean; isSelf: boolean; lastSeenAt: string }[] };
+    };
+    expect(mj.data.devices).toHaveLength(2);
+    expect(mj.data.devices.find((d) => d.isSelf)?.isOwner).toBe(true);
+    for (const d of mj.data.devices)
+      expect(Object.keys(d).sort()).toEqual(['id', 'isOwner', 'isSelf', 'lastSeenAt']);
+
+    // メンバーは外せない
+    const denied = await app.request(`/api/v1/sync/devices/${owner.deviceId}`, {
+      method: 'DELETE',
+      headers: authHeader(member.deviceId, member.secret),
+    });
+    expect(denied.status).toBe(403);
+
+    // オーナーが外す → 新しい招待コードが返る
+    const evicted = await app.request(`/api/v1/sync/devices/${member.deviceId}`, {
+      method: 'DELETE',
+      headers: authHeader(owner.deviceId, owner.secret),
+    });
+    expect(evicted.status).toBe(200);
+    const ej = (await evicted.json()) as { data: { inviteCode: string } };
+    expect(ej.data.inviteCode).not.toBe(cj.data.inviteCode);
+
+    const after = await app.request('/api/v1/sync/me', {
+      headers: authHeader(member.deviceId, member.secret),
+    });
+    expect(after.status).toBe(401);
+
+    await cleanup();
+  });
+
+  it('オーナーが 14 日同期していなければ、最も古い生存端末へ所有権が移る（#209）', async () => {
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string; inviteCode: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+    const joined = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const jj = (await joined.json()) as { data: { deviceId: string; deviceSecret: string } };
+    member = { deviceId: jj.data.deviceId, secret: jj.data.deviceSecret };
+
+    // オーナーの最終同期を 20 日前に倒す（テストだけが触る裏口）
+    const postgres = (await import('postgres')).default;
+    const sql = postgres(TEST_DB as string, { max: 1 });
+    await sql`UPDATE sync_devices SET last_seen_at = now() - interval '20 days' WHERE id = ${owner.deviceId}`;
+    await sql.end();
+
+    const me = await app.request('/api/v1/sync/me', {
+      headers: authHeader(member.deviceId, member.secret),
+    });
+    const mj = (await me.json()) as { data: { isOwner: boolean; inviteCode?: string } };
+    expect(mj.data.isOwner).toBe(true);
+    expect(mj.data.inviteCode).toBeDefined();
+
+    // 元オーナーは member になっている（ただし外されてはいない）
+    const old = await app.request('/api/v1/sync/me', {
+      headers: authHeader(owner.deviceId, owner.secret),
+    });
+    expect(old.status).toBe(200);
+    const oj = (await old.json()) as { data: { isOwner: boolean } };
+    expect(oj.data.isOwner).toBe(false);
+
+    // 後始末は新オーナー（member）で
+    await app.request('/api/v1/sync/group', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeader(member.deviceId, member.secret),
+      },
+      body: JSON.stringify({ confirm: true }),
+    });
+  });
+
+  it('90 日同期していない端末は、誰かの参加のついでに消える（#209）', async () => {
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string; inviteCode: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+    const joined = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const jj = (await joined.json()) as { data: { deviceId: string; deviceSecret: string } };
+    const ghost = { deviceId: jj.data.deviceId, secret: jj.data.deviceSecret };
+
+    const postgres = (await import('postgres')).default;
+    const sql = postgres(TEST_DB as string, { max: 1 });
+    await sql`UPDATE sync_devices SET last_seen_at = now() - interval '100 days' WHERE id = ${ghost.deviceId}`;
+    await sql.end();
+
+    const again = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const aj = (await again.json()) as {
+      data: { deviceId: string; deviceSecret: string; memberCount: number };
+    };
+    member = { deviceId: aj.data.deviceId, secret: aj.data.deviceSecret };
+    expect(aj.data.memberCount).toBe(2); // owner + 新しい端末。幽霊は消えた
+
+    const gone = await app.request('/api/v1/sync/me', {
+      headers: authHeader(ghost.deviceId, ghost.secret),
+    });
+    expect(gone.status).toBe(401);
+
+    await cleanup();
+  });
+
   it('push した変更が、他端末の pull に seq 順で届く', async () => {
     const created = await post('/api/v1/sync/groups', {});
     const cj = (await created.json()) as {

@@ -1,6 +1,40 @@
 import type ja from '../ja/recipeImport';
 
 const recipeImport: typeof ja = {
+  share: {
+    title: 'Import a shared recipe',
+    loading: 'Loading the shared page',
+    recipeLead: 'A recipe shared by your family. Check it and save it to your library.',
+    bookLead: {
+      one: 'This book has {{count}} recipe. You can save it all to your library.',
+      other: 'This book has {{count}} recipes. You can save them all to your library.',
+    },
+    ingredientCount: {
+      one: '{{count}} ingredient',
+      other: '{{count}} ingredients',
+    },
+    passcodeLead: 'This recipe book is protected by a passcode. Enter the 4 digits you were given.',
+    unlock: 'Open',
+    save: 'Save to library',
+    saveAll: {
+      one: 'Save {{count}} recipe to library',
+      other: 'Save {{count}} recipes to library',
+    },
+    saving: 'Saving…',
+    saved: 'Saved to your library',
+    savedCount: {
+      one: 'Saved {{count}} recipe to your library',
+      other: 'Saved {{count}} recipes to your library',
+    },
+    backToLibrary: 'Back to library',
+    error: {
+      notFound: 'This shared page was not found (it may have been stopped or expired).',
+      wrong: 'That passcode is not right.',
+      locked: 'Too many attempts. Please try again later.',
+      network: 'Could not connect. Please try again somewhere with better signal.',
+      server: 'Could not load it. Please try again later.',
+    },
+  },
   formTitle: 'Check and edit your recipe',
   saved: 'Recipe saved',
 
