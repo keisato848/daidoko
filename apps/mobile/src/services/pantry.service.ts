@@ -25,7 +25,7 @@ import {
   readQuantityRow,
   rematerialize,
   upsertPart,
-} from './pantry-quantity.db';
+} from './pantry-quantity-db';
 import { SYNC_ENTITY_PANTRY_ITEM, SYNC_ENTITY_PANTRY_QUANTITY } from './sync-payload';
 import { enqueueSyncEntity, initialSharedValue } from './sync-queue.service';
 import { normalizeItemName } from '../utils/itemName';

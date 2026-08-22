@@ -35,7 +35,7 @@ import {
   readPart,
   rematerialize,
   upsertPart,
-} from './pantry-quantity.db';
+} from './pantry-quantity-db';
 import {
   SYNC_ENTITY_JAN_CATALOG,
   SYNC_ENTITY_NAME_ALIAS,

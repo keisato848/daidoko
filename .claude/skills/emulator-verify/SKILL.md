@@ -110,3 +110,16 @@ adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:
 | タップが効かない             | オーバーレイ（コーチマーク等）が手前 → スクショで確認して先に閉じる                                       |
 | ネイティブ変更が反映されない | prebuild していない → `--prebuild`（build スクリプトが警告を出す）                                        |
 | 署名不一致で install 失敗    | debug/release・EAS 鍵の混在 → 同一署名のビルドで `-r`、やむを得ない時だけユーザー承認の上アンインストール |
+
+## 同時減算の手順（S2-B・在庫数量の持ち分）
+
+2 台が**同じ品目を同時に**減らして収束するかを見る。逐次のシナリオでは出ない欠陥（§5-2f N1 の型）。
+
+1. A・B を同じグループに入れ、共有中の在庫（例: RiceA 数量 5）を両方に出す
+2. PowerShell で 2 台へ**同じ秒内**に `input tap`（−ボタン）を送る:
+   `& $adb -s emulator-5554 shell input tap <x> <y>; & $adb -s emulator-5556 shell input tap <x> <y>`
+3. 10 秒待って両方の画面を撮る → **両方 3**（LWW だと 4 で止まる）
+4. 裏取り: `docker exec daidoko-sync-pg psql … -c "select entity_id, payload from sync_entities where entity_type='pantry_quantity'"`
+   に端末ごとの持ち分が 2 行（net = −1 ずつ）。端末側は
+   `adb shell "run-as com.daidoko.app sqlite3 …"` ではなく、画面の値と `quantity_base + Σ` の一致で見る
+5. 5 回繰り返す（1 回では競合の窓に当たらない）

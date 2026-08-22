@@ -944,7 +944,7 @@ const NON_RESTORABLE_APP_META_KEYS: readonly string[] = ['sync_cursor'];
 
 /** 復元直後: 未移行の在庫行をベースライン化し、持ち分から表示値を導出し直す（S2-B） */
 async function rebaselineQuantities(): Promise<void> {
-  const { ensureQuantityBaseline, rematerializeAll } = await import('./pantry-quantity.db');
+  const { ensureQuantityBaseline, rematerializeAll } = await import('./pantry-quantity-db');
   await ensureQuantityBaseline();
   await rematerializeAll();
 }

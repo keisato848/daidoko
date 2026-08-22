@@ -29,7 +29,7 @@ export function useDatabase() {
           await normalizePhotoPaths(getDb());
           // v16: 在庫数量のベースライン化（未移行の行だけ）と自己修復の再実体化（設計 §5-3-1）
           const { ensureQuantityBaseline, rematerializeAll } =
-            await import('../services/pantry-quantity.db');
+            await import('../services/pantry-quantity-db');
           await ensureQuantityBaseline();
           await rematerializeAll();
         }
