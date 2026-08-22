@@ -17,16 +17,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  FlatList,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
@@ -41,6 +32,7 @@ import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { t, tCount } from '../../src/i18n';
 import { formatMonthDay, formatMonthLabel } from '../../src/i18n/format';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
+import { dialog } from '../../src/services/dialog.service';
 import { getInStockNormalizedNames } from '../../src/services/pantry.service';
 import { getWantToCookRecipes } from '../../src/services/recipe.service';
 import { getTimeline } from '../../src/services/timeline.service';
@@ -173,22 +165,20 @@ export default function HomeScreen() {
     setSelectedIds(new Set(entries.map((entry) => entry.id)));
   }, [entries]);
 
-  const handleBulkDelete = useCallback(() => {
+  const handleBulkDelete = useCallback(async () => {
     const count = selectedIds.size;
     if (count === 0) return;
 
-    Alert.alert(t('home.delete.title'), tCount('home.delete.confirm', count), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.delete'),
-        style: 'destructive',
-        onPress: async () => {
-          await Promise.all([...selectedIds].map((id) => deleteCookingLog(id)));
-          exitSelectMode();
-          await loadTimeline();
-        },
-      },
-    ]);
+    const confirmed = await dialog.confirm({
+      title: t('home.delete.title'),
+      message: tCount('home.delete.confirm', count),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await Promise.all([...selectedIds].map((id) => deleteCookingLog(id)));
+    exitSelectMode();
+    await loadTimeline();
   }, [selectedIds, exitSelectMode, loadTimeline]);
 
   const renderItem = ({ item, index }: { item: TimelineEntry; index: number }) => {
@@ -449,7 +439,7 @@ export default function HomeScreen() {
               styles.actionBtnDelete,
               selectedIds.size === 0 && styles.actionBtnDisabled,
             ]}
-            onPress={handleBulkDelete}
+            onPress={() => void handleBulkDelete()}
             disabled={selectedIds.size === 0}
           >
             <Trash2 size={16} color={selectedIds.size === 0 ? Colors.muted : Colors.bg} />
