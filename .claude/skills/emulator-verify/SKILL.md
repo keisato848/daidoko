@@ -29,9 +29,20 @@ description: Android エミュレータ/実機での画面・機能検証の定�
 EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1     # サンプルシード（recipe-1〜6・調理記録・家族「恵/健/陽」）
 EXPO_PUBLIC_DISABLE_COACH_MARKS=1    # コーチマーク非表示（スクショ・回帰確認用）
 EXPO_PUBLIC_FREE_DAILY_LIMIT=0       # 無料枠0=常時ペイウォール（広告フロー E2E 用）
-EXPO_PUBLIC_ADMOB_ENABLED=true       # 広告有効（テストIDなら Google テスト広告）
+EXPO_PUBLIC_ADMOB_ENABLED=true       # 広告有効。**これだけでは広告は出ない**（次行が要る）
+EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID=ca-app-pub-3940256099942544/5224354917  # Google のテスト用リワード枠
 node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更時は --prebuild 必須
 ```
+
+**ユニット ID を渡さないと広告は「出せない」扱いになる。** `isAdRewardConfigured()` は
+`ADMOB_ENABLED && ADMOB_REWARDED_UNIT_ID !== ''` で、空だと広告まわりが丸ごとスタブに落ちる
+（本番ビルドにテスト広告を出さないための設計 — `apps/mobile/src/config.ts`）。この状態で枠切れにすると
+広告視聴の確認を飛ばして**ペイウォールに直行**するので、「広告フローが壊れた」と読み違える。
+
+**ビルドスクリプトはリポジトリのルートから叩く。** `apps/mobile` を cwd にしたまま
+`node scripts/agent/build-android.mjs` を叩くと MODULE_NOT_FOUND で即死するが、
+`| tail` などに繋いでいると**パイプ側の終了コード 0 が返って成功に見える**。
+「ビルドし直したのに変更が反映されない」の正体がこれだったことがある。
 
 インストールは常に `adb install -r`（`-r` なしはローカルデータ消失リスクで hook が ask）。
 
@@ -70,11 +81,14 @@ adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:
 
 ## 既知の落とし穴まとめ
 
-| 症状                         | 原因と対処                                                                                                |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
-| 広告/UMP/名寄せが失敗        | エミュレータの DNS 死亡 → `-dns-server` 付きで再起動。ping での判定は不可                                 |
-| OCR/ラベリングが動かない     | ML Kit モデル未DL（オフライン）→ オンライン実機/Google Playイメージで                                     |
-| スクショに ANR ダイアログ    | wipe 直後の SystemUI 高負荷 → Wait をタップ、2〜3分待つ                                                   |
-| タップが効かない             | オーバーレイ（コーチマーク等）が手前 → スクショで確認して先に閉じる                                       |
-| ネイティブ変更が反映されない | prebuild していない → `--prebuild`（build スクリプトが警告を出す）                                        |
-| 署名不一致で install 失敗    | debug/release・EAS 鍵の混在 → 同一署名のビルドで `-r`、やむを得ない時だけユーザー承認の上アンインストール |
+| 症状                         | 原因と対処                                                                                                                                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 広告/UMP/名寄せが失敗        | エミュレータの DNS 死亡 → `-dns-server` 付きで再起動。ping での判定は不可                                                                                                                            |
+| OCR/ラベリングが動かない     | ML Kit モデル未DL（オフライン）→ オンライン実機/Google Playイメージで                                                                                                                                |
+| スクショに ANR ダイアログ    | wipe 直後の SystemUI 高負荷 → Wait をタップ、2〜3分待つ                                                                                                                                              |
+| タップが効かない             | オーバーレイ（コーチマーク等）が手前 → スクショで確認して先に閉じる                                                                                                                                  |
+| ネイティブ変更が反映されない | prebuild していない → `--prebuild`（build スクリプトが警告を出す）                                                                                                                                   |
+| 署名不一致で install 失敗    | debug/release・EAS 鍵の混在 → 同一署名のビルドで `-r`、やむを得ない時だけユーザー承認の上アンインストール                                                                                            |
+| `input text` が入らない      | 日本語 IME（Gboard 12キー）が変換中のまま抱えて確定しない → 入力後に確定キー（右下の ✓・1080幅で `input tap 968 2189`）を押す。初回は「入力レイアウトの選択」が被るので先にスキップする              |
+| サンプルデータが入らない     | 既存 DB があると `seedDatabase` は `app_meta` の版で判定して何もしない。アプリのデータ全消しはフックが止める（データ消失防止）ので、**検証用データは画面から手で作る**か、ユーザーに wipe を依頼する |
+| 別セッションの端末を掴む     | エミュレータが複数動いていることがある。`adb -s <serial> emu avd name` で AVD 名を、`adb -s <serial> shell cat /proc/uptime` で自分が起動したものかを確かめ、以後 `adb -s` を必ず付ける              |
