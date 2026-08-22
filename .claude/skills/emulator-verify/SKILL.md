@@ -57,6 +57,25 @@ adb reverse --remove-all             # 本番構成検証時は必ず除去（�
 
 サーバーログの 200 応答で「端末から届いた」ことを裏どりする。
 
+**リリースビルドは平文 HTTP を遮断する**（targetSdk 28+ の既定。`localhost` も例外ではない）。
+`build-android.mjs` は release しか組まないので、ローカルサーバーへ向ける検証ビルドでは
+**`android/app/src/main/AndroidManifest.xml` の `<application>` に
+`android:usesCleartextTraffic="true"` を手で足してから**組む。`android/` は `.gitignore`
+対象なのでコミットには出ないが、`--prebuild` で再生成されると消えるので都度確認する。
+入れ忘れると症状は「同期だけ何も起きない・ログにも何も出ない」で、原因が JS 側に見える。
+
+**2 端末の検証は AVD を 2 つ起動するのが速い**（`-port 5556` を付けて 2 台目を起動）。
+実機は画面ロック（暗証番号）が掛かっていると `screencap` が真っ黒になり操作できない。
+
+```powershell
+& "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd daidoko_e2e_fresh_api36 -port 5556 -no-boot-anim -no-audio -no-snapshot -dns-server 8.8.8.8,1.1.1.1
+adb -s emulator-5554 reverse tcp:3210 tcp:3210   # 端末ごとに張る
+adb -s emulator-5556 reverse tcp:3210 tcp:3210
+```
+
+ポートは**空いているものを選ぶ**（このマシンは 3000/3100 が別プロセスで埋まっていた）。
+サーバー側は `PORT` と `SYNC_DATABASE_URL` を渡して起動する。
+
 ## 5. テスト写真の投入（AI 写真機能の E2E）
 
 ギャラリーに画像が要る場合:
