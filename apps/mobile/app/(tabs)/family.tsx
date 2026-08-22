@@ -38,10 +38,12 @@ import {
 } from '../../src/services/sync-client.service';
 import {
   countUndecidedSharedPantryItems,
+  revertUndecidedPantryItemsShared,
   setUndecidedPantryItemsShared,
 } from '../../src/services/pantry.service';
 import {
   countUndecidedSharedShoppingItems,
+  revertUndecidedShoppingItemsShared,
   setUndecidedShoppingItemsShared,
 } from '../../src/services/shopping-list.service';
 import { onSyncGroupJoined, onSyncGroupLeft } from '../../src/services/sync-runner.service';
@@ -241,22 +243,33 @@ export default function FamilyScreen() {
    *
    * 対象は**まだ共有可否を決めていない品目だけ**（`shared IS NULL`）。他端末から
    * 降りてきた品目は決定済みなので触らない。対象が無ければ聞かない。
+   *
+   * 戻り値は**答えを無かったことにする関数**。参加・作成がこの後で失敗したら呼ぶ —
+   * 呼ばないと決定だけが残り、次に参加したときプロンプトが出ず、「自分だけ」にした
+   * 品目は永久に同期されない／「共有する」にした品目は別のグループへ無確認で出る。
    */
-  const askShareExistingItems = useCallback(async (): Promise<void> => {
+  const askShareExistingItems = useCallback(async (): Promise<() => Promise<void>> => {
+    const noop = async () => undefined;
     const [shopping, pantry] = await Promise.all([
       countUndecidedSharedShoppingItems().catch(() => 0),
       countUndecidedSharedPantryItems().catch(() => 0),
     ]);
-    if (shopping === 0 && pantry === 0) return;
+    if (shopping === 0 && pantry === 0) return noop;
 
-    const applyChoice = async (shared: boolean): Promise<void> => {
-      await Promise.all([
-        setUndecidedShoppingItemsShared(shared),
-        setUndecidedPantryItemsShared(shared),
-      ]).catch(() => undefined);
+    const applyChoice = async (shared: boolean): Promise<() => Promise<void>> => {
+      const [shoppingIds, pantryIds] = await Promise.all([
+        setUndecidedShoppingItemsShared(shared).catch((): string[] => []),
+        setUndecidedPantryItemsShared(shared).catch((): string[] => []),
+      ]);
+      return async () => {
+        await Promise.all([
+          revertUndecidedShoppingItemsShared(shoppingIds),
+          revertUndecidedPantryItemsShared(pantryIds),
+        ]).catch(() => undefined);
+      };
     };
 
-    return new Promise<void>((resolve) => {
+    return new Promise<() => Promise<void>>((resolve) => {
       Alert.alert(
         t('pantry.shared.askTitle'),
         t('pantry.shared.askBody'),
@@ -264,13 +277,13 @@ export default function FamilyScreen() {
           {
             text: t('pantry.shared.askNo'),
             onPress: () => {
-              void applyChoice(false).finally(resolve);
+              void applyChoice(false).then(resolve, () => resolve(noop));
             },
           },
           {
             text: t('pantry.shared.askYes'),
             onPress: () => {
-              void applyChoice(true).finally(resolve);
+              void applyChoice(true).then(resolve, () => resolve(noop));
             },
           },
         ],
@@ -289,10 +302,15 @@ export default function FamilyScreen() {
         onPress: () => {
           void runSyncAction(async () => {
             // 送信が始まる前に、いまある品目をどうするか決めておく
-            await askShareExistingItems();
-            // 表示名は送らない。サーバーは返さないので使い道が無く、
-            // 「サーバーに個人情報を置かない」（設計 §2）に反するだけになる
-            await createSyncGroup(null);
+            const revertShareChoice = await askShareExistingItems();
+            try {
+              // 表示名は送らない。サーバーは返さないので使い道が無く、
+              // 「サーバーに個人情報を置かない」（設計 §2）に反するだけになる
+              await createSyncGroup(null);
+            } catch (err) {
+              await revertShareChoice(); // 作れなかったのに決定だけ残さない
+              throw err;
+            }
             // 参加した瞬間から共有が始まる。いまある蔵書を全部送信待ちへ積む（§5-2）
             await onSyncGroupJoined();
             await loadCloud();
@@ -312,8 +330,13 @@ export default function FamilyScreen() {
         text: t('family.sync.join'),
         onPress: () => {
           void runSyncAction(async () => {
-            await askShareExistingItems();
-            await joinSyncGroup(code, null);
+            const revertShareChoice = await askShareExistingItems();
+            try {
+              await joinSyncGroup(code, null);
+            } catch (err) {
+              await revertShareChoice(); // 招待コードの打ち間違い等。決定だけ残さない
+              throw err;
+            }
             setJoinCode('');
             await onSyncGroupJoined();
             await loadCloud();
@@ -374,7 +397,9 @@ export default function FamilyScreen() {
   const hasProfileChanges =
     familyName.trim() !== family.name || displayName.trim() !== currentUser.displayName;
   const canAddMember = newMemberName.trim().length > 0 && !saving;
-  const canJoin = joinCode.trim().length > 0 && !saving;
+  // syncBusy も見る。参加の往復中にもう一度押せると**端末が 2 つ登録され**、片方は
+  // 資格情報が無いので誰からも消せない幽霊になる
+  const canJoin = joinCode.trim().length > 0 && !saving && !syncBusy;
 
   return (
     <View style={styles.container}>

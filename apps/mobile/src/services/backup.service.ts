@@ -39,6 +39,15 @@ interface BackupTableDefinition {
    * 欠けていても「0件」として扱う（バージョンは上げずに前方/後方互換を保つ）。
    */
   optional?: boolean;
+  /**
+   * 旧ファイルにその列が無いときに入れる値。
+   *
+   * **後から足した NOT NULL 列には必ず要る。** 復元は値を `?? null` で明示的に束縛するので
+   * SQLite の DEFAULT は効かず、列を持たない古いファイル（1.4.3 以前の移行 ZIP）は
+   * `NOT NULL constraint failed` で**丸ごと復元に失敗する**（2026-08-22 のレビューで発見）。
+   * `ADD_COLUMN_MIGRATIONS` の NOT NULL 列がここに揃っていることはテストが見張る。
+   */
+  defaults?: Readonly<Record<string, string | number>>;
 }
 
 /**
@@ -140,6 +149,8 @@ export const BACKUP_TABLES = [
       'kind',
       'place_name',
     ],
+    // 1.4.3 以前のファイルには kind が無い。NOT NULL なので既定値を入れて復元する
+    defaults: { kind: 'cooked' },
   },
   {
     name: 'cooking_photos',
@@ -930,6 +941,11 @@ function replaceDatabase(payload: LocalBackupPayload): void {
     for (const table of [...BACKUP_TABLES].reverse()) {
       expoDb.runSync(`DELETE FROM ${quoteIdentifier(table.name)}`);
     }
+    // 同期の送信待ちは**復元対象ではないが、ここで必ず捨てる**。残すと、復元で消えた行の
+    // 印が次の送信で tombstone になり、**家族の端末からそのレシピ・帖が消える**。
+    // 復元後に `clearSyncQueue()` も走るが、それは別の手順で、間にアプリが落ちたり
+    // 同期が割り込んだりすると飛ぶ。`sync_cursor` と同じ理由で同じトランザクションに入れる
+    expoDb.runSync('DELETE FROM sync_queue');
 
     for (const table of BACKUP_TABLES) {
       const sql = `INSERT INTO ${quoteIdentifier(table.name)} (${tableColumnList(table)}) VALUES (${tablePlaceholders(table)})`;
@@ -937,9 +953,11 @@ function replaceDatabase(payload: LocalBackupPayload): void {
         if (table.name === 'app_meta' && NON_RESTORABLE_APP_META_KEYS.includes(String(row.key))) {
           continue;
         }
+        // `as const` の配列なので、defaults を持たない要素の型には defaults が無い
+        const defaults = (table as BackupTableDefinition).defaults;
         expoDb.runSync(
           sql,
-          table.columns.map((column) => row[column] ?? null),
+          table.columns.map((column) => row[column] ?? defaults?.[column] ?? null),
         );
       }
     }

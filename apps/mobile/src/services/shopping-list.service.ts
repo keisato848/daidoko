@@ -323,7 +323,7 @@ export async function checkOffByNames(boughtNames: readonly string[]): Promise<C
   const db = getDb();
 
   const now = new Date().toISOString();
-  await db
+  const updated = await db
     .update(schema.shoppingItems)
     .set({ checked: 1, checkedAt: now, checkedBy: getCurrentUser().id, updatedAt: now })
     .where(
@@ -331,9 +331,10 @@ export async function checkOffByNames(boughtNames: readonly string[]): Promise<C
         schema.shoppingItems.id,
         hit.map((item) => item.id),
       ),
-    );
-  for (const item of hit) {
-    await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, item.id);
+    )
+    .returning({ id: schema.shoppingItems.id, shared: schema.shoppingItems.shared });
+  for (const row of updated) {
+    await enqueueIfShared(row.id, row.shared);
   }
   return { count: hit.length, names: hit.map((item) => item.name) };
 }
@@ -349,16 +350,17 @@ export async function setShoppingItemChecked(id: string, checked: boolean): Prom
   const schema = await import('../db/schema');
 
   const now = new Date().toISOString();
-  await getDb()
+  const updated = await getDb()
     .update(schema.shoppingItems)
     .set(
       checked
         ? { checked: 1, checkedAt: now, checkedBy: getCurrentUser().id, updatedAt: now }
         : { checked: 0, checkedAt: null, checkedBy: null, updatedAt: now },
     )
-    .where(eq(schema.shoppingItems.id, id));
+    .where(eq(schema.shoppingItems.id, id))
+    .returning({ shared: schema.shoppingItems.shared });
 
-  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
+  await enqueueIfShared(id, updated[0]?.shared);
 }
 
 /** 買う場所を変える（空文字・null は未設定に戻す） */
@@ -368,14 +370,28 @@ export async function setShoppingItemStore(id: string, storeGroup: string | null
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
 
-  await getDb()
+  const updated = await getDb()
     .update(schema.shoppingItems)
     .set({
       storeGroup: storeGroup?.trim() ? storeGroup.trim() : null,
       updatedAt: new Date().toISOString(),
     })
-    .where(eq(schema.shoppingItems.id, id));
+    .where(eq(schema.shoppingItems.id, id))
+    .returning({ shared: schema.shoppingItems.shared });
 
+  await enqueueIfShared(id, updated[0]?.shared);
+}
+
+/**
+ * 共有中の行だけ送信待ちへ積む。
+ *
+ * **「自分だけ」の行は触るたびに積まない。** 積むと毎回 tombstone がサーバーへ出て、
+ * そのたびに家族の端末へ変更通知が飛ぶ（中身は固定文言だが「何かしている」ことが
+ * 伝わる）。共有をやめた瞬間の 1 回（`setShoppingItemShared`）で他端末からは消えているので、
+ * それ以降の編集・削除は端末の中だけで完結してよい。
+ */
+async function enqueueIfShared(id: string, shared: number | null | undefined): Promise<void> {
+  if (shared === 0) return;
   await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
 }
 
@@ -414,8 +430,8 @@ export async function setShoppingItemShared(id: string, shared: boolean): Promis
  *
  * 新しく作った行は `shared` が NULL（＝共有）なので、次に聞かれたときの対象になる。
  */
-export async function setUndecidedShoppingItemsShared(shared: boolean): Promise<number> {
-  if (!isNativePlatform) return 0;
+export async function setUndecidedShoppingItemsShared(shared: boolean): Promise<string[]> {
+  if (!isNativePlatform) return [];
   const { isNull } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
@@ -425,7 +441,7 @@ export async function setUndecidedShoppingItemsShared(shared: boolean): Promise<
     .select({ id: schema.shoppingItems.id })
     .from(schema.shoppingItems)
     .where(isNull(schema.shoppingItems.shared));
-  if (rows.length === 0) return 0;
+  if (rows.length === 0) return [];
 
   const now = new Date().toISOString();
   await db
@@ -436,7 +452,26 @@ export async function setUndecidedShoppingItemsShared(shared: boolean): Promise<
   // ここで積むと 3 秒デバウンスが参加の往復中に発火し、「自分だけ」にしたばかりの
   // 品目の id が墓標としてサーバーへ出る。参加時に `onSyncGroupJoined` が
   // 待ち行列を捨てて全件積み直すので、ここでの積み直しは要らない。
-  return rows.length;
+  return rows.map((row) => row.id);
+}
+
+/**
+ * 参加プロンプトの答えを**無かったことにする**（参加・作成がその後に失敗したとき）。
+ *
+ * 答えは参加より先に書くので、参加が失敗すると決定だけが残る。残ると次に参加したとき
+ * プロンプトが出ず（まだ決めていない行が 0 件）、「自分だけ」にした品目は永久に
+ * 同期されない・「共有する」にした品目は別のグループへ無確認で出る。
+ * この時点では資格情報が無く一度もサーバーへ出ていないので、戻して安全。
+ */
+export async function revertUndecidedShoppingItemsShared(ids: readonly string[]): Promise<void> {
+  if (!isNativePlatform || ids.length === 0) return;
+  const { inArray } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  await getDb()
+    .update(schema.shoppingItems)
+    .set({ shared: null, updatedAt: new Date().toISOString() })
+    .where(inArray(schema.shoppingItems.id, [...ids]));
 }
 
 /** 参加プロンプトを出すかの判定用。まだ決めていない品目の数 */
@@ -457,7 +492,11 @@ export async function removeShoppingItem(id: string): Promise<void> {
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
-  await getDb().delete(schema.shoppingItems).where(eq(schema.shoppingItems.id, id));
-  // 物理削除。送信時に行が無いことを見て tombstone になる（sync-row-entities.service）
-  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
+  const removed = await getDb()
+    .delete(schema.shoppingItems)
+    .where(eq(schema.shoppingItems.id, id))
+    .returning({ shared: schema.shoppingItems.shared });
+  // 物理削除。送信時に行が無いことを見て tombstone になる（sync-row-entities.service）。
+  // 「自分だけ」だった行は他端末にもサーバーにも（墓標として以外）無いので積まない
+  await enqueueIfShared(id, removed[0]?.shared);
 }

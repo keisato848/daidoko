@@ -83,6 +83,12 @@ export interface AddPantryOptions {
   groupName?: string | null;
   /** 賞味期限 YYYY-MM-DD（任意） */
   expiresOn?: string | null;
+  /**
+   * 共有するか（v15）。未指定なら「参加中なら共有・未参加なら未決定」。
+   * 買い物リストから在庫へ移すときは**元の行の決定を引き継ぐ**ために渡す —
+   * 渡さないと「自分だけ」の買い物が、家族に見える在庫になって出ていく。
+   */
+  shared?: number | null;
 }
 
 export async function getPantryItems(): Promise<PantryItem[]> {
@@ -142,18 +148,25 @@ export async function addPantryItem(
     groupName == null
       ? isNull(schema.pantryItems.groupName)
       : eq(schema.pantryItems.groupName, groupName);
+  // **共有の境界も鍵に入れる（v15）。** 「自分だけ」の行と家族の行を同じ品だからと合算すると、
+  // 片方の決定がもう片方に伝染する — 家族の行が私的な行に吸われて家族の端末から消えるか、
+  // 私的な行の中身が家族の行に載ってサーバーへ出るか、のどちらか
+  const sharedValue = options.shared !== undefined ? options.shared : await initialSharedValue();
+  const sharedMatch = await sharedBoundaryMatch(sharedValue);
   const janCode = options.janCode?.trim() ? options.janCode.trim() : null;
   const match = janCode
     ? and(
         eq(schema.pantryItems.familyId, familyId),
         eq(schema.pantryItems.janCode, janCode),
         groupMatch,
+        sharedMatch,
       )
     : and(
         eq(schema.pantryItems.familyId, familyId),
         eq(schema.pantryItems.nameNormalized, nameNormalized),
         unit == null ? isNull(schema.pantryItems.unit) : eq(schema.pantryItems.unit, unit),
         groupMatch,
+        sharedMatch,
       );
 
   const existing = await db
@@ -187,7 +200,7 @@ export async function addPantryItem(
         updatedAt: now,
       })
       .where(eq(schema.pantryItems.id, prev.id));
-    await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, prev.id);
+    await enqueueIfShared(prev.id, prev.shared);
     return {
       id: prev.id,
       name: prev.name,
@@ -211,7 +224,7 @@ export async function addPantryItem(
     janCode,
     groupName,
     expiresOn,
-    shared: true,
+    shared: sharedValue !== 0,
   };
   await db.insert(schema.pantryItems).values({
     id,
@@ -226,13 +239,31 @@ export async function addPantryItem(
     expiresOn,
     createdAt: now,
     updatedAt: now,
-    // 参加中なら「共有すると決まっている」1。未参加なら null（参加時に聞く）
-    shared: await initialSharedValue(),
+    // 参加中なら「共有すると決まっている」1。未参加なら null（参加時に聞く）。
+    // 買い物から移すときは元の行の決定（options.shared）
+    shared: sharedValue,
   });
   // **これを忘れると新しい在庫が一度も同期されない。** 合算経路にはあって挿入経路に
   // 無い、という形で抜けていた（実機では「買った→在庫」で品目が消えたように見える）
-  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
+  await enqueueIfShared(id, sharedValue);
   return item;
+}
+
+/**
+ * 合算・寄せの相手を「同じ共有状態の行」に限る条件。
+ * `0`（自分だけ）同士、それ以外（null/1 = 共有）同士でだけ合算する。
+ */
+async function sharedBoundaryMatch(shared: number | null) {
+  const { eq, isNull, ne, or } = await import('drizzle-orm');
+  const schema = await import('../db/schema');
+  if (shared === 0) return eq(schema.pantryItems.shared, 0);
+  return or(isNull(schema.pantryItems.shared), ne(schema.pantryItems.shared, 0));
+}
+
+/** 共有中の行だけ積む（「自分だけ」の行は触るたびに tombstone を出さない — shopping と同じ） */
+async function enqueueIfShared(id: string, shared: number | null | undefined): Promise<void> {
+  if (shared === 0) return;
+  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
 }
 
 /**
@@ -288,8 +319,12 @@ export async function updatePantryItem(
     if (merged) return;
   }
 
-  await db.update(schema.pantryItems).set(set).where(eq(schema.pantryItems.id, id));
-  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
+  const updated = await db
+    .update(schema.pantryItems)
+    .set(set)
+    .where(eq(schema.pantryItems.id, id))
+    .returning({ shared: schema.pantryItems.shared });
+  await enqueueIfShared(id, updated[0]?.shared);
 }
 
 /**
@@ -312,12 +347,15 @@ async function mergeIntoGroup(id: string, groupName: string | null): Promise<boo
       lowStockThreshold: schema.pantryItems.lowStockThreshold,
       expiresOn: schema.pantryItems.expiresOn,
       groupName: schema.pantryItems.groupName,
+      shared: schema.pantryItems.shared,
     })
     .from(schema.pantryItems)
     .where(eq(schema.pantryItems.id, id))
     .limit(1);
   const self = rows[0];
   if (!self || self.groupName === groupName) return false;
+  // 寄せ先は**同じ共有状態の行だけ**（addPantryItem の合算と同じ理由）
+  const sharedMatch = await sharedBoundaryMatch(self.shared);
 
   const groupMatch =
     groupName == null
@@ -328,6 +366,7 @@ async function mergeIntoGroup(id: string, groupName: string | null): Promise<boo
         eq(schema.pantryItems.familyId, self.familyId),
         eq(schema.pantryItems.janCode, self.janCode),
         groupMatch,
+        sharedMatch,
         ne(schema.pantryItems.id, id),
       )
     : and(
@@ -337,6 +376,7 @@ async function mergeIntoGroup(id: string, groupName: string | null): Promise<boo
           ? isNull(schema.pantryItems.unit)
           : eq(schema.pantryItems.unit, self.unit),
         groupMatch,
+        sharedMatch,
         ne(schema.pantryItems.id, id),
       );
 
@@ -364,8 +404,9 @@ async function mergeIntoGroup(id: string, groupName: string | null): Promise<boo
     .where(eq(schema.pantryItems.id, into.id));
   await db.delete(schema.pantryItems).where(eq(schema.pantryItems.id, id));
   // **寄せ先と、消えた自分の両方**を積む。消えた側を積み忘れると他端末に残り続ける
-  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, into.id);
-  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
+  //（両方とも同じ共有状態なので、判定は self.shared で足りる）
+  await enqueueIfShared(into.id, self.shared);
+  await enqueueIfShared(id, self.shared);
   return true;
 }
 
@@ -395,8 +436,8 @@ export async function setPantryItemShared(id: string, shared: boolean): Promise<
  *
  * 新しく作った行は `shared` が NULL（＝共有）なので、次に聞かれたときの対象になる。
  */
-export async function setUndecidedPantryItemsShared(shared: boolean): Promise<number> {
-  if (!isNativePlatform) return 0;
+export async function setUndecidedPantryItemsShared(shared: boolean): Promise<string[]> {
+  if (!isNativePlatform) return [];
   const { isNull } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
@@ -406,7 +447,7 @@ export async function setUndecidedPantryItemsShared(shared: boolean): Promise<nu
     .select({ id: schema.pantryItems.id })
     .from(schema.pantryItems)
     .where(isNull(schema.pantryItems.shared));
-  if (rows.length === 0) return 0;
+  if (rows.length === 0) return [];
 
   const now = new Date().toISOString();
   await db
@@ -417,7 +458,19 @@ export async function setUndecidedPantryItemsShared(shared: boolean): Promise<nu
   // ここで積むと 3 秒デバウンスが参加の往復中に発火し、「自分だけ」にしたばかりの
   // 品目の id が墓標としてサーバーへ出る。参加時に `onSyncGroupJoined` が
   // 待ち行列を捨てて全件積み直すので、ここでの積み直しは要らない。
-  return rows.length;
+  return rows.map((row) => row.id);
+}
+
+/** 参加プロンプトの答えを無かったことにする（理由は shopping-list.service の同名関数） */
+export async function revertUndecidedPantryItemsShared(ids: readonly string[]): Promise<void> {
+  if (!isNativePlatform || ids.length === 0) return;
+  const { inArray } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  await getDb()
+    .update(schema.pantryItems)
+    .set({ shared: null, updatedAt: new Date().toISOString() })
+    .where(inArray(schema.pantryItems.id, [...ids]));
 }
 
 /** 参加プロンプトを出すかの判定用。まだ決めていない在庫の数 */
@@ -438,8 +491,11 @@ export async function removePantryItem(id: string): Promise<void> {
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
-  await getDb().delete(schema.pantryItems).where(eq(schema.pantryItems.id, id));
-  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
+  const removed = await getDb()
+    .delete(schema.pantryItems)
+    .where(eq(schema.pantryItems.id, id))
+    .returning({ shared: schema.pantryItems.shared });
+  await enqueueIfShared(id, removed[0]?.shared);
 }
 
 /**
@@ -536,11 +592,17 @@ export async function moveShoppingItemToPantry(item: {
   id: string;
   name: string;
   amount: string | null;
+  /** 買い物側の共有の決定。**在庫にそのまま引き継ぐ**（自分だけの買い物が家族の在庫にならない） */
+  shared?: boolean;
 }): Promise<boolean> {
   if (!isNativePlatform) return false;
   const { removeShoppingItem } = await import('./shopping-list.service');
   const { quantity, unit } = parseAmount(item.amount);
-  const result = await addPantryItem(item.name, { quantity, unit });
+  const result = await addPantryItem(item.name, {
+    quantity,
+    unit,
+    ...(item.shared === false ? { shared: 0 } : {}),
+  });
   if (!result) return false;
   await removeShoppingItem(item.id);
   return true;

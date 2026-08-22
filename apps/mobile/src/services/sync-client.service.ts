@@ -30,6 +30,8 @@ export type SyncErrorCode =
   | 'AUTH_INVALID'
   /** 既にグループに入っている（先に離脱が必要 — 旧グループのクレデンシャルを黙って捨てない） */
   | 'ALREADY_JOINED'
+  /** 1 回の push が大きすぎる（HTTP 413）。**半分に割って送り直せば通る** — 捨ててはいけない */
+  | 'PAYLOAD_TOO_LARGE'
   | 'NETWORK'
   /**
    * サーバーが**この内容を受け付けない**と確定した（HTTP 400）。
@@ -120,6 +122,7 @@ const KNOWN_CODES: readonly SyncErrorCode[] = [
   'GROUP_FULL',
   'RATE_LIMITED',
   'OWNER_ONLY',
+  'PAYLOAD_TOO_LARGE',
 ];
 
 interface RequestOptions {

@@ -368,7 +368,7 @@ const CREATE_TABLES_SQL = `
 
 // Columns added after a table first shipped (SQLite has no ADD COLUMN IF NOT
 // EXISTS — the duplicate-column error on re-run is expected and swallowed).
-const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
+export const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   { table: 'recipes', columnDdl: 'cover_photo_path TEXT' }, // v7
   { table: 'steps', columnDdl: 'photo_path TEXT' }, // v7
   { table: 'recipes', columnDdl: 'pinned_at TEXT' }, // v8: 作りたいリスト

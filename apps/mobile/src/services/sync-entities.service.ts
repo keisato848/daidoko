@@ -26,7 +26,9 @@ import { getDb, getExpoDb, isNativePlatform } from '../db/client';
 import { shouldHideSeedRecipe } from '../db/sampleData';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
+import { setAppMeta } from './app-meta.service';
 import { revokeSharedBook } from './recipe-book.service';
+import { URL_IMPORTED_META_PREFIX } from './web-share.service';
 import {
   SYNC_ENTITY_RECIPE,
   SYNC_ENTITY_RECIPE_BOOK,
@@ -155,6 +157,15 @@ async function buildRecipeChange(recipeId: string, deletedAt: string): Promise<O
     .innerJoin(schema.tags, eq(schema.recipeTags.tagId, schema.tags.id))
     .where(eq(schema.recipeTags.recipeId, recipeId));
 
+  // 出所ゲート用。現在のリビジョンだけでなく**どれかのリビジョン**が URL 由来なら真
+  const urlSourceRows = await db
+    .select({ id: schema.recipeRevisions.id })
+    .from(schema.recipeRevisions)
+    .innerJoin(schema.sources, eq(schema.recipeRevisions.sourceId, schema.sources.id))
+    .where(and(eq(schema.recipeRevisions.recipeId, recipeId), eq(schema.sources.type, 'url')))
+    .limit(1);
+  const urlImported = urlSourceRows.length > 0 || source?.type === 'url';
+
   const payload: RecipeSyncPayload = {
     schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
     entity: SYNC_ENTITY_RECIPE,
@@ -191,6 +202,7 @@ async function buildRecipeChange(recipeId: string, deletedAt: string): Promise<O
           createdAt: source.createdAt,
         }
       : null,
+    urlImported,
     ingredients: ingredientRows.map((row) => ({
       id: row.id,
       sortOrder: row.sortOrder,
@@ -386,6 +398,12 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<ApplyOutc
         createdAt: payload.source.createdAt,
       })
       .onConflictDoNothing();
+  }
+
+  // 1b. URL 取り込み由来の印。出所行が届かないリビジョンでもゲートが効くように、
+  //     レシピ単位の印を app_meta に残す（`getShareBlockReason` がこれも見る）
+  if (payload.urlImported) {
+    await setAppMeta(URL_IMPORTED_META_PREFIX + payload.recipe.id, '1').catch(() => undefined);
   }
 
   // 2. レシピ本体。**表紙写真の列は触らない**（受信側の写真を消さないため）

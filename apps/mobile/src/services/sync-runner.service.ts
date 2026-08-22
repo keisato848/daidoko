@@ -17,7 +17,7 @@
  * 他人の seq を引き継がないようにするため。
  */
 import { getAppMeta, setAppMeta } from './app-meta.service';
-import { getExpoPushToken } from './notification.service';
+import { getExpoPushTokenIfPermitted } from './notification.service';
 import {
   SyncError,
   getStoredCredentials,
@@ -198,12 +198,50 @@ async function pushPending(): Promise<void> {
       await removeSentSyncQueueEntries(prepared.entries);
     } catch (err) {
       await bumpSyncQueueRetry(prepared.entries);
-      if (
-        err instanceof SyncError &&
-        err.code === 'SERVER_REJECTED' &&
-        prepared.changes.length > 1
-      ) {
+      if (err instanceof SyncError && err.code === 'SERVER_REJECTED') {
+        // **1 件でも通す。** 「2 件以上のときだけ」にしていると、待ち行列が 1 件
+        // （＝レシピを 1 件直して 3 秒待った、いちばんふつうの状態）のとき 400 の
+        // 1 件が先頭に居座り、この端末は**送信も受信も永久に止まる**
         await pushOneByOne(prepared);
+        continue;
+      }
+      if (err instanceof SyncError && err.code === 'PAYLOAD_TOO_LARGE') {
+        // 大きすぎるだけ。半分ずつ送れば通る（1 件でも大きければ 1 件ずつの道で
+        // サーバーの 1 件上限に当たって 400 になり、そこで捨てられる）
+        await pushInHalves(prepared);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+/** 413 を受けたバッチを半分に割って送る。1 件まで割れたら 1 件ずつの道へ */
+async function pushInHalves(prepared: PreparedPush): Promise<void> {
+  if (prepared.changes.length <= 1) {
+    await pushOneByOne(prepared);
+    return;
+  }
+  const mid = Math.ceil(prepared.changes.length / 2);
+  const halves: PreparedPush[] = [
+    {
+      changes: prepared.changes.slice(0, mid),
+      entries: prepared.entries.slice(0, mid),
+      dropped: [],
+    },
+    { changes: prepared.changes.slice(mid), entries: prepared.entries.slice(mid), dropped: [] },
+  ];
+  for (const half of halves) {
+    try {
+      await pushSyncChanges(half.changes);
+      await removeSentSyncQueueEntries(half.entries);
+    } catch (err) {
+      if (err instanceof SyncError && err.code === 'PAYLOAD_TOO_LARGE') {
+        await pushInHalves(half);
+        continue;
+      }
+      if (err instanceof SyncError && err.code === 'SERVER_REJECTED') {
+        await pushOneByOne(half);
         continue;
       }
       throw err;
@@ -247,11 +285,14 @@ async function pullAndApply(credentials: SyncCredentials): Promise<number> {
       }
       const outcome = await applyIncomingChange(change);
       if (outcome === 'failed') {
+        // ここで止める。残りを適用してもカーソルは進まないので、次の pull で
+        // **同じページを丸ごと適用し直す**ことになる（材料・手順の DELETE→INSERT が
+        // 同期のたびに走り、一覧も毎回読み直される）。残りは次回に回す
         blocked = true;
-        continue;
+        break;
       }
       if (outcome === 'applied') applied += 1;
-      if (!blocked) nextCursor = Math.max(nextCursor, change.seq);
+      nextCursor = Math.max(nextCursor, change.seq);
     }
 
     if (epoch !== cursorEpoch) return applied; // 復元などで白紙に戻った。この回は捨てる
@@ -287,7 +328,9 @@ let registeredPushToken: string | null = null;
 
 async function ensurePushTokenRegistered(): Promise<void> {
   try {
-    const token = await getExpoPushToken();
+    // **許可を求めない。** 求めると、家族グループに入った直後に理由の無い OS ダイアログが出て、
+    // 断られると料理中タイマーの通知まで道連れになる（notification.service 参照）
+    const token = await getExpoPushTokenIfPermitted();
     if (!token || token === registeredPushToken) return;
     await registerSyncPushToken(token, getLocale());
     registeredPushToken = token;
@@ -309,9 +352,18 @@ async function execute(): Promise<void> {
   if (!credentials) return; // 未参加。同期そのものが無い
   setSyncing(true);
   try {
-    await pushPending();
+    // **送れないことと受け取れないことは独立させる。** push が投げたら pull を飛ばす、
+    // にしていると、送れない変更が 1 件あるだけでその端末は家族の変更を一切受け取れず、
+    // 通知の登録もされない（無言で、再インストールまで続く）
+    let pushError: unknown = null;
+    try {
+      await pushPending();
+    } catch (err) {
+      pushError = err;
+    }
     await pullAndApply(credentials); // 適用の合図はページごとに出る（下の pullAndApply）
     await ensurePushTokenRegistered();
+    if (pushError !== null) throw pushError;
   } finally {
     setSyncing(false);
   }

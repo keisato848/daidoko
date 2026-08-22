@@ -164,6 +164,31 @@ function isSyncNotification(data: unknown): boolean {
 export async function getExpoPushToken(): Promise<string | null> {
   if (!isNativePlatform) return null;
   if (!(await ensureNotificationPermission())) return null;
+  return readExpoPushToken();
+}
+
+/**
+ * **許可を求めずに**トークンを取る。まだ許可されていなければ null。
+ *
+ * 同期の変更通知はいちばん優先度の低い通知（届かなくても pull で追いつく — 設計 §7）。
+ * その登録のために起動直後に OS の許可ダイアログを出すと、理由の分からない利用者は
+ * 反射的に断る。iOS は一度断られると設定アプリまで行かないと戻せず、
+ * **料理中タイマーの通知まで二度と出せなくなる**。許可はタイマーや残量通知のように
+ * 「いま何に使うか」が見えている場面でだけ求める。
+ */
+export async function getExpoPushTokenIfPermitted(): Promise<string | null> {
+  if (!isNativePlatform) return null;
+  try {
+    const status = (await Notifications.getPermissionsAsync()).status;
+    if (status !== 'granted') return null;
+  } catch {
+    return null;
+  }
+  ensureHandler();
+  return readExpoPushToken();
+}
+
+async function readExpoPushToken(): Promise<string | null> {
   const projectId = Constants.expoConfig?.extra?.['eas']?.projectId as string | undefined;
   if (!projectId) return null;
   try {

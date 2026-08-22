@@ -239,6 +239,58 @@ describe.runIf(Boolean(TEST_DB))('S1: push / pull（実 PostgreSQL）', () => {
     await cleanup();
   });
 
+  it('同じ品目を 2 台が同時に push しても、新しい方が残る（直列化）', async () => {
+    // 買い物中の「同時にチェック」がこの機能の主用途。ロック無しだと古い判定で
+    // 新しい方を踏み潰し、踏まれた端末は 200 を受けているので二度と送らない
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string; inviteCode: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+    const joined = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const jj = (await joined.json()) as { data: { deviceId: string; deviceSecret: string } };
+    member = { deviceId: jj.data.deviceId, secret: jj.data.deviceSecret };
+
+    const change = (title: string, at: string) => ({
+      changes: [
+        {
+          entityType: 'shopping_item',
+          entityId: 'race1',
+          payload: JSON.stringify({ title }),
+          clientUpdatedAt: at,
+          deleted: false,
+        },
+      ],
+    });
+
+    for (let round = 0; round < 5; round += 1) {
+      const older = `2026-08-21T12:00:${String(round * 2).padStart(2, '0')}.000Z`;
+      const newer = `2026-08-21T12:00:${String(round * 2 + 1).padStart(2, '0')}.000Z`;
+      // 新しい方を owner、古い方を member が**同時に**送る
+      await Promise.all([
+        post('/api/v1/sync/push', change('newer', newer), authHeader(owner.deviceId, owner.secret)),
+        post(
+          '/api/v1/sync/push',
+          change('older', older),
+          authHeader(member.deviceId, member.secret),
+        ),
+      ]);
+      const pull = await app.request('/api/v1/sync/pull?since=0', {
+        headers: authHeader(owner.deviceId, owner.secret),
+      });
+      const plj = (await pull.json()) as {
+        data: { changes: { entityId: string; payload: string; clientUpdatedAt: string }[] };
+      };
+      const row = plj.data.changes.find((chg) => chg.entityId === 'race1');
+      expect(row).toBeDefined();
+      if (!row) throw new Error('unreachable');
+      expect(JSON.parse(row.payload) as { title: string }).toEqual({ title: 'newer' });
+      expect(row.clientUpdatedAt).toBe(newer);
+    }
+
+    await cleanup();
+  });
+
   it('push した変更が、他端末の pull に seq 順で届く', async () => {
     const created = await post('/api/v1/sync/groups', {});
     const cj = (await created.json()) as {

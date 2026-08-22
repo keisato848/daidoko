@@ -365,6 +365,13 @@ export async function pushChanges(
   const sql = await db();
   const now = Date.now();
   return sql.begin(async (tx) => {
+    // **先にグループ行をロックして、push を直列化する。** READ COMMITTED では下の
+    // 「既存行を読んで LWW を判定する」SELECT に行ロックが無く、2 台が同じ品目を同時に
+    // 押すと、先にコミットした新しい方を、古い判定のまま後から来た方が踏み潰す
+    // （踏み潰された端末は 200 を受けて待ち行列から消しているので二度と送らない）。
+    // join が定員チェックでやっているのと同じ構え。バッチの 2 件目以降は seq の
+    // 採番で同じロックを取るので、競合の窓は 1 件目だけだった
+    await tx`SELECT id FROM sync_groups WHERE id = ${device.groupId} FOR UPDATE`;
     let applied = 0;
     for (const change of changes) {
       const rows = await tx<{ updated_at: Date; updated_by_device: string }[]>`

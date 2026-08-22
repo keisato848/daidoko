@@ -73,6 +73,8 @@ jest.mock('../app-meta.service', () => ({
 const mockGetExpoPushToken = jest.fn();
 jest.mock('../notification.service', () => ({
   getExpoPushToken: (...args: unknown[]) => mockGetExpoPushToken(...args),
+  // runner は許可を**求めない**版を使う（家族参加直後に OS ダイアログを出さない）
+  getExpoPushTokenIfPermitted: (...args: unknown[]) => mockGetExpoPushToken(...args),
 }));
 
 import { SyncError } from '../sync-client.service';
@@ -247,8 +249,40 @@ describe('runSync — push', () => {
 
     expect(mockBumpRetry).toHaveBeenCalled();
     expect(mockRemoveSent).not.toHaveBeenCalled();
-    // push が落ちたら pull もしない（同じ通信断なので）
-    expect(mockPullSyncChanges).not.toHaveBeenCalled();
+    // **push が落ちても pull はする。** 「送れない変更が 1 件ある」だけでその端末が
+    // 家族の変更を一切受け取れなくなる（無言・再インストールまで）のを防ぐ
+    expect(mockPullSyncChanges).toHaveBeenCalled();
+  });
+
+  it('待ち行列が 1 件だけでも、400 の 1 件は捨てて先へ進む', async () => {
+    // 「2 件以上のときだけ 1 件ずつ送り直す」だと、1 件のときに 400 が先頭に居座り、
+    // この端末は送信も受信も永久に止まっていた
+    // Once にしないと待ち行列が空にならず、上限回数までぐるぐる回る
+    mockListSyncQueue.mockResolvedValueOnce([queueEntry('bad')]);
+    mockBuildOutgoingChange.mockResolvedValue(outgoing('bad'));
+    mockPushSyncChanges.mockRejectedValue(new SyncError('SERVER_REJECTED'));
+
+    await runSync();
+
+    expect(mockRemoveSent).toHaveBeenCalledWith([expect.objectContaining({ entityId: 'bad' })]);
+    expect(mockPullSyncChanges).toHaveBeenCalled();
+  });
+
+  it('413（大きすぎる）は半分に割って送り直す（捨てない）', async () => {
+    mockListSyncQueue.mockResolvedValueOnce([queueEntry('a'), queueEntry('b')]);
+    mockBuildOutgoingChange
+      .mockResolvedValueOnce(outgoing('a'))
+      .mockResolvedValueOnce(outgoing('b'));
+    mockPushSyncChanges
+      .mockRejectedValueOnce(new SyncError('PAYLOAD_TOO_LARGE'))
+      .mockResolvedValue({ applied: 1, latestSeq: 1 });
+
+    await runSync();
+
+    // 1 回目: 2 件まとめて → 413。2・3 回目: 1 件ずつ
+    const sizes = mockPushSyncChanges.mock.calls.map((call) => (call[0] as unknown[]).length);
+    expect(sizes).toEqual([2, 1, 1]);
+    expect(mockRemoveSent).toHaveBeenCalledTimes(2);
   });
 
   it('サーバーの一時障害（502 等）では 1 件も捨てない', async () => {

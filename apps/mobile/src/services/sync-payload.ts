@@ -119,6 +119,16 @@ export interface RecipeSyncPayload {
     capturedAt: string | null;
     createdAt: string;
   } | null;
+  /**
+   * **どのリビジョンかを問わず** URL 取り込み由来か。
+   *
+   * `source` は現在のリビジョンの出所しか運ばない。URL 取り込みの後に AI 調整などで
+   * 別の出所のリビジョンが現在になると、受信側には URL の出所が一つも無く、
+   * 出所ゲート（`getShareBlockReason` は全リビジョンを見る）をすり抜けて
+   * **他人のレシピを Web 公開できてしまう**。送信側で全リビジョンを見て立てる。
+   * 省略可（古い版の送信には無い＝ false 扱い）。
+   */
+  urlImported?: boolean;
   ingredients: {
     id: string;
     sortOrder: number;
@@ -301,6 +311,7 @@ const recipePayloadSchema = z.object({
     })
     .nullish()
     .transform((v) => v ?? null),
+  urlImported: z.boolean().optional(),
   ingredients: z.array(
     z.object({
       id: z.string().min(1),
