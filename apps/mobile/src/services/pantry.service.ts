@@ -24,6 +24,7 @@ interface PantryRow {
   janCode: string | null;
   groupName: string | null;
   expiresOn: string | null;
+  shared?: number | null;
 }
 
 function rowToItem(row: PantryRow): PantryItem {
@@ -36,6 +37,8 @@ function rowToItem(row: PantryRow): PantryItem {
     janCode: row.janCode,
     groupName: row.groupName,
     expiresOn: row.expiresOn,
+    // null は「共有」— 列を持たない古い行を現行どおりに見せる（設計 §5-2b）
+    shared: row.shared !== 0,
   };
 }
 
@@ -98,6 +101,7 @@ export async function getPantryItems(): Promise<PantryItem[]> {
       janCode: schema.pantryItems.janCode,
       groupName: schema.pantryItems.groupName,
       expiresOn: schema.pantryItems.expiresOn,
+      shared: schema.pantryItems.shared,
     })
     .from(schema.pantryItems)
     .where(eq(schema.pantryItems.familyId, await currentFamilyId()))
@@ -162,6 +166,7 @@ export async function addPantryItem(
       janCode: schema.pantryItems.janCode,
       groupName: schema.pantryItems.groupName,
       expiresOn: schema.pantryItems.expiresOn,
+      shared: schema.pantryItems.shared,
     })
     .from(schema.pantryItems)
     .where(match)
@@ -192,6 +197,7 @@ export async function addPantryItem(
       janCode: janCode ?? prev.janCode,
       groupName: prev.groupName,
       expiresOn: mergedExpiry,
+      shared: prev.shared !== 0,
     };
   }
 
@@ -205,6 +211,7 @@ export async function addPantryItem(
     janCode,
     groupName,
     expiresOn,
+    shared: true,
   };
   await db.insert(schema.pantryItems).values({
     id,
@@ -355,6 +362,37 @@ async function mergeIntoGroup(id: string, groupName: string | null): Promise<boo
   await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, into.id);
   await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
   return true;
+}
+
+/** この品目を家族と共有するか（設計 §5-2）。やめると他端末からは消える */
+export async function setPantryItemShared(id: string, shared: boolean): Promise<void> {
+  if (!isNativePlatform) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  await getDb()
+    .update(schema.pantryItems)
+    .set({ shared: shared ? 1 : 0, updatedAt: new Date().toISOString() })
+    .where(eq(schema.pantryItems.id, id));
+
+  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
+}
+
+/** いまある在庫を一括で共有する/しない（グループ参加直後に一度だけ聞く） */
+export async function setAllPantryItemsShared(shared: boolean): Promise<number> {
+  if (!isNativePlatform) return 0;
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const rows = await db.select({ id: schema.pantryItems.id }).from(schema.pantryItems);
+  const now = new Date().toISOString();
+  await db.update(schema.pantryItems).set({ shared: shared ? 1 : 0, updatedAt: now });
+  for (const row of rows) {
+    await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, row.id);
+  }
+  return rows.length;
 }
 
 export async function removePantryItem(id: string): Promise<void> {

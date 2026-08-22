@@ -26,6 +26,7 @@ interface ShoppingRow {
   storeGroup?: string | null;
   createdBy?: string | null;
   checkedBy?: string | null;
+  shared?: number | null;
 }
 
 function rowToItem(row: ShoppingRow): ShoppingItem {
@@ -39,6 +40,8 @@ function rowToItem(row: ShoppingRow): ShoppingItem {
     storeGroup: row.storeGroup ?? null,
     createdBy: row.createdBy ?? null,
     checkedBy: row.checkedBy ?? null,
+    // null は「共有」— 列を持たない古い行を現行どおりに見せる（設計 §5-2b）
+    shared: row.shared !== 0,
   };
 }
 
@@ -65,6 +68,7 @@ export async function getShoppingItems(): Promise<ShoppingItem[]> {
       storeGroup: schema.shoppingItems.storeGroup,
       createdBy: schema.shoppingItems.createdBy,
       checkedBy: schema.shoppingItems.checkedBy,
+      shared: schema.shoppingItems.shared,
     })
     .from(schema.shoppingItems)
     .where(eq(schema.shoppingItems.familyId, await currentFamilyId()))
@@ -146,6 +150,7 @@ export async function addShoppingItem(
     storeGroup: options?.storeGroup?.trim() ? options.storeGroup.trim() : null,
     createdBy: getCurrentUser().id,
     checkedBy: null,
+    shared: true,
   };
 }
 
@@ -370,6 +375,45 @@ export async function setShoppingItemStore(id: string, storeGroup: string | null
     .where(eq(schema.shoppingItems.id, id));
 
   await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
+}
+
+/**
+ * この品目を家族と共有するか（設計 §5-2）。
+ *
+ * 共有をやめると、次の同期で**他端末からも消える**（tombstone を送る）。
+ * 自分の端末には残るので「自分だけの買い物」に戻るだけ。
+ */
+export async function setShoppingItemShared(id: string, shared: boolean): Promise<void> {
+  if (!isNativePlatform) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  await getDb()
+    .update(schema.shoppingItems)
+    .set({ shared: shared ? 1 : 0, updatedAt: new Date().toISOString() })
+    .where(eq(schema.shoppingItems.id, id));
+
+  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
+}
+
+/**
+ * いまある買い物リストを一括で共有する/しない（グループ参加直後に一度だけ聞く）。
+ * 変更した件数を返す。
+ */
+export async function setAllShoppingItemsShared(shared: boolean): Promise<number> {
+  if (!isNativePlatform) return 0;
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const rows = await db.select({ id: schema.shoppingItems.id }).from(schema.shoppingItems);
+  const now = new Date().toISOString();
+  await db.update(schema.shoppingItems).set({ shared: shared ? 1 : 0, updatedAt: now });
+  for (const row of rows) {
+    await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, row.id);
+  }
+  return rows.length;
 }
 
 export async function removeShoppingItem(id: string): Promise<void> {

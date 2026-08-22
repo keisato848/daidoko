@@ -36,6 +36,8 @@ import {
   type SyncErrorCode,
   type SyncMe,
 } from '../../src/services/sync-client.service';
+import { setAllPantryItemsShared } from '../../src/services/pantry.service';
+import { setAllShoppingItemsShared } from '../../src/services/shopping-list.service';
 import { onSyncGroupJoined, onSyncGroupLeft } from '../../src/services/sync-runner.service';
 import {
   addFamilyMember,
@@ -217,6 +219,34 @@ export default function FamilyScreen() {
     [loadCloud],
   );
 
+  /**
+   * 参加した直後に一度だけ聞く（設計 §5-2）。
+   *
+   * 既定は「共有」なので、**いいえを選んだときだけ**いまある品目を自分だけに倒す。
+   * これから追加するものは共有される（品目ごとに後から変えられる）。
+   */
+  const askShareExistingItems = useCallback(() => {
+    Alert.alert(t('pantry.shared.askTitle'), t('pantry.shared.askBody'), [
+      {
+        text: t('pantry.shared.askNo'),
+        onPress: () => {
+          void Promise.all([
+            setAllShoppingItemsShared(false),
+            setAllPantryItemsShared(false),
+          ]).catch(() => undefined);
+        },
+      },
+      {
+        text: t('pantry.shared.askYes'),
+        onPress: () => {
+          void Promise.all([setAllShoppingItemsShared(true), setAllPantryItemsShared(true)]).catch(
+            () => undefined,
+          );
+        },
+      },
+    ]);
+  }, []);
+
   /** グループ作成。確認ダイアログが「何が共有されるか」への同意の瞬間（§5-2） */
   const handleCreateGroup = () => {
     Alert.alert(t('family.sync.consentTitle'), t('family.sync.consentBody'), [
@@ -232,6 +262,7 @@ export default function FamilyScreen() {
             await onSyncGroupJoined();
             await loadCloud();
             Alert.alert(t('family.sync.createdTitle'), t('family.sync.createdBody'));
+            askShareExistingItems();
           });
         },
       },
@@ -252,6 +283,7 @@ export default function FamilyScreen() {
             await onSyncGroupJoined();
             await loadCloud();
             Alert.alert(t('family.sync.joinedTitle'), t('family.sync.joinedBody'));
+            askShareExistingItems();
           });
         },
       },

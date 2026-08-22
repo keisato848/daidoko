@@ -20,6 +20,7 @@ import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
+import { SharedToggle } from '../../src/components/SharedToggle';
 import { AdBanner } from '../../src/components/AdBanner';
 import { GroupChips } from '../../src/components/GroupChips';
 import { GroupPicker } from '../../src/components/GroupPicker';
@@ -35,6 +36,7 @@ import {
   addPantryItem,
   getPantryItems,
   removePantryItem,
+  setPantryItemShared,
   UNGROUPED,
   updatePantryItem,
 } from '../../src/services/pantry.service';
@@ -372,6 +374,15 @@ export default function PantryScreen() {
                   color={item.lowStockThreshold != null ? Colors.gold : Colors.muted}
                 />
               </Pressable>
+              <SharedToggle
+                shared={item.shared}
+                onToggle={(next) => {
+                  setItems((prev) =>
+                    prev.map((row) => (row.id === item.id ? { ...row, shared: next } : row)),
+                  );
+                  void setPantryItemShared(item.id, next).catch(() => refresh());
+                }}
+              />
               <Pressable
                 onPress={() => handleRemove(item.id)}
                 hitSlop={10}

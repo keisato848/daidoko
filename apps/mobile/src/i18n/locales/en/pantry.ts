@@ -2,6 +2,18 @@ import type ja from '../ja/pantry';
 
 const pantry: typeof ja = {
   title: 'Pantry',
+  shared: {
+    onLabel: 'Shared with your family. Tap to make it private',
+    offLabel: 'Private. Tap to share with your family',
+    onBadge: 'Family',
+    offBadge: 'Private',
+    askTitle: 'Share your current list and pantry too?',
+    askBody:
+      'Choose Share to show the items you already have on your family’s devices. Choose Keep private to leave them to yourself; items you add from now on will be shared. You can change this per item later.',
+    askYes: 'Share',
+    askNo: 'Keep private',
+  },
+
   empty: 'Your pantry is empty. Add some ingredients.',
 
   addPlaceholder: 'Add an ingredient (e.g. onion)',

@@ -15,8 +15,17 @@ interface SyncStoreState {
   lastAppliedAt: number;
   /** 同期の往復中。将来インジケータを出すなら使う */
   syncing: boolean;
+  /**
+   * 家族グループに入っているか。
+   *
+   * **画面が「個人/家族」の切り替えを出すかどうかの判断に使う**（設計 §5-2 —
+   * 未参加のあいだは出さない＝使わない人の画面を変えない）。
+   * 起動時と参加・離脱のたびに同期の実行役が入れる。
+   */
+  joined: boolean;
   markApplied: () => void;
   setSyncing: (syncing: boolean) => void;
+  setJoined: (joined: boolean) => void;
   /** テスト用: 初期状態へ戻す */
   resetForTesting: () => void;
 }
@@ -24,9 +33,11 @@ interface SyncStoreState {
 export const useSyncStore = create<SyncStoreState>((set) => ({
   lastAppliedAt: 0,
   syncing: false,
+  joined: false,
   markApplied: () => set({ lastAppliedAt: Date.now() }),
   setSyncing: (syncing) => set({ syncing }),
-  resetForTesting: () => set({ lastAppliedAt: 0, syncing: false }),
+  setJoined: (joined) => set({ joined }),
+  resetForTesting: () => set({ lastAppliedAt: 0, syncing: false, joined: false }),
 }));
 
 /** 描画の外から合図を出す用（サービス層から呼ぶ） */
@@ -36,4 +47,13 @@ export function notifySyncApplied(): void {
 
 export function setSyncing(syncing: boolean): void {
   useSyncStore.getState().setSyncing(syncing);
+}
+
+export function setSyncJoined(joined: boolean): void {
+  useSyncStore.getState().setJoined(joined);
+}
+
+/** 描画の外から読む用 */
+export function isSyncJoined(): boolean {
+  return useSyncStore.getState().joined;
 }

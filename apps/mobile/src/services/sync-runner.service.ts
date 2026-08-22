@@ -45,7 +45,7 @@ import {
 } from './sync-queue.service';
 import { isNativePlatform } from '../db/client';
 import { getLocale } from '../i18n';
-import { notifySyncApplied, setSyncing } from '../stores/sync.store';
+import { notifySyncApplied, setSyncing, setSyncJoined } from '../stores/sync.store';
 
 const CURSOR_KEY = 'sync_cursor';
 
@@ -281,6 +281,8 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function execute(): Promise<void> {
   const credentials = await getStoredCredentials();
+  // 画面が「個人/家族」の切り替えを出すかの判断に使う（設計 §5-2）
+  setSyncJoined(credentials !== null);
   if (!credentials) return; // 未参加。同期そのものが無い
   setSyncing(true);
   try {
@@ -341,6 +343,7 @@ export function initSync(): void {
 export async function onSyncGroupJoined(): Promise<void> {
   if (!isNativePlatform) return;
   await resetCursor();
+  setSyncJoined(true);
   registeredPushToken = null; // 新しいグループへ登録し直す
   await enqueueSyncEntities(await listAllSyncableEntities());
   await runSync();
@@ -355,6 +358,7 @@ export async function onSyncGroupLeft(): Promise<void> {
   }
   await clearSyncQueue();
   await resetCursor();
+  setSyncJoined(false);
   registeredPushToken = null;
 }
 
