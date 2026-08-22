@@ -12,11 +12,36 @@
  * 依存の向き: recipe.service → **sync-queue** → （コールバックで）sync-runner。
  * runner を直接 import しない（runner はこのモジュールを import するので循環する）。
  */
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import type { SyncEntityType } from './sync-payload';
+
+/**
+ * 新しく作る買い物・在庫の行に入れる `shared` の値。
+ *
+ * - **未参加のあいだは `null`**（＝まだ決めていない）。参加時のプロンプトの対象になる
+ * - **参加中は `1`**（＝共有すると決まっている）。作った瞬間に家族へ送られるので、
+ *   あとから出るプロンプトが触ってはいけない
+ *
+ * ここを `null` のままにすると、離脱→再参加のときプロンプトが「まだ決めていない行」として
+ * 拾ってしまい、「自分だけ」を選んだ瞬間に**家族の端末からその品目が消える**
+ * （設計 §5-2c の D1 と同じ事故が別の入口から起きる）。
+ *
+ * 判定はストアのフラグではなく**保存されている資格情報**を見る。ストアは 401 のあと
+ * 次の同期まで古いことがある。
+ */
+export async function initialSharedValue(): Promise<number | null> {
+  if (!isNativePlatform) return null;
+  try {
+    const { getSyncState } = await import('./sync-client.service');
+    return (await getSyncState()).kind === 'joined' ? 1 : null;
+  } catch {
+    // 読めないときは「まだ決めていない」に倒す（プロンプトで聞ける方が安全）
+    return null;
+  }
+}
 
 export interface SyncQueueEntry {
   entityType: string;
@@ -153,12 +178,22 @@ export async function removeSentSyncQueueEntries(
 /** 送信に失敗した回数を増やす（捨てはしない。次の起動で再挑戦する） */
 export async function bumpSyncQueueRetry(entries: readonly SyncQueueEntry[]): Promise<void> {
   if (!isNativePlatform || entries.length === 0) return;
-  const ids = entries.map((entry) => entry.entityId);
+  // **entityType も見る。** 主キーは (entity_type, entity_id) なので、id だけで
+  // 絞ると別種の行まで数える。いまは retryCount で何も判断していないが、
+  // 「N 回で諦める」を足した瞬間に無関係な行が捨てられる
   try {
-    await getDb()
-      .update(schema.syncQueue)
-      .set({ retryCount: sql`${schema.syncQueue.retryCount} + 1` })
-      .where(inArray(schema.syncQueue.entityId, ids));
+    const db = getDb();
+    for (const entry of entries) {
+      await db
+        .update(schema.syncQueue)
+        .set({ retryCount: sql`${schema.syncQueue.retryCount} + 1` })
+        .where(
+          and(
+            eq(schema.syncQueue.entityType, entry.entityType),
+            eq(schema.syncQueue.entityId, entry.entityId),
+          ),
+        );
+    }
   } catch {
     // 回数が増えないだけ。挙動は変わらない
   }

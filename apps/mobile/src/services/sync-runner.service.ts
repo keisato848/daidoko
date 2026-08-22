@@ -89,7 +89,20 @@ async function readCursor(groupId: string): Promise<number> {
   }
 }
 
-async function writeCursor(groupId: string, seq: number): Promise<void> {
+/**
+ * カーソルを白紙に戻した回数。
+ *
+ * **走っている最中の同期が、白紙に戻した後のカーソルを上書きしないための世代番号。**
+ * `runSync` は実行中の呼び出しを合流させるだけで、走っている回を止められない。
+ * バックアップ復元は「復元 → `resetCursor` → `runSync`」の順で進むが、そのとき
+ * 前の回がまだ pull の返事を待っていると、返ってきた瞬間に**復元前の seq** を書き戻す。
+ * すると復元後の端末は「そこまでは受け取り済み」と思い込み、
+ * **バックアップに入っていなかった家族の変更が二度と降りてこない**。
+ */
+let cursorEpoch = 0;
+
+async function writeCursor(groupId: string, seq: number, epoch: number): Promise<void> {
+  if (epoch !== cursorEpoch) return; // 途中で白紙に戻された。この回の結果は捨てる
   const cursor: SyncCursor = {
     groupId,
     seq,
@@ -99,6 +112,7 @@ async function writeCursor(groupId: string, seq: number): Promise<void> {
 }
 
 async function resetCursor(): Promise<void> {
+  cursorEpoch += 1;
   await setAppMeta(CURSOR_KEY, '').catch(() => undefined);
 }
 
@@ -212,10 +226,12 @@ async function pushPending(): Promise<void> {
  * サーバーは自分の古い push を LWW で捨てるので、取り直さないと永久に食い違う。
  */
 async function pullAndApply(credentials: SyncCredentials): Promise<number> {
+  const epoch = cursorEpoch;
   const startCursor = await readCursor(credentials.groupId);
   const applyOwnChanges = startCursor === 0;
   let cursor = startCursor;
   let applied = 0;
+  let notified = 0;
 
   for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
     const result = await pullSyncChanges(cursor);
@@ -238,9 +254,16 @@ async function pullAndApply(credentials: SyncCredentials): Promise<number> {
       if (!blocked) nextCursor = Math.max(nextCursor, change.seq);
     }
 
+    if (epoch !== cursorEpoch) return applied; // 復元などで白紙に戻った。この回は捨てる
     if (nextCursor > cursor) {
       cursor = nextCursor;
-      await writeCursor(credentials.groupId, cursor);
+      await writeCursor(credentials.groupId, cursor, epoch);
+    }
+    // **ページごとに合図を出す。** 最後にまとめて出すと、途中のページで回線が切れた
+    // ときに「適用したのに一覧が古いまま」になる
+    if (applied > notified) {
+      notified = applied;
+      notifySyncApplied();
     }
     if (blocked) break;
     if (!result.hasMore || result.changes.length === 0) break;
@@ -287,9 +310,8 @@ async function execute(): Promise<void> {
   setSyncing(true);
   try {
     await pushPending();
-    const applied = await pullAndApply(credentials);
+    await pullAndApply(credentials); // 適用の合図はページごとに出る（下の pullAndApply）
     await ensurePushTokenRegistered();
-    if (applied > 0) notifySyncApplied();
   } finally {
     setSyncing(false);
   }
@@ -339,9 +361,14 @@ export function initSync(): void {
  * グループを作った/参加した直後に呼ぶ。
  * カーソルを白紙に戻し、**いま端末にあるレシピ・帖を全部**送信待ちへ積む
  * （v1 は全量同期。参加の同意ダイアログでその旨を伝えている — 設計 §5-2）。
+ *
+ * 積み直す前に**待ち行列を捨てる**。参加前に付いた分（参加プロンプトで「自分だけ」に
+ * 倒した品目など）が残っていると、共有しないと決めた品目の id が墓標としてサーバーへ
+ * 出てしまう。積み直しは `listAllSyncableEntities()` が全部やり直すので、捨てて損はない。
  */
 export async function onSyncGroupJoined(): Promise<void> {
   if (!isNativePlatform) return;
+  await clearSyncQueue();
   await resetCursor();
   setSyncJoined(true);
   registeredPushToken = null; // 新しいグループへ登録し直す
@@ -380,6 +407,7 @@ export async function onLocalDataReplaced(): Promise<void> {
 
 /** テスト用: 実行中フラグとデバウンスを初期化する */
 export function resetSyncRunnerForTesting(): void {
+  cursorEpoch = 0;
   running = null;
   rerunRequested = false;
   registeredPushToken = null;

@@ -910,6 +910,17 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
   };
 }
 
+/**
+ * 復元してはいけない `app_meta` の鍵。
+ *
+ * `sync_cursor` は「サーバーの seq をここまで受け取った」という**この端末の現在地**で、
+ * 中身とは無関係。バックアップから戻すと、古いデータの上に進んだカーソルが載り、
+ * **その seq 以下の家族の変更が二度と降りてこない**（サーバーは 1 エンティティ 1 行なので
+ * 再送のきっかけが無い）。復元後に `resetCursor()` も走るが、それは別の手順で、
+ * 途中でアプリが落ちれば飛ぶ。**同じトランザクションの中で落とすのが確実。**
+ */
+const NON_RESTORABLE_APP_META_KEYS: readonly string[] = ['sync_cursor'];
+
 function replaceDatabase(payload: LocalBackupPayload): void {
   const expoDb = getExpoDb();
 
@@ -923,6 +934,9 @@ function replaceDatabase(payload: LocalBackupPayload): void {
     for (const table of BACKUP_TABLES) {
       const sql = `INSERT INTO ${quoteIdentifier(table.name)} (${tableColumnList(table)}) VALUES (${tablePlaceholders(table)})`;
       for (const row of payload.tables[table.name]) {
+        if (table.name === 'app_meta' && NON_RESTORABLE_APP_META_KEYS.includes(String(row.key))) {
+          continue;
+        }
         expoDb.runSync(
           sql,
           table.columns.map((column) => row[column] ?? null),

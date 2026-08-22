@@ -20,6 +20,7 @@
 import { and, eq } from 'drizzle-orm';
 
 import { getDb } from '../db/client';
+import { shouldHideSeedShoppingItem } from '../db/sampleData';
 import * as schema from '../db/schema';
 import {
   SYNC_ENTITY_JAN_CATALOG,
@@ -271,7 +272,9 @@ export async function listRowSyncableEntities(): Promise<
 
   return [
     ...shopping
-      .filter((row) => isShared(row.shared))
+      // サンプルの品目は送らない（レシピと同じ扱い）。id が全端末で同じなので、
+      // 新しい端末が参加すると、家族が前に消したサンプルが復活してしまう
+      .filter((row) => isShared(row.shared) && !shouldHideSeedShoppingItem(row.id))
       .map((row) => ({ entityType: SYNC_ENTITY_SHOPPING_ITEM, entityId: row.id }) as const),
     ...pantry
       .filter((row) => isShared(row.shared))
@@ -295,12 +298,16 @@ async function applyShoppingItem(payload: RowSyncPayload): Promise<ApplyOutcome>
       updatedAt: schema.shoppingItems.updatedAt,
       checkedAt: schema.shoppingItems.checkedAt,
       createdAt: schema.shoppingItems.createdAt,
+      shared: schema.shoppingItems.shared,
     })
     .from(schema.shoppingItems)
     .where(eq(schema.shoppingItems.id, item.id))
     .limit(1);
   const local = localRows[0];
   if (local && !incomingChangeWins(item.updatedAt, shoppingUpdatedAt(local))) return 'skipped';
+  // **「自分だけ」にした行は他端末の編集で共有に戻さない。** 戻すと、以後その行の中身が
+  // サーバーへ出ていく（利用者は個人のつもりのまま）。共有をやめる決定はこの端末のもの
+  if (local && !isShared(local.shared)) return 'skipped';
 
   await db
     .insert(schema.shoppingItems)
@@ -334,7 +341,8 @@ async function applyShoppingItem(payload: RowSyncPayload): Promise<ApplyOutcome>
         storeGroup: item.storeGroup,
         checkedAt: item.checkedAt,
         updatedAt: item.updatedAt,
-        shared: 1,
+        // shared は **更新しない**。届いた時点では共有中だが、この端末が後から
+        // 「自分だけ」に倒していることがある（その場合は上で抜けている）
       },
     });
   return 'applied';
@@ -345,12 +353,13 @@ async function applyPantryItem(payload: RowSyncPayload): Promise<ApplyOutcome> {
   const db = getDb();
   const item = payload.item;
   const localRows = await db
-    .select({ updatedAt: schema.pantryItems.updatedAt })
+    .select({ updatedAt: schema.pantryItems.updatedAt, shared: schema.pantryItems.shared })
     .from(schema.pantryItems)
     .where(eq(schema.pantryItems.id, item.id))
     .limit(1);
   const local = localRows[0];
   if (local && !incomingChangeWins(item.updatedAt, local.updatedAt)) return 'skipped';
+  if (local && !isShared(local.shared)) return 'skipped';
 
   await db
     .insert(schema.pantryItems)
@@ -381,7 +390,7 @@ async function applyPantryItem(payload: RowSyncPayload): Promise<ApplyOutcome> {
         groupName: item.groupName,
         expiresOn: item.expiresOn,
         updatedAt: item.updatedAt,
-        shared: 1,
+        // shared は更新しない（買い物と同じ理由）
       },
     });
   return 'applied';
@@ -512,6 +521,14 @@ export async function applyRowPayload(payload: RowSyncPayload): Promise<ApplyOut
 /**
  * 受信 tombstone。**物理削除**（買い物・在庫・辞書はどれも子を持たないので安全）。
  *
+ * **`shared = 0` の行は消さない。** 「共有をやめても自分の端末には残る」が §5-2 の約束で、
+ * 共有集合から抜けた行はもう他端末の支配下に無い。見ないと二つ壊れる:
+ *
+ * 1. 他端末が同じ品目を消した tombstone が、こちらの「自分だけ」の行まで消す
+ * 2. **自分が出した tombstone が自分の行を消す。** カーソルを 0 に戻す経路
+ *    （バックアップ復元・再参加・payload バージョン更新）は自分の変更も適用するので、
+ *    「自分だけ」に倒したときの tombstone が戻ってきて自分の品目が消える
+ *
  * 辞書系で「持っていない id」の tombstone が来たら何もしない。自然キーで持っている
  * 同じ対応が消えずに残るが、**消えるより残る方が害が小さい**（削除は稀で、
  * 残っても名寄せが効くだけ）。
@@ -529,24 +546,27 @@ export async function applyRowTombstone(
           updatedAt: schema.shoppingItems.updatedAt,
           checkedAt: schema.shoppingItems.checkedAt,
           createdAt: schema.shoppingItems.createdAt,
+          shared: schema.shoppingItems.shared,
         })
         .from(schema.shoppingItems)
         .where(eq(schema.shoppingItems.id, entityId))
         .limit(1);
       const local = rows[0];
       if (!local) return 'skipped';
+      if (!isShared(local.shared)) return 'skipped';
       if (!incomingChangeWins(clientUpdatedAt, shoppingUpdatedAt(local))) return 'skipped';
       await db.delete(schema.shoppingItems).where(eq(schema.shoppingItems.id, entityId));
       return 'applied';
     }
     case SYNC_ENTITY_PANTRY_ITEM: {
       const rows = await db
-        .select({ updatedAt: schema.pantryItems.updatedAt })
+        .select({ updatedAt: schema.pantryItems.updatedAt, shared: schema.pantryItems.shared })
         .from(schema.pantryItems)
         .where(eq(schema.pantryItems.id, entityId))
         .limit(1);
       const local = rows[0];
       if (!local) return 'skipped';
+      if (!isShared(local.shared)) return 'skipped';
       if (!incomingChangeWins(clientUpdatedAt, local.updatedAt)) return 'skipped';
       await db.delete(schema.pantryItems).where(eq(schema.pantryItems.id, entityId));
       return 'applied';

@@ -36,8 +36,14 @@ import {
   type SyncErrorCode,
   type SyncMe,
 } from '../../src/services/sync-client.service';
-import { setAllPantryItemsShared } from '../../src/services/pantry.service';
-import { setAllShoppingItemsShared } from '../../src/services/shopping-list.service';
+import {
+  countUndecidedSharedPantryItems,
+  setUndecidedPantryItemsShared,
+} from '../../src/services/pantry.service';
+import {
+  countUndecidedSharedShoppingItems,
+  setUndecidedShoppingItemsShared,
+} from '../../src/services/shopping-list.service';
 import { onSyncGroupJoined, onSyncGroupLeft } from '../../src/services/sync-runner.service';
 import {
   addFamilyMember,
@@ -220,31 +226,58 @@ export default function FamilyScreen() {
   );
 
   /**
-   * 参加した直後に一度だけ聞く（設計 §5-2）。
+   * いまある買い物・在庫を共有するかを一度だけ聞く（設計 §5-2）。
    *
-   * 既定は「共有」なので、**いいえを選んだときだけ**いまある品目を自分だけに倒す。
-   * これから追加するものは共有される（品目ごとに後から変えられる）。
+   * **参加より先に聞き、答えを反映してから参加する。** 参加してから聞くと二つ壊れる —
+   * 実機検証（2026-08-22）で両方とも起きた:
+   *
+   * 1. 「自分だけ」を選んでも手遅れ。参加した瞬間に全件が送信待ちへ積まれ、
+   *    いまある品目が一度サーバーへ出てしまう。
+   * 2. **家族の品目を消す。** 参加直後の pull で降りてきた他端末の品目まで
+   *    「いまある品目」に含まれ、`shared = 0` に倒れて墓標として押し返される。
+   *
+   * 先に聞けば、自分だけにした行はそもそも送信対象に入らない
+   * （`listRowSyncableEntities` が共有中の行だけを返す）。
+   *
+   * 対象は**まだ共有可否を決めていない品目だけ**（`shared IS NULL`）。他端末から
+   * 降りてきた品目は決定済みなので触らない。対象が無ければ聞かない。
    */
-  const askShareExistingItems = useCallback(() => {
-    Alert.alert(t('pantry.shared.askTitle'), t('pantry.shared.askBody'), [
-      {
-        text: t('pantry.shared.askNo'),
-        onPress: () => {
-          void Promise.all([
-            setAllShoppingItemsShared(false),
-            setAllPantryItemsShared(false),
-          ]).catch(() => undefined);
-        },
-      },
-      {
-        text: t('pantry.shared.askYes'),
-        onPress: () => {
-          void Promise.all([setAllShoppingItemsShared(true), setAllPantryItemsShared(true)]).catch(
-            () => undefined,
-          );
-        },
-      },
+  const askShareExistingItems = useCallback(async (): Promise<void> => {
+    const [shopping, pantry] = await Promise.all([
+      countUndecidedSharedShoppingItems().catch(() => 0),
+      countUndecidedSharedPantryItems().catch(() => 0),
     ]);
+    if (shopping === 0 && pantry === 0) return;
+
+    const applyChoice = async (shared: boolean): Promise<void> => {
+      await Promise.all([
+        setUndecidedShoppingItemsShared(shared),
+        setUndecidedPantryItemsShared(shared),
+      ]).catch(() => undefined);
+    };
+
+    return new Promise<void>((resolve) => {
+      Alert.alert(
+        t('pantry.shared.askTitle'),
+        t('pantry.shared.askBody'),
+        [
+          {
+            text: t('pantry.shared.askNo'),
+            onPress: () => {
+              void applyChoice(false).finally(resolve);
+            },
+          },
+          {
+            text: t('pantry.shared.askYes'),
+            onPress: () => {
+              void applyChoice(true).finally(resolve);
+            },
+          },
+        ],
+        // 外側タップで閉じられると「どちらでもない」まま参加してしまう
+        { cancelable: false },
+      );
+    });
   }, []);
 
   /** グループ作成。確認ダイアログが「何が共有されるか」への同意の瞬間（§5-2） */
@@ -255,6 +288,8 @@ export default function FamilyScreen() {
         text: t('family.sync.create'),
         onPress: () => {
           void runSyncAction(async () => {
+            // 送信が始まる前に、いまある品目をどうするか決めておく
+            await askShareExistingItems();
             // 表示名は送らない。サーバーは返さないので使い道が無く、
             // 「サーバーに個人情報を置かない」（設計 §2）に反するだけになる
             await createSyncGroup(null);
@@ -262,7 +297,6 @@ export default function FamilyScreen() {
             await onSyncGroupJoined();
             await loadCloud();
             Alert.alert(t('family.sync.createdTitle'), t('family.sync.createdBody'));
-            askShareExistingItems();
           });
         },
       },
@@ -278,12 +312,12 @@ export default function FamilyScreen() {
         text: t('family.sync.join'),
         onPress: () => {
           void runSyncAction(async () => {
+            await askShareExistingItems();
             await joinSyncGroup(code, null);
             setJoinCode('');
             await onSyncGroupJoined();
             await loadCloud();
             Alert.alert(t('family.sync.joinedTitle'), t('family.sync.joinedBody'));
-            askShareExistingItems();
           });
         },
       },

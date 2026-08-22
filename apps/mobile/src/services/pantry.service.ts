@@ -11,7 +11,7 @@ import { isNativePlatform } from '../db/client';
 import { parseAmount } from '../utils/amount';
 import { generateId } from '../utils/id';
 import { SYNC_ENTITY_PANTRY_ITEM } from './sync-payload';
-import { enqueueSyncEntity } from './sync-queue.service';
+import { enqueueSyncEntity, initialSharedValue } from './sync-queue.service';
 import { normalizeItemName } from '../utils/itemName';
 import type { PantryItem } from './types';
 
@@ -226,7 +226,12 @@ export async function addPantryItem(
     expiresOn,
     createdAt: now,
     updatedAt: now,
+    // 参加中なら「共有すると決まっている」1。未参加なら null（参加時に聞く）
+    shared: await initialSharedValue(),
   });
+  // **これを忘れると新しい在庫が一度も同期されない。** 合算経路にはあって挿入経路に
+  // 無い、という形で抜けていた（実機では「買った→在庫」で品目が消えたように見える）
+  await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
   return item;
 }
 
@@ -379,19 +384,52 @@ export async function setPantryItemShared(id: string, shared: boolean): Promise<
   await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, id);
 }
 
-/** いまある在庫を一括で共有する/しない（グループ参加直後に一度だけ聞く） */
-export async function setAllPantryItemsShared(shared: boolean): Promise<number> {
+/**
+ * まだ決めていない品目（`shared IS NULL`）だけを一括で共有する/しない。
+ *
+ * **「全部」ではなく「まだ決めていないもの」だけ**を触るのが要点。参加プロンプトの
+ * 対象は「この端末が自分で作って、まだ共有可否を決めていない品目」であって、
+ * 他端末から降りてきた品目ではない。全部を倒すと、降りてきたばかりの家族の品目まで
+ * `shared = 0` になり、墓標として押し返して**家族の端末から消してしまう**
+ * （実機検証 2026-08-22 で再現）。離脱→再参加でも同じことが起きる。
+ *
+ * 新しく作った行は `shared` が NULL（＝共有）なので、次に聞かれたときの対象になる。
+ */
+export async function setUndecidedPantryItemsShared(shared: boolean): Promise<number> {
   if (!isNativePlatform) return 0;
+  const { isNull } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
   const db = getDb();
 
-  const rows = await db.select({ id: schema.pantryItems.id }).from(schema.pantryItems);
+  const rows = await db
+    .select({ id: schema.pantryItems.id })
+    .from(schema.pantryItems)
+    .where(isNull(schema.pantryItems.shared));
+  if (rows.length === 0) return 0;
+
   const now = new Date().toISOString();
-  await db.update(schema.pantryItems).set({ shared: shared ? 1 : 0, updatedAt: now });
-  for (const row of rows) {
-    await enqueueSyncEntity(SYNC_ENTITY_PANTRY_ITEM, row.id);
-  }
+  await db
+    .update(schema.pantryItems)
+    .set({ shared: shared ? 1 : 0, updatedAt: now })
+    .where(isNull(schema.pantryItems.shared));
+  // **積まない。** 呼ばれるのは参加より前だけ（`family.tsx` の参加プロンプト）。
+  // ここで積むと 3 秒デバウンスが参加の往復中に発火し、「自分だけ」にしたばかりの
+  // 品目の id が墓標としてサーバーへ出る。参加時に `onSyncGroupJoined` が
+  // 待ち行列を捨てて全件積み直すので、ここでの積み直しは要らない。
+  return rows.length;
+}
+
+/** 参加プロンプトを出すかの判定用。まだ決めていない在庫の数 */
+export async function countUndecidedSharedPantryItems(): Promise<number> {
+  if (!isNativePlatform) return 0;
+  const { isNull } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const rows = await getDb()
+    .select({ id: schema.pantryItems.id })
+    .from(schema.pantryItems)
+    .where(isNull(schema.pantryItems.shared));
   return rows.length;
 }
 

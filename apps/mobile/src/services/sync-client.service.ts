@@ -14,6 +14,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { API_V1 } from '../config';
 import { isNativePlatform } from '../db/client';
+import { setSyncJoined } from '../stores/sync.store';
 
 const CREDENTIALS_KEY = 'sync_credentials_v1';
 
@@ -99,6 +100,10 @@ async function storeCredentials(credentials: SyncCredentials): Promise<void> {
 
 async function clearCredentials(): Promise<void> {
   await SecureStore.deleteItemAsync(CREDENTIALS_KEY).catch(() => undefined);
+  // 資格情報が無くなった＝もうグループに居ない。**その場でストアにも反映する。**
+  // 次の同期まで `joined` が真のままだと、参加していない端末に「個人/家族」の
+  // 切り替えが出続け、押すと次の参加で解釈が変わる値を書いてしまう
+  setSyncJoined(false);
 }
 
 export async function getSyncState(): Promise<SyncState> {
