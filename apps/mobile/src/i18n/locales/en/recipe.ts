@@ -89,7 +89,6 @@ const recipe: typeof ja = {
       stopConfirm:
         'This deletes the share page. People with the link will no longer see it. Continue?',
       stopAction: 'Stop sharing',
-      stopDoneTitle: 'Web sharing stopped',
       stopDoneBody: 'The share page has been deleted.',
       stopFailedBody: 'Could not stop sharing. Check your connection and try again.',
     },

@@ -102,7 +102,6 @@ const recipe = {
       stopConfirm:
         '共有ページを削除します。リンクを知っている人も見られなくなります。よろしいですか？',
       stopAction: '停止する',
-      stopDoneTitle: 'Web共有を停止しました',
       stopDoneBody: '共有ページは削除されました。',
       stopFailedBody: '停止できませんでした。通信環境を確認してもう一度お試しください。',
     },
