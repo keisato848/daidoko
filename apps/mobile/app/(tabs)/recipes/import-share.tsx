@@ -9,7 +9,6 @@ import { ChevronLeft } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +24,7 @@ import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
 import { API_V1 } from '../../../src/config';
 import { t, tCount } from '../../../src/i18n';
+import { dialog } from '../../../src/services/dialog.service';
 import { createRecipe } from '../../../src/services/recipe.service';
 import {
   ShareImportError,
@@ -163,7 +163,10 @@ export default function ImportShareScreen() {
       setPhase('done');
       setTimeout(() => router.replace('/(tabs)/recipes'), 1200);
     } catch {
-      Alert.alert(t('recipeImport.share.title'), t('recipeImport.share.error.server'));
+      void dialog.alert({
+        title: t('recipeImport.share.title'),
+        message: t('recipeImport.share.error.server'),
+      });
     } finally {
       setSavingAll(false);
     }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { DialogHost } from '../src/components/DialogHost';
 import { Colors } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
 import { initLocaleFromDevice } from '../src/i18n';
@@ -141,6 +142,11 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
       </Stack>
+      {/*
+        アプリのデザインのダイアログ（`docs/画面設計.md` §7）。**アプリに 1 つだけ**置く。
+        `Stack` の外に出しているのは、どの画面から出した確認でも同じ場所に描くため
+      */}
+      <DialogHost />
     </KeyboardProvider>
   );
 }

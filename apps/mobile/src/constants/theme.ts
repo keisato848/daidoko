@@ -14,6 +14,10 @@ export const Colors = {
   paperDim: '#DCC9A8',
   muted: '#5A4A34',
   white: '#FFFFFF',
+  /** 破壊的操作・入力エラー。文字と罫線に使う */
+  danger: '#FF6B6B',
+  /** 破壊的操作のボタン面。danger の文字が読める暗さに落としてある */
+  dangerBg: '#5C2020',
 } as const;
 
 export const Fonts = {

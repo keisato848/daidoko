@@ -13,7 +13,6 @@ import {
 } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -35,10 +34,12 @@ import { NumberStepper } from '../../../src/components/NumberStepper';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
+import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { t, tCount } from '../../../src/i18n';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
+import { dialog } from '../../../src/services/dialog.service';
 import {
   addMissingRecipeIngredientsToList,
   describeAddMissingResult,
@@ -102,6 +103,7 @@ export default function RecipeDetailScreen() {
   const [webShare, setWebShare] = useState<WebShareRecord | null>(null);
   const [webShareBlocked, setWebShareBlocked] = useState(true);
   const [webSharePublishing, setWebSharePublishing] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
   const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
   const unitSystem = useUnitSystemStore((state) => state.system);
@@ -234,10 +236,10 @@ export default function RecipeDetailScreen() {
         // 共有シートのキャンセルは無視（リンクは発行済み — メニューから再共有できる）
       }
     } catch {
-      Alert.alert(
-        t('recipe.detail.webShare.failedTitle'),
-        t('recipe.detail.webShare.publishFailedBody'),
-      );
+      void dialog.alert({
+        title: t('recipe.detail.webShare.failedTitle'),
+        message: t('recipe.detail.webShare.publishFailedBody'),
+      });
     } finally {
       setWebSharePublishing(false);
     }
@@ -256,55 +258,54 @@ export default function RecipeDetailScreen() {
     }
     // 権利面の確認（出所ゲートを通ったレシピにも、テキスト取り込み等の
     // 出所不明分があるため必ず挟む — docs/Web共有設計.md §2-2）
-    Alert.alert(t('recipe.detail.webShare.attestTitle'), t('recipe.detail.webShare.attestBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      { text: t('recipe.detail.webShare.attestOk'), onPress: () => void doWebSharePublish() },
-    ]);
+    const attested = await dialog.confirm({
+      title: t('recipe.detail.webShare.attestTitle'),
+      message: t('recipe.detail.webShare.attestBody'),
+      confirmLabel: t('recipe.detail.webShare.attestOk'),
+    });
+    if (attested) await doWebSharePublish();
   };
 
-  const handleWebShareStop = () => {
+  const handleWebShareStop = async () => {
     if (!id) return;
-    Alert.alert(t('recipe.detail.webShare.stopTitle'), t('recipe.detail.webShare.stopConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('recipe.detail.webShare.stopAction'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await revokeWebShare(id);
-            setWebShare(null);
-            Alert.alert(
-              t('recipe.detail.webShare.stopDoneTitle'),
-              t('recipe.detail.webShare.stopDoneBody'),
-            );
-          } catch {
-            Alert.alert(
-              t('recipe.detail.webShare.failedTitle'),
-              t('recipe.detail.webShare.stopFailedBody'),
-            );
-          }
-        },
-      },
-    ]);
+    const confirmed = await dialog.confirm({
+      title: t('recipe.detail.webShare.stopTitle'),
+      message: t('recipe.detail.webShare.stopConfirm'),
+      confirmLabel: t('recipe.detail.webShare.stopAction'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await revokeWebShare(id);
+      setWebShare(null);
+      // 画面に留まる純粋な成功なのでトーストで済ませる（docs/画面設計.md §7-1）
+      setToastMessage(t('recipe.detail.webShare.stopDoneBody'));
+    } catch {
+      void dialog.alert({
+        title: t('recipe.detail.webShare.failedTitle'),
+        message: t('recipe.detail.webShare.stopFailedBody'),
+      });
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!id) return;
-    Alert.alert(t('recipe.detail.deleteTitle'), t('recipe.detail.deleteConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.delete'),
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteRecipe(id);
-            router.replace('/(tabs)/recipes');
-          } catch {
-            Alert.alert(t('recipe.detail.deleteFailedTitle'), t('recipe.detail.deleteFailedBody'));
-          }
-        },
-      },
-    ]);
+    const confirmed = await dialog.confirm({
+      title: t('recipe.detail.deleteTitle'),
+      message: t('recipe.detail.deleteConfirm'),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteRecipe(id);
+      router.replace('/(tabs)/recipes');
+    } catch {
+      void dialog.alert({
+        title: t('recipe.detail.deleteFailedTitle'),
+        message: t('recipe.detail.deleteFailedBody'),
+      });
+    }
   };
 
   const handleAddMissingToList = async () => {
@@ -322,7 +323,7 @@ export default function RecipeDetailScreen() {
     } else {
       message = t('recipe.detail.shoppingNothingMissing');
     }
-    Alert.alert(t('recipe.detail.shoppingTitle'), message);
+    void dialog.alert({ title: t('recipe.detail.shoppingTitle'), message });
   };
 
   if (isLoading) {
@@ -448,7 +449,7 @@ export default function RecipeDetailScreen() {
               style={styles.menuItem}
               onPress={() => {
                 setShowMenu(false);
-                handleWebShareStop();
+                void handleWebShareStop();
               }}
             >
               <Text style={styles.menuItemText}>{t('recipe.detail.menu.webShareStop')}</Text>
@@ -467,7 +468,7 @@ export default function RecipeDetailScreen() {
             style={styles.menuItem}
             onPress={() => {
               setShowMenu(false);
-              handleDelete();
+              void handleDelete();
             }}
           >
             <Text style={[styles.menuItemText, styles.menuItemDestructive]}>
@@ -706,6 +707,12 @@ export default function RecipeDetailScreen() {
         total={coach.total}
         onNext={coach.next}
         onSkip={coach.skip}
+      />
+
+      <Toast
+        message={toastMessage ?? ''}
+        visible={toastMessage != null}
+        onDismiss={() => setToastMessage(null)}
       />
     </View>
   );

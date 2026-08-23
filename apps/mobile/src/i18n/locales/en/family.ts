@@ -33,7 +33,6 @@ const family: typeof ja = {
   joinPlaceholder: 'Invite code',
   alreadyMemberTitle: 'Already a member',
   alreadyMemberBody: 'You’re already in {{name}}.',
-  joinedTitle: 'Joined',
   joinedBody: 'You’ve joined {{name}}.',
 
   saveFailed: 'Saving failed',

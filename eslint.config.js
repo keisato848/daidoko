@@ -102,4 +102,30 @@ module.exports = [
       ],
     },
   },
+
+  /**
+   * **OS 標準のダイアログを出させない**（`docs/画面設計.md` §7）。
+   *
+   * `Alert.alert` は Android では Material、iOS では `UIAlertController` の見た目で出て、
+   * 暗い背景とゴールドの世界観から浮く。67 箇所を自前のダイアログへ移したあとで
+   * 1 箇所でも戻ると、その操作だけ OS のダイアログが出る。目視では気づけないので lint で止める。
+   */
+  {
+    files: ['apps/mobile/app/**/*.{ts,tsx}', 'apps/mobile/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react-native',
+              importNames: ['Alert'],
+              message:
+                'OS 標準のダイアログは使いません。src/services/dialog.service の dialog.alert / confirm / choose を使ってください（docs/画面設計.md §7）。',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

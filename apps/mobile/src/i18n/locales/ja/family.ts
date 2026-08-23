@@ -36,7 +36,6 @@ const family = {
   joinPlaceholder: '招待コード',
   alreadyMemberTitle: '参加済み',
   alreadyMemberBody: '{{name}} に参加しています。',
-  joinedTitle: '参加しました',
   joinedBody: '{{name}} に参加しました。',
 
   saveFailed: '保存に失敗しました',

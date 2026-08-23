@@ -7,16 +7,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Camera, ChevronLeft, Image as ImageIcon, Store, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { Loading } from '../../../../src/components/Loading';
@@ -24,6 +15,7 @@ import { t } from '../../../../src/i18n';
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../../src/services/cooking-log.service';
+import { dialog } from '../../../../src/services/dialog.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
 import {
   capturePhoto,
@@ -167,10 +159,10 @@ export default function RefineRecipeScreen() {
       setCookedPhoto(await capturePhoto(source, expoImagePickerPhotoCaptureAdapter));
     } catch (error) {
       if (error instanceof PhotoCaptureCancelledError) return;
-      Alert.alert(
-        t('common.photoAddFailed'),
-        error instanceof Error ? error.message : t('common.photoAddFailed'),
-      );
+      void dialog.alert({
+        title: t('common.photoAddFailed'),
+        message: error instanceof Error ? error.message : t('common.photoAddFailed'),
+      });
     }
   }, []);
 
@@ -239,10 +231,10 @@ export default function RefineRecipeScreen() {
       setShowToast(true);
       setTimeout(() => router.replace(`/(tabs)/recipes/${recipe.id}`), 1200);
     } catch (error) {
-      Alert.alert(
-        t('recipe.refine.saveFailedTitle'),
-        error instanceof Error ? error.message : t('recipe.refine.saveFailedBody'),
-      );
+      void dialog.alert({
+        title: t('recipe.refine.saveFailedTitle'),
+        message: error instanceof Error ? error.message : t('recipe.refine.saveFailedBody'),
+      });
       setPhase('preview');
     }
   }, [recipe, refined, feedback, router]);

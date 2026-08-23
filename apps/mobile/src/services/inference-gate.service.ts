@@ -7,14 +7,14 @@
  *
  * リワード広告は**利用者が選んで見る**形式（AdMob ポリシー）なので、
  * 自動再生はせず、確認ダイアログを 1 つだけ挟む。
+ * ここは画面ではないので、命令的な `dialog.confirm()` で出す（`docs/画面設計.md` §7-3）。
  *
  * 視聴回数に上限は無い（2026-08-14 撤廃）。したがってペイウォール画面に落ちるのは
  * **広告そのものが出せないとき**（no-fill・広告無効ビルド・オフライン）だけで、
  * そこは BYOK 案内への逃げ道として残す。
  */
-import { Alert } from 'react-native';
-
 import { getAdRewardProvider } from './ad-reward.service';
+import { dialog } from './dialog.service';
 import { grantAdBonus, getFreemiumStatus, type FreemiumStatus } from './usage.service';
 import { t } from '../i18n';
 
@@ -36,11 +36,11 @@ export function decideInferenceGate(
 }
 
 function confirmWatchAd(): Promise<boolean> {
-  return new Promise((resolve) => {
-    Alert.alert(t('ai.adGate.title'), t('ai.adGate.body'), [
-      { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
-      { text: t('ai.adGate.watch'), onPress: () => resolve(true) },
-    ]);
+  // 画面ではないので JSX を返せない。命令的な dialog を使う（docs/画面設計.md §7-3）
+  return dialog.confirm({
+    title: t('ai.adGate.title'),
+    message: t('ai.adGate.body'),
+    confirmLabel: t('ai.adGate.watch'),
   });
 }
 

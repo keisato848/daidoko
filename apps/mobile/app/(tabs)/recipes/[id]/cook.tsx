@@ -7,13 +7,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { NumberStepper } from '../../../../src/components/NumberStepper';
 import { TimerWidget } from '../../../../src/components/TimerWidget';
 import { Colors } from '../../../../src/constants/theme';
 import { t, tCount } from '../../../../src/i18n';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
+import { dialog } from '../../../../src/services/dialog.service';
 import { getRecipeDetail } from '../../../../src/services/recipe.service';
 import { useTimerStore } from '../../../../src/stores/timer.store';
 import { useUnitSystemStore } from '../../../../src/stores/unitSystem.store';
@@ -107,7 +108,7 @@ export default function CookingModeScreen() {
   const detectedTimer = current.timerSec == null ? extractPrimaryStepTimer(current.body) : null;
   const effectiveTimerSec = current.timerSec ?? detectedTimer?.seconds ?? null;
 
-  const startTimerForStep = (step: StepData, timerSec: number | null) => {
+  const startTimerForStep = async (step: StepData, timerSec: number | null) => {
     if (timerSec == null) return;
     const begin = () => {
       const store = useTimerStore.getState();
@@ -123,14 +124,12 @@ export default function CookingModeScreen() {
       (running.status === 'running' || running.status === 'paused') &&
       running.context?.stepId !== step.id
     ) {
-      Alert.alert(
-        t('recipe.cook.switchTimerTitle'),
-        t('recipe.cook.switchTimerBody', { step: running.context?.stepNumber ?? '?' }),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          { text: t('recipe.cook.switchTimerAction'), onPress: begin },
-        ],
-      );
+      const switched = await dialog.confirm({
+        title: t('recipe.cook.switchTimerTitle'),
+        message: t('recipe.cook.switchTimerBody', { step: running.context?.stepNumber ?? '?' }),
+        confirmLabel: t('recipe.cook.switchTimerAction'),
+      });
+      if (switched) begin();
       return;
     }
     begin();
@@ -197,7 +196,7 @@ export default function CookingModeScreen() {
         {effectiveTimerSec != null && !timerOnCurrentStep && (
           <Pressable
             style={styles.timerButton}
-            onPress={() => startTimerForStep(current, effectiveTimerSec)}
+            onPress={() => void startTimerForStep(current, effectiveTimerSec)}
           >
             <Text style={styles.timerIcon}>⏱</Text>
             <Text style={styles.timerButtonText}>

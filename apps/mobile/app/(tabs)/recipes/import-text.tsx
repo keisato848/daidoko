@@ -8,6 +8,7 @@ import { useCallback, useState } from 'react';
 import { Clipboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { RecipeForm } from '../../../src/components/RecipeForm';
+import { SourceBanner } from '../../../src/components/SourceBanner';
 import { Toast } from '../../../src/components/Toast';
 import { KeyboardAwareScroll } from '../../../src/components/KeyboardAwareScroll';
 import { Colors } from '../../../src/constants/theme';
@@ -72,16 +73,15 @@ export default function ImportTextScreen() {
     return (
       <View style={styles.container}>
         {parsed && (
-          <View style={styles.sourceBanner}>
-            <FileText size={12} color={Colors.goldDim} />
-            <Text style={styles.sourceName}>
-              {[confidenceLabel(parsed.confidence), normalizedLabel(parsed.normalizedBy)]
-                .filter(Boolean)
-                .join(' / ')}
-            </Text>
-          </View>
+          <SourceBanner
+            icon={<FileText size={12} color={Colors.goldDim} />}
+            text={[confidenceLabel(parsed.confidence), normalizedLabel(parsed.normalizedBy)]
+              .filter(Boolean)
+              .join(' / ')}
+          />
         )}
         <RecipeForm
+          topInset={false}
           initialValues={parsed?.formData}
           onSubmit={handleSave}
           onCancel={() => setPhase('input')}
@@ -241,20 +241,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.bg,
     letterSpacing: 1,
-  },
-  sourceBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: '#1C1409',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  sourceName: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: Colors.goldDim,
   },
 });

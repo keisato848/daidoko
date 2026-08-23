@@ -5,7 +5,6 @@ import { AgentBridge, type AgentResult } from '@daidoko/shared';
 
 import { hasEnoughOcrText, parseOcrText, type OcrRecognitionResult } from '../services/ocr.service';
 import type { RecipeFormData } from '../validation/recipe.schema';
-import { recipeFormSchema } from '../validation/recipe.schema';
 import type { ParseConfidence, ParsedRecipeText } from '../utils/recipeTextParser';
 import { t } from '../i18n';
 
@@ -45,6 +44,25 @@ async function defaultPreprocessImage(imageUri: string): Promise<OcrPreprocessRe
   return { imageUri };
 }
 
+/**
+ * 確認画面へ進めるだけの中身があるか。**保存時の `recipeFormSchema` では判定しない。**
+ *
+ * parser は読めなかった項目に編集用の空行を 1 つ置くので、材料が取れなかった下書きは
+ * 保存スキーマを通らない。それを進行の条件にしていたため、手順が 3 つ読めていても
+ * 「レシピとして必要な項目を読み取れませんでした」で行き止まりになっていた
+ * （AQUOS でパッケージ裏を撮って発覚・2026-08-23）。この画面は**確認・編集して保存する**のが
+ * 前提なので、**材料か手順がどちらか 1 つでも**読めていれば渡す。
+ *
+ * 料理名だけでは通さない — 文章を撮っただけでも 1 行目は料理名になるので、
+ * それを許すと中身の無い下書きが必ず出てしまう。
+ */
+function hasUsableDraft(draft: RecipeFormData): boolean {
+  return (
+    draft.ingredients.some((ingredient) => ingredient.name.trim().length > 0) ||
+    draft.steps.some((step) => step.body.trim().length > 0)
+  );
+}
+
 export async function runOcrAgent(
   input: OcrAgentInput,
   dependencies: OcrAgentDependencies = {},
@@ -69,7 +87,7 @@ export async function runOcrAgent(
       ? await dependencies.parseText(recognized.rawText)
       : await parseOcrText(recognized.rawText);
 
-    if (!recipeFormSchema.safeParse(parsed.formData).success) {
+    if (!hasUsableDraft(parsed.formData)) {
       return errorResult('PARSE_FAILED', t('recipeImport.ocr.missingRequiredFields'));
     }
 

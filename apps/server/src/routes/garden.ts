@@ -2,12 +2,16 @@
  * さいえん手帳（家庭菜園アプリ）がこのサーバーに相乗りしているルート群
  * （WBS 決定⑨）。レシピ系とは共存させない。
  *
- * - `POST /api/v1/garden/consult` … AI 相談（写真 → 診断・アドバイス）
- * - `POST /api/v1/garden/harvest` … 収穫の写真記録（写真 → 作物と個数）
+ * - `POST /api/v1/garden/consult`  … AI 相談（写真 → 診断・アドバイス）
+ * - `POST /api/v1/garden/harvest`  … 収穫の写真記録（写真 → 作物と個数）
+ * - `POST /api/v1/garden/identify` … 栽培登録の下書き（写真 → 作物名と品種）
  *
- * **2 つは別物として扱う。** 目的も出力の長さも単価も頻度も違うので、
- * プロンプト（`lib/garden-vision.ts` / `lib/harvest-vision.ts`）も
- * レート上限のプールも分けてある。
+ * **3 つは別物として扱う。** 目的も出力の長さも単価も頻度も違うので、
+ * プロンプト（`lib/garden-vision.ts` / `lib/harvest-vision.ts` /
+ * `lib/identify-vision.ts`）もレート上限のプールも分けてある。
+ *
+ * **既存の 2 本は登録に流用できない**（実測・2026-08-22）: consult は種袋に
+ * `{"isPlant": false}` しか返さず、harvest は育っている株を意図的に弾く。
  */
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
@@ -26,7 +30,14 @@ import {
   sanitize as sanitizeHarvest,
   type HarvestVisionProvider,
 } from '../lib/harvest-vision.js';
-import { checkRateLimit, GARDEN_POOL, HARVEST_POOL } from '../lib/rate-limit.js';
+import {
+  GeminiIdentifyVisionProvider,
+  IdentifyVisionConfigError,
+  IdentifyVisionRequestError,
+  sanitize as sanitizeIdentify,
+  type IdentifyVisionProvider,
+} from '../lib/identify-vision.js';
+import { checkRateLimit, GARDEN_POOL, HARVEST_POOL, IDENTIFY_POOL } from '../lib/rate-limit.js';
 import { parseOutputLocale } from '../lib/output-locale.js';
 
 const gardenRouter = new Hono();
@@ -204,6 +215,90 @@ gardenRouter.post('/harvest', zValidator('json', harvestSchema), async (c) => {
         code: 'AI_INFER_FAILED',
         message: '写真を読み取れませんでした。数量は手で入力できます。',
         retryable: err instanceof HarvestVisionRequestError,
+      },
+    });
+  }
+});
+
+// ─── 栽培登録の下書き（saien-techo#139 / #149） ─────────────────────────────
+
+const identifySchema = z.object({
+  imageBase64: z.string().min(1, '画像が空です').max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  /**
+   * 端末が持っている作物マスターの名前。表記ゆれを抑える手がかり（任意）。
+   * さいえん手帳は 30 作物なので、上限はそれを少し超える程度にしてある。
+   */
+  knownCrops: z.array(z.string().max(50)).max(40).optional(),
+  locale: z.enum(['ja', 'en']).optional(),
+});
+
+let identifyProviderOverride: IdentifyVisionProvider | null = null;
+
+export function setIdentifyProviderForTesting(provider: IdentifyVisionProvider | null): void {
+  identifyProviderOverride = provider;
+}
+
+function resolveIdentifyProvider(): IdentifyVisionProvider {
+  return identifyProviderOverride ?? new GeminiIdentifyVisionProvider();
+}
+
+gardenRouter.post('/identify', zValidator('json', identifySchema), async (c) => {
+  // **相談とも収穫とも別のプール。** 登録はインストール直後に集中し、
+  // その後はほとんど呼ばれない。同じ枠に混ぜると初回の一括登録が
+  // 日常の相談・収穫を締め出す（プールを分けた元の理由と同じ）。
+  const rate = checkRateLimit(clientIp(c), IDENTIFY_POOL);
+  if (!rate.allowed) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'RATE_LIMITED',
+        message:
+          rate.scope === 'global'
+            ? '本日の利用上限に達しました。時間をおいてお試しください。'
+            : '本日の利用上限に達しました。',
+        retryable: false,
+      },
+    });
+  }
+
+  const { imageBase64, mimeType, knownCrops, locale } = c.req.valid('json');
+
+  let provider: IdentifyVisionProvider;
+  try {
+    provider = resolveIdentifyProvider();
+  } catch (err) {
+    if (err instanceof IdentifyVisionConfigError) {
+      return c.json({
+        ok: false,
+        error: {
+          code: 'AI_API_UNAVAILABLE',
+          message: '写真からの登録が利用できません',
+          retryable: false,
+        },
+      });
+    }
+    throw err;
+  }
+
+  try {
+    const raw = await provider.analyze({
+      imageBase64,
+      mimeType,
+      ...(knownCrops !== undefined && { knownCrops }),
+      outputLocale: parseOutputLocale(locale),
+    });
+    // **必ずここを通す。** provider が何を返しても、台帳に載る値は境界で検める。
+    // とくに株の写真に付いてきた品種はここで落とす（幻覚が台帳に載るのを防ぐ）。
+    return c.json({ ok: true, data: sanitizeIdentify(raw) });
+  } catch (err) {
+    console.error('[garden/identify] failed:', err instanceof Error ? err.message : String(err));
+    return c.json({
+      ok: false,
+      error: {
+        code: 'AI_INFER_FAILED',
+        message: '写真を読み取れませんでした。作物名は手で入力できます。',
+        retryable: err instanceof IdentifyVisionRequestError,
       },
     });
   }

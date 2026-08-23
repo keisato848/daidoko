@@ -8,6 +8,7 @@ import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { RecipeForm } from '../../../src/components/RecipeForm';
+import { SourceBanner } from '../../../src/components/SourceBanner';
 import { Toast } from '../../../src/components/Toast';
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { Colors } from '../../../src/constants/theme';
@@ -150,14 +151,13 @@ export default function ImportUrlScreen() {
   return (
     <KeyboardAvoider style={styles.container}>
       {draft?.sourceName && (
-        <View style={styles.sourceBanner}>
-          <Globe size={12} color={Colors.goldDim} />
-          <Text style={styles.sourceName}>
-            {t('recipeImport.url.sourceLabel')} {draft.sourceName}
-          </Text>
-        </View>
+        <SourceBanner
+          icon={<Globe size={12} color={Colors.goldDim} />}
+          text={`${t('recipeImport.url.sourceLabel')} ${draft.sourceName}`}
+        />
       )}
       <RecipeForm
+        topInset={!draft?.sourceName}
         initialValues={draft ? draftToFormData(draft) : undefined}
         onSubmit={handleSave}
         onCancel={() => setPhase('input')}
@@ -263,20 +263,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.bg,
     letterSpacing: 1,
-  },
-  sourceBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: '#1C1409',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  sourceName: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: Colors.goldDim,
   },
 });

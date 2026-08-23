@@ -10,7 +10,6 @@ import { Check, Crown, Gift, KeyRound, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Pressable,
   ScrollView,
@@ -24,6 +23,7 @@ import { Colors } from '../../../src/constants/theme';
 import { t, tCount } from '../../../src/i18n';
 import { getAdRewardProvider, isAdRewardAvailable } from '../../../src/services/ad-reward.service';
 import type { PreparedRewardedAd } from '../../../src/services/ad-reward.types';
+import { dialog } from '../../../src/services/dialog.service';
 import {
   getEntitlementProvider,
   isEntitlementConfigured,
@@ -114,13 +114,17 @@ export default function PaywallScreen() {
       if (rewarded) {
         const newBalance = await grantAdBonus();
         setTokenBalance(newBalance);
-        Alert.alert(t('paywall.thanksTitle'), tCount('paywall.adGranted', newBalance));
+        // 直後に画面を離れるのでトーストでは見えない。通知ダイアログのまま（§7-1）
+        await dialog.alert({
+          title: t('paywall.thanksTitle'),
+          message: tCount('paywall.adGranted', newBalance),
+        });
         router.back();
         return;
       }
       void loadAd(); // 途中で閉じた — 次の 1 枚を用意する
     } catch {
-      Alert.alert(t('paywall.noticeTitle'), t('paywall.adFailed'));
+      void dialog.alert({ title: t('paywall.noticeTitle'), message: t('paywall.adFailed') });
       void loadAd();
     } finally {
       setBusy(false);
@@ -132,14 +136,14 @@ export default function PaywallScreen() {
     try {
       const outcome = await getEntitlementProvider().purchasePremium();
       if (outcome.success) {
-        Alert.alert(t('paywall.thanksTitle'), t('paywall.subscribed'));
+        await dialog.alert({ title: t('paywall.thanksTitle'), message: t('paywall.subscribed') });
         router.back();
       }
       // cancelled === true: the user backed out — stay quietly on the paywall.
     } catch (error) {
       const message =
         error instanceof EntitlementUnavailableError ? error.message : t('paywall.purchaseFailed');
-      Alert.alert(t('paywall.noticeTitle'), message);
+      void dialog.alert({ title: t('paywall.noticeTitle'), message });
     } finally {
       setBusy(false);
     }
@@ -150,13 +154,19 @@ export default function PaywallScreen() {
     try {
       const restored = await getEntitlementProvider().restore();
       if (restored) {
-        Alert.alert(t('paywall.restoredTitle'), t('paywall.restoredBody'));
+        await dialog.alert({
+          title: t('paywall.restoredTitle'),
+          message: t('paywall.restoredBody'),
+        });
         router.back();
       } else {
-        Alert.alert(t('paywall.noticeTitle'), t('paywall.nothingToRestore'));
+        void dialog.alert({
+          title: t('paywall.noticeTitle'),
+          message: t('paywall.nothingToRestore'),
+        });
       }
     } catch {
-      Alert.alert(t('paywall.noticeTitle'), t('paywall.restoreFailed'));
+      void dialog.alert({ title: t('paywall.noticeTitle'), message: t('paywall.restoreFailed') });
     } finally {
       setBusy(false);
     }

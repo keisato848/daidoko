@@ -11,7 +11,6 @@ import { ChevronLeft, Copy, LogOut, RefreshCw, Trash2, UserPlus, Users } from 'l
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   Share,
   StyleSheet,
@@ -22,8 +21,10 @@ import {
 
 import { Avatar } from '../../src/components/Avatar';
 import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
+import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
+import { dialog } from '../../src/services/dialog.service';
 import {
   SyncError,
   createSyncGroup,
@@ -133,6 +134,7 @@ export default function FamilyScreen() {
   const [saving, setSaving] = useState(false);
   const [cloud, setCloud] = useState<CloudPhase>({ kind: 'loading' });
   const [syncBusy, setSyncBusy] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const [nextUser, nextFamily, nextMembers] = await Promise.all([
@@ -181,7 +183,7 @@ export default function FamilyScreen() {
         await refresh();
       } catch (error) {
         const message = error instanceof Error ? error.message : t('family.saveFailed');
-        Alert.alert(t('family.saveFailedTitle'), message);
+        void dialog.alert({ title: t('family.saveFailedTitle'), message });
       } finally {
         setSaving(false);
       }
@@ -207,17 +209,15 @@ export default function FamilyScreen() {
     });
   };
 
-  const handleRemoveMember = (member: FamilyMember) => {
-    Alert.alert(t('family.removeTitle'), t('family.removeConfirm', { name: member.displayName }), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.delete'),
-        style: 'destructive',
-        onPress: () => {
-          void runAction(async () => removeFamilyMember(member.id));
-        },
-      },
-    ]);
+  const handleRemoveMember = async (member: FamilyMember) => {
+    const confirmed = await dialog.confirm({
+      title: t('family.removeTitle'),
+      message: t('family.removeConfirm', { name: member.displayName }),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await runAction(async () => removeFamilyMember(member.id));
   };
 
   /** 同期 API を1つ実行する共通処理。失敗は SyncError を人間の言葉にして出す */
@@ -227,7 +227,7 @@ export default function FamilyScreen() {
       try {
         await action();
       } catch (err) {
-        Alert.alert(t('family.sync.errorTitle'), syncErrorText(err));
+        void dialog.alert({ title: t('family.sync.errorTitle'), message: syncErrorText(err) });
         // グループが消えていた場合は表示も未参加へ戻す
         if (err instanceof SyncError && err.code === 'AUTH_INVALID') await loadCloud();
       } finally {
@@ -279,87 +279,77 @@ export default function FamilyScreen() {
       };
     };
 
-    return new Promise<() => Promise<void>>((resolve) => {
-      Alert.alert(
-        t('pantry.shared.askTitle'),
-        t('pantry.shared.askBody'),
-        [
-          {
-            text: t('pantry.shared.askNo'),
-            onPress: () => {
-              void applyChoice(false).then(resolve, () => resolve(noop));
-            },
-          },
-          {
-            text: t('pantry.shared.askYes'),
-            onPress: () => {
-              void applyChoice(true).then(resolve, () => resolve(noop));
-            },
-          },
-        ],
-        // 外側タップで閉じられると「どちらでもない」まま参加してしまう
-        { cancelable: false },
-      );
+    // **答えが返るまで待つ**。ここを待たずに進めると D1 が戻る（上のコメント）。
+    // 背景タップ・戻るキーは `dialog.confirm` の却下側＝第 1 ボタンに倒れるので、
+    // 「共有しない」を第 1 ボタンに置くこと。逆にすると、確かめないまま
+    // 手元の買い物リストと在庫が家族へ出る
+    const share = await dialog.confirm({
+      title: t('pantry.shared.askTitle'),
+      message: t('pantry.shared.askBody'),
+      cancelLabel: t('pantry.shared.askNo'),
+      confirmLabel: t('pantry.shared.askYes'),
     });
+    return applyChoice(share).catch(() => noop);
   }, []);
 
   /** グループ作成。確認ダイアログが「何が共有されるか」への同意の瞬間（§5-2） */
-  const handleCreateGroup = () => {
-    Alert.alert(t('family.sync.consentTitle'), t('family.sync.consentBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('family.sync.create'),
-        onPress: () => {
-          void runSyncAction(async () => {
-            // 送信が始まる前に、いまある品目をどうするか決めておく
-            const revertShareChoice = await askShareExistingItems();
-            try {
-              // 表示名は送らない。サーバーは返さないので使い道が無く、
-              // 「サーバーに個人情報を置かない」（設計 §2）に反するだけになる
-              await createSyncGroup(null);
-            } catch (err) {
-              await revertShareChoice(); // 作れなかったのに決定だけ残さない
-              throw err;
-            }
-            // 参加した瞬間から共有が始まる。いまある蔵書を全部送信待ちへ積む（§5-2）
-            await onSyncGroupJoined();
-            await loadCloud();
-            Alert.alert(t('family.sync.createdTitle'), t('family.sync.createdBody'));
-          });
-        },
-      },
-    ]);
+  const handleCreateGroup = async () => {
+    const agreed = await dialog.confirm({
+      title: t('family.sync.consentTitle'),
+      message: t('family.sync.consentBody'),
+      confirmLabel: t('family.sync.create'),
+    });
+    if (!agreed) return;
+    await runSyncAction(async () => {
+      // 送信が始まる前に、いまある品目をどうするか決めておく
+      const revertShareChoice = await askShareExistingItems();
+      try {
+        // 表示名は送らない。サーバーは返さないので使い道が無く、
+        // 「サーバーに個人情報を置かない」（設計 §2）に反するだけになる
+        await createSyncGroup(null);
+      } catch (err) {
+        await revertShareChoice(); // 作れなかったのに決定だけ残さない
+        throw err;
+      }
+      // 参加した瞬間から共有が始まる。いまある蔵書を全部送信待ちへ積む（§5-2）
+      await onSyncGroupJoined();
+      await loadCloud();
+      // 次にやること（招待コードを家族に伝える）を含むのでトーストにしない（画面設計 §7-1）
+      await dialog.alert({
+        title: t('family.sync.createdTitle'),
+        message: t('family.sync.createdBody'),
+      });
+    });
   };
 
-  const handleJoinGroup = () => {
+  const handleJoinGroup = async () => {
     const code = joinCode.trim();
     if (!code) return;
-    Alert.alert(t('family.sync.consentTitle'), t('family.sync.consentBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('family.sync.join'),
-        onPress: () => {
-          void runSyncAction(async () => {
-            const revertShareChoice = await askShareExistingItems();
-            try {
-              await joinSyncGroup(code, null);
-            } catch (err) {
-              await revertShareChoice(); // 招待コードの打ち間違い等。決定だけ残さない
-              throw err;
-            }
-            setJoinCode('');
-            await onSyncGroupJoined();
-            await loadCloud();
-            Alert.alert(t('family.sync.joinedTitle'), t('family.sync.joinedBody'));
-          });
-        },
-      },
-    ]);
+    const agreed = await dialog.confirm({
+      title: t('family.sync.consentTitle'),
+      message: t('family.sync.consentBody'),
+      confirmLabel: t('family.sync.join'),
+    });
+    if (!agreed) return;
+    await runSyncAction(async () => {
+      const revertShareChoice = await askShareExistingItems();
+      try {
+        await joinSyncGroup(code, null);
+      } catch (err) {
+        await revertShareChoice(); // 招待コードの打ち間違い等。決定だけ残さない
+        throw err;
+      }
+      setJoinCode('');
+      await onSyncGroupJoined();
+      await loadCloud();
+      // 画面に留まる純粋な成功なのでトースト（docs/画面設計.md §7-1）
+      setToastMessage(t('family.sync.joinedBody'));
+    });
   };
 
   const handleShareInvite = (code: string) => {
     void Share.share({ message: t('family.sync.shareMessage', { code }) }).catch(() => {
-      Alert.alert(t('family.sync.inviteLabel'), code);
+      void dialog.alert({ title: t('family.sync.inviteLabel'), message: code });
     });
   };
 
@@ -374,58 +364,48 @@ export default function FamilyScreen() {
    * 端末を外す（#209）。紛失・初期化した端末の幽霊を消す入口。
    * 端末には名前が無いので「最終同期 N 日前」だけで見分ける（§0-2: 個人情報を持たない）。
    */
-  const handleEvictDevice = (deviceId: string, lastSeenAt: string) => {
-    Alert.alert(
-      t('family.sync.devices.evictTitle'),
-      t('family.sync.devices.evictBody', { when: formatLastSeen(lastSeenAt) }),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('family.sync.devices.evict'),
-          style: 'destructive',
-          onPress: () => {
-            void runSyncAction(async () => {
-              await evictSyncDevice(deviceId);
-              await loadCloud();
-            });
-          },
-        },
-      ],
-    );
+  const handleEvictDevice = async (deviceId: string, lastSeenAt: string) => {
+    const confirmed = await dialog.confirm({
+      title: t('family.sync.devices.evictTitle'),
+      message: t('family.sync.devices.evictBody', { when: formatLastSeen(lastSeenAt) }),
+      confirmLabel: t('family.sync.devices.evict'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await runSyncAction(async () => {
+      await evictSyncDevice(deviceId);
+      await loadCloud();
+    });
   };
 
-  const handleLeaveGroup = () => {
-    Alert.alert(t('family.sync.leaveConfirmTitle'), t('family.sync.leaveConfirmBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('family.sync.leave'),
-        style: 'destructive',
-        onPress: () => {
-          void runSyncAction(async () => {
-            await leaveSyncGroup();
-            await onSyncGroupLeft();
-            await loadCloud();
-          });
-        },
-      },
-    ]);
+  const handleLeaveGroup = async () => {
+    const confirmed = await dialog.confirm({
+      title: t('family.sync.leaveConfirmTitle'),
+      message: t('family.sync.leaveConfirmBody'),
+      confirmLabel: t('family.sync.leave'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await runSyncAction(async () => {
+      await leaveSyncGroup();
+      await onSyncGroupLeft();
+      await loadCloud();
+    });
   };
 
-  const handleDeleteGroup = () => {
-    Alert.alert(t('family.sync.deleteConfirmTitle'), t('family.sync.deleteConfirmBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.delete'),
-        style: 'destructive',
-        onPress: () => {
-          void runSyncAction(async () => {
-            await deleteSyncGroup();
-            await onSyncGroupLeft();
-            await loadCloud();
-          });
-        },
-      },
-    ]);
+  const handleDeleteGroup = async () => {
+    const confirmed = await dialog.confirm({
+      title: t('family.sync.deleteConfirmTitle'),
+      message: t('family.sync.deleteConfirmBody'),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await runSyncAction(async () => {
+      await deleteSyncGroup();
+      await onSyncGroupLeft();
+      await loadCloud();
+    });
   };
 
   const hasProfileChanges =
@@ -499,7 +479,7 @@ export default function FamilyScreen() {
                 <Text style={styles.memberRole}>{roleLabel(member.role)}</Text>
               </View>
               {member.role !== 'owner' && (
-                <Pressable onPress={() => handleRemoveMember(member)} hitSlop={10}>
+                <Pressable onPress={() => void handleRemoveMember(member)} hitSlop={10}>
                   <Trash2 size={17} color="#FF6B6B" />
                 </Pressable>
               )}
@@ -552,7 +532,7 @@ export default function FamilyScreen() {
               <Text style={styles.syncInfo}>{t('family.sync.introNone')}</Text>
               <Pressable
                 style={[styles.primaryButton, syncBusy && styles.buttonDisabled]}
-                onPress={handleCreateGroup}
+                onPress={() => void handleCreateGroup()}
                 disabled={syncBusy}
               >
                 <Text style={styles.primaryButtonText}>{t('family.sync.create')}</Text>
@@ -571,7 +551,7 @@ export default function FamilyScreen() {
                 />
                 <Pressable
                   style={[styles.iconButton, !canJoin && styles.buttonDisabled]}
-                  onPress={handleJoinGroup}
+                  onPress={() => void handleJoinGroup()}
                   disabled={!canJoin}
                   accessibilityLabel={t('family.sync.join')}
                 >
@@ -638,7 +618,7 @@ export default function FamilyScreen() {
                       </Text>
                       {cloud.me.isOwner && !device.isSelf && (
                         <Pressable
-                          onPress={() => handleEvictDevice(device.id, device.lastSeenAt)}
+                          onPress={() => void handleEvictDevice(device.id, device.lastSeenAt)}
                           disabled={syncBusy}
                           hitSlop={8}
                           accessibilityLabel={t('family.sync.devices.evict')}
@@ -652,7 +632,7 @@ export default function FamilyScreen() {
               )}
               <Pressable
                 style={[styles.leaveButton, syncBusy && styles.buttonDisabled]}
-                onPress={handleLeaveGroup}
+                onPress={() => void handleLeaveGroup()}
                 disabled={syncBusy}
               >
                 <LogOut size={15} color="#FF6B6B" />
@@ -661,7 +641,7 @@ export default function FamilyScreen() {
               {cloud.me.isOwner && (
                 <Pressable
                   style={[styles.deleteGroupButton, syncBusy && styles.buttonDisabled]}
-                  onPress={handleDeleteGroup}
+                  onPress={() => void handleDeleteGroup()}
                   disabled={syncBusy}
                 >
                   <Trash2 size={15} color="#FF6B6B" />
@@ -672,6 +652,12 @@ export default function FamilyScreen() {
           )}
         </View>
       </KeyboardAwareScroll>
+
+      <Toast
+        message={toastMessage ?? ''}
+        visible={toastMessage != null}
+        onDismiss={() => setToastMessage(null)}
+      />
     </View>
   );
 }
