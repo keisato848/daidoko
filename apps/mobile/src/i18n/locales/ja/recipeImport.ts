@@ -3,6 +3,8 @@
  *
  * 写真からの AI 生成は `recipe.photo` にある（主役の入口なので分けている）。
  */
+import type { CriticalMessage, PluralMessage } from '../../types';
+
 const recipeImport = {
   formTitle: 'レシピを確認・編集',
   saved: 'レシピを保存しました',
@@ -83,6 +85,45 @@ const recipeImport = {
     labelSummary: '画像ラベル: {{labels}}',
   },
 
+  /**
+   * 紙面（レシピ本・食品パッケージ・手書きメモ）に**書かれている**レシピの読み取り。
+   * 端末内 OCR から AI に置き換えた（`docs/レシピ推論の評価設計.md` §10）。
+   */
+  page: {
+    title: '文字入り画像から読み取り',
+    heading: 'レシピが載っている紙面を読み取り',
+    lead: 'レシピ本・食品パッケージ・手書きメモに書かれている材料と作り方を、AI が読み取って下書きにします。',
+    formTitle: '読み取り結果を確認・編集',
+    reading: '紙面を読み取っています...',
+
+    /** 表と裏で 1 つのレシピになることを、**撮る前に**伝える */
+    multiHint: '材料の面と作り方の面が分かれているときは、続けて撮ってください（{{max}} 枚まで）。',
+    /** 実行ボタン。何が起きるかを動詞で書く */
+    read: '読み取る',
+    /** 裏面だけを撮ると料理名が無いのは普通。責めずに何をすればよいかだけ伝える */
+    titleMissing: '料理名は読み取れませんでした。入力してください',
+    addMore: '追加',
+    removePage: 'この写真を外す',
+    /** 上限に達したとき。追加タイルの代わりに出す */
+    limitReached: { one: '{{count}} 枚まで', other: '{{count}} 枚まで' } satisfies PluralMessage,
+
+    /**
+     * 送信先の開示。**書かないと不当な収集になる**ので A 階層。
+     * 端末内 OCR のときは不要だったが、AI に寄せたので必須になった。
+     */
+    disclosure: {
+      text: '写真は読み取りのためサーバー（AI 提供元）に送信されます。保存はされません。',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    } satisfies CriticalMessage,
+
+    failed: '紙面を読み取れませんでした。時間をおいてお試しください。',
+    notFound: 'レシピを読み取れませんでした。材料と作り方が書かれた面を撮ってお試しください。',
+    offlineNotice: 'インターネットにつながっていると、紙面からレシピをつくれます',
+  },
+
   /** 作りたいものを相談してレシピにする。写真からレシピと違い、まだ料理が無いときの入口。 */
   consult: {
     title: '相談しながらつくる',
@@ -103,6 +144,22 @@ const recipeImport = {
     restart: '最初からやり直す',
     restartConfirm: 'これまでの会話と下書きを消して、最初からやり直しますか？',
     disclaimer: 'アレルギーの有無は判定できません。材料はご自身で確認してください。',
+
+    /** 写真を添えて相談する（冷蔵庫の中身・食材・参考にしたい料理）。 */
+    attachPhoto: '写真を添える',
+    attachedPhoto: '添えた写真',
+    removePhoto: 'この写真を外す',
+    photoHint: '冷蔵庫の中身や、参考にしたい料理の写真を添えられます',
+    /**
+     * 送信先の開示。**写真を添えたときだけ出す**（文字だけの相談では写真は出ない）。
+     */
+    photoDisclosure: {
+      text: '添えた写真は相談のためサーバー（AI 提供元）に送信されます。保存はされません。',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    } satisfies CriticalMessage,
     firstMessage:
       '何を作りましょうか。「あっさりした麺類」「冷蔵庫の鶏むねを使いたい」など、ざっくりで大丈夫です。',
   },

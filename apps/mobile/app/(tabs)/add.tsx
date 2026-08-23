@@ -1,6 +1,5 @@
 /**
- * S08: Add Recipe — Method selection bottom sheet
- * Entry point for manual, text, URL, photo inference, and OCR-based recipe creation.
+ * S08: レシピ追加の入口。**手元に何があるか**で 3 グループに分けて出す。
  */
 import { useRouter } from 'expo-router';
 import {
@@ -12,7 +11,7 @@ import {
   PenLine,
 } from 'lucide-react-native';
 import { useRef } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
@@ -27,49 +26,67 @@ interface MethodOption {
   id: MethodId;
   icon: React.ReactNode;
   enabled: boolean;
-  /** 端末内 ML Kit を使う機能は Android のみ（iOS 版がないため入口を隠す）。 */
-  androidOnly?: boolean;
 }
 
-// 主役（写真からレシピ）を先頭に置く。以前は 5 択の 4 番目で、上に手動・テキスト・URL が
-// 並んでいた（`docs/お店の味を再現設計.md` §4.3 問題2）。手動入力は最後でよい。
-// **文言は定数に持たせない。** import 時のロケールで固定されてしまう。
-// ここには見た目の定義（アイコン・並び・対応 OS）だけを置き、
-// ラベルと説明は描画のたびに辞書から引く
-const METHODS: MethodOption[] = [
+/**
+ * 入口は**手元に何があるか**で 3 つに束ねる（2026-08-23）。
+ *
+ * | グループ | 何を持っているか | AI の無料枠 |
+ * | --- | --- | --- |
+ * | 写真から | 料理そのもの / レシピが載っている紙面 | 使う |
+ * | 相談しながら決める | まだ何も無い | 使う |
+ * | 文字から | リンク・貼り付け・自分で書く | **使わない** |
+ *
+ * 「文字入り画像から」は**写真のグループ**に置く。中身が端末内 OCR から AI へ変わり、
+ * 「写真を撮って AI に読ませる」点で写真からレシピと同じ性質になったため
+ * （`docs/レシピ推論の評価設計.md` §10）。
+ *
+ * **文言は定数に持たせない。** import 時のロケールで固定されてしまうので、
+ * ここには見た目の定義（アイコン・並び・対応 OS）だけを置き、
+ * ラベルと説明は描画のたびに辞書から引く。
+ */
+type MethodGroupId = 'photo' | 'consult' | 'text';
+
+interface MethodGroup {
+  id: MethodGroupId;
+  methods: MethodOption[];
+}
+
+const METHOD_GROUPS: MethodGroup[] = [
   {
     id: 'photo',
-    icon: <Camera size={24} color={Colors.gold} />,
-    enabled: true,
+    methods: [
+      { id: 'photo', icon: <Camera size={24} color={Colors.gold} />, enabled: true },
+      { id: 'ocr', icon: <ImageIcon size={24} color={Colors.gold} />, enabled: true },
+    ],
   },
   {
-    // 写真の次。写真は「目の前に料理がある」とき、相談は「まだ料理が無い」とき
     id: 'consult',
-    icon: <MessagesSquare size={24} color={Colors.gold} />,
-    enabled: true,
-  },
-  {
-    id: 'url',
-    icon: <Globe size={24} color={Colors.gold} />,
-    enabled: true,
+    methods: [
+      { id: 'consult', icon: <MessagesSquare size={24} color={Colors.gold} />, enabled: true },
+    ],
   },
   {
     id: 'text',
-    icon: <FileText size={24} color={Colors.gold} />,
-    enabled: true,
-  },
-  {
-    id: 'ocr',
-    icon: <ImageIcon size={24} color={Colors.gold} />,
-    enabled: true,
-    androidOnly: true,
-  },
-  {
-    id: 'manual',
-    icon: <PenLine size={24} color={Colors.gold} />,
-    enabled: true,
+    methods: [
+      { id: 'url', icon: <Globe size={24} color={Colors.gold} />, enabled: true },
+      { id: 'text', icon: <FileText size={24} color={Colors.gold} />, enabled: true },
+      { id: 'manual', icon: <PenLine size={24} color={Colors.gold} />, enabled: true },
+    ],
   },
 ];
+
+function groupLabel(id: MethodGroupId): string {
+  if (id === 'photo') return t('recipe.add.group.photo');
+  if (id === 'consult') return t('recipe.add.group.consult');
+  return t('recipe.add.group.text');
+}
+
+function groupNote(id: MethodGroupId): string {
+  if (id === 'photo') return t('recipe.add.group.photoNote');
+  if (id === 'consult') return t('recipe.add.group.consultNote');
+  return t('recipe.add.group.textNote');
+}
 
 function methodLabel(id: MethodId): string {
   if (id === 'photo') return t('recipe.add.method.photo');
@@ -88,10 +105,6 @@ function methodDescription(id: MethodId): string {
   if (id === 'ocr') return t('recipe.add.method.ocrDescription');
   return t('recipe.add.method.manualDescription');
 }
-
-const VISIBLE_METHODS = METHODS.filter(
-  (method) => !method.androidOnly || Platform.OS === 'android',
-);
 
 export default function AddScreen() {
   const router = useRouter();
@@ -156,27 +169,37 @@ export default function AddScreen() {
       </View>
       <Text style={styles.subheading}>{t('recipe.add.subheading')}</Text>
 
-      <View style={styles.methods}>
-        {VISIBLE_METHODS.map((method) => (
-          <View key={method.id} ref={coachRefFor(method.id)} collapsable={false}>
-            <PressableScale
-              style={[styles.methodCard, !method.enabled && styles.methodCardDisabled]}
-              onPress={() => handleSelect(method)}
-            >
-              <View style={styles.methodIcon}>{method.icon}</View>
-              <View style={styles.methodText}>
-                <Text style={[styles.methodLabel, !method.enabled && styles.methodLabelDisabled]}>
-                  {methodLabel(method.id)}
-                </Text>
-                <Text style={styles.methodDescription}>{methodDescription(method.id)}</Text>
-                {!method.enabled && (
-                  <Text style={styles.comingSoon}>{t('settings.comingSoonStatus')}</Text>
-                )}
+      <ScrollView contentContainerStyle={styles.methods}>
+        {METHOD_GROUPS.map((group) => (
+          <View key={group.id} style={styles.group}>
+            <View style={styles.groupHeader}>
+              <Text style={styles.groupLabel}>{groupLabel(group.id)}</Text>
+              <Text style={styles.groupNote}>{groupNote(group.id)}</Text>
+            </View>
+            {group.methods.map((method) => (
+              <View key={method.id} ref={coachRefFor(method.id)} collapsable={false}>
+                <PressableScale
+                  style={[styles.methodCard, !method.enabled && styles.methodCardDisabled]}
+                  onPress={() => handleSelect(method)}
+                >
+                  <View style={styles.methodIcon}>{method.icon}</View>
+                  <View style={styles.methodText}>
+                    <Text
+                      style={[styles.methodLabel, !method.enabled && styles.methodLabelDisabled]}
+                    >
+                      {methodLabel(method.id)}
+                    </Text>
+                    <Text style={styles.methodDescription}>{methodDescription(method.id)}</Text>
+                    {!method.enabled && (
+                      <Text style={styles.comingSoon}>{t('settings.comingSoonStatus')}</Text>
+                    )}
+                  </View>
+                </PressableScale>
               </View>
-            </PressableScale>
+            ))}
           </View>
         ))}
-      </View>
+      </ScrollView>
 
       <CoachMarkOverlay
         visible={coach.visible}
@@ -216,7 +239,25 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   methods: {
-    gap: 12,
+    gap: 22,
+    paddingBottom: 32,
+  },
+  group: {
+    gap: 10,
+  },
+  groupHeader: {
+    gap: 2,
+    paddingHorizontal: 2,
+  },
+  groupLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.gold,
+    letterSpacing: 0.5,
+  },
+  groupNote: {
+    fontSize: 11,
+    color: Colors.muted,
   },
   methodCard: {
     flexDirection: 'row',

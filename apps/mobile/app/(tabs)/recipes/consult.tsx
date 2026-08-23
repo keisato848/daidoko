@@ -8,10 +8,11 @@
  * のは、写真レシピ・感想調整と同じ約束（docs/フリーミアム設計.md）。
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, RotateCcw, Send } from 'lucide-react-native';
+import { ChevronLeft, ImagePlus, RotateCcw, Send, X } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +22,14 @@ import {
   View,
 } from 'react-native';
 
+import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
+import {
+  capturePhoto,
+  PhotoCaptureCancelledError,
+  type CapturedPhoto,
+  type PhotoCaptureSource,
+} from '../../../src/services/photo-capture.service';
+import { MAX_CONSULT_IMAGES_PER_MESSAGE } from '../../../src/services/recipe-consult.provider';
 import { GroupMultiChips } from '../../../src/components/GroupMultiChips';
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { RecipeForm } from '../../../src/components/RecipeForm';
@@ -63,6 +72,8 @@ export default function ConsultScreen() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [usePantry, setUsePantry] = useState(false);
+  /** 次の発言に添える写真（端末内パス）。送ったら空に戻す */
+  const [pendingPhotos, setPendingPhotos] = useState<CapturedPhoto[]>([]);
   const [pantryGroups, setPantryGroups] = useState<string[]>([]);
   /** 送る置き場所。**空 = すべて**（置き場所を使っていない人は何も選ばずに済む） */
   const [pantryGroupFilter, setPantryGroupFilter] = useState<string[]>([]);
@@ -89,6 +100,21 @@ export default function ConsultScreen() {
     return () => clearTimeout(id);
   }, [messages, busy]);
 
+  const addPhoto = useCallback(async (source: PhotoCaptureSource) => {
+    setErrorMsg(null);
+    try {
+      const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
+      setPendingPhotos((current) => [...current, photo].slice(0, MAX_CONSULT_IMAGES_PER_MESSAGE));
+    } catch (error) {
+      if (error instanceof PhotoCaptureCancelledError) return;
+      setErrorMsg(t('common.photoAddFailed'));
+    }
+  }, []);
+
+  const removePhoto = useCallback((index: number) => {
+    setPendingPhotos((current) => current.filter((_, i) => i !== index));
+  }, []);
+
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || busy) return;
@@ -102,9 +128,16 @@ export default function ConsultScreen() {
     }
     if (gate !== 'ready') return;
 
-    const next: ConsultMessage[] = [...messages, { role: 'user', text }];
+    const photos = pendingPhotos;
+    const next: ConsultMessage[] = [
+      ...messages,
+      photos.length > 0
+        ? { role: 'user', text, imageUris: photos.map((photo) => photo.localPath) }
+        : { role: 'user', text },
+    ];
     setMessages(next);
     setInput('');
+    setPendingPhotos([]);
     setErrorMsg(null);
     setBusy(true);
     try {
@@ -127,11 +160,12 @@ export default function ConsultScreen() {
       // 失敗した発言は入力欄に戻す。打ち直させない
       setMessages(messages);
       setInput(text);
+      setPendingPhotos(photos);
       setErrorMsg(err instanceof ConsultError ? err.message : t('error.photoRecipeFailed'));
     } finally {
       setBusy(false);
     }
-  }, [input, busy, messages, draft, usePantry, pantryGroupFilter, router]);
+  }, [input, busy, messages, draft, usePantry, pantryGroupFilter, pendingPhotos, router]);
 
   const handleRestart = async () => {
     const confirmed = await dialog.confirm({
@@ -270,7 +304,43 @@ export default function ConsultScreen() {
         />
       )}
 
+      {pendingPhotos.length > 0 && (
+        <View style={styles.pendingRow}>
+          {pendingPhotos.map((photo, index) => (
+            <View key={`${photo.localPath}-${index}`} style={styles.pendingThumbWrap}>
+              <Image source={{ uri: photo.localPath }} style={styles.pendingThumb} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('recipeImport.consult.removePhoto')}
+                style={styles.pendingRemove}
+                onPress={() => removePhoto(index)}
+                hitSlop={8}
+                disabled={busy}
+              >
+                <X size={12} color={Colors.bg} />
+              </Pressable>
+            </View>
+          ))}
+          {/* 送信先の開示。**送る前に見えている**必要があるので写真の隣に置く */}
+          <Text style={styles.pendingDisclosure}>{t('recipeImport.consult.photoDisclosure')}</Text>
+        </View>
+      )}
+
       <View style={styles.composer}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('recipeImport.consult.attachPhoto')}
+          style={[
+            styles.attachButton,
+            (busy || pendingPhotos.length >= MAX_CONSULT_IMAGES_PER_MESSAGE) &&
+              styles.attachButtonDisabled,
+          ]}
+          onPress={() => void addPhoto('camera')}
+          onLongPress={() => void addPhoto('gallery')}
+          disabled={busy || pendingPhotos.length >= MAX_CONSULT_IMAGES_PER_MESSAGE}
+        >
+          <ImagePlus size={19} color={Colors.gold} />
+        </Pressable>
         <TextInput
           style={styles.input}
           value={input}
@@ -351,6 +421,57 @@ const styles = StyleSheet.create({
   pantryLabels: { flex: 1, paddingRight: 12 },
   pantryLabel: { fontSize: 15, color: Colors.paper },
   pantrySubtitle: { fontSize: 12, color: Colors.muted, marginTop: 2 },
+  // 添えた写真は composer のすぐ上に置く。**送る前に見えている**ことが要る
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  pendingThumbWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  pendingThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  pendingRemove: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingDisclosure: {
+    flex: 1,
+    minWidth: 160,
+    fontSize: 10,
+    lineHeight: 15,
+    color: Colors.muted,
+  },
+  attachButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachButtonDisabled: {
+    opacity: 0.4,
+  },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',

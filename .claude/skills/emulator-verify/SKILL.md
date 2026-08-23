@@ -44,6 +44,30 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 `| tail` などに繋いでいると**パイプ側の終了コード 0 が返って成功に見える**。
 「ビルドし直したのに変更が反映されない」の正体がこれだったことがある。
 
+**インストールできて起動もするのに画面が真っ黒なら、APK に JS バンドルが入っていない。**
+`build-android.mjs` は `EXPO_PUBLIC_*` が変わると JS バンドルの出力を消して作り直させるが、
+このとき `intermediates/assets` まで消すため **`mergeReleaseAssets` の差分状態と食い違う**。
+症状は 2 段階で出る（2026-08-23 に実測）:
+
+1. 消した直後のビルドは通るが、**`index.android.bundle` の無い APK** ができる
+   （サイズが 50MB → 44MB のように急に落ちるのが手がかり）
+2. 次のビルドは `Cannot invoke "DataFile.getItems()" because "dataFile" is null` で失敗する
+
+```powershell
+# APK にバンドルがあるか（黒画面を見たら真っ先にこれ）
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::OpenRead($apk)
+$zip.Entries | Where-Object { $_.FullName -like "*index.android.bundle*" }
+```
+
+```bash
+# 直し方: マージの差分状態ごと消してから作り直す
+rm -rf apps/mobile/android/app/build/intermediates/incremental/mergeReleaseAssets \
+       apps/mobile/android/app/build/intermediates/assets \
+       apps/mobile/android/app/build/intermediates/merged_assets \
+       apps/mobile/android/app/build/intermediates/compressed_assets
+```
+
 インストールは常に `adb install -r`（`-r` なしはローカルデータ消失リスクで hook が ask）。
 
 ## 3. 画面遷移・確認
@@ -67,6 +91,21 @@ adb reverse --remove-all             # 本番構成検証時は必ず除去（�
 ```
 
 サーバーログの 200 応答で「端末から届いた」ことを裏どりする。
+
+**release ビルドではこの手が使えない。** `AndroidManifest` に `usesCleartextTraffic` が無く、
+targetSdk 28+ の既定は false なので **`http://localhost:...` への通信はブロックされる**
+（2026-08-23 に実測。`adb reverse` は張れているのにサーバーへ 1 件も届かない）。
+症状はアプリ側の「インターネットにつながっていません」で、**ネットワーク不通と見分けが付かない**。
+
+AI 機能を release ビルドで通したいときの代わりの手:
+
+- **BYOK 経路を使う**（設定 → 自分の AI キーに Gemini キーを入れる）。端末から Google へ
+  HTTPS 直通なのでサーバーが要らず、アプリ側の処理（base64 化・リクエスト組み立て・
+  応答の正規化・画面反映）は全部通る。**検証が終わったらキーを消す**
+- サーバー経路そのものを見たいなら Railway にデプロイして本番 URL で確認する
+
+**端末がそもそもオフラインでないかを先に見る。** Wi-Fi が切れているだけのことがある
+（`adb shell dumpsys wifi | grep "^Wi-Fi is"` / `adb shell svc wifi enable`）。
 
 ## 5. テスト写真の投入（AI 写真機能の E2E）
 

@@ -36,11 +36,19 @@ import { parseOutputLocale, parseUnitSystem } from '../lib/output-locale.js';
 import {
   ConsultConfigError,
   GeminiRecipeConsultProvider,
+  MAX_CONSULT_IMAGES,
   MAX_CONSULT_MESSAGES,
   type ConsultDraft,
   type RecipeConsultProvider,
 } from '../lib/recipe-consult.js';
 import { runRecipeConsultAgent } from '../agents/recipe-consult.agent.js';
+import {
+  GeminiRecipePageProvider,
+  MAX_RECIPE_PAGE_IMAGES,
+  RecipePageConfigError,
+  type RecipePageProvider,
+} from '../lib/recipe-page.js';
+import { runRecipePageAgent } from '../agents/recipe-page.agent.js';
 
 const inferRouter = new Hono();
 
@@ -153,6 +161,86 @@ export function setMealProviderForTesting(provider: MealVisionProvider | null): 
 function resolveMealProvider(): MealVisionProvider {
   return mealProviderOverride ?? new GeminiMealVisionProvider();
 }
+
+/**
+ * 紙面（レシピ本・パッケージ・手書きメモ）に**書かれている**レシピを読み取る。
+ *
+ * `/photo`（料理写真から推測する）とは**タスクが正反対**なので分けている。
+ * あちらは見えないものを補い、こちらは書いてあるものだけを写す。
+ * プロンプトの違いは `lib/recipe-page.ts` を参照。
+ *
+ * **最初から複数枚**を受ける。紙面は表に料理名・裏に材料と作り方のように分かれるのが
+ * 普通で、1 枚では完結しないため（`docs/レシピ推論の評価設計.md` §10）。
+ */
+const inferRecipePageSchema = z.object({
+  images: z
+    .array(
+      z.object({
+        imageBase64: z
+          .string()
+          .min(1, '画像が空です')
+          .max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
+        mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+      }),
+    )
+    .min(1, '画像がありません')
+    .max(MAX_RECIPE_PAGE_IMAGES, `画像は ${MAX_RECIPE_PAGE_IMAGES} 枚までです`),
+  context: z.string().max(1000, '補足テキストが長すぎます').optional(),
+  locale: z.enum(['ja', 'en']).optional(),
+  unitSystem: z.enum(['metric', 'imperial']).optional(),
+});
+
+let recipePageProviderOverride: RecipePageProvider | null = null;
+
+export function setRecipePageProviderForTesting(provider: RecipePageProvider | null): void {
+  recipePageProviderOverride = provider;
+}
+
+inferRouter.post('/recipe-page', zValidator('json', inferRecipePageSchema), async (c) => {
+  const clientId =
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous';
+  const rate = checkRateLimit(clientId);
+  if (!rate.allowed) {
+    const message =
+      rate.scope === 'global'
+        ? '本日の利用上限に達しました。時間をおいてお試しください。'
+        : '本日の利用上限に達しました。';
+    return c.json({ ok: false, error: { code: 'RATE_LIMITED', message, retryable: false } });
+  }
+
+  const { images, context, locale, unitSystem } = c.req.valid('json');
+
+  let provider: RecipePageProvider;
+  try {
+    provider = recipePageProviderOverride ?? new GeminiRecipePageProvider();
+  } catch (err) {
+    if (err instanceof RecipePageConfigError) {
+      return c.json({
+        ok: false,
+        error: {
+          code: 'AI_API_UNAVAILABLE',
+          message: 'AI 読み取りが利用できません',
+          retryable: false,
+        },
+      });
+    }
+    throw err;
+  }
+
+  const result = await runRecipePageAgent(
+    {
+      images,
+      ...(context !== undefined && { context }),
+      outputLocale: parseOutputLocale(locale),
+      unitSystem: parseUnitSystem(unitSystem),
+    },
+    provider,
+  );
+  // Always 200 — errors are in the response body (AgentResult pattern).
+  return c.json(result);
+});
 
 inferRouter.post('/meal', zValidator('json', inferMealSchema), async (c) => {
   const clientId =
@@ -441,6 +529,22 @@ const inferConsultSchema = z.object({
       z.object({
         role: z.enum(['user', 'assistant']),
         text: z.string().min(1, '発言が空です').max(2000, '発言が長すぎます'),
+        /**
+         * その発言に添えた写真（冷蔵庫の中身・食材・参考にしたい料理）。**任意**。
+         * 何枚まで実際にモデルへ載せるかは `pickRecentImages()` が新しい方から決める。
+         */
+        images: z
+          .array(
+            z.object({
+              imageBase64: z
+                .string()
+                .min(1, '画像が空です')
+                .max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
+              mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+            }),
+          )
+          .max(MAX_CONSULT_IMAGES)
+          .optional(),
       }),
     )
     .min(1, '相談する内容がありません')
@@ -519,7 +623,12 @@ inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) =
 
   const result = await runRecipeConsultAgent(
     {
-      messages,
+      // exactOptionalPropertyTypes: images は「無い」と「undefined」を区別する
+      messages: messages.map((message) => ({
+        role: message.role,
+        text: message.text,
+        ...(message.images !== undefined && { images: message.images }),
+      })),
       draft: snapshot,
       ...(pantry !== undefined && { pantry }),
       outputLocale: parseOutputLocale(locale),
