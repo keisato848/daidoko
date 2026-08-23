@@ -60,6 +60,9 @@ const STEP_PATTERN = /^(?:\d+|[０-９]+|[①②③④⑤⑥⑦⑧⑨⑩])[\.)�
 const BULLET_PATTERN = /^[・*\-−—]\s*/;
 const TITLE_PATTERN = /^(?:タイトル|レシピ名|name)[:：]\s*(.+)$/i;
 const SERVINGS_PATTERN = /(?:^|[:：\s　])(\d+|[０-９]+)\s*(?:人分|人前| servings?)/i;
+/** 見出しの末尾に付いた人数。「肉じゃが（2人分）」「肉じゃが(2人分)」「肉じゃが 2人分」。 */
+const TITLE_SERVINGS_SUFFIX_PATTERN =
+  /\s*[（(]?\s*(\d+|[０-９]+)\s*(?:人分|人前|servings?)\s*[)）]?\s*$/i;
 const COOK_TIME_PATTERN = /(?:調理時間|所要時間|cook(?:ing)? time)[:：\s　]*(\d+|[０-９]+)\s*分?/i;
 const PREP_TIME_PATTERN =
   /(?:下準備|準備時間|prep(?:aration)? time)[:：\s　]*(\d+|[０-９]+)\s*分?/i;
@@ -75,6 +78,17 @@ function normalizeDigits(value: string): string {
 function parsePositiveInt(value: string): number | undefined {
   const parsed = Number.parseInt(normalizeDigits(value), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+/**
+ * 見出しに人数が付いていたら分ける。OCR や手書きの見出しは「肉じゃが（2人分）」の形が多く、
+ * そのまま料理名にすると人数欄が空のまま料理名に「(2人分)」が残る（Pixel 9a で確認・2026-08-23）。
+ * 末尾に付いているときだけ扱い、本文中の人数表記には触らない。
+ */
+function splitTitleServings(value: string): { title: string; servings: number | undefined } {
+  const match = value.match(TITLE_SERVINGS_SUFFIX_PATTERN);
+  if (!match || match.index === undefined) return { title: value, servings: undefined };
+  return { title: value.slice(0, match.index).trim(), servings: parsePositiveInt(match[1]) };
 }
 
 function cleanLine(line: string): string {
@@ -167,12 +181,22 @@ export function parseRecipeText(rawText: string): ParsedRecipeText {
 
     const explicitTitle = line.match(TITLE_PATTERN);
     if (explicitTitle) {
-      title = explicitTitle[1].trim();
+      const split = splitTitleServings(explicitTitle[1].trim());
+      title = split.title;
+      servings = split.servings ?? servings;
       continue;
     }
 
     const servingsMatch = line.match(SERVINGS_PATTERN);
     if (servingsMatch) {
+      // 「肉じゃが 2人分」のように見出しと人数が 1 行のとき、人数だけ拾って見出しを
+      // 落とさない。「材料: 2人分」のようなラベル付きは見出しにしない
+      const split = !title && mode === 'unknown' ? splitTitleServings(line) : null;
+      if (split && split.title && !/[:：]$/.test(split.title)) {
+        title = split.title;
+        servings = split.servings;
+        continue;
+      }
       servings = parsePositiveInt(servingsMatch[1]);
       continue;
     }
@@ -190,7 +214,9 @@ export function parseRecipeText(rawText: string): ParsedRecipeText {
     }
 
     if (!title && mode === 'unknown') {
-      title = line.replace(/^#+\s*/, '');
+      const split = splitTitleServings(line.replace(/^#+\s*/, ''));
+      title = split.title;
+      servings = split.servings ?? servings;
       continue;
     }
 

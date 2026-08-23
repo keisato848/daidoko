@@ -149,3 +149,62 @@ describe('parseRecipeText', () => {
     ]);
   });
 });
+
+/**
+ * 見出しに付いた人数。OCR や手書きの見出しは「肉じゃが（2人分）」の形が多く、
+ * そのまま料理名にすると人数欄が空のまま料理名に「(2人分)」が残った（Pixel 9a・2026-08-23）。
+ */
+describe('parseRecipeText: 見出しの人数', () => {
+  it('全角括弧の人数を料理名から分けて人数欄に入れる', () => {
+    const result = parseRecipeText(`肉じゃが（2人分）
+
+材料
+じゃがいも 3個`);
+    expect(result.formData.title).toBe('肉じゃが');
+    expect(result.formData.servings).toBe(2);
+  });
+
+  it('半角括弧・括弧なしでも同じ', () => {
+    expect(
+      parseRecipeText(`肉じゃが(4人分)
+材料
+玉ねぎ 1個`).formData,
+    ).toMatchObject({
+      title: '肉じゃが',
+      servings: 4,
+    });
+    expect(
+      parseRecipeText(`肉じゃが 2人分
+材料
+玉ねぎ 1個`).formData,
+    ).toMatchObject({
+      title: '肉じゃが',
+      servings: 2,
+    });
+  });
+
+  it('「レシピ名:」の行でも分ける', () => {
+    const result = parseRecipeText(`レシピ名: 鮭の味噌焼き（3人前）
+材料
+鮭 3切れ`);
+    expect(result.formData).toMatchObject({ title: '鮭の味噌焼き', servings: 3 });
+  });
+
+  it('ラベル付きの人数行は見出しにしない', () => {
+    const result = parseRecipeText(`材料: 2人分
+じゃがいも 3個`);
+    expect(result.formData.title).not.toContain('材料');
+    expect(result.formData.servings).toBe(2);
+  });
+
+  it('人数の付いていない見出しはそのまま', () => {
+    expect(
+      parseRecipeText(`肉じゃが
+材料
+玉ねぎ 1個`).formData,
+    ).toMatchObject({
+      title: '肉じゃが',
+      servings: undefined,
+    });
+  });
+});

@@ -19,6 +19,7 @@ import {
 
 import { runOcrAgent, type OcrAgentOutput } from '../../../src/agents/ocr.agent';
 import { RecipeForm } from '../../../src/components/RecipeForm';
+import { SourceBanner } from '../../../src/components/SourceBanner';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
@@ -156,14 +157,12 @@ export default function ImportOcrScreen() {
     return (
       <View style={styles.container}>
         {ocrResult && (
-          <View style={styles.sourceBanner}>
-            <Camera size={12} color={Colors.goldDim} />
-            <Text style={styles.sourceName}>
-              {[accuracyLabel(ocrResult.confidence), ...ocrResult.warnings]
-                .filter(Boolean)
-                .join(' / ')}
-            </Text>
-          </View>
+          <SourceBanner
+            icon={<Camera size={12} color={Colors.goldDim} />}
+            text={[accuracyLabel(ocrResult.confidence), ...ocrResult.warnings]
+              .filter(Boolean)
+              .join(' / ')}
+          />
         )}
         <RecipeForm
           initialValues={ocrResult?.draft}
@@ -171,6 +170,7 @@ export default function ImportOcrScreen() {
           onCancel={() => setPhase('select')}
           title={t('recipeImport.ocr.formTitle')}
           submitLabel={t('common.save')}
+          topInset={false}
         />
         <Toast
           message={toastMessage ?? ''}
@@ -422,20 +422,5 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontSize: 12,
     color: Colors.muted,
-  },
-  sourceBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: '#130E08',
-  },
-  sourceName: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.goldDim,
   },
 });
