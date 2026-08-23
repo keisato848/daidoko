@@ -18,6 +18,13 @@ export interface CapturedPhoto {
 export interface PhotoCaptureAdapter {
   captureFromCamera: () => Promise<Omit<CapturedPhoto, 'source' | 'takenAt' | 'temporary'> | null>;
   pickFromGallery: () => Promise<Omit<CapturedPhoto, 'source' | 'takenAt' | 'temporary'> | null>;
+  /**
+   * ギャラリーから**複数枚**選ぶ。紙面は表と裏で 1 つのレシピになるので、
+   * 1 枚ずつ選ばせると往復が増える。持たないアダプタでは 1 枚選択に落ちる。
+   */
+  pickManyFromGallery?: (
+    limit: number,
+  ) => Promise<Omit<CapturedPhoto, 'source' | 'takenAt' | 'temporary'>[]>;
   deleteTemporaryFile?: (localPath: string) => Promise<void>;
   now?: () => string;
 }
@@ -73,6 +80,28 @@ export async function capturePhoto(
   }
   if (!photo) throw new PhotoCaptureCancelledError();
   return stampPhoto(photo, source, now);
+}
+
+/**
+ * ギャラリーから複数枚まとめて取る。**キャンセルは空配列**（例外にしない）。
+ * カメラは 1 回 1 枚しか撮れないので、複数枚は `capturePhoto('camera')` の繰り返しで作る。
+ */
+export async function capturePhotosFromGallery(
+  adapter: PhotoCaptureAdapter,
+  limit: number,
+): Promise<CapturedPhoto[]> {
+  const now = adapter.now ?? (() => new Date().toISOString());
+  markPhotoCaptureStart();
+  try {
+    if (!adapter.pickManyFromGallery) {
+      const single = await adapter.pickFromGallery();
+      return single ? [stampPhoto(single, 'gallery', now)] : [];
+    }
+    const picked = await adapter.pickManyFromGallery(limit);
+    return picked.slice(0, limit).map((photo) => stampPhoto(photo, 'gallery', now));
+  } finally {
+    markPhotoCaptureEnd();
+  }
 }
 
 export async function cleanupTemporaryPhotos(

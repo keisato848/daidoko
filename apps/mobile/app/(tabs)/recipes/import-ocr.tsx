@@ -1,15 +1,24 @@
 /**
- * S10: OCR Import screen
- * On native: camera capture → A2 OCRAgent → RecipeForm preview
- * On web / Expo Go: shows requirements and manual fallback
+ * S10: 紙面からレシピを読み取る画面。
+ *
+ * **中身は端末内 OCR から AI に置き換わった**（`docs/レシピ推論の評価設計.md` §10）。
+ * ML Kit は版面が少しでも複雑だと 1 文を断片に割ってしまい、実際のレシピ本や
+ * 食品パッケージでは成立しなかった。ルート名（`import-ocr`）は 8 ファイルが
+ * 参照しているのでそのまま。利用者に見える名前（「文字入り画像から作成」）も変わらない。
+ *
+ * 端末内 OCR との違い:
+ * - **写真がサーバーへ出る** → 開示を必ず出す（`recipeImport.page.disclosure`）
+ * - **無料枠を消費する** → `ensureInferenceCredit()` を通す
+ * - **オフラインでは使えない**
+ * - **iOS でも使える**（ML Kit は Android 限定だった）
+ * - **複数枚を 1 つのレシピにまとめられる**（表に料理名・裏に材料と作り方）
  */
 import { useRouter } from 'expo-router';
-import { Camera, Image as ImageIcon, PenLine, RotateCcw, X } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { Camera, Image as ImageIcon, PenLine, Plus, X } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,164 +26,125 @@ import {
   View,
 } from 'react-native';
 
-import { runOcrAgent, type OcrAgentOutput } from '../../../src/agents/ocr.agent';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { SourceBanner } from '../../../src/components/SourceBanner';
 import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
-import { t } from '../../../src/i18n';
-import { createRecipe } from '../../../src/services/recipe.service';
-import { createOcrSource } from '../../../src/services/source.service';
-import {
-  createClientOcrRecognizer,
-  isClientOcrAvailable,
-} from '../../../src/services/client-ocr.provider';
-import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
+import { t, tCount } from '../../../src/i18n';
+import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import {
-  ON_DEVICE_OCR_MAX_DIMENSION,
-  preprocessImageForOcr,
-} from '../../../src/services/image-preprocess.service';
-import {
   capturePhoto,
+  capturePhotosFromGallery,
   PhotoCaptureCancelledError,
+  UserFacingError,
   type CapturedPhoto,
-  type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
+import {
+  MAX_RECIPE_PAGE_IMAGES,
+  readRecipeFromPages,
+  RecipePageError,
+  type RecipePageResult,
+} from '../../../src/services/recipe-page.provider';
+import { createRecipe } from '../../../src/services/recipe.service';
+import { createOcrSource } from '../../../src/services/source.service';
+import { recordCloudInference } from '../../../src/services/usage.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 
 type Phase = 'select' | 'processing' | 'preview';
 
-const isAndroid = Platform.OS === 'android';
-
-function accuracyLabel(confidence: OcrAgentOutput['confidence']): string {
+function accuracyLabel(confidence: RecipePageResult['confidence']): string {
   if (confidence === 'high') return t('recipeImport.ocr.accuracy.high');
   if (confidence === 'medium') return t('recipeImport.ocr.accuracy.medium');
   return t('recipeImport.ocr.accuracy.low');
 }
 
-export default function ImportOcrScreen() {
+export default function ImportRecipePageScreen() {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('select');
-  const [providerReady, setProviderReady] = useState(false);
-  const [capturedPhoto, setCapturedPhoto] = useState<CapturedPhoto | null>(null);
-  const [ocrResult, setOcrResult] = useState<OcrAgentOutput | null>(null);
+  const [pages, setPages] = useState<CapturedPhoto[]>([]);
+  const [result, setResult] = useState<RecipePageResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    if (!isAndroid) {
-      setProviderReady(false);
-      return () => {
-        mounted = false;
-      };
+  const handleManual = () => router.replace('/recipes/new');
+
+  const addFromCamera = useCallback(async () => {
+    setErrorMsg(null);
+    try {
+      const photo = await capturePhoto('camera', expoImagePickerPhotoCaptureAdapter);
+      setPages((current) => [...current, photo].slice(0, MAX_RECIPE_PAGE_IMAGES));
+    } catch (error) {
+      if (error instanceof PhotoCaptureCancelledError) return;
+      setErrorMsg(error instanceof UserFacingError ? error.message : t('common.photoAddFailed'));
     }
-
-    isClientOcrAvailable()
-      .then((available) => {
-        if (mounted) setProviderReady(available);
-      })
-      .catch(() => {
-        if (mounted) setProviderReady(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
   }, []);
 
-  const handleManual = () => {
-    router.replace('/recipes/new');
-  };
+  const addFromGallery = useCallback(async () => {
+    setErrorMsg(null);
+    try {
+      const remaining = MAX_RECIPE_PAGE_IMAGES - pages.length;
+      const picked = await capturePhotosFromGallery(expoImagePickerPhotoCaptureAdapter, remaining);
+      if (picked.length === 0) return;
+      setPages((current) => [...current, ...picked].slice(0, MAX_RECIPE_PAGE_IMAGES));
+    } catch (error) {
+      setErrorMsg(error instanceof UserFacingError ? error.message : t('common.photoAddFailed'));
+    }
+  }, [pages.length]);
 
-  const preprocessForAgent = useCallback(async (imageUri: string) => {
-    // 端末内で読むだけなので、読める大きさを保つ（縮めると文字が潰れて行が割れる）
-    const processed = await preprocessImageForOcr(imageUri, expoImageManipulatorPreprocessAdapter, {
-      maxDimension: ON_DEVICE_OCR_MAX_DIMENSION,
-    });
-    return {
-      imageUri: processed.imageUri,
-      warnings: processed.warnings.map((warning) => warning.message),
-    };
+  const removePage = useCallback((index: number) => {
+    setPages((current) => current.filter((_, i) => i !== index));
   }, []);
 
-  const recognizePhoto = useCallback(
-    async (photo: CapturedPhoto, options: { preprocessImage?: boolean } = {}) => {
-      setCapturedPhoto(photo);
-      const shouldPreprocess = options.preprocessImage ?? true;
+  const handleRead = useCallback(async () => {
+    if (pages.length === 0) return;
+    setErrorMsg(null);
 
-      const result = await runOcrAgent(
-        { imageUri: photo.localPath },
-        {
-          preprocessImage: shouldPreprocess ? preprocessForAgent : undefined,
-          recognizeText: createClientOcrRecognizer(),
-        },
-      );
+    // 枠切れなら、その場で広告視聴を持ちかけて続行する（端末内 OCR のときは無料だった）
+    const gate = await ensureInferenceCredit();
+    if (gate === 'paywall') {
+      router.push('/recipes/paywall');
+      return;
+    }
+    if (gate !== 'ready') return;
 
-      if (!result.ok || !result.data) {
-        setErrorMsg(result.error?.message ?? t('recipeImport.ocr.failed'));
-        setPhase('select');
-        return;
-      }
-
-      setOcrResult(result.data);
+    setPhase('processing');
+    try {
+      const read = await readRecipeFromPages({ imageUris: pages.map((page) => page.localPath) });
+      void recordCloudInference().catch(() => undefined);
+      setResult(read);
       setPhase('preview');
-    },
-    [preprocessForAgent],
-  );
-
-  const handleRead = useCallback(
-    async (source: PhotoCaptureSource) => {
-      setErrorMsg(null);
-      setPhase('processing');
-      setOcrResult(null);
-
-      try {
-        const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-        await recognizePhoto(photo);
-      } catch (error) {
-        if (error instanceof PhotoCaptureCancelledError) {
-          setPhase('select');
-          return;
-        }
-        setErrorMsg(error instanceof Error ? error.message : t('recipeImport.ocr.failed'));
-        setPhase('select');
-      }
-    },
-    [recognizePhoto],
-  );
+    } catch (error) {
+      setErrorMsg(error instanceof RecipePageError ? error.message : t('recipeImport.page.failed'));
+      setPhase('select');
+    }
+  }, [pages, router]);
 
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
-      if (!ocrResult) return;
       const sourceId = await createOcrSource({
-        rawText: ocrResult.rawText,
-        capturedAt: capturedPhoto?.takenAt,
+        rawText: '',
+        capturedAt: pages[0]?.takenAt,
       });
       await createRecipe({ ...data, sourceId });
       setToastMessage(t('recipeImport.saved'));
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
-    [capturedPhoto?.takenAt, ocrResult, router],
+    [pages, router],
   );
 
-  if (phase === 'preview') {
+  if (phase === 'preview' && result) {
     return (
       <View style={styles.container}>
-        {ocrResult && (
-          <SourceBanner
-            icon={<Camera size={12} color={Colors.goldDim} />}
-            text={[accuracyLabel(ocrResult.confidence), ...ocrResult.warnings]
-              .filter(Boolean)
-              .join(' / ')}
-          />
-        )}
+        <SourceBanner
+          icon={<Camera size={12} color={Colors.goldDim} />}
+          text={accuracyLabel(result.confidence)}
+        />
         <RecipeForm
-          initialValues={ocrResult?.draft}
+          initialValues={result.draft}
           onSubmit={handleSave}
           onCancel={() => setPhase('select')}
-          title={t('recipeImport.ocr.formTitle')}
+          title={t('recipeImport.page.formTitle')}
           submitLabel={t('common.save')}
           topInset={false}
         />
@@ -187,71 +157,110 @@ export default function ImportOcrScreen() {
     );
   }
 
+  const canAddMore = pages.length < MAX_RECIPE_PAGE_IMAGES;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>{t('recipeImport.ocr.title')}</Text>
+        <Text style={styles.headerTitle}>{t('recipeImport.page.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        <View style={styles.iconWrapper}>
-          <Camera size={48} color={isAndroid ? Colors.gold : Colors.muted} />
-        </View>
+        {pages.length === 0 && (
+          <View style={styles.iconWrapper}>
+            <Camera size={48} color={Colors.gold} />
+          </View>
+        )}
 
-        {isAndroid ? (
+        <Text style={styles.title}>{t('recipeImport.page.heading')}</Text>
+        <Text style={styles.description}>{t('recipeImport.page.lead')}</Text>
+        <Text style={styles.hintText}>
+          {t('recipeImport.page.multiHint', { max: MAX_RECIPE_PAGE_IMAGES })}
+        </Text>
+
+        {pages.length > 0 && (
           <>
-            <Text style={styles.title}>{t('recipeImport.ocr.heading')}</Text>
-            <Text style={styles.description}>{t('recipeImport.ocr.lead')}</Text>
-
-            {capturedPhoto && (
-              <Image source={{ uri: capturedPhoto.localPath }} style={styles.previewImage} />
-            )}
-
-            {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
-            {!providerReady && (
-              <Text style={styles.noticeText}>{t('recipeImport.ocr.providerUnavailable')}</Text>
-            )}
-
-            {phase === 'processing' ? (
-              <View style={styles.processingBox}>
-                <ActivityIndicator size="large" color={Colors.gold} />
-                <Text style={styles.processingText}>{t('recipeImport.ocr.reading')}</Text>
-              </View>
-            ) : (
-              <View style={styles.actionGrid}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.takePhoto')}
-                  style={[styles.primaryButton, !providerReady && styles.buttonDisabled]}
-                  onPress={() => handleRead('camera')}
-                  disabled={!providerReady}
-                >
-                  <Camera size={18} color={Colors.bg} />
-                  <Text style={styles.primaryButtonText}>{t('common.takePhoto')}</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('common.pickFromGallery')}
-                  style={[styles.secondaryButton, !providerReady && styles.buttonDisabled]}
-                  onPress={() => handleRead('gallery')}
-                  disabled={!providerReady}
-                >
-                  <ImageIcon size={18} color={Colors.gold} />
-                  <Text style={styles.secondaryButtonText}>{t('common.pickFromGallery')}</Text>
-                </Pressable>
-              </View>
-            )}
-          </>
-        ) : (
-          <>
-            <Text style={styles.title}>{t('recipeImport.ocr.webTitle')}</Text>
-            <Text style={styles.description}>{t('recipeImport.ocr.webDescription')}</Text>
+            <Text style={styles.countText}>
+              {tCount('recipeImport.page.pageCount', pages.length)}
+            </Text>
+            <View style={styles.pageRow}>
+              {pages.map((page, index) => (
+                <View key={`${page.localPath}-${index}`} style={styles.pageThumbWrapper}>
+                  <Image source={{ uri: page.localPath }} style={styles.pageThumb} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('recipeImport.page.removePage')}
+                    style={styles.pageRemove}
+                    onPress={() => removePage(index)}
+                    hitSlop={8}
+                  >
+                    <X size={13} color={Colors.paper} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
           </>
         )}
+
+        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
+        {phase === 'processing' ? (
+          <View style={styles.processingBox}>
+            <ActivityIndicator size="large" color={Colors.gold} />
+            <Text style={styles.processingText}>{t('recipeImport.page.reading')}</Text>
+          </View>
+        ) : (
+          <View style={styles.actionGrid}>
+            {pages.length > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                style={styles.primaryButton}
+                onPress={() => void handleRead()}
+              >
+                <Camera size={18} color={Colors.bg} />
+                <Text style={styles.primaryButtonText}>{t('recipeImport.page.formTitle')}</Text>
+              </Pressable>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.takePhoto')}
+              style={[
+                pages.length > 0 ? styles.secondaryButton : styles.primaryButton,
+                !canAddMore && styles.buttonDisabled,
+              ]}
+              onPress={() => void addFromCamera()}
+              disabled={!canAddMore}
+            >
+              {pages.length > 0 ? (
+                <Plus size={18} color={Colors.gold} />
+              ) : (
+                <Camera size={18} color={Colors.bg} />
+              )}
+              <Text
+                style={pages.length > 0 ? styles.secondaryButtonText : styles.primaryButtonText}
+              >
+                {pages.length > 0 ? t('recipeImport.page.addPage') : t('common.takePhoto')}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.pickFromGallery')}
+              style={[styles.secondaryButton, !canAddMore && styles.buttonDisabled]}
+              onPress={() => void addFromGallery()}
+              disabled={!canAddMore}
+            >
+              <ImageIcon size={18} color={Colors.gold} />
+              <Text style={styles.secondaryButtonText}>{t('common.pickFromGallery')}</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* 送信先の開示。**撮る前に見えている**必要があるので、ボタンの直下に置く */}
+        <Text style={styles.disclosureText}>{t('recipeImport.page.disclosure')}</Text>
 
         <View style={styles.divider} />
 
@@ -260,12 +269,6 @@ export default function ImportOcrScreen() {
           <PenLine size={18} color={Colors.bg} />
           <Text style={styles.manualButtonText}>{t('recipeImport.ocr.manualAction')}</Text>
         </Pressable>
-        {capturedPhoto && phase !== 'processing' && (
-          <Pressable style={styles.retryButton} onPress={() => setCapturedPhoto(null)}>
-            <RotateCcw size={14} color={Colors.muted} />
-            <Text style={styles.retryButtonText}>{t('recipeImport.ocr.clearImage')}</Text>
-          </Pressable>
-        )}
       </ScrollView>
     </View>
   );
@@ -295,11 +298,9 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 20 },
   body: {
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 32,
     paddingVertical: 36,
-    minHeight: '90%',
-    gap: 16,
+    gap: 14,
   },
   iconWrapper: {
     width: 88,
@@ -325,26 +326,52 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  previewImage: {
+  hintText: {
+    fontSize: 12,
+    color: Colors.muted,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  countText: {
+    fontSize: 12,
+    color: Colors.goldDim,
+  },
+  pageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  pageThumbWrapper: {
+    width: 92,
+    height: 122,
+  },
+  pageThumb: {
     width: '100%',
-    maxWidth: 360,
-    aspectRatio: 4 / 3,
+    height: '100%',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: '#130E08',
+  },
+  pageRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.bgInput,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorText: {
     fontSize: 13,
     color: '#F2A07B',
     textAlign: 'center',
     lineHeight: 20,
-  },
-  noticeText: {
-    fontSize: 12,
-    color: Colors.muted,
-    textAlign: 'center',
-    lineHeight: 18,
   },
   processingBox: {
     alignItems: 'center',
@@ -392,6 +419,12 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.45,
   },
+  disclosureText: {
+    fontSize: 11,
+    color: Colors.muted,
+    textAlign: 'center',
+    lineHeight: 17,
+  },
   divider: {
     width: '60%',
     height: 1,
@@ -418,15 +451,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: Colors.bg,
-  },
-  retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-  },
-  retryButtonText: {
-    fontSize: 12,
-    color: Colors.muted,
   },
 });

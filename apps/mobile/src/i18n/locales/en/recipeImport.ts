@@ -72,6 +72,33 @@ const recipeImport: typeof ja = {
     labelSummary: 'Image labels: {{labels}}',
   },
 
+  page: {
+    title: 'Read from an image with text',
+    heading: 'Read a page with a recipe on it',
+    lead: 'AI reads the ingredients and method written on a cookbook page, a food package or a handwritten note, and turns them into a draft.',
+    formTitle: 'Check and edit what was read',
+    reading: 'Reading the page…',
+
+    multiHint:
+      'If the ingredients and the method are on different sides, photograph them one after another (up to {{max}}).',
+    addPage: 'Add this page too',
+    pageCount: { one: '{{count}} page', other: '{{count}} pages' },
+    removePage: 'Remove this photo',
+
+    disclosure: {
+      text: 'Your photo is sent to our server (and the AI provider) to be read. It is not stored.',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    },
+
+    failed: "We couldn't read that page. Please try again in a moment.",
+    notFound:
+      "We couldn't find a recipe. Try photographing the side with the ingredients and method.",
+    offlineNotice: 'Connect to the internet to create recipes from a page',
+  },
+
   consult: {
     title: 'Plan with AI',
     heading: 'Work out what to cook, together',

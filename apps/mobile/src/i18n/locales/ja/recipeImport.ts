@@ -3,6 +3,8 @@
  *
  * 写真からの AI 生成は `recipe.photo` にある（主役の入口なので分けている）。
  */
+import type { CriticalMessage, PluralMessage } from '../../types';
+
 const recipeImport = {
   formTitle: 'レシピを確認・編集',
   saved: 'レシピを保存しました',
@@ -81,6 +83,40 @@ const recipeImport = {
     labelUncertain: '写真だけでは分量・加熱時間・隠れた調味料を確定できません',
     labelGenericDraft: '料理名を特定できなかったため、汎用の下書きにしました',
     labelSummary: '画像ラベル: {{labels}}',
+  },
+
+  /**
+   * 紙面（レシピ本・食品パッケージ・手書きメモ）に**書かれている**レシピの読み取り。
+   * 端末内 OCR から AI に置き換えた（`docs/レシピ推論の評価設計.md` §10）。
+   */
+  page: {
+    title: '文字入り画像から読み取り',
+    heading: 'レシピが載っている紙面を読み取り',
+    lead: 'レシピ本・食品パッケージ・手書きメモに書かれている材料と作り方を、AI が読み取って下書きにします。',
+    formTitle: '読み取り結果を確認・編集',
+    reading: '紙面を読み取っています...',
+
+    /** 表と裏で 1 つのレシピになることを、撮る前に伝える */
+    multiHint: '材料の面と作り方の面が分かれているときは、続けて撮ってください（{{max}} 枚まで）。',
+    addPage: 'この紙面も追加',
+    pageCount: { one: '{{count}} 枚', other: '{{count}} 枚' } satisfies PluralMessage,
+    removePage: 'この写真を外す',
+
+    /**
+     * 送信先の開示。**書かないと不当な収集になる**ので A 階層。
+     * 端末内 OCR のときは不要だったが、AI に寄せたので必須になった。
+     */
+    disclosure: {
+      text: '写真は読み取りのためサーバー（AI 提供元）に送信されます。保存はされません。',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    } satisfies CriticalMessage,
+
+    failed: '紙面を読み取れませんでした。時間をおいてお試しください。',
+    notFound: 'レシピを読み取れませんでした。材料と作り方が書かれた面を撮ってお試しください。',
+    offlineNotice: 'インターネットにつながっていると、紙面からレシピをつくれます',
   },
 
   /** 作りたいものを相談してレシピにする。写真からレシピと違い、まだ料理が無いときの入口。 */

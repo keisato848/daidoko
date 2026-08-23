@@ -59,10 +59,11 @@ const METHODS: MethodOption[] = [
     enabled: true,
   },
   {
+    // 端末内 ML Kit から AI に置き換えたので Android 限定ではなくなった
+    // （`docs/レシピ推論の評価設計.md` §10）
     id: 'ocr',
     icon: <ImageIcon size={24} color={Colors.gold} />,
     enabled: true,
-    androidOnly: true,
   },
   {
     id: 'manual',
