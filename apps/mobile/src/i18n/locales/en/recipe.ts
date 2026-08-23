@@ -212,7 +212,7 @@ const recipe: typeof ja = {
       searchText: 'Search by recipe name, tag, or ingredient (for example “egg”).',
       addTitle: 'Adding more recipes',
       addText:
-        'Use the “Add” tab below to enter a recipe by hand, import one from a URL, or create one from a photo with AI.',
+        'Use the “Add” tab below to create a recipe from a photo with AI, plan one with AI, import one from a URL, or enter one by hand.',
     },
   },
 
