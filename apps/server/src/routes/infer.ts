@@ -36,6 +36,7 @@ import { parseOutputLocale, parseUnitSystem } from '../lib/output-locale.js';
 import {
   ConsultConfigError,
   GeminiRecipeConsultProvider,
+  MAX_CONSULT_IMAGES,
   MAX_CONSULT_MESSAGES,
   type ConsultDraft,
   type RecipeConsultProvider,
@@ -528,6 +529,22 @@ const inferConsultSchema = z.object({
       z.object({
         role: z.enum(['user', 'assistant']),
         text: z.string().min(1, '発言が空です').max(2000, '発言が長すぎます'),
+        /**
+         * その発言に添えた写真（冷蔵庫の中身・食材・参考にしたい料理）。**任意**。
+         * 何枚まで実際にモデルへ載せるかは `pickRecentImages()` が新しい方から決める。
+         */
+        images: z
+          .array(
+            z.object({
+              imageBase64: z
+                .string()
+                .min(1, '画像が空です')
+                .max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
+              mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+            }),
+          )
+          .max(MAX_CONSULT_IMAGES)
+          .optional(),
       }),
     )
     .min(1, '相談する内容がありません')
@@ -606,7 +623,12 @@ inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) =
 
   const result = await runRecipeConsultAgent(
     {
-      messages,
+      // exactOptionalPropertyTypes: images は「無い」と「undefined」を区別する
+      messages: messages.map((message) => ({
+        role: message.role,
+        text: message.text,
+        ...(message.images !== undefined && { images: message.images }),
+      })),
       draft: snapshot,
       ...(pantry !== undefined && { pantry }),
       outputLocale: parseOutputLocale(locale),

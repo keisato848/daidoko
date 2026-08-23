@@ -120,6 +120,18 @@ const recipeImport: typeof ja = {
     restartConfirm: 'Clear this conversation and the draft, and start over?',
     disclaimer:
       'This cannot tell you whether a dish contains allergens. Always check the ingredients yourself.',
+
+    attachPhoto: 'Attach a photo',
+    attachedPhoto: 'Attached photos',
+    removePhoto: 'Remove this photo',
+    photoHint: 'You can attach a photo of your fridge, or a dish you want to aim for',
+    photoDisclosure: {
+      text: 'Attached photos are sent to our server (and the AI provider) for the conversation. They are not stored.',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    },
     firstMessage:
       'What shall we make? Something rough is fine — "a light noodle dish", "chicken breast I need to use up".',
   },

@@ -144,6 +144,22 @@ const recipeImport = {
     restart: '最初からやり直す',
     restartConfirm: 'これまでの会話と下書きを消して、最初からやり直しますか？',
     disclaimer: 'アレルギーの有無は判定できません。材料はご自身で確認してください。',
+
+    /** 写真を添えて相談する（冷蔵庫の中身・食材・参考にしたい料理）。 */
+    attachPhoto: '写真を添える',
+    attachedPhoto: '添えた写真',
+    removePhoto: 'この写真を外す',
+    photoHint: '冷蔵庫の中身や、参考にしたい料理の写真を添えられます',
+    /**
+     * 送信先の開示。**写真を添えたときだけ出す**（文字だけの相談では写真は出ない）。
+     */
+    photoDisclosure: {
+      text: '添えた写真は相談のためサーバー（AI 提供元）に送信されます。保存はされません。',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    } satisfies CriticalMessage,
     firstMessage:
       '何を作りましょうか。「あっさりした麺類」「冷蔵庫の鶏むねを使いたい」など、ざっくりで大丈夫です。',
   },
