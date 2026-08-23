@@ -28,6 +28,28 @@ interface CoachMarkOverlayProps {
 const PADDING = 8;
 const BUBBLE_MARGIN = 16;
 
+export type CoachMarkRect = NonNullable<CoachMarkStep['rect']>;
+
+/**
+ * 吹き出しの位置。**対象が画面の上半分なら下に、下半分なら上に**出す。
+ *
+ * 以前は「下に 180px 空いていれば下」という固定値で判定していたが、吹き出しの高さは
+ * 文言で変わる（4 行だと 380px を超える）。追加画面の 3 枚目（手動入力＝最下段のカード）で
+ * 「はじめる」が画面の外に押し出された（Pixel 9a・2026-08-23）。
+ * 半分で振り分ければ、どちら側にも最低で画面の半分の余白があり、文言の長さに左右されない。
+ * 対象が無い（画面外・未描画）ときは中央やや上に出す。
+ */
+export function bubblePlacement(
+  rect: CoachMarkRect | null,
+  screenH: number,
+): { top: number } | { bottom: number } {
+  if (!rect) return { top: screenH * 0.38 };
+  const centerY = rect.y + rect.height / 2;
+  return centerY < screenH / 2
+    ? { top: rect.y + rect.height + BUBBLE_MARGIN }
+    : { bottom: screenH - rect.y + BUBBLE_MARGIN };
+}
+
 export function CoachMarkOverlay({
   visible,
   step,
@@ -49,13 +71,7 @@ export function CoachMarkOverlay({
       }
     : null;
 
-  // 吹き出しはハイライトの下、入り切らなければ上に出す
-  const bubbleBelow = rect ? rect.y + rect.height + 180 < screenH : false;
-  const bubbleStyle = rect
-    ? bubbleBelow
-      ? { top: rect.y + rect.height + BUBBLE_MARGIN }
-      : { bottom: screenH - rect.y + BUBBLE_MARGIN }
-    : { top: screenH * 0.38 };
+  const bubbleStyle = bubblePlacement(rect, screenH);
 
   const isLast = index >= total - 1;
 

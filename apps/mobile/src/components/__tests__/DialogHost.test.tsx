@@ -11,6 +11,10 @@ import { DialogHost } from '../DialogHost';
 import { dialog } from '../../services/dialog.service';
 import { resetDialogStoreForTesting } from '../../stores/dialog.store';
 
+// 最初の 1 本は Modal ツリーの初回描画で 3 秒台かかる。Android ビルドと並走する
+// pre-commit では既定の 5 秒を超えて落ちた（2026-08-23・中身の失敗ではない）
+jest.setTimeout(20000);
+
 describe('DialogHost', () => {
   beforeEach(() => {
     resetDialogStoreForTesting();
