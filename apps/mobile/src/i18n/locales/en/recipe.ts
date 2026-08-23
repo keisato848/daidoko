@@ -236,10 +236,13 @@ const recipe: typeof ja = {
     coach: {
       photoTitle: 'AI recipes from a photo',
       photoText:
-        'Pick a photo of a dish and AI drafts the recipe. URL imports and text-in-image reading start here too (AI analysis has a free daily allowance).',
+        'Pick a photo of a dish and AI drafts the ingredients, amounts and steps. Once the free allowance is used up, each short ad unlocks one more.',
+      consultTitle: 'Not sure what to cook yet?',
+      consultText:
+        'Talk it through with AI — what you feel like, what you have at home — and turn it into a draft. Same free allowance and ads as photos.',
       manualTitle: 'By hand, when you want the detail',
       manualText:
-        'Type it from scratch — with a cover photo, per-step photos and timers if you want them.',
+        'Type it from scratch, with a cover photo, per-step photos and timers if you want them. Importing from a URL, text or an image with text never uses the AI allowance.',
     },
   },
 

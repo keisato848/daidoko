@@ -96,8 +96,11 @@ const VISIBLE_METHODS = METHODS.filter(
 export default function AddScreen() {
   const router = useRouter();
 
-  // 初回利用ガイド（コーチマーク）
+  // 初回利用ガイド（コーチマーク）。写真 → 相談 → 手動の 3 枚。
+  // 1 枚目の吹き出しは 2 枚目のカード（相談）を丸ごと隠すので、相談には自分の吹き出しを持たせる
+  // （隠れたカードの話を 1 枚目でするのは読めない — 実機で確認した 2026-08-23）
   const photoRef = useRef<View>(null);
+  const consultRef = useRef<View>(null);
   const manualRef = useRef<View>(null);
   const coach = useCoachMarks('add', [
     {
@@ -107,12 +110,26 @@ export default function AddScreen() {
       ref: photoRef,
     },
     {
+      key: 'consult',
+      title: t('recipe.add.coach.consultTitle'),
+      text: t('recipe.add.coach.consultText'),
+      ref: consultRef,
+    },
+    {
       key: 'manual',
       title: t('recipe.add.coach.manualTitle'),
       text: t('recipe.add.coach.manualText'),
       ref: manualRef,
     },
   ]);
+
+  // コーチマークがハイライトするカードだけ ref を持つ（入れ子の三項演算を避ける）
+  const coachRefFor = (id: MethodId) => {
+    if (id === 'photo') return photoRef;
+    if (id === 'consult') return consultRef;
+    if (id === 'manual') return manualRef;
+    return undefined;
+  };
 
   const handleSelect = (method: MethodOption) => {
     if (!method.enabled) return;
@@ -141,11 +158,7 @@ export default function AddScreen() {
 
       <View style={styles.methods}>
         {VISIBLE_METHODS.map((method) => (
-          <View
-            key={method.id}
-            ref={method.id === 'photo' ? photoRef : method.id === 'manual' ? manualRef : undefined}
-            collapsable={false}
-          >
+          <View key={method.id} ref={coachRefFor(method.id)} collapsable={false}>
             <PressableScale
               style={[styles.methodCard, !method.enabled && styles.methodCardDisabled]}
               onPress={() => handleSelect(method)}
