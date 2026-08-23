@@ -31,7 +31,10 @@ import {
 } from '../../../src/services/client-ocr.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
-import { preprocessImageForOcr } from '../../../src/services/image-preprocess.service';
+import {
+  ON_DEVICE_OCR_MAX_DIMENSION,
+  preprocessImageForOcr,
+} from '../../../src/services/image-preprocess.service';
 import {
   capturePhoto,
   PhotoCaptureCancelledError,
@@ -86,7 +89,10 @@ export default function ImportOcrScreen() {
   };
 
   const preprocessForAgent = useCallback(async (imageUri: string) => {
-    const processed = await preprocessImageForOcr(imageUri, expoImageManipulatorPreprocessAdapter);
+    // 端末内で読むだけなので、読める大きさを保つ（縮めると文字が潰れて行が割れる）
+    const processed = await preprocessImageForOcr(imageUri, expoImageManipulatorPreprocessAdapter, {
+      maxDimension: ON_DEVICE_OCR_MAX_DIMENSION,
+    });
     return {
       imageUri: processed.imageUri,
       warnings: processed.warnings.map((warning) => warning.message),

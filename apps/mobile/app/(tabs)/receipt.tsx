@@ -25,7 +25,10 @@ import {
 } from '../../src/services/client-ocr.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../../src/services/expo-photo-capture.adapter';
-import { preprocessImageForOcr } from '../../src/services/image-preprocess.service';
+import {
+  ON_DEVICE_OCR_MAX_DIMENSION,
+  preprocessImageForOcr,
+} from '../../src/services/image-preprocess.service';
 import { addPantryItem, defaultGroupFor } from '../../src/services/pantry.service';
 import {
   capturePhoto,
@@ -53,7 +56,10 @@ import { formatQuantityInput, parseQuantityInput } from '../../src/utils/receipt
 async function readTextOnDevice(localPath: string): Promise<string | null> {
   let imageUri = localPath;
   try {
-    const pre = await preprocessImageForOcr(localPath, expoImageManipulatorPreprocessAdapter);
+    // レシートも端末内 OCR。文字が小さいので縮めない
+    const pre = await preprocessImageForOcr(localPath, expoImageManipulatorPreprocessAdapter, {
+      maxDimension: ON_DEVICE_OCR_MAX_DIMENSION,
+    });
     imageUri = pre.imageUri;
   } catch {
     // fall back to the original image
