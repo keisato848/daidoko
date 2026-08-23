@@ -21,6 +21,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 import { API_V1, GEMINI_MODEL } from '../config';
 import { getUserApiKey } from './byok.service';
+import { expoImageManipulatorPreprocessAdapter } from './expo-image-preprocess.adapter';
+import { preprocessImageForOcr } from './image-preprocess.service';
 import type { RecipeFormData } from '../validation/recipe.schema';
 import { t } from '../i18n';
 import {
@@ -37,6 +39,17 @@ const TIMEOUT_MS = 40_000;
 
 /** 1 回に送れる紙面の枚数。サーバー側 `MAX_RECIPE_PAGE_IMAGES` と揃える。 */
 export const MAX_RECIPE_PAGE_IMAGES = 4;
+
+/**
+ * 送る前に縮める長辺。**縮めないと送れない。**
+ * 端末のカメラは 4320x7680 のような巨大な写真を返し、そのまま base64 にすると
+ * 1 枚で 10.7M 文字になってサーバーの上限（8M 文字 ≒ 6MB）を超える（実測・2026-08-23）。
+ *
+ * 一方で**縮めすぎると読めない**（端末内 OCR は長辺 1200 で文字が潰れて失敗していた
+ * — `docs/レシピ推論の評価設計.md` §10）。2000 なら 4 枚送っても本文は数 MB に収まり、
+ * 紙面の本文も判読できる大きさが残る。
+ */
+const PAGE_MAX_DIMENSION = 2000;
 
 export interface RecipePageResult {
   draft: RecipeFormData;
@@ -373,15 +386,18 @@ export async function readRecipeFromPages(args: {
 
   const images: PageImage[] = [];
   for (const uri of uris) {
-    let base64: string;
     try {
-      base64 = await FileSystem.readAsStringAsync(uri, {
+      // 送る前に必ず縮める。原寸のままだとサーバーの上限を超えて送れない
+      const processed = await preprocessImageForOcr(uri, expoImageManipulatorPreprocessAdapter, {
+        maxDimension: PAGE_MAX_DIMENSION,
+      });
+      const base64 = await FileSystem.readAsStringAsync(processed.imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      images.push({ base64, mimeType: mimeTypeFor(processed.imageUri) });
     } catch {
       throw new RecipePageError(t('ai.error.imageLoadFailed'), 'transient', false);
     }
-    images.push({ base64, mimeType: mimeTypeFor(uri) });
   }
 
   const userKey = await getUserApiKey();
