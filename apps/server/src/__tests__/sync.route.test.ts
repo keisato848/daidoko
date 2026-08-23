@@ -71,6 +71,10 @@ describe('同期が無効な環境（DATABASE_URL なし）', () => {
 describe.runIf(Boolean(TEST_DB))('S1: push / pull（実 PostgreSQL）', () => {
   beforeAll(() => {
     process.env['SYNC_DATABASE_URL'] = TEST_DB as string;
+  });
+  // グループ作成は 1 クライアント 10 回/日で頭打ち。テストを足すと静かに 429 になり、
+  // 「data が undefined」という分かりにくい失敗になるので、各テストで枠を戻す
+  beforeEach(() => {
     resetSyncRateLimitForTesting();
   });
   afterAll(async () => {
@@ -445,6 +449,115 @@ describe.runIf(Boolean(TEST_DB))('S1: push / pull（実 PostgreSQL）', () => {
       data: { changes: { entityType: string; entityId: string }[] };
     };
     expect(plj.data.changes.find((c) => c.entityType === 'pantry_quantity')?.entityId).toBe(partId);
+
+    await cleanup();
+  });
+
+  it('行の編集と在庫の持ち分を別端末が同時に push しても、どちらも残る（S2-B・設計 §5-3）', async () => {
+    // UI の同時タップはエミュレータが不安定で取り切れないので、**同じ不変条件を protocol 層で固定する**。
+    // 行（LWW・updated_at を進める）と持ち分（単一書き手）は別エンティティなので競合しない、が要点。
+    const created = await post('/api/v1/sync/groups', {});
+    const cj = (await created.json()) as {
+      data: { deviceId: string; deviceSecret: string; inviteCode: string };
+    };
+    owner = { deviceId: cj.data.deviceId, secret: cj.data.deviceSecret };
+    const joined = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const jj = (await joined.json()) as { data: { deviceId: string; deviceSecret: string } };
+    member = { deviceId: jj.data.deviceId, secret: jj.data.deviceSecret };
+
+    const itemId = '3c9e77aa-1111-4222-8333-444455556666';
+    const epoch = 1787376676434;
+    const rowPayload = (expiresOn: string, updatedAt: string) =>
+      JSON.stringify({
+        schemaVersion: 3,
+        entity: 'pantry_item',
+        item: {
+          id: itemId,
+          name: 'SaltA',
+          nameNormalized: 'salta',
+          quantity: 1,
+          unit: null,
+          lowStockThreshold: null,
+          janCode: null,
+          groupName: null,
+          expiresOn,
+          createdAt: '2026-08-20T00:00:00.000Z',
+          updatedAt,
+          quantityBase: null,
+          quantityEpoch: epoch,
+        },
+      });
+    const partId = `${itemId}:${member.deviceId}`;
+
+    // 2 端末が「ほぼ同時」に押す: A = 行の編集（期限）、B = 持ち分（−1）
+    const [rowRes, partRes] = await Promise.all([
+      post(
+        '/api/v1/sync/push',
+        {
+          changes: [
+            {
+              entityType: 'pantry_item',
+              entityId: itemId,
+              payload: rowPayload('2027-06-15', '2026-08-23T10:00:00.000Z'),
+              clientUpdatedAt: '2026-08-23T10:00:00.000Z',
+              deleted: false,
+            },
+          ],
+        },
+        authHeader(owner.deviceId, owner.secret),
+      ),
+      post(
+        '/api/v1/sync/push',
+        {
+          changes: [
+            {
+              entityType: 'pantry_quantity',
+              entityId: partId,
+              payload: JSON.stringify({
+                schemaVersion: 3,
+                entity: 'pantry_quantity',
+                item: {
+                  id: partId,
+                  itemId,
+                  deviceId: member.deviceId,
+                  net: -1,
+                  epoch,
+                  updatedAt: '2026-08-23T10:00:00.100Z',
+                },
+              }),
+              clientUpdatedAt: '2026-08-23T10:00:00.100Z',
+              deleted: false,
+            },
+          ],
+        },
+        authHeader(member.deviceId, member.secret),
+      ),
+    ]);
+    expect(rowRes.status).toBe(200);
+    expect(partRes.status).toBe(200);
+
+    // 3 台目から見て、行の編集も持ち分も両方届く（片方が消えない）
+    const third = await post('/api/v1/sync/groups/join', { inviteCode: cj.data.inviteCode });
+    const tj = (await third.json()) as { data: { deviceId: string; deviceSecret: string } };
+    const pull = await app.request('/api/v1/sync/pull?since=0', {
+      headers: authHeader(tj.data.deviceId, tj.data.deviceSecret),
+    });
+    const plj = (await pull.json()) as {
+      data: { changes: { entityType: string; entityId: string; payload: string }[] };
+    };
+    const row = plj.data.changes.find((c) => c.entityId === itemId);
+    const part = plj.data.changes.find((c) => c.entityId === partId);
+    expect(row).toBeDefined();
+    expect(part).toBeDefined();
+    if (!row || !part) return;
+    // 行は期限が入り、数量の権威（base/epoch）は行 LWW と独立に保たれている
+    const rowItem = (JSON.parse(row.payload) as { item: Record<string, unknown> }).item;
+    expect(rowItem['expiresOn']).toBe('2027-06-15');
+    expect(rowItem['quantityEpoch']).toBe(epoch);
+    // 持ち分は同じ世代のまま
+    const partItem = (JSON.parse(part.payload) as { item: Record<string, unknown> }).item;
+    expect(partItem['net']).toBe(-1);
+    expect(partItem['epoch']).toBe(epoch);
 
     await cleanup();
   });
