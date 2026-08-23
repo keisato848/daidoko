@@ -1,4 +1,5 @@
 import { RECIPE_TEXT_AI_PROMPT, parseRecipeText } from '../recipeTextParser';
+import { recipeFormSchema } from '../../validation/recipe.schema';
 
 describe('parseRecipeText', () => {
   it('parses a heading-based Japanese recipe text', () => {
@@ -206,5 +207,117 @@ describe('parseRecipeText: 見出しの人数', () => {
       title: '肉じゃが',
       servings: undefined,
     });
+  });
+});
+
+/**
+ * レシピ本・食品パッケージの書式。**空白で区切られていない。**
+ * 見出しは「材料(2人前)」、材料は「じゃがいも……中2個」。この 2 つを扱えないと
+ * 材料が 1 つも取れず、下書きが行き止まりになる（AQUOS で撮って発覚・2026-08-23）。
+ */
+describe('parseRecipeText: 紙面の書式', () => {
+  it('人数つきの見出しを見出しとして扱い、人数も拾う', () => {
+    const result = parseRecipeText(`材料(2人前)
+じゃがいも 2個
+作り方
+1. 炒める`);
+    expect(result.formData.servings).toBe(2);
+    expect(result.formData.ingredients).toEqual([
+      { name: 'じゃがいも', amount: '2個', groupLabel: '', note: '' },
+    ]);
+    expect(result.formData.steps.map((step) => step.body)).toEqual(['炒める']);
+  });
+
+  it('見出しの人数は全角括弧・空白区切りでも拾う', () => {
+    expect(
+      parseRecipeText(`材料（4人分）
+玉ねぎ 1個`).formData.servings,
+    ).toBe(4);
+    expect(
+      parseRecipeText(`材料 3人前
+玉ねぎ 1個`).formData.servings,
+    ).toBe(3);
+  });
+
+  it('リーダー（点線）で材料名と分量を分ける', () => {
+    const result = parseRecipeText(`材料
+じゃがいも(くし形切り)……中2個(300g)
+サラダ油…………大さじ1`);
+    expect(result.formData.ingredients).toEqual([
+      { name: 'じゃがいも(くし形切り)', amount: '中2個(300g)', groupLabel: '', note: '' },
+      { name: 'サラダ油', amount: '大さじ1', groupLabel: '', note: '' },
+    ]);
+  });
+
+  it('OCR が点線をピリオド 1 個に潰しても分ける', () => {
+    // 実測: ML Kit が「じゃがいも(くし形切り)……中2個(300g)」をこの形で返した
+    const result = parseRecipeText(`材料
+じゃがいも(くし形切り).中2個(300g)`);
+    expect(result.formData.ingredients).toEqual([
+      { name: 'じゃがいも(くし形切り)', amount: '中2個(300g)', groupLabel: '', note: '' },
+    ]);
+  });
+
+  it('小数と空白区切りの行は点で割らない', () => {
+    const result = parseRecipeText(`材料
+サラダ油 大さじ1.5
+塩.こしょう 少々`);
+    expect(result.formData.ingredients).toEqual([
+      { name: 'サラダ油', amount: '大さじ1.5', groupLabel: '', note: '' },
+      { name: '塩.こしょう', amount: '少々', groupLabel: '', note: '' },
+    ]);
+  });
+
+  it('中黒 1 つは区切りにしない（並列の材料名を割らない）', () => {
+    const result = parseRecipeText(`材料
+塩・こしょう 少々`);
+    expect(result.formData.ingredients).toEqual([
+      { name: '塩・こしょう', amount: '少々', groupLabel: '', note: '' },
+    ]);
+  });
+
+  it('句点で手順を割らない', () => {
+    const result = parseRecipeText(`材料
+塩 少々
+作り方
+1. 炒めます。よく混ぜます。`);
+    expect(result.formData.steps.map((step) => step.body)).toEqual(['炒めます。よく混ぜます。']);
+  });
+});
+
+/**
+ * **読めた項目は保存スキーマの上限を超えない。**
+ * OCR は紙面の隅（原材料表示・賞味期限）まで拾うので、1 行でも上限を超えると
+ * 保存でそこに詰まる。確認・編集の画面へ渡すのが目的なので、落とさず刈り込む。
+ *
+ * 逆に、読めなかった項目には**編集用の空行が 1 つ残る**（スキーマは通らない）。
+ * だから確認画面へ進む条件を保存スキーマにしてはいけない — `ocr.agent` の
+ * `hasUsableDraft()` 参照。
+ */
+describe('parseRecipeText: スキーマの上限', () => {
+  it('長すぎる行を刈り込んでスキーマを通す', () => {
+    const long = 'あ'.repeat(600);
+    const result = parseRecipeText(`${long}
+材料
+${long} ${long}
+作り方
+1. ${long}`);
+    expect(recipeFormSchema.safeParse(result.formData).success).toBe(true);
+    expect(result.formData.title.length).toBe(100);
+    expect(result.formData.ingredients[0].name.length).toBe(50);
+    expect(result.formData.steps[0].body.length).toBe(500);
+  });
+
+  it('範囲外の人数・時間は読めなかった扱いにする', () => {
+    const result = parseRecipeText(`カレー
+300人分
+調理時間 5000分
+材料
+塩 少々
+作り方
+1. 煮る`);
+    expect(result.formData.servings).toBeUndefined();
+    expect(result.formData.cookTimeMin).toBeUndefined();
+    expect(recipeFormSchema.safeParse(result.formData).success).toBe(true);
   });
 });

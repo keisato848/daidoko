@@ -89,3 +89,57 @@ describe('OCR-AGT-02 runOcrAgent errors', () => {
     });
   });
 });
+
+/**
+ * 進行の条件は**保存スキーマではなく「材料か手順が読めたか」**。
+ * parser は読めなかった項目に編集用の空行を 1 つ置くので、保存スキーマを条件にすると
+ * 材料が読めなかった下書きは手順が読めていても行き止まりになる
+ * （AQUOS でパッケージ裏を撮って発覚・2026-08-23）。
+ */
+describe('OCR-AGT-03 下書きの受け入れ', () => {
+  it('材料が読めなくても、手順が読めていれば確認画面へ進める', async () => {
+    const stepsOnly = `作り方
+1. じゃがいもを耐熱皿に入れ、ラップをして電子レンジで加熱します。
+2. 油を熱し、焼き目が付くまで炒めます。`;
+
+    const result = await runOcrAgent(
+      { imageUri: 'file:///tmp/package.jpg' },
+      { recognizeText: async () => recognition(stepsOnly) },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.data?.draft.steps).toHaveLength(2);
+  });
+
+  it('材料も手順も読めなければ PARSE_FAILED', async () => {
+    const noise = '賞味期限:枠外下部に記載 保存方法:直射日光、高温多湿を避けて保存してください。';
+
+    const result = await runOcrAgent(
+      { imageUri: 'file:///tmp/noise.jpg' },
+      { recognizeText: async () => recognition(noise), parseText: async () => emptyParse() },
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'PARSE_FAILED', message: t('recipeImport.ocr.missingRequiredFields') },
+    });
+  });
+});
+
+function emptyParse() {
+  return {
+    formData: {
+      title: '',
+      titleReading: '',
+      description: '',
+      ingredients: [{ name: '', amount: '', groupLabel: '', note: '' }],
+      steps: [{ body: '' }],
+      tags: [],
+    },
+    confidence: 'low' as const,
+    unparsedLines: [],
+    normalizedBy: 'parser' as const,
+    warnings: [],
+    normalizedText: '',
+  };
+}

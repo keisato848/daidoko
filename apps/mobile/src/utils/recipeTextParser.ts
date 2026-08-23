@@ -12,7 +12,13 @@ export interface ParsedRecipeText {
   unparsedLines: string[];
   normalizedBy: RecipeTextParseSource;
   normalizedText?: string;
+  /** **画面に出す**警告。日本語で、利用者が読んで意味のあるものだけ */
   warnings: string[];
+  /**
+   * 補正 provider が使えなかった理由。**開発者向けで画面には出さない**
+   * （英語の内部メッセージが結果画面の帯に出ていた — 2026-08-23）。
+   */
+  assistanceFailures?: string[];
 }
 
 export const RECIPE_TEXT_AI_PROMPT = `次のレシピ情報を、以下の形式だけで出力してください。JSON、表、Markdownの装飾、説明文は出力しないでください。
@@ -47,6 +53,31 @@ export const RECIPE_TEXT_AI_PROMPT = `次のレシピ情報を、以下の形式
 変換したいレシピ情報:
 `;
 
+/**
+ * `recipeFormSchema` の上限。**parser の出力は必ずこの範囲に収める。**
+ * OCR は紙面の隅（原材料表示・賞味期限）まで拾うので、1 行でも上限を超えると
+ * 保存時にそこで詰まる。確認・編集の画面へ渡すのが目的なので、落とさず刈り込む。
+ */
+const LIMITS = {
+  title: 100,
+  groupLabel: 30,
+  ingredientName: 50,
+  amount: 30,
+  note: 100,
+  stepBody: 500,
+  servings: { min: 1, max: 99 },
+  minutes: { min: 1, max: 999 },
+} as const;
+
+function clamp(value: string, max: number): string {
+  return value.length > max ? value.slice(0, max) : value;
+}
+
+/** 範囲外は「読めなかった」扱いにする（スキーマを通らない値を渡さない）。 */
+function inRange(value: number | undefined, min: number, max: number): number | undefined {
+  return value !== undefined && value >= min && value <= max ? value : undefined;
+}
+
 const EMPTY_INGREDIENT = { name: '', amount: '', groupLabel: '', note: '' };
 const EMPTY_STEP = { body: '', timerSec: undefined };
 
@@ -58,6 +89,36 @@ const SECTION_PATTERNS: Record<Exclude<ParseMode, 'unknown'>, RegExp> = {
 
 const STEP_PATTERN = /^(?:\d+|[０-９]+|[①②③④⑤⑥⑦⑧⑨⑩])[\.)．、\s　]+(.+)$/;
 const BULLET_PATTERN = /^[・*\-−—]\s*/;
+/**
+ * 「じゃがいも……中2個」のリーダー（点線）。**レシピ本と食品パッケージの標準的な書式**で、
+ * 空白が 1 つも無いため、これを区切りとして扱わないと材料が 1 つも取れない
+ * （AQUOS でパッケージ裏を撮って発覚・2026-08-23）。
+ *
+ * `…` `‥` は区切り専用の文字なので 1 つでも区切りとみなす。
+ * 点と中黒は **2 つ以上**のときだけ — 「塩・こしょう」の並列や文末の句点を割らないため。
+ */
+const LEADER_DOTS_PATTERN = /(?:[…‥]+|[.．]{2,}|[・･]{2,})/;
+
+/**
+ * 点 1 つのリーダー。**OCR は点線をピリオド 1 個に潰すことがある**
+ * （AQUOS + ML Kit で「じゃがいも(くし形切り).中2個(300g)」— 2026-08-23）。
+ *
+ * 誤爆が怖いので条件を 2 つ課す:
+ * - **行に空白が無いとき**だけ。リーダー書式は空白を使わないので、
+ *   「じゃがいも 2.5個」のような空白区切りの行はこちらに来ない
+ * - 点の**前が数字でない**こと。小数（「大さじ1.5」）を割らない
+ */
+function splitOnSingleDot(value: string): { name: string; amount: string } | null {
+  if (/\s/.test(value)) return null;
+  for (let index = value.length - 1; index > 0; index--) {
+    if (value[index] !== '.' && value[index] !== '．') continue;
+    if (/\d/.test(value[index - 1])) continue;
+    const name = value.slice(0, index).trim();
+    const amount = value.slice(index + 1).trim();
+    if (name && amount) return { name, amount };
+  }
+  return null;
+}
 const TITLE_PATTERN = /^(?:タイトル|レシピ名|name)[:：]\s*(.+)$/i;
 const SERVINGS_PATTERN = /(?:^|[:：\s　])(\d+|[０-９]+)\s*(?:人分|人前| servings?)/i;
 /** 見出しの末尾に付いた人数。「肉じゃが（2人分）」「肉じゃが(2人分)」「肉じゃが 2人分」。 */
@@ -99,10 +160,25 @@ function stripBullet(line: string): string {
   return cleanLine(line.replace(BULLET_PATTERN, ''));
 }
 
-function detectSection(line: string): ParseMode | null {
-  if (SECTION_PATTERNS.ingredients.test(line)) return 'ingredients';
-  if (SECTION_PATTERNS.steps.test(line)) return 'steps';
-  if (SECTION_PATTERNS.description.test(line)) return 'description';
+interface DetectedSection {
+  mode: Exclude<ParseMode, 'unknown'>;
+  /** 見出しに人数が付いていたとき（「材料(2人前)」）だけ入る */
+  servings?: number;
+}
+
+/**
+ * 見出し行かどうか。**人数が付いた形も見出しとして扱う**（「材料(2人前)」「作り方 4人分」）。
+ * 食品パッケージやレシピ本ではこの形が普通で、`材料` だけの行を要求していたため
+ * 材料が 1 つも拾えないまま終わっていた（AQUOS で発覚・2026-08-23）。
+ */
+function detectSection(line: string): DetectedSection | null {
+  const split = splitTitleServings(line);
+  const head = split.servings === undefined ? line : split.title;
+  for (const mode of ['ingredients', 'steps', 'description'] as const) {
+    if (SECTION_PATTERNS[mode].test(head)) {
+      return split.servings === undefined ? { mode } : { mode, servings: split.servings };
+    }
+  }
   return null;
 }
 
@@ -117,6 +193,23 @@ function isLikelyAmount(value: string): boolean {
 
 function parseIngredient(line: string): RecipeFormData['ingredients'][number] {
   const cleaned = stripBullet(line).replace(/[：:]/, ' ');
+
+  // リーダー（「じゃがいも……中2個」）は空白より先に見る。空白が無い書式なので、
+  // ここで分けないと行まるごとが材料名になる
+  const leader = cleaned.split(LEADER_DOTS_PATTERN).filter(Boolean);
+  if (leader.length >= 2) {
+    const name = leader[0].trim();
+    const amount = leader.slice(1).join(' ').trim();
+    if (name && amount) {
+      return { name, amount, groupLabel: '', note: '' };
+    }
+  }
+
+  const singleDot = splitOnSingleDot(cleaned);
+  if (singleDot) {
+    return { ...singleDot, groupLabel: '', note: '' };
+  }
+
   const parts = cleaned.split(/\s+/).filter(Boolean);
 
   if (parts.length >= 2) {
@@ -175,7 +268,8 @@ export function parseRecipeText(rawText: string): ParsedRecipeText {
   for (const line of lines) {
     const section = detectSection(line);
     if (section) {
-      mode = section;
+      mode = section.mode;
+      if (section.servings !== undefined) servings = section.servings;
       continue;
     }
 
@@ -255,14 +349,25 @@ export function parseRecipeText(rawText: string): ParsedRecipeText {
   }
 
   const formData: RecipeFormData = {
-    title,
+    title: clamp(title, LIMITS.title),
     titleReading: '',
     description: descriptionLines.join('\n').slice(0, 500),
-    servings,
-    cookTimeMin,
-    prepTimeMin,
-    ingredients: ingredients.length > 0 ? ingredients : [{ ...EMPTY_INGREDIENT }],
-    steps: steps.length > 0 ? steps : [{ ...EMPTY_STEP }],
+    servings: inRange(servings, LIMITS.servings.min, LIMITS.servings.max),
+    cookTimeMin: inRange(cookTimeMin, LIMITS.minutes.min, LIMITS.minutes.max),
+    prepTimeMin: inRange(prepTimeMin, LIMITS.minutes.min, LIMITS.minutes.max),
+    ingredients:
+      ingredients.length > 0
+        ? ingredients.map((ingredient) => ({
+            name: clamp(ingredient.name, LIMITS.ingredientName),
+            amount: clamp(ingredient.amount, LIMITS.amount),
+            groupLabel: clamp(ingredient.groupLabel, LIMITS.groupLabel),
+            note: clamp(ingredient.note, LIMITS.note),
+          }))
+        : [{ ...EMPTY_INGREDIENT }],
+    steps:
+      steps.length > 0
+        ? steps.map((step) => ({ ...step, body: clamp(step.body, LIMITS.stepBody) }))
+        : [{ ...EMPTY_STEP }],
     tags: [],
   };
 

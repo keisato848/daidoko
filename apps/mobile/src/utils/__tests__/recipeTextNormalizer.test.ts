@@ -61,6 +61,8 @@ describe('parseRecipeTextWithAssistance', () => {
 
     expect(result.normalizedBy).toBe('parser');
     expect(result.confidence).toBe('low');
-    expect(result.warnings.join('\n')).toContain('normalized output did not improve');
+    // 失敗の理由は開発者向け。**画面に出す warnings には混ぜない**
+    expect(result.assistanceFailures?.join('\n')).toContain('normalized output did not improve');
+    expect(result.warnings.join('\n')).not.toContain('normalized output did not improve');
   });
 });
