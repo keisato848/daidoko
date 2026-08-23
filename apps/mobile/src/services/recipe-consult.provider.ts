@@ -8,7 +8,11 @@
  * プロンプトはサーバー `apps/server/src/lib/recipe-consult.ts` の写し。
  * **片方だけ直さないこと。**
  */
+import * as FileSystem from 'expo-file-system/legacy';
+
 import { API_V1 } from '../config';
+import { expoImageManipulatorPreprocessAdapter } from './expo-image-preprocess.adapter';
+import { preprocessImageForOcr } from './image-preprocess.service';
 import { t } from '../i18n';
 import {
   requestLocale,
@@ -29,7 +33,25 @@ export type ConsultRole = 'user' | 'assistant';
 export interface ConsultMessage {
   role: ConsultRole;
   text: string;
+  /**
+   * その発言に添えた写真の**端末内パス**（冷蔵庫の中身・食材・参考にしたい料理）。
+   * base64 は送る直前にここで作る — **画面の state に base64 を置かない**
+   * （会話が伸びるほど state が重くなるため）。
+   */
+  imageUris?: string[];
 }
+
+/** 1 回の発言に添えられる写真。画面もこの数で止める。 */
+export const MAX_CONSULT_IMAGES_PER_MESSAGE = 2;
+
+/** 1 リクエストに載せる写真の総数。サーバー側 `MAX_CONSULT_IMAGES` と揃える。 */
+export const MAX_CONSULT_IMAGES = 4;
+
+/**
+ * 送る前に縮める長辺。冷蔵庫や食材が判別できればよいので、紙面（2000）より小さくてよい。
+ * 会話は往復ごとに送るので、1 枚ぶんの重さがそのまま毎回の待ち時間になる。
+ */
+const CONSULT_IMAGE_MAX_DIMENSION = 1280;
 
 /** 会話の途中で育っていく下書き。保存するまで DB には入らない。 */
 export interface ConsultTurnResult {
@@ -118,6 +140,74 @@ export function trimMessages(
   return messages.length <= max ? messages : messages.slice(messages.length - max);
 }
 
+interface WireImage {
+  imageBase64: string;
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+}
+
+interface WireMessage {
+  role: ConsultRole;
+  text: string;
+  images?: WireImage[];
+}
+
+function mimeTypeFor(uri: string): WireImage['mimeType'] {
+  const lower = uri.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
+
+/**
+ * 送る写真を**新しい方から** `MAX_CONSULT_IMAGES` 枚だけ base64 にする。
+ * 落とす判断はサーバーもやるが、**端末側で先に落とさないと無駄に base64 を作って送ることになる**
+ * （会話が伸びるほど効く）。assistant の発言に付いた写真は載せない。
+ */
+async function toWireMessages(messages: ConsultMessage[]): Promise<WireMessage[]> {
+  let budget = MAX_CONSULT_IMAGES;
+  const keep = new Map<number, string[]>();
+  for (let index = messages.length - 1; index >= 0 && budget > 0; index--) {
+    const message = messages[index];
+    if (message.role !== 'user') continue;
+    const uris = message.imageUris ?? [];
+    if (uris.length === 0) continue;
+    const take = uris.slice(Math.max(0, uris.length - budget));
+    keep.set(index, take);
+    budget -= take.length;
+  }
+
+  const wire: WireMessage[] = [];
+  for (const [index, message] of messages.entries()) {
+    const uris = keep.get(index);
+    if (!uris || uris.length === 0) {
+      wire.push({ role: message.role, text: message.text });
+      continue;
+    }
+    const images: WireImage[] = [];
+    for (const uri of uris) {
+      try {
+        const processed = await preprocessImageForOcr(uri, expoImageManipulatorPreprocessAdapter, {
+          maxDimension: CONSULT_IMAGE_MAX_DIMENSION,
+        });
+        images.push({
+          imageBase64: await FileSystem.readAsStringAsync(processed.imageUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          }),
+          mimeType: mimeTypeFor(processed.imageUri),
+        });
+      } catch {
+        // 1 枚読めなくても相談は続けられる。黙って落とす方が会話が止まらない
+      }
+    }
+    wire.push(
+      images.length > 0
+        ? { role: message.role, text: message.text, images }
+        : { role: message.role, text: message.text },
+    );
+  }
+  return wire;
+}
+
 export interface ConsultArgs {
   messages: ConsultMessage[];
   draft?: RecipeFormData | null;
@@ -146,6 +236,13 @@ const SYSTEM_PROMPT = [
   '- **言われた点だけを変える。** 関係ない材料・手順は一字一句そのまま残す。',
   '- 分量は具体値で書く。家庭の台所と近所のスーパーで作れる範囲に収める。',
   '- draft は常に**レシピ全体**を返す（差分ではない）。',
+  '',
+  '## 写真が添えられたとき',
+  '- 冷蔵庫の中身・食材・参考にしたい料理の写真が来ることがある。**写真は手がかりであって注文ではない。**',
+  '- 写っているものを勝手にレシピへ入れない。まず「何が写っているか」を短く確かめてから使う。',
+  '- 賞味期限・分量・鮮度は写真から確定できない。**見えないことを見えたことにしない。**',
+  '- 参考にしたい料理の写真なら、それに寄せた下書きを出す。目分量は推定と分かるように書く。',
+  '- 写真が来ていないときは、写真の話をしない。',
   '',
   '## 在庫が渡されたとき',
   '- 使えるものを優先する。ただし**在庫だけで無理に作らない**。足りないものは材料に書く。',
@@ -214,12 +311,20 @@ export function buildContextText(args: ConsultArgs): string {
 }
 
 async function consultViaByok(args: ConsultArgs, apiKey: string): Promise<ConsultTurnResult> {
-  const messages = trimMessages(args.messages);
+  const messages = await toWireMessages(trimMessages(args.messages));
   const context = buildContextText(args);
   const contents = messages.map((message, index) => {
     const isLast = index === messages.length - 1;
     const text = isLast && context ? `${message.text}\n\n${context}` : message.text;
-    return { role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text }] };
+    return {
+      role: message.role === 'assistant' ? 'model' : 'user',
+      parts: [
+        ...(message.images ?? []).map((image) => ({
+          inlineData: { mimeType: image.mimeType, data: image.imageBase64 },
+        })),
+        { text },
+      ],
+    };
   });
 
   const controller = new AbortController();
@@ -289,7 +394,7 @@ async function consultViaServer(args: ConsultArgs): Promise<ConsultTurnResult> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: trimMessages(args.messages),
+        messages: await toWireMessages(trimMessages(args.messages)),
         ...(args.draft ? { draft: formDataToDraft(args.draft) } : {}),
         ...(args.pantry && args.pantry.length > 0 ? { pantry: args.pantry } : {}),
         locale: requestLocale(),

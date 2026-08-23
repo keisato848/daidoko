@@ -31,6 +31,21 @@ export const expoImagePickerPhotoCaptureAdapter: PhotoCaptureAdapter = {
     });
     return result.canceled ? null : toCapturedPhoto(result.assets[0]);
   },
+  async pickManyFromGallery(limit) {
+    // system Photo Picker は複数選択に対応している（Android 13+ / iOS 14+）。
+    // selectionLimit で上限を渡すと、ピッカー側が超過選択を止めてくれる
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: false,
+      allowsMultipleSelection: true,
+      selectionLimit: limit,
+      mediaTypes: ['images'],
+      quality: 1,
+    });
+    if (result.canceled) return [];
+    return result.assets
+      .map(toCapturedPhoto)
+      .filter((photo): photo is RawCapturedPhoto => photo !== null);
+  },
   async pickFromGallery() {
     // Uses the system Photo Picker (Android 13+ / iOS 14+), which grants
     // scoped access to the selected item without requiring a media-library

@@ -22,10 +22,27 @@ import { thinkingConfigFragment } from './thinking-budget.js';
 
 export type ConsultRole = 'user' | 'assistant';
 
+export interface ConsultImage {
+  imageBase64: string;
+  mimeType: string;
+}
+
 export interface ConsultMessage {
   role: ConsultRole;
   text: string;
+  /**
+   * その発言に添えられた写真（冷蔵庫の中身・食材・参考にしたい料理）。
+   * **user の発言にだけ付く。** assistant 側に来たら載せない。
+   */
+  images?: ConsultImage[];
 }
+
+/**
+ * 1 リクエストに載せる写真の総数。会話が伸びるほど過去の写真が積み上がるので、
+ * **新しい方から数えて**これを超えたぶんは落とす（古い写真は assistant の返答に
+ * 言葉として残っているため、落としても文脈は途切れにくい）。
+ */
+export const MAX_CONSULT_IMAGES = 4;
 
 export interface ConsultIngredient {
   groupLabel?: string;
@@ -113,6 +130,13 @@ const SYSTEM_PROMPT = [
   '- 家庭の台所と、近所のスーパーで買えるもので作れる範囲に収める。',
   '- draft は常に**レシピ全体**を返す（差分ではない）。',
   '',
+  '## 写真が添えられたとき',
+  '- 冷蔵庫の中身・食材・参考にしたい料理の写真が来ることがある。**写真は手がかりであって注文ではない。**',
+  '- 写っているものを勝手にレシピへ入れない。まず「何が写っているか」を短く確かめてから使う。',
+  '- 賞味期限・分量・鮮度は写真から確定できない。**見えないことを見えたことにしない。**',
+  '- 参考にしたい料理の写真なら、それに寄せた下書きを出す。目分量は推定と分かるように書く。',
+  '- 写真が来ていないときは、写真の話をしない。',
+  '',
   '## 在庫が渡されたとき',
   '- 使えるものを優先して組み立てる。ただし**在庫だけで無理に作らない**。',
   '- 足りないものは足りないものとして材料に書く。隠さない。',
@@ -198,6 +222,29 @@ export function trimMessages(
   return messages.length <= max ? messages : messages.slice(messages.length - max);
 }
 
+/**
+ * 送る写真を新しい方から `MAX_CONSULT_IMAGES` 件だけ残す。
+ * 返すのは「メッセージの添字 → 残した写真」。**assistant の写真は載せない。**
+ */
+export function pickRecentImages(
+  messages: ConsultMessage[],
+  max = MAX_CONSULT_IMAGES,
+): Map<number, ConsultImage[]> {
+  const kept = new Map<number, ConsultImage[]>();
+  let budget = max;
+  for (let index = messages.length - 1; index >= 0 && budget > 0; index--) {
+    const message = messages[index];
+    if (message.role !== 'user') continue;
+    const images = message.images ?? [];
+    if (images.length === 0) continue;
+    // 同じ発言の中でも新しい方（後ろ）を優先して残す
+    const take = images.slice(Math.max(0, images.length - budget));
+    kept.set(index, take);
+    budget -= take.length;
+  }
+  return kept;
+}
+
 /** 現在の下書きと在庫を、モデルに渡す 1 つの user メッセージにまとめる。 */
 export function buildContextText(input: ConsultRecipeInput): string {
   const parts: string[] = [];
@@ -243,10 +290,20 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
 
     // 会話はそのまま contents に流す。下書きと在庫は**最後の user 発言に添える**
     // （直近ほど効くため、古い turn に混ぜない）。
+    const keptImages = pickRecentImages(messages);
     const contents = messages.map((message, index) => {
       const isLast = index === messages.length - 1;
       const text = isLast && context ? `${message.text}\n\n${context}` : message.text;
-      return { role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text }] };
+      const images = keptImages.get(index) ?? [];
+      return {
+        role: message.role === 'assistant' ? 'model' : 'user',
+        parts: [
+          ...images.map((image) => ({
+            inlineData: { mimeType: image.mimeType, data: image.imageBase64 },
+          })),
+          { text },
+        ],
+      };
     });
 
     const body = {

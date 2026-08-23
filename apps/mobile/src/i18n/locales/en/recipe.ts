@@ -231,6 +231,15 @@ const recipe: typeof ja = {
   add: {
     heading: 'Add a recipe',
     subheading: 'Choose how to add it',
+    group: {
+      photo: 'From a photo',
+      photoNote: 'A dish itself, or a page with a recipe on it',
+      consult: 'Work it out together',
+      consultNote: "When you haven't decided what to cook",
+      text: 'From text',
+      textNote: 'A link, pasted text, or typing it yourself',
+    },
+
     method: {
       photo: 'From a photo',
       consult: 'Plan it with AI',
@@ -254,7 +263,7 @@ const recipe: typeof ja = {
         'Talk it through with AI — what you feel like, what you have at home — and turn it into a draft. Same free allowance and ads as photos.',
       manualTitle: 'By hand, when you want the detail',
       manualText:
-        'Type it from scratch, with a cover photo, per-step photos and timers if you want them. Importing from a URL, text or an image with text never uses the AI allowance.',
+        'Type it from scratch, with a cover photo, per-step photos and timers if you want them. Importing from a URL or from pasted text never uses the AI allowance.',
     },
   },
 

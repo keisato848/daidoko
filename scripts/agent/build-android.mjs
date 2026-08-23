@@ -284,10 +284,18 @@ function invalidateJsBundleIfPublicEnvChanged() {
       '[INFO] EXPO_PUBLIC_* か画像アセットが前回ビルドから変化しました — JS バンドルキャッシュを破棄して再生成します。',
     );
   }
+  // **マージの差分状態まで一緒に消す。** `intermediates/assets` だけ消すと
+  // `mergeReleaseAssets` の incremental な記録と食い違い、2 段階で壊れる（2026-08-23 実測）:
+  //   1. そのビルドは通るが index.android.bundle の無い APK ができる（起動して黒画面）
+  //   2. 次のビルドが `DataFile.getItems() because "dataFile" is null` で失敗する
+  // どちらも「JS の変更が反映されない」ようにしか見えないので、原因に辿り着きにくい。
   for (const dir of [
     join(buildDir, 'generated', 'assets', 'createBundleReleaseJsAndAssets'),
     join(buildDir, 'generated', 'res', 'createBundleReleaseJsAndAssets'),
     join(buildDir, 'intermediates', 'assets'),
+    join(buildDir, 'intermediates', 'merged_assets'),
+    join(buildDir, 'intermediates', 'compressed_assets'),
+    join(buildDir, 'intermediates', 'incremental', 'mergeReleaseAssets'),
   ]) {
     rmSync(dir, { recursive: true, force: true });
   }

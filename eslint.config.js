@@ -76,6 +76,8 @@ module.exports = [
       'apps/mobile/src/services/meal-vision.provider.ts',
       'apps/mobile/src/services/receipt-vision.provider.ts',
       'apps/mobile/src/services/name-resolve.provider.ts',
+      // 紙面読み取りのプロンプト。サーバー `lib/recipe-page.ts` の写し（BYOK はサーバーを通らない）
+      'apps/mobile/src/services/recipe-page.provider.ts',
       'apps/mobile/src/services/ai-output-locale.ts',
       // テストは期待値として日本語を書く
       '**/__tests__/**',
