@@ -89,6 +89,17 @@ rm -rf apps/mobile/android/app/build/intermediates/incremental/mergeReleaseAsset
 cd apps/server && pnpm exec tsx --env-file=.env src/index.ts
 ```
 
+**古いサーバーが生き残る。** Git Bash の `pkill -f tsx` は **Windows の node を殺せない**。
+「止めて起動し直した」つもりで**前のセッションの版が応答し続ける**ことがあり、症状は
+**新しいエンドポイントだけ 404**（2026-08-24 に被弾。前日 21:09 起動のプロセスが 3210 を掴んでいた）。
+起動し直したら、必ず**今の版かを起動時刻で確かめる**:
+
+```powershell
+$procId = (Get-NetTCPConnection -LocalPort 3210 -State Listen).OwningProcess | Select-Object -Unique
+(Get-Process -Id $procId).StartTime      # 直前でなければ古い版
+Stop-Process -Id $procId -Force          # 入れ替えるときはこれで殺す
+```
+
 ```powershell
 adb reverse tcp:3000 tcp:3000        # 端末 localhost:3000 → ホスト（開発検証）
 adb reverse --remove-all             # 本番構成検証時は必ず除去（既定 = Railway 本番へ向く）
@@ -149,6 +160,11 @@ adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:
 ```
 
 （画像自体は実写真をコピーするか、System.Drawing 等で生成した「料理らしい」画像。not_a_dish 判定される画像は無料枠を消費しない）
+
+**紙面レシピ（`/infer/recipe-page`）の検証は合成画像では通らない。** 文字を描画しただけの平坦な画像は
+`found=false`（読めなかった扱い）になり、画面には「レシピを読み取れませんでした」しか出ないので
+**実装の不具合と見分けが付かない**。端末で撮った実物の写真（食品パッケージの表と裏、レシピ本の見開き）を使う。
+2026-08-24 の実測: 合成画像 → 読み取れず / 実写真 2 枚 → `confidence: high` で表裏を 1 レシピに統合。
 
 ## 既知の落とし穴まとめ
 
