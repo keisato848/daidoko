@@ -561,7 +561,8 @@ export default function FamilyScreen() {
                 <TextInput
                   style={[styles.input, styles.inlineInput]}
                   value={joinCode}
-                  onChangeText={(value) => setJoinCode(value.toUpperCase())}
+                  // 日本語 IME は全角で確定することがある（実機で 404 になった）。NFKC で半角に寄せる
+                  onChangeText={(value) => setJoinCode(value.normalize('NFKC').toUpperCase())}
                   placeholder={t('family.sync.joinPlaceholder')}
                   placeholderTextColor={Colors.muted}
                   autoCapitalize="characters"

@@ -34,8 +34,13 @@ export function generateInviteCode(): string {
 }
 
 /** 入力ゆれの吸収: 空白・ハイフンを除き大文字化（読み上げ・手打ちを想定） */
+/**
+ * 招待コードの正規化。**全角も受ける** — 日本語 IME は英数字を全角で確定することがあり
+ * （AQUOS の Gboard 12 キーで実測・2026-08-23）、そのままでは正しいコードが 404 になる。
+ * NFKC で半角に寄せ、空白とハイフンを落として大文字にする。
+ */
 export function normalizeInviteCode(raw: string): string {
-  return raw.replace(/[\s-]/g, '').toUpperCase();
+  return raw.normalize('NFKC').replace(/[\s-]/g, '').toUpperCase();
 }
 
 export function inviteExpiresAt(now: Date = new Date()): Date {

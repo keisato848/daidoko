@@ -19,6 +19,15 @@ import {
   verifySecretHash,
 } from '../lib/sync-auth.js';
 
+describe('normalizeInviteCode', () => {
+  it('全角・空白・ハイフン・小文字を半角大文字に寄せる（日本語 IME 対策）', async () => {
+    const { normalizeInviteCode } = await import('../lib/sync-auth.js');
+    expect(normalizeInviteCode('９ＴＸ９２ＤＣＺ')).toBe('9TX92DCZ');
+    expect(normalizeInviteCode(' 9tx9-2dcz ')).toBe('9TX92DCZ');
+    expect(normalizeInviteCode('9 TX92DCZ')).toBe('9TX92DCZ');
+  });
+});
+
 describe('招待コード', () => {
   it('8 文字・紛らわしい字を含まない字母から作る', () => {
     for (let i = 0; i < 50; i += 1) {
