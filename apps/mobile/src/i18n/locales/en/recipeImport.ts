@@ -81,9 +81,11 @@ const recipeImport: typeof ja = {
 
     multiHint:
       'If the ingredients and the method are on different sides, photograph them one after another (up to {{max}}).',
-    addPage: 'Add this page too',
-    pageCount: { one: '{{count}} page', other: '{{count}} pages' },
+    read: 'Read it',
+    titleMissing: "We couldn't find a recipe name — please add one",
+    addMore: 'Add',
     removePage: 'Remove this photo',
+    limitReached: { one: 'Up to {{count}}', other: 'Up to {{count}}' },
 
     disclosure: {
       text: 'Your photo is sent to our server (and the AI provider) to be read. It is not stored.',

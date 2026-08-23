@@ -44,6 +44,30 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 `| tail` などに繋いでいると**パイプ側の終了コード 0 が返って成功に見える**。
 「ビルドし直したのに変更が反映されない」の正体がこれだったことがある。
 
+**インストールできて起動もするのに画面が真っ黒なら、APK に JS バンドルが入っていない。**
+`build-android.mjs` は `EXPO_PUBLIC_*` が変わると JS バンドルの出力を消して作り直させるが、
+このとき `intermediates/assets` まで消すため **`mergeReleaseAssets` の差分状態と食い違う**。
+症状は 2 段階で出る（2026-08-23 に実測）:
+
+1. 消した直後のビルドは通るが、**`index.android.bundle` の無い APK** ができる
+   （サイズが 50MB → 44MB のように急に落ちるのが手がかり）
+2. 次のビルドは `Cannot invoke "DataFile.getItems()" because "dataFile" is null` で失敗する
+
+```powershell
+# APK にバンドルがあるか（黒画面を見たら真っ先にこれ）
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::OpenRead($apk)
+$zip.Entries | Where-Object { $_.FullName -like "*index.android.bundle*" }
+```
+
+```bash
+# 直し方: マージの差分状態ごと消してから作り直す
+rm -rf apps/mobile/android/app/build/intermediates/incremental/mergeReleaseAssets \
+       apps/mobile/android/app/build/intermediates/assets \
+       apps/mobile/android/app/build/intermediates/merged_assets \
+       apps/mobile/android/app/build/intermediates/compressed_assets
+```
+
 インストールは常に `adb install -r`（`-r` なしはローカルデータ消失リスクで hook が ask）。
 
 ## 3. 画面遷移・確認

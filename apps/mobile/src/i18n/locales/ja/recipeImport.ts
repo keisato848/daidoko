@@ -96,11 +96,16 @@ const recipeImport = {
     formTitle: '読み取り結果を確認・編集',
     reading: '紙面を読み取っています...',
 
-    /** 表と裏で 1 つのレシピになることを、撮る前に伝える */
+    /** 表と裏で 1 つのレシピになることを、**撮る前に**伝える */
     multiHint: '材料の面と作り方の面が分かれているときは、続けて撮ってください（{{max}} 枚まで）。',
-    addPage: 'この紙面も追加',
-    pageCount: { one: '{{count}} 枚', other: '{{count}} 枚' } satisfies PluralMessage,
+    /** 実行ボタン。何が起きるかを動詞で書く */
+    read: '読み取る',
+    /** 裏面だけを撮ると料理名が無いのは普通。責めずに何をすればよいかだけ伝える */
+    titleMissing: '料理名は読み取れませんでした。入力してください',
+    addMore: '追加',
     removePage: 'この写真を外す',
+    /** 上限に達したとき。追加タイルの代わりに出す */
+    limitReached: { one: '{{count}} 枚まで', other: '{{count}} 枚まで' } satisfies PluralMessage,
 
     /**
      * 送信先の開示。**書かないと不当な収集になる**ので A 階層。

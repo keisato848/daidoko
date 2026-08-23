@@ -14,7 +14,15 @@
  * - **複数枚を 1 つのレシピにまとめられる**（表に料理名・裏に材料と作り方）
  */
 import { useRouter } from 'expo-router';
-import { Camera, Image as ImageIcon, PenLine, Plus, X } from 'lucide-react-native';
+import {
+  Camera,
+  Image as ImageIcon,
+  PenLine,
+  Plus,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -138,7 +146,13 @@ export default function ImportRecipePageScreen() {
       <View style={styles.container}>
         <SourceBanner
           icon={<Camera size={12} color={Colors.goldDim} />}
-          text={accuracyLabel(result.confidence)}
+          text={[
+            accuracyLabel(result.confidence),
+            // 裏面だけを撮ると料理名が無いのは普通。必須項目なので先に伝える
+            result.draft.title ? '' : t('recipeImport.page.titleMissing'),
+          ]
+            .filter(Boolean)
+            .join(' / ')}
         />
         <RecipeForm
           initialValues={result.draft}
@@ -157,7 +171,9 @@ export default function ImportRecipePageScreen() {
     );
   }
 
+  const hasPages = pages.length > 0;
   const canAddMore = pages.length < MAX_RECIPE_PAGE_IMAGES;
+  const busy = phase === 'processing';
 
   return (
     <View style={styles.container}>
@@ -170,82 +186,94 @@ export default function ImportRecipePageScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
-        {pages.length === 0 && (
-          <View style={styles.iconWrapper}>
-            <Camera size={48} color={Colors.gold} />
-          </View>
+        {/*
+          写真が入ったら説明を畳む。撮る前に読むものであって、
+          選んだあとも占有し続けると、肝心のサムネイルと実行ボタンが下に押される
+        */}
+        {!hasPages && (
+          <>
+            <View style={styles.iconWrapper}>
+              <Camera size={44} color={Colors.gold} />
+            </View>
+            <Text style={styles.title}>{t('recipeImport.page.heading')}</Text>
+            <Text style={styles.description}>{t('recipeImport.page.lead')}</Text>
+            <Text style={styles.hintText}>
+              {t('recipeImport.page.multiHint', { max: MAX_RECIPE_PAGE_IMAGES })}
+            </Text>
+          </>
         )}
 
-        <Text style={styles.title}>{t('recipeImport.page.heading')}</Text>
-        <Text style={styles.description}>{t('recipeImport.page.lead')}</Text>
-        <Text style={styles.hintText}>
-          {t('recipeImport.page.multiHint', { max: MAX_RECIPE_PAGE_IMAGES })}
-        </Text>
-
-        {pages.length > 0 && (
-          <>
-            <Text style={styles.countText}>
-              {tCount('recipeImport.page.pageCount', pages.length)}
-            </Text>
-            <View style={styles.pageRow}>
-              {pages.map((page, index) => (
-                <View key={`${page.localPath}-${index}`} style={styles.pageThumbWrapper}>
-                  <Image source={{ uri: page.localPath }} style={styles.pageThumb} />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('recipeImport.page.removePage')}
-                    style={styles.pageRemove}
-                    onPress={() => removePage(index)}
-                    hitSlop={8}
-                  >
-                    <X size={13} color={Colors.paper} />
-                  </Pressable>
+        {hasPages && (
+          <View style={styles.pageGrid}>
+            {pages.map((page, index) => (
+              <View key={`${page.localPath}-${index}`} style={styles.pageThumbWrap}>
+                <Image source={{ uri: page.localPath }} style={styles.pageThumb} />
+                {/* 順番がそのまま読み取りの順になるので、番号を出す */}
+                <View style={styles.pageIndex}>
+                  <Text style={styles.pageIndexText}>{index + 1}</Text>
                 </View>
-              ))}
-            </View>
-          </>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('recipeImport.page.removePage')}
+                  style={styles.pageRemove}
+                  onPress={() => removePage(index)}
+                  hitSlop={8}
+                  disabled={busy}
+                >
+                  <Trash2 size={13} color={Colors.bg} />
+                </Pressable>
+              </View>
+            ))}
+            {canAddMore ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('recipeImport.page.addMore')}
+                style={styles.addTile}
+                onPress={() => void addFromCamera()}
+                disabled={busy}
+              >
+                <Plus size={20} color={Colors.gold} />
+                <Text style={styles.addTileText}>{t('recipeImport.page.addMore')}</Text>
+              </Pressable>
+            ) : (
+              <View style={[styles.addTile, styles.addTileFull]}>
+                <Text style={styles.addTileText}>
+                  {tCount('recipeImport.page.limitReached', MAX_RECIPE_PAGE_IMAGES)}
+                </Text>
+              </View>
+            )}
+          </View>
         )}
 
         {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
-        {phase === 'processing' ? (
+        {busy ? (
           <View style={styles.processingBox}>
             <ActivityIndicator size="large" color={Colors.gold} />
             <Text style={styles.processingText}>{t('recipeImport.page.reading')}</Text>
           </View>
         ) : (
           <View style={styles.actionGrid}>
-            {pages.length > 0 && (
+            {hasPages ? (
               <Pressable
                 accessibilityRole="button"
                 style={styles.primaryButton}
                 onPress={() => void handleRead()}
               >
+                <Sparkles size={18} color={Colors.bg} />
+                <Text style={styles.primaryButtonText}>{t('recipeImport.page.read')}</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('common.takePhoto')}
+                style={styles.primaryButton}
+                onPress={() => void addFromCamera()}
+              >
                 <Camera size={18} color={Colors.bg} />
-                <Text style={styles.primaryButtonText}>{t('recipeImport.page.formTitle')}</Text>
+                <Text style={styles.primaryButtonText}>{t('common.takePhoto')}</Text>
               </Pressable>
             )}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('common.takePhoto')}
-              style={[
-                pages.length > 0 ? styles.secondaryButton : styles.primaryButton,
-                !canAddMore && styles.buttonDisabled,
-              ]}
-              onPress={() => void addFromCamera()}
-              disabled={!canAddMore}
-            >
-              {pages.length > 0 ? (
-                <Plus size={18} color={Colors.gold} />
-              ) : (
-                <Camera size={18} color={Colors.bg} />
-              )}
-              <Text
-                style={pages.length > 0 ? styles.secondaryButtonText : styles.primaryButtonText}
-              >
-                {pages.length > 0 ? t('recipeImport.page.addPage') : t('common.takePhoto')}
-              </Text>
-            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t('common.pickFromGallery')}
@@ -259,14 +287,13 @@ export default function ImportRecipePageScreen() {
           </View>
         )}
 
-        {/* 送信先の開示。**撮る前に見えている**必要があるので、ボタンの直下に置く */}
+        {/* 送信先の開示。**送る前に見えている**必要があるので実行ボタンの直下 */}
         <Text style={styles.disclosureText}>{t('recipeImport.page.disclosure')}</Text>
 
         <View style={styles.divider} />
 
-        <Text style={styles.altLabel}>{t('recipeImport.ocr.manualLabel')}</Text>
-        <Pressable style={styles.manualButton} onPress={handleManual}>
-          <PenLine size={18} color={Colors.bg} />
+        <Pressable style={styles.manualButton} onPress={handleManual} disabled={busy}>
+          <PenLine size={16} color={Colors.goldDim} />
           <Text style={styles.manualButtonText}>{t('recipeImport.ocr.manualAction')}</Text>
         </Pressable>
       </ScrollView>
@@ -332,40 +359,73 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  countText: {
-    fontSize: 12,
-    color: Colors.goldDim,
-  },
-  pageRow: {
+  // 調理記録の写真グリッドと同じ寸法・同じ削除ボタンにする（アプリ内で作法を揃える）
+  pageGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 10,
   },
-  pageThumbWrapper: {
+  pageThumbWrap: {
     width: 92,
-    height: 122,
-  },
-  pageThumb: {
-    width: '100%',
-    height: '100%',
+    height: 116,
     borderRadius: 8,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: '#130E08',
   },
+  pageThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  /** 並び順がそのまま読み取りの順になるので番号を出す */
+  pageIndex: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    backgroundColor: Colors.bgOverlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageIndexText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.paper,
+  },
   pageRemove: {
     position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.bgInput,
+    top: 5,
+    right: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addTile: {
+    width: 92,
+    height: 116,
+    borderRadius: 8,
     borderWidth: 1,
+    borderStyle: 'dashed',
     borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
+  },
+  addTileFull: {
+    borderStyle: 'solid',
+  },
+  addTileText: {
+    fontSize: 11,
+    color: Colors.goldDim,
+    textAlign: 'center',
   },
   errorText: {
     fontSize: 13,
@@ -431,25 +491,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     marginVertical: 8,
   },
-  altLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: Colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
+  // 手入力は**逃げ道**であって主役ではない。金色の大ボタンだと読み取りと競合するので控えめに
   manualButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.gold,
-    paddingHorizontal: 28,
-    paddingVertical: 13,
-    borderRadius: 8,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
   manualButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.bg,
+    fontSize: 13,
+    color: Colors.goldDim,
   },
 });
