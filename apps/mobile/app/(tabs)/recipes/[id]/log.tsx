@@ -5,22 +5,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Camera, Image as ImageIcon, Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import {
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { t, tCount } from '../../../../src/i18n';
 import { createCookingLog } from '../../../../src/services/cooking-log.service';
+import { dialog } from '../../../../src/services/dialog.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
 import {
   capturePhoto,
@@ -76,10 +68,10 @@ export default function CookingLogScreen() {
   const handleAddPhoto = useCallback(
     async (source: PhotoCaptureSource) => {
       if (photos.length >= MAX_COOKING_LOG_PHOTOS) {
-        Alert.alert(
-          t('log.form.photoLimitTitle'),
-          tCount('log.form.photoLimit', MAX_COOKING_LOG_PHOTOS),
-        );
+        void dialog.alert({
+          title: t('log.form.photoLimitTitle'),
+          message: tCount('log.form.photoLimit', MAX_COOKING_LOG_PHOTOS),
+        });
         return;
       }
 
@@ -89,7 +81,7 @@ export default function CookingLogScreen() {
       } catch (error) {
         if (error instanceof PhotoCaptureCancelledError) return;
         const message = error instanceof Error ? error.message : t('common.photoAddFailed');
-        Alert.alert(t('common.photoAddFailed'), message);
+        void dialog.alert({ title: t('common.photoAddFailed'), message });
       }
     },
     [photos.length],
@@ -120,21 +112,23 @@ export default function CookingLogScreen() {
       const trimmedMemo = memo.trim();
       if (id && trimmedMemo) {
         setTimeout(() => {
-          Alert.alert(t('log.form.refinePromptTitle'), t('log.form.refinePromptBody'), [
-            {
-              text: t('log.form.refineLater'),
-              style: 'cancel',
-              onPress: () => router.push('/(tabs)'),
-            },
-            {
-              text: t('log.form.refineNow'),
-              onPress: () =>
+          void dialog
+            .confirm({
+              title: t('log.form.refinePromptTitle'),
+              message: t('log.form.refinePromptBody'),
+              cancelLabel: t('log.form.refineLater'),
+              confirmLabel: t('log.form.refineNow'),
+            })
+            .then((refineNow) => {
+              if (refineNow) {
                 router.replace({
                   pathname: '/(tabs)/recipes/[id]/refine',
                   params: { id, feedback: trimmedMemo },
-                }),
-            },
-          ]);
+                });
+              } else {
+                router.push('/(tabs)');
+              }
+            });
         }, 1200);
         return;
       }
@@ -142,7 +136,7 @@ export default function CookingLogScreen() {
     } catch (error) {
       await cleanupStoredCookingPhotos(persistedPhotos);
       const message = error instanceof Error ? error.message : t('log.form.saveFailedBody');
-      Alert.alert(t('log.form.saveFailedTitle'), message);
+      void dialog.alert({ title: t('log.form.saveFailedTitle'), message });
     } finally {
       setSaving(false);
     }

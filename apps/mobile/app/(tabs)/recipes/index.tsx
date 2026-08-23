@@ -7,7 +7,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ArrowUpDown, BookOpen, Check, Plus, Search, Trash2, X } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Image,
   Pressable,
@@ -30,6 +29,7 @@ import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { t, tCount } from '../../../src/i18n';
+import { dialog } from '../../../src/services/dialog.service';
 import { getAliasMap } from '../../../src/services/name-alias.service';
 import { deleteRecipe, getRecipeList } from '../../../src/services/recipe.service';
 import type { RecipeListItem } from '../../../src/services/types';
@@ -170,7 +170,10 @@ export default function RecipeListScreen() {
     const urlImported = await getUrlImportedRecipeIds();
     const eligible = [...selectedIds].filter((id) => !urlImported.has(id));
     if (eligible.length === 0) {
-      Alert.alert(t('recipe.list.bookShare.title'), t('recipe.list.bookShare.allExcluded'));
+      void dialog.alert({
+        title: t('recipe.list.bookShare.title'),
+        message: t('recipe.list.bookShare.allExcluded'),
+      });
       return;
     }
     setBookEligibleIds(eligible);
@@ -195,7 +198,13 @@ export default function RecipeListScreen() {
       exitSelectMode();
       router.push({ pathname: '/(tabs)/book-edit', params: { id } });
     } catch {
-      Alert.alert(t('recipe.list.bookShare.title'), t('recipe.list.bookShare.failed'));
+      // シートを閉じてから出す。開いたシートの上に重ねると iOS で
+      // Modal の入れ子になって表示に失敗しうる（docs/画面設計.md §7-4）
+      setBookSheetOpen(false);
+      void dialog.alert({
+        title: t('recipe.list.bookShare.title'),
+        message: t('recipe.list.bookShare.failed'),
+      });
     } finally {
       setBookPublishing(false);
     }
@@ -217,27 +226,30 @@ export default function RecipeListScreen() {
         // 共有シートのキャンセルは無視（設定 → レシピ帖の管理 から再共有できる）
       }
     } catch {
-      Alert.alert(t('recipe.list.bookShare.title'), t('recipe.list.bookShare.failed'));
+      // 同上 — 先に帖シートを閉じる
+      setBookSheetOpen(false);
+      void dialog.alert({
+        title: t('recipe.list.bookShare.title'),
+        message: t('recipe.list.bookShare.failed'),
+      });
     } finally {
       setBookPublishing(false);
     }
   }, [bookPublishing, bookTitle, createBookFromSelection, exitSelectMode]);
 
-  const handleBulkDelete = useCallback(() => {
+  const handleBulkDelete = useCallback(async () => {
     const count = selectedIds.size;
     if (count === 0) return;
-    Alert.alert(t('recipe.list.deleteTitle'), tCount('recipe.list.deleteConfirm', count), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.delete'),
-        style: 'destructive',
-        onPress: async () => {
-          await Promise.all([...selectedIds].map((id) => deleteRecipe(id)));
-          exitSelectMode();
-          await loadRecipes();
-        },
-      },
-    ]);
+    const confirmed = await dialog.confirm({
+      title: t('recipe.list.deleteTitle'),
+      message: tCount('recipe.list.deleteConfirm', count),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await Promise.all([...selectedIds].map((id) => deleteRecipe(id)));
+    exitSelectMode();
+    await loadRecipes();
   }, [selectedIds, exitSelectMode, loadRecipes]);
 
   const handleSelectAll = useCallback(() => {
@@ -464,7 +476,7 @@ export default function RecipeListScreen() {
                 styles.actionBtnDelete,
                 selectedIds.size === 0 && styles.actionBtnDisabled,
               ]}
-              onPress={handleBulkDelete}
+              onPress={() => void handleBulkDelete()}
               disabled={selectedIds.size === 0}
             >
               <Trash2 size={16} color={selectedIds.size === 0 ? Colors.muted : Colors.bg} />

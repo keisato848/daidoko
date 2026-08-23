@@ -5,12 +5,14 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronLeft, Copy, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
+import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
+import { dialog } from '../../src/services/dialog.service';
 import {
   addFamilyMember,
   getCurrentFamily,
@@ -41,6 +43,7 @@ export default function FamilyScreen() {
   const [newMemberName, setNewMemberName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [saving, setSaving] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const [nextUser, nextFamily, nextMembers] = await Promise.all([
@@ -69,7 +72,7 @@ export default function FamilyScreen() {
         await refresh();
       } catch (error) {
         const message = error instanceof Error ? error.message : t('family.saveFailed');
-        Alert.alert(t('family.saveFailedTitle'), message);
+        void dialog.alert({ title: t('family.saveFailedTitle'), message });
       } finally {
         setSaving(false);
       }
@@ -95,17 +98,15 @@ export default function FamilyScreen() {
     });
   };
 
-  const handleRemoveMember = (member: FamilyMember) => {
-    Alert.alert(t('family.removeTitle'), t('family.removeConfirm', { name: member.displayName }), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.delete'),
-        style: 'destructive',
-        onPress: () => {
-          void runAction(async () => removeFamilyMember(member.id));
-        },
-      },
-    ]);
+  const handleRemoveMember = async (member: FamilyMember) => {
+    const confirmed = await dialog.confirm({
+      title: t('family.removeTitle'),
+      message: t('family.removeConfirm', { name: member.displayName }),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await runAction(async () => removeFamilyMember(member.id));
   };
 
   const handleRotateInviteCode = () => {
@@ -119,7 +120,7 @@ export default function FamilyScreen() {
       message: t('family.shareMessage', { name: family.name, code: family.inviteCode }),
       title: t('family.shareTitle'),
     }).catch(() => {
-      Alert.alert(t('family.inviteSection'), family.inviteCode);
+      void dialog.alert({ title: t('family.inviteSection'), message: family.inviteCode });
     });
   };
 
@@ -128,12 +129,13 @@ export default function FamilyScreen() {
       const result = await joinFamilyByInviteCode(joinCode);
       setJoinCode('');
       if (result.status === 'already-member') {
-        Alert.alert(
-          t('family.alreadyMemberTitle'),
-          t('family.alreadyMemberBody', { name: result.family.name }),
-        );
+        void dialog.alert({
+          title: t('family.alreadyMemberTitle'),
+          message: t('family.alreadyMemberBody', { name: result.family.name }),
+        });
       } else {
-        Alert.alert(t('family.joinedTitle'), t('family.joinedBody', { name: result.family.name }));
+        // 画面に留まる純粋な成功なのでトースト（docs/画面設計.md §7-1）
+        setToastMessage(t('family.joinedBody', { name: result.family.name }));
       }
     });
   };
@@ -207,7 +209,7 @@ export default function FamilyScreen() {
                 <Text style={styles.memberRole}>{roleLabel(member.role)}</Text>
               </View>
               {member.role !== 'owner' && (
-                <Pressable onPress={() => handleRemoveMember(member)} hitSlop={10}>
+                <Pressable onPress={() => void handleRemoveMember(member)} hitSlop={10}>
                   <Trash2 size={17} color="#FF6B6B" />
                 </Pressable>
               )}
@@ -275,6 +277,12 @@ export default function FamilyScreen() {
           </View>
         </View>
       </KeyboardAwareScroll>
+
+      <Toast
+        message={toastMessage ?? ''}
+        visible={toastMessage != null}
+        onDismiss={() => setToastMessage(null)}
+      />
     </View>
   );
 }

@@ -26,6 +26,12 @@ interface RecipeFormProps {
   submitLabel?: string;
   title: string;
   onFormChange?: (data: Partial<RecipeFormData>) => void;
+  /**
+   * 見出しの上にステータスバー分の余白を取るか（既定 true）。
+   * 上に `SourceBanner` など別の帯を置く画面は false にする — 帯の側が空けるので、
+   * ここでも空けると帯と見出しの間にステータスバー 1 つ分の隙間ができる。
+   */
+  topInset?: boolean;
 }
 
 const DEFAULT_VALUES: RecipeFormData = {
@@ -49,6 +55,7 @@ export function RecipeForm({
   submitLabel,
   title,
   onFormChange,
+  topInset = true,
 }: RecipeFormProps) {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -106,7 +113,7 @@ export function RecipeForm({
     // フォーカス欄の下に余白を確保する（KeyboardAwareScroll のコメント参照）。
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, !topInset && styles.headerFlush]}>
         <Pressable onPress={onCancel} hitSlop={12}>
           <Text style={styles.cancelText}>{t('common.cancel')}</Text>
         </Pressable>
@@ -288,6 +295,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+  },
+  headerFlush: {
+    paddingTop: 12,
   },
   headerTitle: {
     fontSize: 15, // base: フォームタイトル

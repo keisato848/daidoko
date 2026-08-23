@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
@@ -15,6 +15,7 @@ import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { resetCoachMarks } from '../../src/services/coach-marks.service';
+import { dialog } from '../../src/services/dialog.service';
 import {
   getCurrentFamily,
   getCurrentFamilyProfile,
@@ -83,18 +84,16 @@ export default function SettingsScreen() {
 
   // 2 択なので専用の画面は作らず、その場で選ばせる。
   // 言語とは別の設定にしてある（英国の利用者は英語だがメートル法）
-  const handlePickUnitSystem = useCallback(() => {
-    Alert.alert(t('settings.display.unitSystem'), t('settings.display.unitSystemBody'), [
-      {
-        text: t('settings.display.unitMetric'),
-        onPress: () => void setUnitSystem('metric').catch(() => undefined),
-      },
-      {
-        text: t('settings.display.unitImperial'),
-        onPress: () => void setUnitSystem('imperial').catch(() => undefined),
-      },
-      { text: t('common.cancel'), style: 'cancel' },
-    ]);
+  const handlePickUnitSystem = useCallback(async () => {
+    const picked = await dialog.choose({
+      title: t('settings.display.unitSystem'),
+      message: t('settings.display.unitSystemBody'),
+      options: [
+        { label: t('settings.display.unitMetric'), value: 'metric' as const },
+        { label: t('settings.display.unitImperial'), value: 'imperial' as const },
+      ],
+    });
+    if (picked) await setUnitSystem(picked).catch(() => undefined);
   }, [setUnitSystem]);
 
   const handleToggleLaunchCamera = useCallback((next: boolean) => {
@@ -113,7 +112,11 @@ export default function SettingsScreen() {
     if (freemium.isPremium) {
       planLabel = t('settings.plan.premium');
       planSubtitle = t('settings.plan.premiumSubtitle');
-      planOnPress = () => Alert.alert(t('settings.plan.premium'), t('settings.plan.premiumBody'));
+      planOnPress = () =>
+        void dialog.alert({
+          title: t('settings.plan.premium'),
+          message: t('settings.plan.premiumBody'),
+        });
     } else if (freemium.isByok) {
       planLabel = t('settings.plan.byok');
       planSubtitle = t('settings.plan.byokSubtitle');
@@ -124,7 +127,10 @@ export default function SettingsScreen() {
   }
 
   const showComingSoon = () => {
-    Alert.alert(t('settings.comingSoonTitle'), t('settings.comingSoonBody'));
+    void dialog.alert({
+      title: t('settings.comingSoonTitle'),
+      message: t('settings.comingSoonBody'),
+    });
   };
 
   // 初回利用ガイド（コーチマーク）
@@ -166,7 +172,7 @@ export default function SettingsScreen() {
               ? t('settings.display.unitImperial')
               : t('settings.display.unitMetric'),
           enabled: true,
-          onPress: handlePickUnitSystem,
+          onPress: () => void handlePickUnitSystem(),
         },
       ],
     },
@@ -212,10 +218,10 @@ export default function SettingsScreen() {
                   void getAdRewardProvider()
                     .showPrivacyOptionsForm()
                     .catch(() => {
-                      Alert.alert(
-                        t('settings.adPrivacy.failedTitle'),
-                        t('settings.adPrivacy.failedBody'),
-                      );
+                      void dialog.alert({
+                        title: t('settings.adPrivacy.failedTitle'),
+                        message: t('settings.adPrivacy.failedBody'),
+                      });
                     });
                 },
               },
@@ -299,10 +305,10 @@ export default function SettingsScreen() {
           enabled: true,
           onPress: () => {
             void resetCoachMarks().then(() => {
-              Alert.alert(
-                t('settings.app.coachMarksResetTitle'),
-                t('settings.app.coachMarksResetBody'),
-              );
+              void dialog.alert({
+                title: t('settings.app.coachMarksResetTitle'),
+                message: t('settings.app.coachMarksResetBody'),
+              });
             });
           },
         },

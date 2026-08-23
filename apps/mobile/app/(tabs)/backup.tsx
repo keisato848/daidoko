@@ -14,12 +14,13 @@ import {
   Upload,
 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
 import { formatDateTime } from '../../src/i18n/format';
+import { dialog } from '../../src/services/dialog.service';
 import {
   AUTO_SNAPSHOT_KEEP,
   chooseSafBackupDirectory,
@@ -104,42 +105,40 @@ export default function BackupScreen() {
       setToastMessage(t('backup.create.done', { size: formatSize(result.sizeBytes) }));
     } catch (error) {
       const message = error instanceof Error ? error.message : t('backup.create.failed');
-      Alert.alert(t('backup.create.failedTitle'), message);
+      void dialog.alert({ title: t('backup.create.failedTitle'), message });
     } finally {
       setBusy(false);
     }
   }, [refresh]);
 
-  const handleRestore = useCallback(() => {
+  const handleRestore = useCallback(async () => {
     if (!latest) {
-      Alert.alert(t('backup.restore.unavailableTitle'), t('backup.restore.noBackup'));
+      void dialog.alert({
+        title: t('backup.restore.unavailableTitle'),
+        message: t('backup.restore.noBackup'),
+      });
       return;
     }
 
-    Alert.alert(
-      t('backup.restore.title'),
-      t('backup.restore.confirm', { date: formatDate(latest.exportedAt) }),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('backup.restore.confirmAction'),
-          style: 'destructive',
-          onPress: () => {
-            setBusy(true);
-            void restoreLatestLocalBackup()
-              .then((result) => {
-                setToastMessage(t('backup.restore.done', { name: result.fileName }));
-                return refresh();
-              })
-              .catch((error) => {
-                const message = error instanceof Error ? error.message : t('backup.restore.failed');
-                Alert.alert(t('backup.restore.failedTitle'), message);
-              })
-              .finally(() => setBusy(false));
-          },
-        },
-      ],
-    );
+    const confirmed = await dialog.confirm({
+      title: t('backup.restore.title'),
+      message: t('backup.restore.confirm', { date: formatDate(latest.exportedAt) }),
+      confirmLabel: t('backup.restore.confirmAction'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      const result = await restoreLatestLocalBackup();
+      setToastMessage(t('backup.restore.done', { name: result.fileName }));
+      await refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t('backup.restore.failed');
+      void dialog.alert({ title: t('backup.restore.failedTitle'), message });
+    } finally {
+      setBusy(false);
+    }
   }, [latest, refresh]);
 
   const handleCreateMigration = useCallback(async () => {
@@ -164,7 +163,7 @@ export default function BackupScreen() {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : t('backup.migration.createFailed');
-      Alert.alert(t('backup.migration.createFailedTitle'), message);
+      void dialog.alert({ title: t('backup.migration.createFailedTitle'), message });
     } finally {
       setBusy(false);
     }
@@ -172,14 +171,20 @@ export default function BackupScreen() {
 
   const handleShareMigration = useCallback(async () => {
     if (!latestMigration) {
-      Alert.alert(t('backup.share.unavailableTitle'), t('backup.share.noFile'));
+      void dialog.alert({
+        title: t('backup.share.unavailableTitle'),
+        message: t('backup.share.noFile'),
+      });
       return;
     }
 
     try {
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        Alert.alert(t('backup.share.unavailableTitle'), t('backup.share.notSupported'));
+        void dialog.alert({
+          title: t('backup.share.unavailableTitle'),
+          message: t('backup.share.notSupported'),
+        });
         return;
       }
 
@@ -193,7 +198,7 @@ export default function BackupScreen() {
       await refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : t('backup.share.failed');
-      Alert.alert(t('backup.share.failedTitle'), message);
+      void dialog.alert({ title: t('backup.share.failedTitle'), message });
     }
   }, [latestMigration, refresh]);
 
@@ -206,7 +211,7 @@ export default function BackupScreen() {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : t('backup.saf.chooseFailed');
-      Alert.alert(t('backup.saf.chooseFailed'), message);
+      void dialog.alert({ title: t('backup.saf.chooseFailed'), message });
     }
   }, [refresh]);
 
@@ -231,34 +236,28 @@ export default function BackupScreen() {
       if (picked.canceled || picked.assets.length === 0) return;
 
       const asset = picked.assets[0];
-      Alert.alert(
-        t('backup.migration.importTitle'),
-        t('backup.migration.importConfirm', { name: asset.name }),
-        [
-          { text: t('common.cancel'), style: 'cancel' },
-          {
-            text: t('backup.restore.confirmAction'),
-            style: 'destructive',
-            onPress: () => {
-              setBusy(true);
-              void restoreMigrationBackupPackage(asset.uri)
-                .then((result) => {
-                  setToastMessage(tCount('backup.migration.imported', result.restoredPhotoCount));
-                  return refresh();
-                })
-                .catch((error) => {
-                  const message =
-                    error instanceof Error ? error.message : t('backup.restore.failed');
-                  Alert.alert(t('backup.restore.failedTitle'), message);
-                })
-                .finally(() => setBusy(false));
-            },
-          },
-        ],
-      );
+      const confirmed = await dialog.confirm({
+        title: t('backup.migration.importTitle'),
+        message: t('backup.migration.importConfirm', { name: asset.name }),
+        confirmLabel: t('backup.restore.confirmAction'),
+        destructive: true,
+      });
+      if (!confirmed) return;
+
+      setBusy(true);
+      try {
+        const result = await restoreMigrationBackupPackage(asset.uri);
+        setToastMessage(tCount('backup.migration.imported', result.restoredPhotoCount));
+        await refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t('backup.restore.failed');
+        void dialog.alert({ title: t('backup.restore.failedTitle'), message });
+      } finally {
+        setBusy(false);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : t('backup.migration.pickFailed');
-      Alert.alert(t('backup.migration.pickFailed'), message);
+      void dialog.alert({ title: t('backup.migration.pickFailed'), message });
     }
   }, [refresh]);
 

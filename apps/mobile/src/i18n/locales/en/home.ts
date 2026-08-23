@@ -64,7 +64,7 @@ const home: typeof ja = {
   coach: {
     fabTitle: 'Records and recipes start here',
     fabText:
-      'Tap “+” to record a dish you cooked, or add a recipe — by hand, from a URL, or from a photo with AI.',
+      'Tap “+” to record a dish you cooked, or add a recipe — from a photo with AI, by planning it with AI, from a URL, or by hand.',
     cartTitle: 'Shopping list and pantry',
     cartText:
       'Your shopping list, what’s in the kitchen, receipt scanning, and “what can I cook with this” all live behind this cart.',

@@ -320,8 +320,14 @@ export async function parseRecipeTextWithAssistance(
     };
   }
 
-  return {
-    ...base,
-    warnings: [...base.warnings, ...failures],
-  };
+  // 補正 provider の失敗は**開発者向けの情報**。画面には出さない。
+  // 出していたため OCR の結果画面の帯に「gemma-native: unavailable /
+  // local-heuristic: Local heuristic could not produce parser-friendly text」と
+  // 英語の内部メッセージが並んでいた（AQUOS で発覚・2026-08-23）。
+  // 読み取りの出来は同じ帯の「読み取り精度」が伝えているので、利用者にはそれで足りる。
+  if (__DEV__ && failures.length > 0) {
+    console.warn(`[recipeTextNormalizer] ${failures.join(' / ')}`);
+  }
+
+  return { ...base, assistanceFailures: failures };
 }

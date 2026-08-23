@@ -8,22 +8,15 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, ChevronLeft, Plus, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '../../src/components/BottomSheet';
 import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
+import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
+import { dialog } from '../../src/services/dialog.service';
 import {
   getRecipeBook,
   renameRecipeBook,
@@ -49,6 +42,7 @@ export default function BookEditScreen() {
   const [busy, setBusy] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [allRecipes, setAllRecipes] = useState<RecipeListItem[]>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -104,20 +98,26 @@ export default function BookEditScreen() {
 
   const accessOptions = useCallback((): ShareAccessOptions | null => {
     if (passcodeOn && !/^\d{4}$/.test(passcode)) {
-      Alert.alert(t('settings.book.title'), t('settings.book.passcodeInvalid'));
+      void dialog.alert({
+        title: t('settings.book.title'),
+        message: t('settings.book.passcodeInvalid'),
+      });
       return null;
     }
     return { passcode: passcodeOn ? passcode : null, expiresInDays };
   }, [passcodeOn, passcode, expiresInDays]);
 
   /** 共有（未共有 → 発行 / 共有済み → 同じリンクのまま反映） */
-  const handleShare = useCallback(() => {
+  const handleShare = useCallback(async () => {
     if (!book || busy) return;
     const access = accessOptions();
     if (!access) return;
     const shareable = book.items.filter((i) => !i.excluded).length;
     if (shareable === 0) {
-      Alert.alert(t('settings.book.title'), t('recipe.list.bookShare.allExcluded'));
+      void dialog.alert({
+        title: t('settings.book.title'),
+        message: t('recipe.list.bookShare.allExcluded'),
+      });
       return;
     }
     const publish = async () => {
@@ -134,41 +134,49 @@ export default function BookEditScreen() {
             // キャンセルは無視
           }
         } else {
-          Alert.alert(t('settings.book.title'), t('settings.book.updated'));
+          // 画面に留まる純粋な成功なのでトースト（docs/画面設計.md §7-1）
+          setToastMessage(t('settings.book.updated'));
         }
       } catch {
-        Alert.alert(t('settings.book.title'), t('recipe.list.bookShare.failed'));
+        void dialog.alert({
+          title: t('settings.book.title'),
+          message: t('recipe.list.bookShare.failed'),
+        });
       } finally {
         setBusy(false);
       }
     };
     if (book.shareUrl == null) {
       // 初回のみ attestation（自分で作成した内容の確認 — docs/Web共有設計.md §2-2）
-      Alert.alert(t('recipe.list.bookShare.title'), t('recipe.list.bookShare.attestNote'), [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('recipe.list.bookShare.publish'), onPress: () => void publish() },
-      ]);
+      const attested = await dialog.confirm({
+        title: t('recipe.list.bookShare.title'),
+        message: t('recipe.list.bookShare.attestNote'),
+        confirmLabel: t('recipe.list.bookShare.publish'),
+      });
+      if (attested) await publish();
     } else {
-      void publish();
+      await publish();
     }
   }, [book, busy, accessOptions, saveTitle, load]);
 
-  const handleStop = useCallback(() => {
+  const handleStop = useCallback(async () => {
     if (!book) return;
-    Alert.alert(t('settings.webShares.stopTitle'), t('settings.webShares.stopConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('settings.webShares.stopAction'),
-        style: 'destructive',
-        onPress: () => {
-          void revokeSharedBook(book.id)
-            .then(load)
-            .catch(() =>
-              Alert.alert(t('settings.webShares.stopTitle'), t('settings.webShares.stopFailed')),
-            );
-        },
-      },
-    ]);
+    const confirmed = await dialog.confirm({
+      title: t('settings.webShares.stopTitle'),
+      message: t('settings.webShares.stopConfirm'),
+      confirmLabel: t('settings.webShares.stopAction'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await revokeSharedBook(book.id);
+      await load();
+    } catch {
+      void dialog.alert({
+        title: t('settings.webShares.stopTitle'),
+        message: t('settings.webShares.stopFailed'),
+      });
+    }
   }, [book, load]);
 
   if (!book) {
@@ -282,7 +290,7 @@ export default function BookEditScreen() {
 
           <Pressable
             style={[styles.shareBtn, busy && styles.btnDisabled]}
-            onPress={handleShare}
+            onPress={() => void handleShare()}
             disabled={busy}
           >
             <Text style={styles.shareBtnText}>
@@ -296,7 +304,7 @@ export default function BookEditScreen() {
           {book.shareUrl != null && (
             <>
               <Text style={styles.sharedNote}>{t('settings.book.sharedNote')}</Text>
-              <Pressable style={styles.stopBtn} onPress={handleStop}>
+              <Pressable style={styles.stopBtn} onPress={() => void handleStop()}>
                 <Text style={styles.stopBtnText}>{t('settings.webShares.stopAction')}</Text>
               </Pressable>
             </>
@@ -326,6 +334,12 @@ export default function BookEditScreen() {
           ))}
         </ScrollView>
       </BottomSheet>
+
+      <Toast
+        message={toastMessage ?? ''}
+        visible={toastMessage != null}
+        onDismiss={() => setToastMessage(null)}
+      />
     </SafeAreaView>
   );
 }

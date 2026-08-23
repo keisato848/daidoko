@@ -7,12 +7,13 @@
 import { useRouter } from 'expo-router';
 import { KeyRound, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { InfoTooltip } from '../../src/components/InfoTooltip';
 import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
+import { dialog } from '../../src/services/dialog.service';
 import {
   clearUserApiKey,
   getUserApiKey,
@@ -42,7 +43,7 @@ export default function AiKeyScreen() {
 
   const handleSave = useCallback(async () => {
     if (!looksLikeApiKey(keyInput)) {
-      Alert.alert(t('byok.invalidTitle'), t('byok.invalidBody'));
+      void dialog.alert({ title: t('byok.invalidTitle'), message: t('byok.invalidBody') });
       return;
     }
     setBusy(true);
@@ -50,29 +51,27 @@ export default function AiKeyScreen() {
       await setUserApiKey(keyInput);
       setHasKey(true);
       setKeyInput('');
-      Alert.alert(t('byok.savedTitle'), t('byok.savedBody'));
+      // 直後に画面を離れるのでトーストでは見えない。通知ダイアログのまま（§7-1）
+      await dialog.alert({ title: t('byok.savedTitle'), message: t('byok.savedBody') });
       router.back();
     } catch {
-      Alert.alert(t('byok.saveFailedTitle'), t('byok.saveFailedBody'));
+      void dialog.alert({ title: t('byok.saveFailedTitle'), message: t('byok.saveFailedBody') });
     } finally {
       setBusy(false);
     }
   }, [keyInput, router]);
 
-  const handleClear = useCallback(() => {
-    Alert.alert(t('byok.removeTitle'), t('byok.removeConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.delete'),
-        style: 'destructive',
-        onPress: () => {
-          void clearUserApiKey().then(() => {
-            setHasKey(false);
-            setKeyInput('');
-          });
-        },
-      },
-    ]);
+  const handleClear = useCallback(async () => {
+    const confirmed = await dialog.confirm({
+      title: t('byok.removeTitle'),
+      message: t('byok.removeConfirm'),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await clearUserApiKey();
+    setHasKey(false);
+    setKeyInput('');
   }, []);
 
   return (
@@ -121,7 +120,11 @@ export default function AiKeyScreen() {
         </Pressable>
 
         {hasKey && (
-          <Pressable accessibilityRole="button" style={styles.clearButton} onPress={handleClear}>
+          <Pressable
+            accessibilityRole="button"
+            style={styles.clearButton}
+            onPress={() => void handleClear()}
+          >
             <Text style={styles.clearText}>{t('byok.remove')}</Text>
           </Pressable>
         )}

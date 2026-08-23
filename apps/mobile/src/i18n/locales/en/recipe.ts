@@ -89,7 +89,6 @@ const recipe: typeof ja = {
       stopConfirm:
         'This deletes the share page. People with the link will no longer see it. Continue?',
       stopAction: 'Stop sharing',
-      stopDoneTitle: 'Web sharing stopped',
       stopDoneBody: 'The share page has been deleted.',
       stopFailedBody: 'Could not stop sharing. Check your connection and try again.',
     },
@@ -213,7 +212,7 @@ const recipe: typeof ja = {
       searchText: 'Search by recipe name, tag, or ingredient (for example “egg”).',
       addTitle: 'Adding more recipes',
       addText:
-        'Use the “Add” tab below to enter a recipe by hand, import one from a URL, or create one from a photo with AI.',
+        'Use the “Add” tab below to create a recipe from a photo with AI, plan one with AI, import one from a URL, or enter one by hand.',
     },
   },
 
@@ -237,10 +236,13 @@ const recipe: typeof ja = {
     coach: {
       photoTitle: 'AI recipes from a photo',
       photoText:
-        'Pick a photo of a dish and AI drafts the recipe. URL imports and text-in-image reading start here too (AI analysis has a free daily allowance).',
+        'Pick a photo of a dish and AI drafts the ingredients, amounts and steps. Once the free allowance is used up, each short ad unlocks one more.',
+      consultTitle: 'Not sure what to cook yet?',
+      consultText:
+        'Talk it through with AI — what you feel like, what you have at home — and turn it into a draft. Same free allowance and ads as photos.',
       manualTitle: 'By hand, when you want the detail',
       manualText:
-        'Type it from scratch — with a cover photo, per-step photos and timers if you want them.',
+        'Type it from scratch, with a cover photo, per-step photos and timers if you want them. Importing from a URL, text or an image with text never uses the AI allowance.',
     },
   },
 

@@ -32,7 +32,21 @@ export interface ImagePreprocessResult extends ImageInfo {
   warnings: ImageQualityWarning[];
 }
 
+/**
+ * 既定は**サーバーへ送る画像**に合わせた値（アップロードのサイズ制約がある）。
+ * 端末内 OCR は送らないので `ON_DEVICE_OCR_MAX_DIMENSION` を明示して使う。
+ */
 const DEFAULT_MAX_DIMENSION = 1200;
+
+/**
+ * 端末内 OCR に渡す画像の長辺。**送信しないので、読める大きさを優先する。**
+ *
+ * 既定の 1200 で読ませると、実測（AQUOS + S&B シーズニング裏面・2026-08-23）で
+ * 4320x7680 の写真が **675x1200** まで潰れ、本文が数ピクセルになっていた。
+ * 結果、ML Kit が 1 文を 8〜10 個の断片に割り、「300g→3005」「耐熱皿→耐禁E」のような
+ * 誤読が出る。しかも**自分で縮めた画像に対して「画像が小さすぎます」と警告する**状態だった。
+ */
+export const ON_DEVICE_OCR_MAX_DIMENSION = 3000;
 const DEFAULT_MIN_SHORT_EDGE = 800;
 const DEFAULT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 

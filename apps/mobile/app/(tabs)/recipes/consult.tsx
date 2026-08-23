@@ -12,7 +12,6 @@ import { ChevronLeft, RotateCcw, Send } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,6 +36,7 @@ import {
   consultRecipe,
   type ConsultMessage,
 } from '../../../src/services/recipe-consult.provider';
+import { dialog } from '../../../src/services/dialog.service';
 import { createRecipe } from '../../../src/services/recipe.service';
 import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import { recordCloudInference } from '../../../src/services/usage.service';
@@ -133,20 +133,18 @@ export default function ConsultScreen() {
     }
   }, [input, busy, messages, draft, usePantry, pantryGroupFilter, router]);
 
-  const handleRestart = () => {
-    Alert.alert(t('recipeImport.consult.restart'), t('recipeImport.consult.restartConfirm'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('recipeImport.consult.restart'),
-        style: 'destructive',
-        onPress: () => {
-          setMessages([]);
-          setDraft(null);
-          setReady(false);
-          setErrorMsg(null);
-        },
-      },
-    ]);
+  const handleRestart = async () => {
+    const confirmed = await dialog.confirm({
+      title: t('recipeImport.consult.restart'),
+      message: t('recipeImport.consult.restartConfirm'),
+      confirmLabel: t('recipeImport.consult.restart'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setMessages([]);
+    setDraft(null);
+    setReady(false);
+    setErrorMsg(null);
   };
 
   const handleSave = async (data: RecipeFormData) => {
@@ -176,7 +174,7 @@ export default function ConsultScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{t('recipeImport.consult.title')}</Text>
         <Pressable
-          onPress={handleRestart}
+          onPress={() => void handleRestart()}
           hitSlop={8}
           style={styles.headerButton}
           disabled={messages.length === 0}
