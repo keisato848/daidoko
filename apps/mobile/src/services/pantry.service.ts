@@ -722,6 +722,30 @@ export async function defaultGroupFor(name: string, unit?: string | null): Promi
   return rows[0].groupName ?? null;
 }
 
+/**
+ * 突合に使う在庫を**数量つき**で返す（#214）。`getInStockNormalizedNames` と同じ絞り込みで、
+ * 「在庫 1個」と手持ちを添えて見せるために数量と単位も持ってくる。
+ */
+export async function getInStockForMatching(): Promise<
+  { nameNormalized: string; quantity: number | null; unit: string | null }[]
+> {
+  if (!isNativePlatform) return [];
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
+  const rows = await getDb()
+    .select({
+      nameNormalized: schema.pantryItems.nameNormalized,
+      quantity: schema.pantryItems.quantity,
+      unit: schema.pantryItems.unit,
+    })
+    .from(schema.pantryItems)
+    .where(eq(schema.pantryItems.familyId, await currentFamilyId()));
+
+  return rows.filter((r) => r.quantity == null || r.quantity > 0);
+}
+
 /** Normalized names currently in stock (quantity null = unmanaged-but-present, or > 0). */
 export async function getInStockNormalizedNames(groups?: readonly string[]): Promise<string[]> {
   if (!isNativePlatform) return [];

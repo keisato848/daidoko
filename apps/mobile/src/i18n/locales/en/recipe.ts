@@ -119,6 +119,20 @@ const recipe: typeof ja = {
     },
     addMissingLabel: 'Add missing ingredients to the shopping list',
 
+    /**
+     * Selection sheet (#214). Items already in the pantry stay on the list,
+     * unchecked with the reason shown — the user decides, not the app.
+     */
+    shoppingPick: {
+      title: 'Add to shopping list',
+      body: "Checked items get added. Pick the ones you're short of, even if you have some.",
+      inPantry: 'In pantry: {{amount}}',
+      inPantryUnknown: 'In pantry',
+      onList: 'On the list',
+      add: 'Add',
+      addNone: 'Pick at least one',
+    },
+
     emptyMemo: 'No notes yet',
     emptyHistory: 'No cooking records yet',
     emptyHistoryHint: 'After cooking, tap “Record” to save a rating and notes',

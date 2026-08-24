@@ -135,6 +135,20 @@ const recipe = {
     } satisfies PluralMessage,
     addMissingLabel: '足りない材料を買い物リストに追加',
 
+    /**
+     * 選択シート（#214）。在庫にある材料を一覧から**消さずに**、
+     * チェックを外した状態で理由を添えて見せる。引き算はアプリではなく利用者がやる。
+     */
+    shoppingPick: {
+      title: '買い物リストに追加',
+      body: 'チェックしたものを追加します。在庫にあるものも、足りなければ選べます。',
+      inPantry: '在庫 {{amount}}',
+      inPantryUnknown: '在庫あり',
+      onList: 'リストにあり',
+      add: '追加',
+      addNone: '選んでください',
+    },
+
     emptyMemo: 'メモはまだありません',
     emptyHistory: 'まだ調理記録がありません',
     emptyHistoryHint: '調理完了後に「記録する」で評価・メモを残せます',

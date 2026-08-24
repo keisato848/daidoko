@@ -15,6 +15,7 @@ import { normalizeItemName } from '../utils/itemName';
 import { getRecipeDetail } from './recipe.service';
 import { getCurrentUser } from './user.service';
 import type { ShoppingItem, ShoppingItemSource } from './types';
+import type { ShoppingPlanRow } from '../utils/shoppingPlan';
 
 interface ShoppingRow {
   id: string;
@@ -208,6 +209,74 @@ export function describeAddMissingResult(result: AddMissingIngredientsResult): A
   }
   if (result.alreadyOnList > 0) return { kind: 'all-on-list' };
   return { kind: 'nothing-missing' };
+}
+
+/**
+ * レシピの材料を「どう扱うか」まで決めた一覧を返す（#214・**書き込まない**）。
+ *
+ * 在庫にあるものを**画面から消さない**のが目的。消すと「なぜ卵が入らなかったのか」が
+ * 利用者に分からず、卵が 1 個しか無いのに 3 個要る場面で行き止まりになる
+ * （`docs/買い物リスト・在庫設計.md` §5.3-a）。
+ *
+ * ここでも名寄せ辞書を育てる — `addMissingRecipeIngredientsToList` と同じ理由（§6）。
+ */
+export async function buildRecipeShoppingPlan(recipeId: string): Promise<ShoppingPlanRow[]> {
+  if (!isNativePlatform) return [];
+  const detail = await getRecipeDetail(recipeId);
+  if (!detail) return [];
+
+  const { getInStockForMatching } = await import('./pantry.service');
+  const { getAliasMap } = await import('./name-alias.service');
+  const { normalizeItemName } = await import('../utils/itemName');
+  const { buildShoppingPlan } = await import('../utils/shoppingPlan');
+  const [stocks, currentAliases, listed] = await Promise.all([
+    getInStockForMatching(),
+    getAliasMap(),
+    getShoppingItems(),
+  ]);
+  let aliases = currentAliases;
+
+  const stockNames = stocks.map((stock) => stock.nameNormalized);
+  const unresolved = detail.ingredients
+    .map((ingredient) => normalizeItemName(ingredient.name))
+    .filter((name) => name && !isInStock(name, stockNames, aliases));
+  if (unresolved.length > 0) {
+    const { resolveNames } = await import('./name-resolve.service');
+    const resolved = await resolveNames(unresolved).catch(() => null);
+    if (resolved && resolved.resolved > 0) aliases = await getAliasMap();
+  }
+
+  const pending = listed.filter((item) => !item.checked).map((item) => item.name);
+  return buildShoppingPlan(
+    detail.ingredients.map((ingredient) => ({
+      name: ingredient.name,
+      amount: ingredient.amount ?? null,
+    })),
+    stocks,
+    pending,
+    aliases,
+  );
+}
+
+/**
+ * 選んだ行だけを買い物リストへ入れる（#214）。**在庫にあるかは見ない** —
+ * 「1 個あるけど 3 個要るから買う」の判断はもう利用者が済ませている。
+ * 返すのは実際に足せた数（同じ名前が未購入で並んでいるときは足さない）。
+ */
+export async function addSelectedIngredientsToList(
+  recipeId: string,
+  rows: readonly ShoppingPlanRow[],
+): Promise<number> {
+  if (!isNativePlatform) return 0;
+  let added = 0;
+  for (const row of rows) {
+    const inserted = await addShoppingItem(row.name, row.amount ?? undefined, {
+      source: 'recipe',
+      recipeId,
+    });
+    if (inserted) added += 1;
+  }
+  return added;
 }
 
 /**
