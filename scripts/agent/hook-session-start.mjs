@@ -1,6 +1,8 @@
-import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { KNOWLEDGE_TARGETS } from './lib/knowledge-map.mjs';
 import { runCommand } from './lib/runtime.mjs';
 
 const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -18,6 +20,7 @@ if (result.ok) {
       const marker = entry.ok ? '[OK]' : '[NG]';
       lines.push(`${marker} ${entry.label}: ${entry.detail}`);
     }
+    lines.push(...knowledgeIndex());
     systemMessage = lines.join('\n');
   } catch {
     systemMessage = `Agent Suite session start\n${result.stdout.trim()}`.trim();
@@ -26,6 +29,18 @@ if (result.ok) {
   systemMessage = `Agent Suite session start\n${result.combinedOutput}`;
 }
 
-process.stdout.write(
-  `${JSON.stringify({ continue: true, systemMessage }, null, 2)}\n`,
-);
+/**
+ * 「同じ穴を掘り直さない」ための索引（CLAUDE.md §5）。
+ * **作業を始める前に該当箇所を読む**ためのもので、終わったら分かったことをここへ書き足す。
+ * 実在するファイルだけ出す（消えた文書を指し続けないように）。
+ */
+function knowledgeIndex() {
+  const lines = ['記録済みの落とし穴（着手前に該当箇所を読む / 終わりに書き足す）:'];
+  for (const entry of KNOWLEDGE_TARGETS) {
+    if (!existsSync(join(rootDir, entry.path))) continue;
+    lines.push(`  - ${entry.kind} → ${entry.path} ${entry.section}`);
+  }
+  return lines.length > 1 ? lines : [];
+}
+
+process.stdout.write(`${JSON.stringify({ continue: true, systemMessage }, null, 2)}\n`);

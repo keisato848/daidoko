@@ -1,11 +1,23 @@
 /**
- * S16: Family Group Management
- * Local-first family profile, members, invite code, and join flow.
+ * S16: 家族グループ。
+ *
+ * プロフィール・メンバー（調理記録の「誰が」用）はローカルのまま。
+ * 招待コード・参加は **クラウド共有（同期 S0）の本物**に置き換えた —
+ * 以前はローカルのモックで、コードを発行しても相手に何も届かなかった。
+ * docs/クラウド同期設計.md §2。参加/作成の確認ダイアログが同意の瞬間（§5-2）。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronLeft, Copy, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
+import { ChevronLeft, Copy, LogOut, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
@@ -14,23 +26,100 @@ import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
 import { dialog } from '../../src/services/dialog.service';
 import {
+  SyncError,
+  createSyncGroup,
+  deleteSyncGroup,
+  evictSyncDevice,
+  fetchSyncMe,
+  getSyncState,
+  joinSyncGroup,
+  leaveSyncGroup,
+  rotateSyncInvite,
+  type SyncErrorCode,
+  type SyncMe,
+} from '../../src/services/sync-client.service';
+import {
+  countUndecidedSharedPantryItems,
+  revertUndecidedPantryItemsShared,
+  setUndecidedPantryItemsShared,
+} from '../../src/services/pantry.service';
+import {
+  countUndecidedSharedShoppingItems,
+  revertUndecidedShoppingItemsShared,
+  setUndecidedShoppingItemsShared,
+} from '../../src/services/shopping-list.service';
+import { onSyncGroupJoined, onSyncGroupLeft } from '../../src/services/sync-runner.service';
+import {
   addFamilyMember,
   getCurrentFamily,
   getCurrentFamilyProfile,
   getCurrentUser,
   getCurrentUserProfile,
   getFamilyMembers,
-  joinFamilyByInviteCode,
   removeFamilyMember,
-  rotateCurrentFamilyInviteCode,
   updateCurrentFamilyName,
   updateCurrentUserDisplayName,
 } from '../../src/services/user.service';
 import type { CurrentFamily, CurrentUser, FamilyMember } from '../../src/services/types';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 
+/** 「最終同期」の相対表示。日付そのものは個人情報ではないが、細かすぎる時刻は出さない */
+function formatLastSeen(iso: string): string {
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return t('family.sync.devices.justNow');
+  const days = Math.floor(ms / 86_400_000);
+  if (days === 0) return t('family.sync.devices.today');
+  return tCount('family.sync.devices.daysAgo', days);
+}
+
 function roleLabel(role: FamilyMember['role']): string {
   return role === 'owner' ? t('family.role.owner') : t('family.role.member');
+}
+
+/** クラウド共有セクションの表示状態 */
+type CloudPhase =
+  | { kind: 'loading' }
+  | { kind: 'unavailable' } // Web など同期の無い環境
+  | { kind: 'none' } // 未参加
+  | { kind: 'offline-joined' } // 参加中だがサーバーに届かない（オフライン・準備中）
+  | { kind: 'joined'; me: SyncMe };
+
+/** SyncError を人間の言葉へ（生のエラーを画面に出さない — #202） */
+function syncErrorText(err: unknown): string {
+  const code: SyncErrorCode | null = err instanceof SyncError ? err.code : null;
+  switch (code) {
+    case 'INVITE_INVALID':
+      return t('family.sync.error.inviteInvalid');
+    case 'INVITE_EXPIRED':
+      return t('family.sync.error.inviteExpired');
+    case 'GROUP_FULL':
+      return t('family.sync.error.groupFull');
+    case 'RATE_LIMITED':
+      return t('family.sync.error.rateLimited');
+    case 'OWNER_ONLY':
+      return t('family.sync.error.ownerOnly');
+    case 'AUTH_INVALID':
+      return t('family.sync.error.authInvalid');
+    case 'ALREADY_JOINED':
+      return t('family.sync.error.alreadyJoined');
+    case 'NETWORK':
+      return t('family.sync.error.network');
+    case 'SYNC_UNAVAILABLE':
+      return t('family.sync.unavailable');
+    default:
+      return t('family.sync.error.server');
+  }
+}
+
+function formatInviteExpiry(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString(undefined, {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export default function FamilyScreen() {
@@ -43,6 +132,8 @@ export default function FamilyScreen() {
   const [newMemberName, setNewMemberName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [saving, setSaving] = useState(false);
+  const [cloud, setCloud] = useState<CloudPhase>({ kind: 'loading' });
+  const [syncBusy, setSyncBusy] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -58,10 +149,30 @@ export default function FamilyScreen() {
     setFamilyName(nextFamily.name);
   }, []);
 
+  const loadCloud = useCallback(async () => {
+    const state = await getSyncState();
+    if (state.kind === 'unavailable') {
+      setCloud({ kind: 'unavailable' });
+      return;
+    }
+    if (state.kind === 'none') {
+      setCloud({ kind: 'none' });
+      return;
+    }
+    try {
+      setCloud({ kind: 'joined', me: await fetchSyncMe() });
+    } catch (err) {
+      // AUTH_INVALID = グループ側で消された。鍵は破棄済みなので未参加へ自己修復
+      if (err instanceof SyncError && err.code === 'AUTH_INVALID') setCloud({ kind: 'none' });
+      else setCloud({ kind: 'offline-joined' });
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       void refresh();
-    }, [refresh]),
+      void loadCloud();
+    }, [refresh, loadCloud]),
   );
 
   const runAction = useCallback(
@@ -109,41 +220,200 @@ export default function FamilyScreen() {
     await runAction(async () => removeFamilyMember(member.id));
   };
 
-  const handleRotateInviteCode = () => {
-    void runAction(async () => {
-      await rotateCurrentFamilyInviteCode();
-    });
-  };
-
-  const handleShareCode = async () => {
-    await Share.share({
-      message: t('family.shareMessage', { name: family.name, code: family.inviteCode }),
-      title: t('family.shareTitle'),
-    }).catch(() => {
-      void dialog.alert({ title: t('family.inviteSection'), message: family.inviteCode });
-    });
-  };
-
-  const handleJoinWithCode = () => {
-    void runAction(async () => {
-      const result = await joinFamilyByInviteCode(joinCode);
-      setJoinCode('');
-      if (result.status === 'already-member') {
-        void dialog.alert({
-          title: t('family.alreadyMemberTitle'),
-          message: t('family.alreadyMemberBody', { name: result.family.name }),
-        });
-      } else {
-        // 画面に留まる純粋な成功なのでトースト（docs/画面設計.md §7-1）
-        setToastMessage(t('family.joinedBody', { name: result.family.name }));
+  /** 同期 API を1つ実行する共通処理。失敗は SyncError を人間の言葉にして出す */
+  const runSyncAction = useCallback(
+    async (action: () => Promise<void>) => {
+      setSyncBusy(true);
+      try {
+        await action();
+      } catch (err) {
+        void dialog.alert({ title: t('family.sync.errorTitle'), message: syncErrorText(err) });
+        // グループが消えていた場合は表示も未参加へ戻す
+        if (err instanceof SyncError && err.code === 'AUTH_INVALID') await loadCloud();
+      } finally {
+        setSyncBusy(false);
       }
+    },
+    [loadCloud],
+  );
+
+  /**
+   * いまある買い物・在庫を共有するかを一度だけ聞く（設計 §5-2）。
+   *
+   * **参加より先に聞き、答えを反映してから参加する。** 参加してから聞くと二つ壊れる —
+   * 実機検証（2026-08-22）で両方とも起きた:
+   *
+   * 1. 「自分だけ」を選んでも手遅れ。参加した瞬間に全件が送信待ちへ積まれ、
+   *    いまある品目が一度サーバーへ出てしまう。
+   * 2. **家族の品目を消す。** 参加直後の pull で降りてきた他端末の品目まで
+   *    「いまある品目」に含まれ、`shared = 0` に倒れて墓標として押し返される。
+   *
+   * 先に聞けば、自分だけにした行はそもそも送信対象に入らない
+   * （`listRowSyncableEntities` が共有中の行だけを返す）。
+   *
+   * 対象は**まだ共有可否を決めていない品目だけ**（`shared IS NULL`）。他端末から
+   * 降りてきた品目は決定済みなので触らない。対象が無ければ聞かない。
+   *
+   * 戻り値は**答えを無かったことにする関数**。参加・作成がこの後で失敗したら呼ぶ —
+   * 呼ばないと決定だけが残り、次に参加したときプロンプトが出ず、「自分だけ」にした
+   * 品目は永久に同期されない／「共有する」にした品目は別のグループへ無確認で出る。
+   */
+  const askShareExistingItems = useCallback(async (): Promise<() => Promise<void>> => {
+    const noop = async () => undefined;
+    const [shopping, pantry] = await Promise.all([
+      countUndecidedSharedShoppingItems().catch(() => 0),
+      countUndecidedSharedPantryItems().catch(() => 0),
+    ]);
+    if (shopping === 0 && pantry === 0) return noop;
+
+    const applyChoice = async (shared: boolean): Promise<() => Promise<void>> => {
+      const [shoppingIds, pantryIds] = await Promise.all([
+        setUndecidedShoppingItemsShared(shared).catch((): string[] => []),
+        setUndecidedPantryItemsShared(shared).catch((): string[] => []),
+      ]);
+      return async () => {
+        await Promise.all([
+          revertUndecidedShoppingItemsShared(shoppingIds),
+          revertUndecidedPantryItemsShared(pantryIds),
+        ]).catch(() => undefined);
+      };
+    };
+
+    // **答えが返るまで待つ**。ここを待たずに進めると D1 が戻る（上のコメント）。
+    // 背景タップ・戻るキーは `dialog.confirm` の却下側＝第 1 ボタンに倒れるので、
+    // 「共有しない」を第 1 ボタンに置くこと。逆にすると、確かめないまま
+    // 手元の買い物リストと在庫が家族へ出る
+    const share = await dialog.confirm({
+      title: t('pantry.shared.askTitle'),
+      message: t('pantry.shared.askBody'),
+      cancelLabel: t('pantry.shared.askNo'),
+      confirmLabel: t('pantry.shared.askYes'),
+    });
+    return applyChoice(share).catch(() => noop);
+  }, []);
+
+  /** グループ作成。確認ダイアログが「何が共有されるか」への同意の瞬間（§5-2） */
+  const handleCreateGroup = async () => {
+    const agreed = await dialog.confirm({
+      title: t('family.sync.consentTitle'),
+      message: t('family.sync.consentBody'),
+      confirmLabel: t('family.sync.create'),
+    });
+    if (!agreed) return;
+    await runSyncAction(async () => {
+      // 送信が始まる前に、いまある品目をどうするか決めておく
+      const revertShareChoice = await askShareExistingItems();
+      try {
+        // 表示名は送らない。サーバーは返さないので使い道が無く、
+        // 「サーバーに個人情報を置かない」（設計 §2）に反するだけになる
+        await createSyncGroup(null);
+      } catch (err) {
+        await revertShareChoice(); // 作れなかったのに決定だけ残さない
+        throw err;
+      }
+      // 参加した瞬間から共有が始まる。いまある蔵書を全部送信待ちへ積む（§5-2）
+      await onSyncGroupJoined();
+      await loadCloud();
+      // 次にやること（招待コードを家族に伝える）を含むのでトーストにしない（画面設計 §7-1）
+      await dialog.alert({
+        title: t('family.sync.createdTitle'),
+        message: t('family.sync.createdBody'),
+      });
+    });
+  };
+
+  const handleJoinGroup = async () => {
+    const code = joinCode.trim();
+    if (!code) return;
+    const agreed = await dialog.confirm({
+      title: t('family.sync.consentTitle'),
+      message: t('family.sync.consentBody'),
+      confirmLabel: t('family.sync.join'),
+    });
+    if (!agreed) return;
+    await runSyncAction(async () => {
+      const revertShareChoice = await askShareExistingItems();
+      try {
+        await joinSyncGroup(code, null);
+      } catch (err) {
+        await revertShareChoice(); // 招待コードの打ち間違い等。決定だけ残さない
+        throw err;
+      }
+      setJoinCode('');
+      await onSyncGroupJoined();
+      await loadCloud();
+      // 画面に留まる純粋な成功なのでトースト（docs/画面設計.md §7-1）
+      setToastMessage(t('family.sync.joinedBody'));
+    });
+  };
+
+  const handleShareInvite = (code: string) => {
+    void Share.share({ message: t('family.sync.shareMessage', { code }) }).catch(() => {
+      void dialog.alert({ title: t('family.sync.inviteLabel'), message: code });
+    });
+  };
+
+  const handleRotateInvite = () => {
+    void runSyncAction(async () => {
+      await rotateSyncInvite();
+      await loadCloud();
+    });
+  };
+
+  /**
+   * 端末を外す（#209）。紛失・初期化した端末の幽霊を消す入口。
+   * 端末には名前が無いので「最終同期 N 日前」だけで見分ける（§0-2: 個人情報を持たない）。
+   */
+  const handleEvictDevice = async (deviceId: string, lastSeenAt: string) => {
+    const confirmed = await dialog.confirm({
+      title: t('family.sync.devices.evictTitle'),
+      message: t('family.sync.devices.evictBody', { when: formatLastSeen(lastSeenAt) }),
+      confirmLabel: t('family.sync.devices.evict'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await runSyncAction(async () => {
+      await evictSyncDevice(deviceId);
+      await loadCloud();
+    });
+  };
+
+  const handleLeaveGroup = async () => {
+    const confirmed = await dialog.confirm({
+      title: t('family.sync.leaveConfirmTitle'),
+      message: t('family.sync.leaveConfirmBody'),
+      confirmLabel: t('family.sync.leave'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await runSyncAction(async () => {
+      await leaveSyncGroup();
+      await onSyncGroupLeft();
+      await loadCloud();
+    });
+  };
+
+  const handleDeleteGroup = async () => {
+    const confirmed = await dialog.confirm({
+      title: t('family.sync.deleteConfirmTitle'),
+      message: t('family.sync.deleteConfirmBody'),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!confirmed) return;
+    await runSyncAction(async () => {
+      await deleteSyncGroup();
+      await onSyncGroupLeft();
+      await loadCloud();
     });
   };
 
   const hasProfileChanges =
     familyName.trim() !== family.name || displayName.trim() !== currentUser.displayName;
   const canAddMember = newMemberName.trim().length > 0 && !saving;
-  const canJoin = joinCode.trim().length > 0 && !saving;
+  // syncBusy も見る。参加の往復中にもう一度押せると**端末が 2 つ登録され**、片方は
+  // 資格情報が無いので誰からも消せない幽霊になる
+  const canJoin = joinCode.trim().length > 0 && !saving && !syncBusy;
 
   return (
     <View style={styles.container}>
@@ -235,46 +505,151 @@ export default function FamilyScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('family.inviteSection')}</Text>
-          <View style={styles.inviteCodeBox}>
-            <Text style={styles.inviteCode}>{family.inviteCode}</Text>
-          </View>
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.secondaryButton} onPress={handleShareCode} disabled={saving}>
-              <Copy size={14} color={Colors.gold} />
-              <Text style={styles.secondaryButtonText}>{t('family.share')}</Text>
-            </Pressable>
-            <Pressable
-              style={styles.secondaryButton}
-              onPress={handleRotateInviteCode}
-              disabled={saving}
-            >
-              <RefreshCw size={14} color={Colors.gold} />
-              <Text style={styles.secondaryButtonText}>{t('family.rotate')}</Text>
-            </Pressable>
-          </View>
-        </View>
+          <Text style={styles.sectionTitle}>{t('family.sync.section')}</Text>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('family.joinSection')}</Text>
-          <View style={styles.inlineForm}>
-            <TextInput
-              style={[styles.input, styles.inlineInput]}
-              value={joinCode}
-              onChangeText={(value) => setJoinCode(value.toUpperCase())}
-              placeholder={t('family.joinPlaceholder')}
-              placeholderTextColor={Colors.muted}
-              autoCapitalize="characters"
-              maxLength={12}
-            />
-            <Pressable
-              style={[styles.iconButton, !canJoin && styles.buttonDisabled]}
-              onPress={handleJoinWithCode}
-              disabled={!canJoin}
-            >
-              <UserPlus size={17} color={Colors.bg} />
-            </Pressable>
-          </View>
+          {cloud.kind === 'loading' && <ActivityIndicator size="small" color={Colors.gold} />}
+
+          {cloud.kind === 'unavailable' && (
+            <Text style={styles.syncInfo}>{t('family.sync.unavailable')}</Text>
+          )}
+
+          {cloud.kind === 'offline-joined' && (
+            <>
+              <Text style={styles.syncInfo}>{t('family.sync.offlineJoined')}</Text>
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => void loadCloud()}
+                disabled={syncBusy}
+              >
+                <RefreshCw size={14} color={Colors.gold} />
+                <Text style={styles.secondaryButtonText}>{t('family.sync.retry')}</Text>
+              </Pressable>
+            </>
+          )}
+
+          {cloud.kind === 'none' && (
+            <>
+              <Text style={styles.syncInfo}>{t('family.sync.introNone')}</Text>
+              <Pressable
+                style={[styles.primaryButton, syncBusy && styles.buttonDisabled]}
+                onPress={() => void handleCreateGroup()}
+                disabled={syncBusy}
+              >
+                <Text style={styles.primaryButtonText}>{t('family.sync.create')}</Text>
+              </Pressable>
+              <View style={styles.inlineForm}>
+                <TextInput
+                  style={[styles.input, styles.inlineInput]}
+                  value={joinCode}
+                  // 日本語 IME は全角で確定することがある（実機で 404 になった）。NFKC で半角に寄せる
+                  onChangeText={(value) => setJoinCode(value.normalize('NFKC').toUpperCase())}
+                  placeholder={t('family.sync.joinPlaceholder')}
+                  placeholderTextColor={Colors.muted}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={12}
+                />
+                <Pressable
+                  style={[styles.iconButton, !canJoin && styles.buttonDisabled]}
+                  onPress={() => void handleJoinGroup()}
+                  disabled={!canJoin}
+                  accessibilityLabel={t('family.sync.join')}
+                >
+                  <UserPlus size={17} color={Colors.bg} />
+                </Pressable>
+              </View>
+            </>
+          )}
+
+          {cloud.kind === 'joined' && (
+            <>
+              <Text style={styles.syncMemberCount}>
+                {tCount('family.sync.memberCountLabel', cloud.me.memberCount)}
+              </Text>
+              {cloud.me.isOwner && cloud.me.inviteCode && (
+                <>
+                  <Text style={styles.syncInviteLabel}>{t('family.sync.inviteLabel')}</Text>
+                  <View style={styles.inviteCodeBox}>
+                    <Text style={styles.inviteCode}>{cloud.me.inviteCode}</Text>
+                  </View>
+                  {cloud.me.inviteExpiresAt && (
+                    <Text style={styles.syncExpiry}>
+                      {t('family.sync.inviteExpires', {
+                        when: formatInviteExpiry(cloud.me.inviteExpiresAt),
+                      })}
+                    </Text>
+                  )}
+                  <View style={styles.buttonRow}>
+                    <Pressable
+                      style={styles.secondaryButton}
+                      onPress={() => handleShareInvite(cloud.me.inviteCode as string)}
+                      disabled={syncBusy}
+                    >
+                      <Copy size={14} color={Colors.gold} />
+                      <Text style={styles.secondaryButtonText}>{t('family.share')}</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.secondaryButton}
+                      onPress={handleRotateInvite}
+                      disabled={syncBusy}
+                    >
+                      <RefreshCw size={14} color={Colors.gold} />
+                      <Text style={styles.secondaryButtonText}>{t('family.rotate')}</Text>
+                    </Pressable>
+                  </View>
+                  <Text style={styles.syncOwnerBadge}>{t('family.sync.ownerBadge')}</Text>
+                </>
+              )}
+              {cloud.me.devices && cloud.me.devices.length > 1 && (
+                <View style={styles.deviceList}>
+                  <Text style={styles.syncInviteLabel}>{t('family.sync.devices.label')}</Text>
+                  {cloud.me.devices.map((device, index) => (
+                    <View key={device.id} style={styles.deviceRow}>
+                      <Text style={styles.deviceName}>
+                        {device.isSelf
+                          ? t('family.sync.devices.self')
+                          : t('family.sync.devices.other', { index: index + 1 })}
+                        {device.isOwner ? t('family.sync.devices.ownerMark') : ''}
+                      </Text>
+                      <Text style={styles.deviceMeta}>
+                        {t('family.sync.devices.lastSeen', {
+                          when: formatLastSeen(device.lastSeenAt),
+                        })}
+                      </Text>
+                      {cloud.me.isOwner && !device.isSelf && (
+                        <Pressable
+                          onPress={() => void handleEvictDevice(device.id, device.lastSeenAt)}
+                          disabled={syncBusy}
+                          hitSlop={8}
+                          accessibilityLabel={t('family.sync.devices.evict')}
+                        >
+                          <Text style={styles.deviceEvict}>{t('family.sync.devices.evict')}</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+              <Pressable
+                style={[styles.leaveButton, syncBusy && styles.buttonDisabled]}
+                onPress={() => void handleLeaveGroup()}
+                disabled={syncBusy}
+              >
+                <LogOut size={15} color="#FF6B6B" />
+                <Text style={styles.leaveButtonText}>{t('family.sync.leave')}</Text>
+              </Pressable>
+              {cloud.me.isOwner && (
+                <Pressable
+                  style={[styles.deleteGroupButton, syncBusy && styles.buttonDisabled]}
+                  onPress={() => void handleDeleteGroup()}
+                  disabled={syncBusy}
+                >
+                  <Trash2 size={15} color="#FF6B6B" />
+                  <Text style={styles.leaveButtonText}>{t('family.sync.deleteGroup')}</Text>
+                </Pressable>
+              )}
+            </>
+          )}
         </View>
       </KeyboardAwareScroll>
 
@@ -463,5 +838,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: Colors.gold,
+  },
+  syncInfo: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: Colors.paperDim,
+    marginBottom: 10,
+  },
+  syncMemberCount: {
+    fontSize: 14,
+    color: Colors.paper,
+    marginBottom: 10,
+  },
+  syncInviteLabel: {
+    fontSize: 12,
+    color: Colors.muted,
+    marginBottom: 6,
+  },
+  syncExpiry: {
+    fontSize: 12,
+    color: Colors.muted,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  deviceList: { marginTop: 12, gap: 6 },
+  deviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  deviceName: { color: Colors.paper, fontSize: 13, flex: 1 },
+  deviceMeta: { color: Colors.muted, fontSize: 11 },
+  deviceEvict: { color: '#FF6B6B', fontSize: 12 },
+  syncOwnerBadge: {
+    fontSize: 12,
+    color: Colors.goldDim,
+    marginTop: 8,
+  },
+  leaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#5A2E2E',
+    borderRadius: 10,
+    paddingVertical: 11,
+    marginTop: 14,
+  },
+  deleteGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 10,
+    paddingVertical: 11,
+    marginTop: 8,
+  },
+  leaveButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FF6B6B',
   },
 });

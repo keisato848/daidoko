@@ -86,6 +86,55 @@ describe('database migrations', () => {
     expect(statements[0]).toContain('idx_store_group_aliases_family_store');
   });
 
+  it('v14: クラウド同期の送信待ち（sync_queue）を作る', () => {
+    const statements: string[] = [];
+
+    const result = runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS sync_queue');
+    // 主キーが (entity_type, entity_id) であることが「連続編集が 1 回に合流する」の実体。
+    // ここが崩れると同じレシピの編集が何通も送られる
+    expect(statements[0]).toContain('PRIMARY KEY (entity_type, entity_id)');
+    expect(statements[0]).toContain('idx_sync_queue_queued');
+  });
+
+  it('v15: 買い物・在庫の同期に要る列を足し、updated_at を埋める', () => {
+    const statements: string[] = [];
+
+    const result = runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    // **すべて nullable であること。** NOT NULL を足すと、その列を持たない古いバックアップの
+    // 復元が INSERT の制約違反で丸ごと失敗する（replaceDatabase が NULL を明示的に渡すため）
+    expect(statements).toContain('ALTER TABLE shopping_items ADD COLUMN updated_at TEXT');
+    expect(statements).toContain('ALTER TABLE shopping_items ADD COLUMN shared INTEGER');
+    expect(statements).toContain('ALTER TABLE pantry_items ADD COLUMN shared INTEGER');
+    for (const statement of statements) {
+      if (statement.startsWith('ALTER TABLE') && /ADD COLUMN (updated_at|shared)/.test(statement)) {
+        expect(statement).not.toContain('NOT NULL');
+      }
+    }
+
+    // 既存行の updated_at は「チェックした時刻、無ければ作った時刻」で埋める（冪等）
+    const backfill = statements.find((s) => s.includes('UPDATE shopping_items'));
+    expect(backfill).toBeDefined();
+    expect(backfill).toContain('COALESCE(checked_at, created_at)');
+    expect(backfill).toContain('WHERE updated_at IS NULL');
+  });
+
+  it('買い物リストの updated_at 埋めが失敗しても移行は止まらない', () => {
+    const result = runMigrations({
+      execSync: (statement) => {
+        if (statement.includes('UPDATE shopping_items')) {
+          throw new Error('no such column: updated_at');
+        }
+      },
+    });
+
+    expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+  });
+
   it('店名の引き継ぎが失敗しても移行は止まらない（列がまだ無い等）', () => {
     const result = runMigrations({
       execSync: (statement) => {

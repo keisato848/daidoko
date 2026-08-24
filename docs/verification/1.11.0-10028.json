@@ -1,0 +1,17 @@
+{
+  "version": "1.11.0",
+  "versionCode": 10028,
+  "verifiedAt": "2026-08-24T12:25:20.737Z",
+  "device": {
+    "serial": "359971911306313",
+    "model": "SH-RM19s",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10028,
+  "checked": [
+    "#213 の修正を本番サーバー相手に実機確認（AQUOS・1.11.0/10028＋修正）: グループ作成が通る(deleteOrphanParts が実 SQLite で落ちない)・持ち分だけ届いた品目を抱えたまま削除→別グループ作成→行だけ受信で 2（修正前は 0）・同一セッションで持ち分→行の順に届く品目も 2（順序の窓を壊していない）。本番のテストデータは 4 グループとも削除済み"
+  ],
+  "screenshot": "screenshots/1.11.0-10028-2026-08-24T12-25-20-737Z.png",
+  "headCommit": "91a4c2b36354ca1d053899d6d3f3bca267b7c049"
+}

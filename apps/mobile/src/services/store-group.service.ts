@@ -14,6 +14,8 @@
  */
 import { isNativePlatform } from '../db/client';
 import { generateId } from '../utils/id';
+import { SYNC_ENTITY_STORE_GROUP_ALIAS } from './sync-payload';
+import { enqueueSyncEntity } from './sync-queue.service';
 
 export interface StoreGroupAlias {
   id: string;
@@ -75,21 +77,25 @@ export async function learnStoreGroup(storeName: string, groupName: string): Pro
     .limit(1);
 
   if (existing.length > 0) {
+    const id = existing[0].id;
     await db
       .update(schema.storeGroupAliases)
       .set({ groupName: group, updatedAt: now })
-      .where(eq(schema.storeGroupAliases.id, existing[0].id));
+      .where(eq(schema.storeGroupAliases.id, id));
+    await enqueueSyncEntity(SYNC_ENTITY_STORE_GROUP_ALIAS, id);
     return;
   }
 
+  const id = generateId();
   await db.insert(schema.storeGroupAliases).values({
-    id: generateId(),
+    id,
     familyId,
     storeName: store,
     groupName: group,
     createdAt: now,
     updatedAt: now,
   });
+  await enqueueSyncEntity(SYNC_ENTITY_STORE_GROUP_ALIAS, id);
 }
 
 /** 覚えている対応の一覧（メンテ画面用・新しい順） */
@@ -118,6 +124,7 @@ export async function deleteStoreGroupAlias(id: string): Promise<void> {
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
   await getDb().delete(schema.storeGroupAliases).where(eq(schema.storeGroupAliases.id, id));
+  await enqueueSyncEntity(SYNC_ENTITY_STORE_GROUP_ALIAS, id);
 }
 
 /** 買い物リストで使われている店グループの一覧（チップ表示用・名前順） */

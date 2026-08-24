@@ -8,6 +8,8 @@ import { Check, Plus, Store, X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
+import { SharedToggle } from '../../src/components/SharedToggle';
 import { AdBanner } from '../../src/components/AdBanner';
 import { GroupChips } from '../../src/components/GroupChips';
 import { GroupPicker } from '../../src/components/GroupPicker';
@@ -23,6 +25,7 @@ import { getShoppingStoreGroups } from '../../src/services/store-group.service';
 import {
   addShoppingItem,
   setShoppingItemChecked,
+  setShoppingItemShared,
   setShoppingItemStore,
   getShoppingItems,
   removeShoppingItem,
@@ -54,6 +57,8 @@ export default function ShoppingListScreen() {
       .catch(() => setKnownStores([]));
   }, []);
   useFocusEffect(refresh);
+  // 開いたまま家族の変更が届いたときに読み直す（クラウド同期 S2）
+  useSyncRefresh(refresh);
 
   const handleAdd = useCallback(async () => {
     const name = input.trim();
@@ -256,6 +261,16 @@ export default function ShoppingListScreen() {
                 </View>
               </View>
             </Pressable>
+            <SharedToggle
+              shared={item.shared}
+              onToggle={(next) => {
+                // 見た目を先に変える（同期の往復を待たせない）
+                setItems((prev) =>
+                  prev.map((row) => (row.id === item.id ? { ...row, shared: next } : row)),
+                );
+                void setShoppingItemShared(item.id, next).catch(() => refresh());
+              }}
+            />
             <Pressable
               onPress={() => setStorePickerFor(item.id)}
               hitSlop={8}

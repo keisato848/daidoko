@@ -28,7 +28,9 @@ import { t } from '../i18n';
 
 type DB = ExpoSQLiteDatabase<typeof schema>;
 
-export const CURRENT_SCHEMA_VERSION = 13; // v12: レシピの店名 / v13: 在庫・買い物のグループ、賞味期限、誰が
+// v12: レシピの店名 / v13: 在庫・買い物のグループ、賞味期限、誰が / v14: クラウド同期の送信待ち
+// v15: 買い物・在庫の同期（LWW の基準となる updated_at と、個人/家族の shared フラグ）
+export const CURRENT_SCHEMA_VERSION = 16;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -247,6 +249,28 @@ const CREATE_TABLES_SQL = `
     updated_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS sync_queue (
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    queued_at TEXT NOT NULL,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (entity_type, entity_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sync_queue_queued ON sync_queue(queued_at);
+
+  -- v16: per-device quantity parts (S2-B, design section 5-3). Value columns are all nullable.
+  CREATE TABLE IF NOT EXISTS pantry_quantity_parts (
+    item_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    net REAL,
+    epoch INTEGER,
+    updated_at TEXT,
+    PRIMARY KEY (item_id, device_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pantry_quantity_parts_item ON pantry_quantity_parts(item_id);
+
   CREATE TABLE IF NOT EXISTS ingredient_nutrition (
     id TEXT PRIMARY KEY,
     ingredient_id TEXT NOT NULL UNIQUE REFERENCES ingredients(id),
@@ -356,7 +380,7 @@ const CREATE_TABLES_SQL = `
 
 // Columns added after a table first shipped (SQLite has no ADD COLUMN IF NOT
 // EXISTS — the duplicate-column error on re-run is expected and swallowed).
-const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
+export const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   { table: 'recipes', columnDdl: 'cover_photo_path TEXT' }, // v7
   { table: 'steps', columnDdl: 'photo_path TEXT' }, // v7
   { table: 'recipes', columnDdl: 'pinned_at TEXT' }, // v8: 作りたいリスト
@@ -375,6 +399,15 @@ const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   { table: 'shopping_items', columnDdl: 'store_group TEXT' },
   { table: 'shopping_items', columnDdl: 'created_by TEXT' },
   { table: 'shopping_items', columnDdl: 'checked_by TEXT' },
+  // v15: 買い物・在庫の同期（設計 §5-2b）。**すべて nullable**にすること —
+  // NOT NULL にすると、その列を持たない古いバックアップの復元が丸ごと失敗する
+  // （`replaceDatabase` が明示的に NULL を渡すため DEFAULT が効かない）
+  { table: 'shopping_items', columnDdl: 'updated_at TEXT' },
+  { table: 'shopping_items', columnDdl: 'shared INTEGER' },
+  { table: 'pantry_items', columnDdl: 'shared INTEGER' },
+  // v16: 数量のベースライン（S2-B・設計 §5-3）。NULL = 未移行（quantity が権威）
+  { table: 'pantry_items', columnDdl: 'quantity_base REAL' },
+  { table: 'pantry_items', columnDdl: 'quantity_epoch INTEGER' },
 ];
 
 /**
@@ -410,6 +443,25 @@ function backfillRecipePlaceName(expoDb: { execSync: (sql: string) => void }): v
   }
 }
 
+/**
+ * v15: 買い物リストの `updated_at` を埋める。
+ *
+ * 同期の勝敗（LWW）はこの列で決まるので、列を足しただけだと**既存の行が全部 null**になり、
+ * 「ローカルに時刻が無い＝受信が常に勝つ」形になってしまう。既にある情報から一番近い
+ * 時刻（チェックした時刻、無ければ作った時刻）で埋める。**冪等**（null の行だけ触る）。
+ */
+function backfillShoppingUpdatedAt(expoDb: { execSync: (sql: string) => void }): void {
+  try {
+    expoDb.execSync(`
+      UPDATE shopping_items
+      SET updated_at = COALESCE(checked_at, created_at)
+      WHERE updated_at IS NULL
+    `);
+  } catch {
+    // 列がまだ無い等（新規インストール直後）。次回の起動で埋まる
+  }
+}
+
 /** Run migrations (create tables + additive column changes) */
 export function runMigrations(expoDb: { execSync: (sql: string) => void }): MigrationResult {
   expoDb.execSync(CREATE_TABLES_SQL);
@@ -421,6 +473,7 @@ export function runMigrations(expoDb: { execSync: (sql: string) => void }): Migr
     }
   }
   backfillRecipePlaceName(expoDb);
+  backfillShoppingUpdatedAt(expoDb);
   expoDb.execSync(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   return { schemaVersion: CURRENT_SCHEMA_VERSION };
 }

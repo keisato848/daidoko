@@ -331,6 +331,70 @@ shareApiRouter.delete('/books/:slug', (c) => {
 });
 
 // バックアップ用の全件ダンプ。SHARE_EXPORT_TOKEN 未設定なら存在ごと隠す（404）
+/**
+ * 共有レシピの JSON（#198: 共有リンクをアプリで開く）。
+ *
+ * 閲覧ページ（/r/:slug）と同じ公開範囲 — リンクを知っている人なら誰でも読める。
+ * 写真は返さない（別経路 /r/:slug/photo）。アプリは取り込み画面で中身を見せて、
+ * 確認してから保存する（いきなり保存しない — URL 取り込みと同じ）。
+ */
+shareApiRouter.get('/recipes/:slug', (c) => {
+  const row = getActiveShare(c.req.param('slug'));
+  if (!row) return c.json({ ok: false, error: 'NOT_FOUND' }, 404);
+  return c.json({ ok: true, data: shareRowToJson(row) });
+});
+
+/**
+ * 共有レシピ帖の JSON。パスコード付きの帖は `x-share-passcode` ヘッダで渡す
+ * （閲覧ページの cookie と同じ検証・同じロック）。
+ */
+shareApiRouter.get('/books/:slug', (c) => {
+  const slug = c.req.param('slug');
+  const found = getActiveBook(slug);
+  if (!found) return c.json({ ok: false, error: 'NOT_FOUND' }, 404);
+  if (found.book.passcodeHash) {
+    const passcode = c.req.header('x-share-passcode') ?? '';
+    if (!/^\d{4}$/.test(passcode)) return c.json({ ok: false, error: 'PASSCODE_REQUIRED' }, 401);
+    const check = verifyBookPasscode(slug, passcode);
+    if (check === 'locked') return c.json({ ok: false, error: 'PASSCODE_LOCKED' }, 429);
+    if (check === 'wrong') return c.json({ ok: false, error: 'PASSCODE_WRONG' }, 401);
+  }
+  return c.json({
+    ok: true,
+    data: {
+      slug: found.book.slug,
+      title: found.book.title,
+      description: found.book.description,
+      locale: found.book.locale,
+      recipes: found.recipes.map((r) => ({
+        title: r.title,
+        servings: r.servings,
+        cookTimeMin: r.cookTimeMin,
+        description: r.description,
+        ingredients: JSON.parse(r.ingredientsJson) as unknown,
+        steps: JSON.parse(r.stepsJson) as unknown,
+        tags: JSON.parse(r.tagsJson) as unknown,
+      })),
+    },
+  });
+});
+
+function shareRowToJson(row: ReturnType<typeof getActiveShare>): Record<string, unknown> {
+  if (!row) return {};
+  return {
+    slug: row.slug,
+    title: row.title,
+    servings: row.servings,
+    cookTimeMin: row.cookTimeMin,
+    description: row.description,
+    locale: row.locale,
+    ingredients: JSON.parse(row.ingredientsJson) as unknown,
+    steps: JSON.parse(row.stepsJson) as unknown,
+    tags: JSON.parse(row.tagsJson) as unknown,
+    hasPhoto: row.photo !== null,
+  };
+}
+
 shareApiRouter.get('/export', (c) => {
   const expected = process.env['SHARE_EXPORT_TOKEN'];
   if (!expected || expected.trim() === '') return c.notFound();

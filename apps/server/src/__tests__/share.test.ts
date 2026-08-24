@@ -136,6 +136,61 @@ describe('Web 共有', () => {
     expect(again.status).toBe(404);
   });
 
+  it('JSON: アプリで開く用に /api/v1/share/recipes/:slug が中身を返す（#198）', async () => {
+    const res = await publish(basePayload());
+    const { slug } = (await res.json()) as { slug: string };
+
+    const json = await app.request(`/api/v1/share/recipes/${slug}`);
+    expect(json.status).toBe(200);
+    const body = (await json.json()) as {
+      ok: boolean;
+      data: {
+        title: string;
+        ingredients: { name: string }[];
+        steps: { body: string }[];
+        hasPhoto: boolean;
+      };
+    };
+    expect(body.data.title).toBe(basePayload().title);
+    expect(body.data.ingredients.map((i) => i.name)).toEqual(['卵', 'ごはん']);
+    expect(body.data.steps).toHaveLength(2);
+    expect(body.data.hasPhoto).toBe(false);
+
+    const missing = await app.request('/api/v1/share/recipes/nope');
+    expect(missing.status).toBe(404);
+  });
+
+  it('App Links の検証ファイルは環境変数が無ければ 404・あれば JSON（#198）', async () => {
+    const saved = process.env['APP_LINKS_SHA256_FINGERPRINTS'];
+    delete process.env['APP_LINKS_SHA256_FINGERPRINTS'];
+    expect((await app.request('/.well-known/assetlinks.json')).status).toBe(404);
+
+    process.env['APP_LINKS_SHA256_FINGERPRINTS'] =
+      '52:9c:f0:c6:c6:07:13:b0:88:e4:7d:3d:20:52:fb:7d:e3:c9:81:dc:ff:6e:9d:2d:01:6b:40:52:17:87:93:9b, bogus';
+    const res = await app.request('/.well-known/assetlinks.json');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { target: { sha256_cert_fingerprints: string[] } }[];
+    // 大文字に揃え、形式外（bogus）は捨てる
+    expect(body[0]?.target.sha256_cert_fingerprints).toEqual([
+      '52:9C:F0:C6:C6:07:13:B0:88:E4:7D:3D:20:52:FB:7D:E3:C9:81:DC:FF:6E:9D:2D:01:6B:40:52:17:87:93:9B',
+    ]);
+    if (saved === undefined) delete process.env['APP_LINKS_SHA256_FINGERPRINTS'];
+    else process.env['APP_LINKS_SHA256_FINGERPRINTS'] = saved;
+
+    const savedTeam = process.env['APPLE_TEAM_ID'];
+    delete process.env['APPLE_TEAM_ID'];
+    expect((await app.request('/.well-known/apple-app-site-association')).status).toBe(404);
+    process.env['APPLE_TEAM_ID'] = 'ABCDE12345';
+    const aasa = await app.request('/.well-known/apple-app-site-association');
+    expect(aasa.status).toBe(200);
+    const aj = (await aasa.json()) as {
+      applinks: { details: { appID: string; paths: string[] }[] };
+    };
+    expect(aj.applinks.details[0]?.appID).toBe('ABCDE12345.com.daidoko.app');
+    if (savedTeam === undefined) delete process.env['APPLE_TEAM_ID'];
+    else process.env['APPLE_TEAM_ID'] = savedTeam;
+  });
+
   it('存在しない slug のページは 404', async () => {
     expect((await app.request('/r/nonexistent1')).status).toBe(404);
   });
@@ -195,6 +250,24 @@ describe('Web 共有', () => {
       expect(html).toContain('肉じゃが');
       expect(html).toContain('卵焼き');
       expect(html).toContain('name="robots" content="noindex"');
+    });
+
+    it('JSON: パスコード付きの帖は x-share-passcode が要る（#198）', async () => {
+      const res = await publishBook({ ...bookPayload(), passcode: '1234' });
+      const { slug } = (await res.json()) as { slug: string };
+
+      const noCode = await app.request(`/api/v1/share/books/${slug}`);
+      expect(noCode.status).toBe(401);
+      const wrong = await app.request(`/api/v1/share/books/${slug}`, {
+        headers: { 'x-share-passcode': '0000' },
+      });
+      expect(wrong.status).toBe(401);
+      const ok = await app.request(`/api/v1/share/books/${slug}`, {
+        headers: { 'x-share-passcode': '1234' },
+      });
+      expect(ok.status).toBe(200);
+      const body = (await ok.json()) as { data: { title: string; recipes: { title: string }[] } };
+      expect(body.data.recipes.length).toBeGreaterThan(0);
     });
 
     it('attested なしでは公開できない', async () => {

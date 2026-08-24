@@ -59,7 +59,8 @@ export async function inferMealConsumption(args: {
 /** Decrement the given pantry items by one (removing any that reach zero). */
 export async function applyConsumption(pantryItemIds: string[]): Promise<number> {
   if (!isNativePlatform || pantryItemIds.length === 0) return 0;
-  const { getPantryItems, updatePantryItem, removePantryItem } = await import('./pantry.service');
+  const { getPantryItems, adjustPantryQuantity, removePantryItem } =
+    await import('./pantry.service');
   const pantry = await getPantryItems();
 
   let applied = 0;
@@ -69,7 +70,7 @@ export async function applyConsumption(pantryItemIds: string[]): Promise<number>
     if (item.quantity == null || item.quantity <= 1) {
       await removePantryItem(id);
     } else {
-      await updatePantryItem(id, { quantity: item.quantity - 1 });
+      await adjustPantryQuantity(id, -1); // δ（S2-B）
     }
     applied += 1;
   }

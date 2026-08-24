@@ -228,6 +228,11 @@ export interface ShoppingItem {
   /** 入れた人・チェックした人（v13）。家族で共有したとき「誰が」を辿れるように */
   createdBy: string | null;
   checkedBy: string | null;
+  /**
+   * 家族と共有するか（v15）。**グループに入っていない間は UI に出さない**
+   * （使わない人の画面を変えない — `docs/クラウド同期設計.md` §5-2）。
+   */
+  shared: boolean;
 }
 
 export interface PantryItem {
@@ -241,4 +246,6 @@ export interface PantryItem {
   groupName: string | null;
   /** 賞味期限 YYYY-MM-DD（v13・任意）。合算時は近い方を残す */
   expiresOn: string | null;
+  /** 家族と共有するか（v15）。詳細は `ShoppingItem.shared` */
+  shared: boolean;
 }

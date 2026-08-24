@@ -28,6 +28,7 @@ import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
+import { useSyncRefresh } from '../../../src/hooks/useSyncRefresh';
 import { t, tCount } from '../../../src/i18n';
 import { dialog } from '../../../src/services/dialog.service';
 import { getAliasMap } from '../../../src/services/name-alias.service';
@@ -36,7 +37,9 @@ import type { RecipeListItem } from '../../../src/services/types';
 import {
   createRecipeBook,
   getRecipeBook,
+  getRecipeBooks,
   shareRecipeBook,
+  type RecipeBookListItem,
 } from '../../../src/services/recipe-book.service';
 import { getUrlImportedRecipeIds } from '../../../src/services/web-share.service';
 import { recipeMatchesQuery } from '../../../src/utils/recipeSearch';
@@ -62,6 +65,8 @@ const MAX_TAG_FILTERS = 12;
 export default function RecipeListScreen() {
   const router = useRouter();
   const [recipes, setRecipes] = useState<RecipeListItem[]>([]);
+  /** レシピ帖の棚（S4）。蔵書庫から帖へ行けないのはおかしい、という指摘で足した（2026-08-22） */
+  const [books, setBooks] = useState<RecipeBookListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
@@ -73,9 +78,14 @@ export default function RecipeListScreen() {
   const [aliases, setAliases] = useState<Record<string, string>>({});
 
   const loadRecipes = useCallback(async () => {
-    const [list, aliasMap] = await Promise.all([getRecipeList(), getAliasMap()]);
+    const [list, aliasMap, bookList] = await Promise.all([
+      getRecipeList(),
+      getAliasMap(),
+      getRecipeBooks().catch((): RecipeBookListItem[] => []),
+    ]);
     setRecipes(list);
     setAliases(aliasMap);
+    setBooks(bookList);
     setLoading(false);
   }, []);
 
@@ -100,6 +110,13 @@ export default function RecipeListScreen() {
   );
 
   useFocusEffect(
+    useCallback(() => {
+      void loadRecipes();
+    }, [loadRecipes]),
+  );
+
+  // 一覧を開いたまま家族の変更が届いたときに読み直す（クラウド同期 S1）
+  useSyncRefresh(
     useCallback(() => {
       void loadRecipes();
     }, [loadRecipes]),
@@ -164,6 +181,18 @@ export default function RecipeListScreen() {
   const [bookExcludedCount, setBookExcludedCount] = useState(0);
   const [bookPublishing, setBookPublishing] = useState(false);
 
+  /**
+   * 空の帖を作る入口（docs/Web共有設計.md §7-2 の 2 つ目の導線）。
+   * 設定の奥にしか無かったものを蔵書庫の棚へ出した。シートは共有用と同じものを
+   * 「収録 0 品」で開く — 0 品では共有できないので、作るボタンだけ出る。
+   */
+  const handleNewEmptyBook = useCallback(() => {
+    setBookEligibleIds([]);
+    setBookExcludedCount(0);
+    setBookTitle(t('recipe.list.bookShare.defaultTitle'));
+    setBookSheetOpen(true);
+  }, []);
+
   const handleOpenBookSheet = useCallback(async () => {
     if (selectedIds.size === 0) return;
     // 出所ゲート: URL 取り込み由来は帖に載せられない（転載をサーバーに置かない）
@@ -184,6 +213,7 @@ export default function RecipeListScreen() {
 
   /** 帖を作る（S4: 帖はローカルの実体）。選択順ではなく一覧の表示順で収録する */
   const createBookFromSelection = useCallback(async (): Promise<string> => {
+    if (selectedIds.size === 0) return createRecipeBook(bookTitle.trim(), []);
     const order = new Map(recipes.map((r, i) => [r.id, i]));
     const ordered = [...selectedIds].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
     return createRecipeBook(bookTitle.trim(), ordered);
@@ -394,6 +424,48 @@ export default function RecipeListScreen() {
               </ScrollView>
             </View>
 
+            {/* ── レシピ帖の棚 ── 帖は蔵書庫の「モノ」（S4）。ここから開けないと存在に気づけない */}
+            {query.length === 0 && (
+              <View style={styles.bookShelf}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.bookShelfContent}
+                >
+                  <View style={styles.bookShelfLabelWrap}>
+                    <BookOpen size={13} color={Colors.goldDim} />
+                    <Text style={styles.bookShelfLabel}>{t('recipe.list.books.label')}</Text>
+                  </View>
+                  {books.map((book) => (
+                    <Pressable
+                      key={book.id}
+                      style={styles.bookChip}
+                      onPress={() =>
+                        router.push({ pathname: '/(tabs)/book-edit', params: { id: book.id } })
+                      }
+                      accessibilityLabel={t('recipe.list.books.openLabel', { title: book.title })}
+                    >
+                      <Text style={styles.bookChipTitle} numberOfLines={1}>
+                        {book.title}
+                      </Text>
+                      <Text style={styles.bookChipMeta}>
+                        {tCount('recipe.list.books.count', book.recipeCount)}
+                        {book.shareUrl ? t('recipe.list.books.sharedMark') : ''}
+                      </Text>
+                    </Pressable>
+                  ))}
+                  <Pressable
+                    style={[styles.bookChip, styles.bookChipNew]}
+                    onPress={handleNewEmptyBook}
+                    accessibilityLabel={t('recipe.list.books.new')}
+                  >
+                    <Plus size={13} color={Colors.gold} />
+                    <Text style={styles.bookChipNewText}>{t('recipe.list.books.new')}</Text>
+                  </Pressable>
+                </ScrollView>
+              </View>
+            )}
+
             {query.length > 0 && (
               <View style={styles.searchHint}>
                 <Text style={styles.searchHintText}>
@@ -499,7 +571,9 @@ export default function RecipeListScreen() {
           title={t('recipe.list.bookShare.title')}
         >
           <Text style={styles.bookSheetNote}>
-            {tCount('recipe.list.bookShare.countNote', bookEligibleIds.length)}
+            {bookEligibleIds.length === 0 && bookExcludedCount === 0
+              ? t('recipe.list.books.newBody')
+              : tCount('recipe.list.bookShare.countNote', bookEligibleIds.length)}
             {bookExcludedCount > 0 &&
               ` ${tCount('recipe.list.bookShare.excludedNote', bookExcludedCount)}`}
           </Text>
@@ -511,21 +585,25 @@ export default function RecipeListScreen() {
             placeholderTextColor={Colors.muted}
             maxLength={100}
           />
-          <Text style={styles.bookSheetAttest}>{t('recipe.list.bookShare.attestNote')}</Text>
-          <Pressable
-            style={[
-              styles.bookPublishBtn,
-              (bookPublishing || bookTitle.trim() === '') && styles.actionBtnDisabled,
-            ]}
-            onPress={() => void handlePublishBook()}
-            disabled={bookPublishing || bookTitle.trim() === ''}
-          >
-            <Text style={styles.bookPublishBtnText}>
-              {bookPublishing
-                ? t('recipe.list.bookShare.publishing')
-                : t('recipe.list.bookShare.publish')}
-            </Text>
-          </Pressable>
+          {bookEligibleIds.length > 0 && (
+            <>
+              <Text style={styles.bookSheetAttest}>{t('recipe.list.bookShare.attestNote')}</Text>
+              <Pressable
+                style={[
+                  styles.bookPublishBtn,
+                  (bookPublishing || bookTitle.trim() === '') && styles.actionBtnDisabled,
+                ]}
+                onPress={() => void handlePublishBook()}
+                disabled={bookPublishing || bookTitle.trim() === ''}
+              >
+                <Text style={styles.bookPublishBtnText}>
+                  {bookPublishing
+                    ? t('recipe.list.bookShare.publishing')
+                    : t('recipe.list.bookShare.publish')}
+                </Text>
+              </Pressable>
+            </>
+          )}
           <Pressable
             style={[
               styles.bookCreateOnlyBtn,
@@ -535,7 +613,9 @@ export default function RecipeListScreen() {
             disabled={bookPublishing || bookTitle.trim() === ''}
           >
             <Text style={styles.bookCreateOnlyBtnText}>
-              {t('recipe.list.bookShare.createOnly')}
+              {bookEligibleIds.length > 0
+                ? t('recipe.list.bookShare.createOnly')
+                : t('recipe.list.books.create')}
             </Text>
           </Pressable>
         </BottomSheet>
@@ -674,6 +754,30 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   filterContainer: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  bookShelf: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  bookShelfContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 8, alignItems: 'center' },
+  bookShelfLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 2 },
+  bookShelfLabel: { color: Colors.goldDim, fontSize: 11, letterSpacing: 1 },
+  bookChip: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: 160,
+    backgroundColor: Colors.bgCard,
+  },
+  bookChipTitle: { color: Colors.paper, fontSize: 13 },
+  bookChipMeta: { color: Colors.muted, fontSize: 10, marginTop: 1 },
+  bookChipNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderStyle: 'dashed',
+    borderColor: Colors.goldDim,
+    backgroundColor: 'transparent',
+  },
+  bookChipNewText: { color: Colors.gold, fontSize: 12 },
   filterContent: {
     gap: 6,
     paddingHorizontal: 16,

@@ -6,7 +6,15 @@
  *           Tag, RecipeTag, Source, CookingLog, CookingPhoto, Memo, SyncMeta, AppMeta
  */
 import { sql } from 'drizzle-orm';
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 // ─── User ──────────────────────���────────────────────────────────────────────
 export const users = sqliteTable('users', {
@@ -282,6 +290,33 @@ export const syncMeta = sqliteTable('sync_meta', {
   lastSyncedAt: text('last_synced_at'),
 });
 
+// ─── SyncQueue（クラウド同期の送信待ち, v14 — docs/クラウド同期設計.md §5-1b）──
+/**
+ * 「この行が変わった」という**印だけ**を積むキュー。payload は持たない。
+ *
+ * 送信時に最新の DB から payload を作り直すので、連続編集は自然に 1 回の送信へ合流する
+ * （3 回直したら 3 通送る、にならない）。主キーを (entity_type, entity_id) にしてあるのは
+ * その合流をテーブル側で保証するため — キューの行数はエンティティ数を超えない。
+ *
+ * **バックアップには含めない**（`backup.service.ts` の BACKUP_TABLES に入れない）。
+ * 他人のバックアップを復元した端末が、その人の送信待ちを自分のグループへ流してしまう。
+ */
+export const syncQueue = sqliteTable(
+  'sync_queue',
+  {
+    /** 'recipe' | 'recipe_book'（S2 で買い物・在庫が増える） */
+    entityType: text('entity_type').notNull(),
+    entityId: text('entity_id').notNull(),
+    queuedAt: text('queued_at').notNull(),
+    /** 送信に失敗した回数。増えても捨てはしない（次の起動で再挑戦する） */
+    retryCount: integer('retry_count').notNull().default(0),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.entityType, table.entityId] }),
+    queuedIdx: index('idx_sync_queue_queued').on(table.queuedAt),
+  }),
+);
+
 // ─── AppMeta ────────────────────────────────────────────────────────────────
 export const appMeta = sqliteTable('app_meta', {
   key: text('key').primaryKey(),
@@ -348,6 +383,22 @@ export const shoppingItems = sqliteTable(
     checkedBy: text('checked_by').references(() => users.id),
     createdAt: text('created_at').notNull(),
     checkedAt: text('checked_at'),
+    /**
+     * 最終更新（v15）。**同期の LWW の基準**（`docs/クラウド同期設計.md` §5-2b）。
+     *
+     * `checked_at` は代用できない — チェックを外すと null に戻り、時計が巻き戻るため。
+     * **nullable にしてある**: `NOT NULL` にすると、この列を持たない古いバックアップの
+     * 復元が丸ごと失敗する（`replaceDatabase` が明示的に NULL を渡すので DEFAULT が効かない）。
+     * null のときは `checked_at ?? created_at` を代用する。
+     */
+    updatedAt: text('updated_at'),
+    /**
+     * 家族と共有するか（v15・0 = 自分だけ / 1 = 家族と共有 / **null = 共有**）。
+     *
+     * null を「共有」と読むのは、列を持たない古いデータ・古いバックアップが
+     * 現行どおり（全部共有）に見えるようにするため（設計 §5-2b の「守る約束」2・3）。
+     */
+    shared: integer('shared'),
   },
   (table) => ({
     familyCheckedIdx: index('idx_shopping_items_family_checked').on(table.familyId, table.checked),
@@ -389,9 +440,45 @@ export const pantryItems = sqliteTable(
     expiresOn: text('expires_on'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
+    /**
+     * 家族と共有するか（v15・0 = 自分だけ / 1 = 家族と共有 / **null = 共有**）。
+     * null の扱いと nullable にした理由は `shopping_items.shared` と同じ。
+     */
+    shared: integer('shared'),
+    /**
+     * 数量のベースライン（v16・S2-B・設計 §5-3）。`quantity` は
+     * `max(0, quantity_base + Σ pantry_quantity_parts.net)` から**導出**する表示値。
+     * `quantity_epoch` が NULL の行は v16 未移行（`quantity` をそのまま base と読む）。
+     */
+    quantityBase: real('quantity_base'),
+    quantityEpoch: integer('quantity_epoch'),
   },
   (table) => ({
     familyNameIdx: index('idx_pantry_items_family_name').on(table.familyId, table.nameNormalized),
+  }),
+);
+
+/**
+ * 在庫数量の持ち分（v16・S2-B・設計 §5-3）。`(品目, 端末)` ごとの累計増減。
+ * 書き手は 1 台だけなので LWW が競合せず、状態なので再適用が冪等。
+ * 外部キーは持たない — 行が part より**後の seq** で届くことがある。
+ * バックアップに**入れる**（`quantity` と対になる中身そのもの。§5-3-1）。
+ */
+export const pantryQuantityParts = sqliteTable(
+  'pantry_quantity_parts',
+  {
+    itemId: text('item_id').notNull(),
+    deviceId: text('device_id').notNull(),
+    /** NULL = 0 */
+    net: real('net'),
+    /** どの世代（`pantry_items.quantity_epoch`）の持ち分か。NULL = 0 */
+    epoch: integer('epoch'),
+    /** part の LWW 基準（端末内で単調） */
+    updatedAt: text('updated_at'),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.itemId, table.deviceId] }),
+    itemIdx: index('idx_pantry_quantity_parts_item').on(table.itemId),
   }),
 );
 

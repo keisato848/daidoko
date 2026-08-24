@@ -6,6 +6,43 @@
 import type { CriticalMessage, PluralMessage } from '../../types';
 
 const recipeImport = {
+  /** 共有リンクをアプリで開いたとき（#198） */
+  share: {
+    title: '共有されたレシピを取り込む',
+    loading: '共有ページを読み込んでいます',
+    recipeLead: '家族から共有されたレシピです。内容を確認して保存してください。',
+    bookLead: {
+      one: 'レシピ帖に{{count}}品あります。まとめて蔵書庫に保存できます。',
+      other: 'レシピ帖に{{count}}品あります。まとめて蔵書庫に保存できます。',
+    } satisfies PluralMessage,
+    ingredientCount: {
+      one: '材料 {{count}}',
+      other: '材料 {{count}}',
+    } satisfies PluralMessage,
+    passcodeLead:
+      'このレシピ帖はパスコードで守られています。共有した人から聞いた4桁を入力してください。',
+    unlock: '開く',
+    save: '蔵書庫に保存',
+    saveAll: {
+      one: '{{count}}品を蔵書庫に保存',
+      other: '{{count}}品を蔵書庫に保存',
+    } satisfies PluralMessage,
+    saving: '保存中…',
+    saved: '蔵書庫に保存しました',
+    savedCount: {
+      one: '{{count}}品を蔵書庫に保存しました',
+      other: '{{count}}品を蔵書庫に保存しました',
+    } satisfies PluralMessage,
+    backToLibrary: '蔵書庫へ戻る',
+    error: {
+      notFound:
+        'この共有ページは見つかりませんでした（共有が停止されたか、期限が切れた可能性があります）。',
+      wrong: 'パスコードが違います。',
+      locked: '試行回数が多すぎます。しばらくしてからお試しください。',
+      network: '通信できませんでした。電波の良い場所でもう一度お試しください。',
+      server: '読み込めませんでした。しばらくしてからお試しください。',
+    },
+  },
   formTitle: 'レシピを確認・編集',
   saved: 'レシピを保存しました',
 

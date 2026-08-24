@@ -29,6 +29,7 @@ import { PressableScale } from '../../src/components/PressableScale';
 import { Stars } from '../../src/components/Stars';
 import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
+import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
 import { t, tCount } from '../../src/i18n';
 import { formatMonthDay, formatMonthLabel } from '../../src/i18n/format';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
@@ -139,6 +140,13 @@ export default function HomeScreen() {
   const monthLabel = formatMonthLabel(new Date());
 
   useFocusEffect(
+    useCallback(() => {
+      void loadTimeline();
+    }, [loadTimeline]),
+  );
+
+  // ホームを開いたまま家族の変更が届いたときに読み直す（クラウド同期 S1）
+  useSyncRefresh(
     useCallback(() => {
       void loadTimeline();
     }, [loadTimeline]),

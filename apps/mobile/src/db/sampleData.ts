@@ -1,9 +1,12 @@
-import { seedCookingLogs, seedRecipes } from './seed';
+import { seedCookingLogs, seedRecipes, seedShoppingItems } from './seed';
 
 const SAMPLE_DATA_FLAG = 'EXPO_PUBLIC_ENABLE_SAMPLE_DATA';
 
 const sampleRecipeIds: ReadonlySet<string> = new Set(seedRecipes.map((item) => item.id));
 const sampleCookingLogIds: ReadonlySet<string> = new Set(seedCookingLogs.map((item) => item.id));
+const sampleShoppingItemIds: ReadonlySet<string> = new Set(
+  seedShoppingItems.map((item) => item.id),
+);
 
 export function isSampleDataEnabled(): boolean {
   const flag = process.env.EXPO_PUBLIC_ENABLE_SAMPLE_DATA ?? process.env[SAMPLE_DATA_FLAG];
@@ -25,6 +28,14 @@ export function isSeedCookingLogId(logId: string | null | undefined): boolean {
 
 export function shouldHideSeedRecipe(recipeId: string | null | undefined): boolean {
   return !isSampleDataEnabled() && isSeedRecipeId(recipeId);
+}
+
+/**
+ * サンプルの買い物品目か。**id はどの端末でも同じ**（shop-01…）なので、
+ * 参加時にこれを送ると、家族の端末で前に消したサンプルが復活する。
+ */
+export function shouldHideSeedShoppingItem(itemId: string | null | undefined): boolean {
+  return !isSampleDataEnabled() && typeof itemId === 'string' && sampleShoppingItemIds.has(itemId);
 }
 
 export function shouldHideSeedCookingLog(

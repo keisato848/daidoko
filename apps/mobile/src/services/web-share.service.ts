@@ -32,6 +32,12 @@ export interface WebShareRecord {
 export type WebShareBlockReason = 'url-import';
 
 const META_PREFIX = 'web_share:';
+/**
+ * 同期で届いたレシピが URL 取り込み由来であることの印（値は '1'）。
+ * 受信側は現在のリビジョンの出所しか持たないので、古いリビジョンだけが URL 由来の
+ * レシピはこの印が無いとゲートをすり抜ける（sync-entities.service 参照）。
+ */
+export const URL_IMPORTED_META_PREFIX = 'url_imported:';
 
 // ── 出所ゲート ───────────────────────────────────────────────────────────────
 
@@ -53,7 +59,10 @@ export async function getShareBlockReason(recipeId: string): Promise<WebShareBlo
     .from(schema.recipeRevisions)
     .innerJoin(schema.sources, eq(schema.recipeRevisions.sourceId, schema.sources.id))
     .where(eq(schema.recipeRevisions.recipeId, recipeId));
-  return shareBlockReasonForSourceTypes(rows.map((r) => r.type));
+  const types: (string | null)[] = rows.map((r) => r.type);
+  // 同期で届いた印も出所として数える（出所行が無くても URL 由来なら共有不可）
+  if ((await getAppMeta(URL_IMPORTED_META_PREFIX + recipeId)) === '1') types.push('url');
+  return shareBlockReasonForSourceTypes(types);
 }
 
 /** レシピ帖の選択画面用: URL 取り込み由来のレシピ ID を一括で取る（1 クエリ） */
@@ -68,7 +77,15 @@ export async function getUrlImportedRecipeIds(): Promise<Set<string>> {
     .from(schema.recipeRevisions)
     .innerJoin(schema.sources, eq(schema.recipeRevisions.sourceId, schema.sources.id))
     .where(eq(schema.sources.type, 'url'));
-  return new Set(rows.map((r) => r.recipeId));
+  const ids = new Set(rows.map((r) => r.recipeId));
+  // 同期で届いた印（app_meta の url_imported:<recipeId>）
+  const { like } = await import('drizzle-orm');
+  const marks = await db
+    .select({ key: schema.appMeta.key })
+    .from(schema.appMeta)
+    .where(like(schema.appMeta.key, `${URL_IMPORTED_META_PREFIX}%`));
+  for (const mark of marks) ids.add(mark.key.slice(URL_IMPORTED_META_PREFIX.length));
+  return ids;
 }
 
 // ── 共有状態（app_meta） ─────────────────────────────────────────────────────

@@ -19,6 +19,8 @@ import {
 import { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
+import { SharedToggle } from '../../src/components/SharedToggle';
 import { AdBanner } from '../../src/components/AdBanner';
 import { GroupChips } from '../../src/components/GroupChips';
 import { GroupPicker } from '../../src/components/GroupPicker';
@@ -34,7 +36,9 @@ import {
   addPantryItem,
   getPantryItems,
   removePantryItem,
+  setPantryItemShared,
   UNGROUPED,
+  adjustPantryQuantity,
   updatePantryItem,
 } from '../../src/services/pantry.service';
 import type { PantryItem } from '../../src/services/types';
@@ -63,6 +67,8 @@ export default function PantryScreen() {
       .catch(() => setItems([]));
   }, []);
   useFocusEffect(refresh);
+  // 開いたまま家族の変更が届いたときに読み直す（クラウド同期 S2）
+  useSyncRefresh(refresh);
 
   const handleAdd = useCallback(async () => {
     const trimmed = name.trim();
@@ -83,7 +89,9 @@ export default function PantryScreen() {
     async (item: PantryItem, delta: number) => {
       const next = Math.max(0, (item.quantity ?? 0) + delta);
       setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, quantity: next } : it)));
-      await updatePantryItem(item.id, { quantity: next }).catch(() => undefined);
+      // δ だけ渡す（S2-B・設計 §5-3-2）。React の item.quantity は pull 直後に古いことがあるので、
+      // 絶対値を作ってはいけない。現在値は service が DB から読む
+      await adjustPantryQuantity(item.id, delta).catch(() => undefined);
       refresh();
       if (delta < 0) checkAndNotifyLowStock().catch(() => undefined);
     },
@@ -369,6 +377,15 @@ export default function PantryScreen() {
                   color={item.lowStockThreshold != null ? Colors.gold : Colors.muted}
                 />
               </Pressable>
+              <SharedToggle
+                shared={item.shared}
+                onToggle={(next) => {
+                  setItems((prev) =>
+                    prev.map((row) => (row.id === item.id ? { ...row, shared: next } : row)),
+                  );
+                  void setPantryItemShared(item.id, next).catch(() => refresh());
+                }}
+              />
               <Pressable
                 onPress={() => handleRemove(item.id)}
                 hitSlop={10}

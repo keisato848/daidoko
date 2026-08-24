@@ -39,6 +39,15 @@ interface BackupTableDefinition {
    * 欠けていても「0件」として扱う（バージョンは上げずに前方/後方互換を保つ）。
    */
   optional?: boolean;
+  /**
+   * 旧ファイルにその列が無いときに入れる値。
+   *
+   * **後から足した NOT NULL 列には必ず要る。** 復元は値を `?? null` で明示的に束縛するので
+   * SQLite の DEFAULT は効かず、列を持たない古いファイル（1.4.3 以前の移行 ZIP）は
+   * `NOT NULL constraint failed` で**丸ごと復元に失敗する**（2026-08-22 のレビューで発見）。
+   * `ADD_COLUMN_MIGRATIONS` の NOT NULL 列がここに揃っていることはテストが見張る。
+   */
+  defaults?: Readonly<Record<string, string | number>>;
 }
 
 /**
@@ -140,6 +149,8 @@ export const BACKUP_TABLES = [
       'kind',
       'place_name',
     ],
+    // 1.4.3 以前のファイルには kind が無い。NOT NULL なので既定値を入れて復元する
+    defaults: { kind: 'cooked' },
   },
   {
     name: 'cooking_photos',
@@ -173,7 +184,17 @@ export const BACKUP_TABLES = [
       'expires_on',
       'created_at',
       'updated_at',
+      'shared', // v15（nullable。理由は shopping_items 側のコメント）
+      'quantity_base', // v16（S2-B・nullable）
+      'quantity_epoch', // v16（S2-B・nullable。NULL = 未移行）
     ],
+    optional: true,
+  },
+  // 在庫数量の持ち分（v16・S2-B）。**復元する** — `quantity` と対になる中身そのもの。
+  // `sync_cursor`（位置）・`sync_queue`（印）とは扱いが逆（設計 §5-3-1 に理由）
+  {
+    name: 'pantry_quantity_parts',
+    columns: ['item_id', 'device_id', 'net', 'epoch', 'updated_at'],
     optional: true,
   },
   {
@@ -198,6 +219,10 @@ export const BACKUP_TABLES = [
       'checked_by',
       'created_at',
       'checked_at',
+      // v15。**nullable な列だけを足すこと** — NOT NULL を足すと、その列を持たない
+      // 古い ZIP の復元が INSERT の制約違反で丸ごと失敗する（下の restore を参照）
+      'updated_at',
+      'shared',
     ],
     optional: true,
   },
@@ -381,6 +406,7 @@ function createEmptyBackupTables(): BackupTables {
     sync_meta: [],
     app_meta: [],
     pantry_items: [],
+    pantry_quantity_parts: [],
     shopping_items: [],
     store_group_aliases: [],
     jan_catalog: [],
@@ -905,6 +931,24 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
   };
 }
 
+/**
+ * 復元してはいけない `app_meta` の鍵。
+ *
+ * `sync_cursor` は「サーバーの seq をここまで受け取った」という**この端末の現在地**で、
+ * 中身とは無関係。バックアップから戻すと、古いデータの上に進んだカーソルが載り、
+ * **その seq 以下の家族の変更が二度と降りてこない**（サーバーは 1 エンティティ 1 行なので
+ * 再送のきっかけが無い）。復元後に `resetCursor()` も走るが、それは別の手順で、
+ * 途中でアプリが落ちれば飛ぶ。**同じトランザクションの中で落とすのが確実。**
+ */
+const NON_RESTORABLE_APP_META_KEYS: readonly string[] = ['sync_cursor'];
+
+/** 復元直後: 未移行の在庫行をベースライン化し、持ち分から表示値を導出し直す（S2-B） */
+async function rebaselineQuantities(): Promise<void> {
+  const { ensureQuantityBaseline, rematerializeAll } = await import('./pantry-quantity-db');
+  await ensureQuantityBaseline();
+  await rematerializeAll();
+}
+
 function replaceDatabase(payload: LocalBackupPayload): void {
   const expoDb = getExpoDb();
 
@@ -914,13 +958,23 @@ function replaceDatabase(payload: LocalBackupPayload): void {
     for (const table of [...BACKUP_TABLES].reverse()) {
       expoDb.runSync(`DELETE FROM ${quoteIdentifier(table.name)}`);
     }
+    // 同期の送信待ちは**復元対象ではないが、ここで必ず捨てる**。残すと、復元で消えた行の
+    // 印が次の送信で tombstone になり、**家族の端末からそのレシピ・帖が消える**。
+    // 復元後に `clearSyncQueue()` も走るが、それは別の手順で、間にアプリが落ちたり
+    // 同期が割り込んだりすると飛ぶ。`sync_cursor` と同じ理由で同じトランザクションに入れる
+    expoDb.runSync('DELETE FROM sync_queue');
 
     for (const table of BACKUP_TABLES) {
       const sql = `INSERT INTO ${quoteIdentifier(table.name)} (${tableColumnList(table)}) VALUES (${tablePlaceholders(table)})`;
       for (const row of payload.tables[table.name]) {
+        if (table.name === 'app_meta' && NON_RESTORABLE_APP_META_KEYS.includes(String(row.key))) {
+          continue;
+        }
+        // `as const` の配列なので、defaults を持たない要素の型には defaults が無い
+        const defaults = (table as BackupTableDefinition).defaults;
         expoDb.runSync(
           sql,
-          table.columns.map((column) => row[column] ?? null),
+          table.columns.map((column) => row[column] ?? defaults?.[column] ?? null),
         );
       }
     }
@@ -940,6 +994,7 @@ export async function restoreLocalBackup(uri: string): Promise<BackupOperationRe
 
   replaceDatabase(payload);
   await rebuildFts(getDb());
+  await rebaselineQuantities(); // v16: 旧 ZIP の在庫にベースラインを与え、表示値を導出し直す（§5-3-1）
 
   const fileName = uri.split('/').pop() ?? 'backup.json';
   return {

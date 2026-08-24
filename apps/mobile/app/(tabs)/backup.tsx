@@ -38,6 +38,7 @@ import {
   restoreLatestLocalBackup,
   type BackupFileSummary,
 } from '../../src/services/backup.service';
+import { onLocalDataReplaced } from '../../src/services/sync-runner.service';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -132,6 +133,9 @@ export default function BackupScreen() {
     try {
       const result = await restoreLatestLocalBackup();
       setToastMessage(t('backup.restore.done', { name: result.fileName }));
+      // 復元でローカルが丸ごと入れ替わった。同期のカーソルを戻して
+      // サーバーと取り直す（どちらが残るかは LWW が決める）
+      await onLocalDataReplaced().catch(() => undefined);
       await refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : t('backup.restore.failed');
@@ -248,6 +252,9 @@ export default function BackupScreen() {
       try {
         const result = await restoreMigrationBackupPackage(asset.uri);
         setToastMessage(tCount('backup.migration.imported', result.restoredPhotoCount));
+        // 復元でローカルが丸ごと入れ替わった。同期のカーソルを戻して
+        // サーバーと取り直す（どちらが残るかは LWW が決める）
+        await onLocalDataReplaced().catch(() => undefined);
         await refresh();
       } catch (error) {
         const message = error instanceof Error ? error.message : t('backup.restore.failed');

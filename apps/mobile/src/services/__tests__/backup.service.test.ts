@@ -11,6 +11,7 @@ import {
   shouldCreateAutoSnapshot,
   type BackupFileSummary,
 } from '../backup.service';
+import { ADD_COLUMN_MIGRATIONS } from '../../db/migrate';
 
 const emptyTables = {
   users: [],
@@ -35,6 +36,30 @@ const emptyTables = {
  * 実際に pantry 系4テーブルがまるごと漏れていた（PR #109）。
  * 列を足したのにここを直し忘れる事故を、テストで止める。
  */
+/**
+ * 後から足した NOT NULL 列は、旧ファイルの復元を**丸ごと**落とす（値を `?? null` で
+ * 明示的に束縛するので DEFAULT が効かない）。実際に `cooking_logs.kind` がそうなっていて、
+ * 1.4.3 以前の移行 ZIP が一件も復元できなかった（2026-08-22 のレビューで発見）。
+ */
+describe('後から足した NOT NULL 列には復元用の既定値がある', () => {
+  const notNullAdded = ADD_COLUMN_MIGRATIONS.filter((m) => /NOT NULL/i.test(m.columnDdl)).map(
+    (m) => ({ table: m.table, column: m.columnDdl.trim().split(/\s+/)[0] ?? '' }),
+  );
+
+  it('ADD COLUMN の NOT NULL 列が 1 つ以上ある（テストが空回りしていない）', () => {
+    expect(notNullAdded.length).toBeGreaterThan(0);
+  });
+
+  it.each(notNullAdded)('$table.$column に defaults がある', ({ table, column }) => {
+    const def = BACKUP_TABLES.find((entry) => entry.name === table) as
+      | { columns: readonly string[]; defaults?: Readonly<Record<string, string | number>> }
+      | undefined;
+    if (!def) return; // 対象外のテーブルは復元しないので関係ない
+    if (!def.columns.includes(column)) return;
+    expect(def.defaults?.[column]).toBeDefined();
+  });
+});
+
 describe('バックアップ対象の取りこぼし防止', () => {
   const columnsOf = (table: string): string[] =>
     BACKUP_TABLES.find((entry) => entry.name === table)?.columns ?? [];
@@ -52,6 +77,7 @@ describe('バックアップ対象の取りこぼし防止', () => {
         'memos',
         'name_aliases',
         'pantry_items',
+        'pantry_quantity_parts',
         'recipe_book_items',
         'recipe_books',
         'recipe_revisions',
@@ -78,6 +104,9 @@ describe('バックアップ対象の取りこぼし防止', () => {
 
   it('v13 のグループ・賞味期限・誰が が入っている（復元で消えないため）', () => {
     expect(columnsOf('pantry_items')).toEqual(expect.arrayContaining(['group_name', 'expires_on']));
+    // v15: 同期の列もバックアップに含める（落とすと復元で共有設定が消える）
+    expect(columnsOf('pantry_items')).toEqual(expect.arrayContaining(['shared']));
+    expect(columnsOf('shopping_items')).toEqual(expect.arrayContaining(['updated_at', 'shared']));
     expect(columnsOf('shopping_items')).toEqual(
       expect.arrayContaining(['store_group', 'created_by', 'checked_by']),
     );

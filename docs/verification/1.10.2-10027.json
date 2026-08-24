@@ -1,0 +1,17 @@
+{
+  "version": "1.10.2",
+  "versionCode": 10027,
+  "verifiedAt": "2026-08-23T22:23:49.214Z",
+  "device": {
+    "serial": "359971911306313",
+    "model": "SH-RM19s",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10027,
+  "checked": [
+    "1.11.0 リグレッション（AQUOS SH-RM19s / Android 13 / arm64・既存データを保持したまま上書き）: 同期の継続(pull 128→129)・レシピ削除/バックアップ復元の破壊的確認がアプリのデザイン(#210)・料理中モードとタイマー自動検出・買い物→在庫(墓標 push)・在庫数量の持ち分(net 2→4, seq 130)・端末一覧(#209)・レシピ新規作成のサーバー反映(seq 131)・追加画面の 3 グループ(#212)・文字入り画像の複数枚読み取り(実写真で表裏を 1 レシピに統合, 精度 高)"
+  ],
+  "screenshot": "screenshots/1.10.2-10027-2026-08-23T22-23-49-214Z.png",
+  "headCommit": "b224d6052712f0cc123f58d7fcd8652902eb6bbe"
+}

@@ -8,6 +8,8 @@
  */
 import { isNativePlatform } from '../db/client';
 import { generateId } from '../utils/id';
+import { SYNC_ENTITY_SHOPPING_ITEM } from './sync-payload';
+import { enqueueSyncEntity, initialSharedValue } from './sync-queue.service';
 import { isInStock } from '../utils/itemMatch';
 import { normalizeItemName } from '../utils/itemName';
 import { getRecipeDetail } from './recipe.service';
@@ -24,6 +26,7 @@ interface ShoppingRow {
   storeGroup?: string | null;
   createdBy?: string | null;
   checkedBy?: string | null;
+  shared?: number | null;
 }
 
 function rowToItem(row: ShoppingRow): ShoppingItem {
@@ -37,6 +40,8 @@ function rowToItem(row: ShoppingRow): ShoppingItem {
     storeGroup: row.storeGroup ?? null,
     createdBy: row.createdBy ?? null,
     checkedBy: row.checkedBy ?? null,
+    // null は「共有」— 列を持たない古い行を現行どおりに見せる（設計 §5-2b）
+    shared: row.shared !== 0,
   };
 }
 
@@ -63,6 +68,7 @@ export async function getShoppingItems(): Promise<ShoppingItem[]> {
       storeGroup: schema.shoppingItems.storeGroup,
       createdBy: schema.shoppingItems.createdBy,
       checkedBy: schema.shoppingItems.checkedBy,
+      shared: schema.shoppingItems.shared,
     })
     .from(schema.shoppingItems)
     .where(eq(schema.shoppingItems.familyId, await currentFamilyId()))
@@ -127,7 +133,14 @@ export async function addShoppingItem(
     createdBy: getCurrentUser().id,
     createdAt: new Date().toISOString(),
     checkedAt: null,
+    // 同期の LWW の基準（v15）。**全書き込み経路でセットすること** —
+    // ここが古いままだと、他端末の古い変更に負けて変更が消える
+    updatedAt: new Date().toISOString(),
+    // 参加中なら「共有すると決まっている」1。未参加なら null（参加時に聞く）
+    shared: await initialSharedValue(),
   });
+
+  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
 
   return {
     id,
@@ -139,6 +152,7 @@ export async function addShoppingItem(
     storeGroup: options?.storeGroup?.trim() ? options.storeGroup.trim() : null,
     createdBy: getCurrentUser().id,
     checkedBy: null,
+    shared: true,
   };
 }
 
@@ -309,15 +323,19 @@ export async function checkOffByNames(boughtNames: readonly string[]): Promise<C
   const db = getDb();
 
   const now = new Date().toISOString();
-  await db
+  const updated = await db
     .update(schema.shoppingItems)
-    .set({ checked: 1, checkedAt: now, checkedBy: getCurrentUser().id })
+    .set({ checked: 1, checkedAt: now, checkedBy: getCurrentUser().id, updatedAt: now })
     .where(
       inArray(
         schema.shoppingItems.id,
         hit.map((item) => item.id),
       ),
-    );
+    )
+    .returning({ id: schema.shoppingItems.id, shared: schema.shoppingItems.shared });
+  for (const row of updated) {
+    await enqueueIfShared(row.id, row.shared);
+  }
   return { count: hit.length, names: hit.map((item) => item.name) };
 }
 
@@ -331,14 +349,18 @@ export async function setShoppingItemChecked(id: string, checked: boolean): Prom
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
 
-  await getDb()
+  const now = new Date().toISOString();
+  const updated = await getDb()
     .update(schema.shoppingItems)
     .set(
       checked
-        ? { checked: 1, checkedAt: new Date().toISOString(), checkedBy: getCurrentUser().id }
-        : { checked: 0, checkedAt: null, checkedBy: null },
+        ? { checked: 1, checkedAt: now, checkedBy: getCurrentUser().id, updatedAt: now }
+        : { checked: 0, checkedAt: null, checkedBy: null, updatedAt: now },
     )
-    .where(eq(schema.shoppingItems.id, id));
+    .where(eq(schema.shoppingItems.id, id))
+    .returning({ shared: schema.shoppingItems.shared });
+
+  await enqueueIfShared(id, updated[0]?.shared);
 }
 
 /** 買う場所を変える（空文字・null は未設定に戻す） */
@@ -348,10 +370,121 @@ export async function setShoppingItemStore(id: string, storeGroup: string | null
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
 
+  const updated = await getDb()
+    .update(schema.shoppingItems)
+    .set({
+      storeGroup: storeGroup?.trim() ? storeGroup.trim() : null,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(schema.shoppingItems.id, id))
+    .returning({ shared: schema.shoppingItems.shared });
+
+  await enqueueIfShared(id, updated[0]?.shared);
+}
+
+/**
+ * 共有中の行だけ送信待ちへ積む。
+ *
+ * **「自分だけ」の行は触るたびに積まない。** 積むと毎回 tombstone がサーバーへ出て、
+ * そのたびに家族の端末へ変更通知が飛ぶ（中身は固定文言だが「何かしている」ことが
+ * 伝わる）。共有をやめた瞬間の 1 回（`setShoppingItemShared`）で他端末からは消えているので、
+ * それ以降の編集・削除は端末の中だけで完結してよい。
+ */
+async function enqueueIfShared(id: string, shared: number | null | undefined): Promise<void> {
+  if (shared === 0) return;
+  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
+}
+
+/**
+ * この品目を家族と共有するか（設計 §5-2）。
+ *
+ * 共有をやめると、次の同期で**他端末からも消える**（tombstone を送る）。
+ * 自分の端末には残るので「自分だけの買い物」に戻るだけ。
+ */
+export async function setShoppingItemShared(id: string, shared: boolean): Promise<void> {
+  if (!isNativePlatform) return;
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+
   await getDb()
     .update(schema.shoppingItems)
-    .set({ storeGroup: storeGroup?.trim() ? storeGroup.trim() : null })
+    .set({ shared: shared ? 1 : 0, updatedAt: new Date().toISOString() })
     .where(eq(schema.shoppingItems.id, id));
+
+  await enqueueSyncEntity(SYNC_ENTITY_SHOPPING_ITEM, id);
+}
+
+/**
+ * いまある買い物リストを一括で共有する/しない（グループ参加直後に一度だけ聞く）。
+ * 変更した件数を返す。
+ */
+/**
+ * まだ決めていない品目（`shared IS NULL`）だけを一括で共有する/しない。
+ *
+ * **「全部」ではなく「まだ決めていないもの」だけ**を触るのが要点。参加プロンプトの
+ * 対象は「この端末が自分で作って、まだ共有可否を決めていない品目」であって、
+ * 他端末から降りてきた品目ではない。全部を倒すと、降りてきたばかりの家族の品目まで
+ * `shared = 0` になり、墓標として押し返して**家族の端末から消してしまう**
+ * （実機検証 2026-08-22 で再現）。離脱→再参加でも同じことが起きる。
+ *
+ * 新しく作った行は `shared` が NULL（＝共有）なので、次に聞かれたときの対象になる。
+ */
+export async function setUndecidedShoppingItemsShared(shared: boolean): Promise<string[]> {
+  if (!isNativePlatform) return [];
+  const { isNull } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const rows = await db
+    .select({ id: schema.shoppingItems.id })
+    .from(schema.shoppingItems)
+    .where(isNull(schema.shoppingItems.shared));
+  if (rows.length === 0) return [];
+
+  const now = new Date().toISOString();
+  await db
+    .update(schema.shoppingItems)
+    .set({ shared: shared ? 1 : 0, updatedAt: now })
+    .where(isNull(schema.shoppingItems.shared));
+  // **積まない。** 呼ばれるのは参加より前だけ（`family.tsx` の参加プロンプト）。
+  // ここで積むと 3 秒デバウンスが参加の往復中に発火し、「自分だけ」にしたばかりの
+  // 品目の id が墓標としてサーバーへ出る。参加時に `onSyncGroupJoined` が
+  // 待ち行列を捨てて全件積み直すので、ここでの積み直しは要らない。
+  return rows.map((row) => row.id);
+}
+
+/**
+ * 参加プロンプトの答えを**無かったことにする**（参加・作成がその後に失敗したとき）。
+ *
+ * 答えは参加より先に書くので、参加が失敗すると決定だけが残る。残ると次に参加したとき
+ * プロンプトが出ず（まだ決めていない行が 0 件）、「自分だけ」にした品目は永久に
+ * 同期されない・「共有する」にした品目は別のグループへ無確認で出る。
+ * この時点では資格情報が無く一度もサーバーへ出ていないので、戻して安全。
+ */
+export async function revertUndecidedShoppingItemsShared(ids: readonly string[]): Promise<void> {
+  if (!isNativePlatform || ids.length === 0) return;
+  const { inArray } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  await getDb()
+    .update(schema.shoppingItems)
+    .set({ shared: null, updatedAt: new Date().toISOString() })
+    .where(inArray(schema.shoppingItems.id, [...ids]));
+}
+
+/** 参加プロンプトを出すかの判定用。まだ決めていない品目の数 */
+export async function countUndecidedSharedShoppingItems(): Promise<number> {
+  if (!isNativePlatform) return 0;
+  const { isNull } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const rows = await getDb()
+    .select({ id: schema.shoppingItems.id })
+    .from(schema.shoppingItems)
+    .where(isNull(schema.shoppingItems.shared));
+  return rows.length;
 }
 
 export async function removeShoppingItem(id: string): Promise<void> {
@@ -359,5 +492,11 @@ export async function removeShoppingItem(id: string): Promise<void> {
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
-  await getDb().delete(schema.shoppingItems).where(eq(schema.shoppingItems.id, id));
+  const removed = await getDb()
+    .delete(schema.shoppingItems)
+    .where(eq(schema.shoppingItems.id, id))
+    .returning({ shared: schema.shoppingItems.shared });
+  // 物理削除。送信時に行が無いことを見て tombstone になる（sync-row-entities.service）。
+  // 「自分だけ」だった行は他端末にもサーバーにも（墓標として以外）無いので積まない
+  await enqueueIfShared(id, removed[0]?.shared);
 }
