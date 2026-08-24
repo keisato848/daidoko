@@ -18,6 +18,7 @@
  */
 import { getAppMeta, setAppMeta } from './app-meta.service';
 import { getExpoPushTokenIfPermitted } from './notification.service';
+import { deleteOrphanParts } from './pantry-quantity-db';
 import {
   SyncError,
   getStoredCredentials,
@@ -422,6 +423,9 @@ export async function onSyncGroupJoined(): Promise<void> {
   if (!isNativePlatform) return;
   await clearSyncQueue();
   await resetCursor();
+  // 前のグループから持ち越した「行の無い持ち分」を捨てる（#213）。
+  // 残すと、同じ品目があとから行だけ届いたときに二重計上になる
+  await deleteOrphanParts();
   setSyncJoined(true);
   registeredPushToken = null; // 新しいグループへ登録し直す
   await enqueueSyncEntities(await listAllSyncableEntities());
@@ -437,6 +441,8 @@ export async function onSyncGroupLeft(): Promise<void> {
   }
   await clearSyncQueue();
   await resetCursor();
+  // 行の無い持ち分を残さない（#213）。次にどのグループへ入っても持ち込まれないようにする
+  await deleteOrphanParts();
   setSyncJoined(false);
   registeredPushToken = null;
 }
@@ -453,6 +459,8 @@ export async function onLocalDataReplaced(): Promise<void> {
   if (!isNativePlatform) return;
   await clearSyncQueue();
   await resetCursor();
+  // 復元で行が入れ替わり、前の中身の持ち分が孤児として残ることがある（#213）
+  await deleteOrphanParts();
   await enqueueSyncEntities(await listAllSyncableEntities());
   await runSync();
 }

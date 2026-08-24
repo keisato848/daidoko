@@ -125,6 +125,52 @@ export async function deleteParts(itemId: string): Promise<void> {
     .where(eq(schema.pantryQuantityParts.itemId, itemId));
 }
 
+/**
+ * **行の無い持ち分を捨てる（#213）。**
+ *
+ * 受信側は「行より先に届いた持ち分」を捨てずに置く（`applyPantryQuantity` は行が無くても
+ * upsert する — §5-3-3）。この置きっぱなしがグループをまたいで残ると、**同じ品目が
+ * あとから行だけ届いたときに二重計上**になる: 届いた `quantity_base` は既に消費を
+ * 反映しているのに、残っていた持ち分がもう一度引く。
+ *
+ * 実測（2026-08-24・実機 2 台）: 参加者が持ち込んだ在庫が、作成者の端末でだけ 3 少なく出た。
+ * 同期しても直らず、増減しても差が open したまま平行に動いた。
+ *
+ * **グループの境目（参加・離脱・ローカル総入れ替え）で呼ぶ。** そこで捨ててよいのは、
+ * 行が無い持ち分は**そもそも送信対象に入らない**から（`listRowSyncableEntities` は
+ * 共有中の行がある品目の持ち分しか積まない）。持ち越して得をする場面が無い。
+ *
+ * セッションの途中では呼ばないこと。「持ち分が行より先に届く」正常な窓を潰してしまう。
+ */
+export async function deleteOrphanParts(): Promise<void> {
+  if (!isNativePlatform) return;
+  const { inArray, notInArray } = await dz();
+  const db = getDb();
+  const ids = await db.select({ id: schema.pantryItems.id }).from(schema.pantryItems);
+  if (ids.length === 0) {
+    // 在庫が 1 件も無いなら、持ち分は全部が孤児
+    await db.delete(schema.pantryQuantityParts);
+    return;
+  }
+  // SQLite の変数上限（既定 999）に当たらないよう、孤児側を拾ってから消す
+  const orphans = await db
+    .select({ itemId: schema.pantryQuantityParts.itemId })
+    .from(schema.pantryQuantityParts)
+    .where(
+      notInArray(
+        schema.pantryQuantityParts.itemId,
+        db.select({ id: schema.pantryItems.id }).from(schema.pantryItems),
+      ),
+    );
+  if (orphans.length === 0) return;
+  const unique = [...new Set(orphans.map((row) => row.itemId))];
+  for (let at = 0; at < unique.length; at += 200) {
+    await db
+      .delete(schema.pantryQuantityParts)
+      .where(inArray(schema.pantryQuantityParts.itemId, unique.slice(at, at + 200)));
+  }
+}
+
 /** 行の epoch と違う世代の持ち分を消す（繰り上げを受信したとき — §5-3-3 審査③） */
 export async function deletePartsNotInEpoch(itemId: string, epoch: number): Promise<void> {
   const { and, eq, ne, isNull, or } = await dz();

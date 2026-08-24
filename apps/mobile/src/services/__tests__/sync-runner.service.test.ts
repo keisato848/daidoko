@@ -77,6 +77,11 @@ jest.mock('../notification.service', () => ({
   getExpoPushTokenIfPermitted: (...args: unknown[]) => mockGetExpoPushToken(...args),
 }));
 
+const mockDeleteOrphanParts = jest.fn(async () => undefined);
+jest.mock('../pantry-quantity-db', () => ({
+  deleteOrphanParts: () => mockDeleteOrphanParts(),
+}));
+
 import { SyncError } from '../sync-client.service';
 import { SYNC_PAYLOAD_SCHEMA_VERSION } from '../sync-payload';
 import {
@@ -575,6 +580,8 @@ describe('グループの出入り', () => {
       { entityType: 'recipe_book', entityId: 'book-1' },
     ]);
     expect(mockPullSyncChanges).toHaveBeenCalledWith(0);
+    // 前のグループの「行の無い持ち分」を持ち込まない（#213）
+    expect(mockDeleteOrphanParts).toHaveBeenCalled();
   });
 
   it('離脱したら送信待ちとカーソルを捨てる', async () => {
@@ -584,6 +591,8 @@ describe('グループの出入り', () => {
 
     expect(mockClearQueue).toHaveBeenCalled();
     expect(mockMeta['sync_cursor']).toBe('');
+    // 行の無い持ち分を残さない。残すと次のグループで数量が二重計上になる（#213）
+    expect(mockDeleteOrphanParts).toHaveBeenCalled();
   });
 
   it('バックアップ復元後は取り直し（カーソル 0）＋全件積み直し', async () => {
@@ -597,5 +606,6 @@ describe('グループの出入り', () => {
       { entityType: 'recipe', entityId: 'recipe-1' },
     ]);
     expect(mockPullSyncChanges).toHaveBeenCalledWith(0);
+    expect(mockDeleteOrphanParts).toHaveBeenCalled();
   });
 });
