@@ -1,0 +1,17 @@
+{
+  "version": "1.11.0",
+  "versionCode": 10028,
+  "verifiedAt": "2026-08-24T03:28:12.102Z",
+  "device": {
+    "serial": "359971911306313",
+    "model": "SH-RM19s",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10028,
+  "checked": [
+    "1.11.0/10028 を本番サーバー(Railway)相手に実機確認（AQUOS SH-RM19s・release ビルド・平文許可なし=TLS のみ）: 消えたグループの資格情報から AUTH_INVALID で未参加へ自己修復・共有グループ作成(招待コード発行)・初回送信 96 件(レシピ14/在庫17/買い物15/名寄せ46/帖1/持ち分2、墓標0)・招待コードで 2 台目が参加して全件受信。前段で 1.10.2/10027 ビルドによる全機能リグレッション10項目も同端末で実施済み"
+  ],
+  "screenshot": "screenshots/1.11.0-10028-2026-08-24T03-28-12-102Z.png",
+  "headCommit": "dfbc2e08fccdee27b25da4d8dcddcd5500421478"
+}
