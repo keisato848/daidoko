@@ -379,8 +379,11 @@ export default function RecipeDetailScreen() {
     <View style={styles.container}>
       <View style={styles.hero}>
         {recipe.heroPhotoUri ? (
-          // 表紙は cover で切っている。押したら切らずに全部見せる
+          // 表紙は cover で切っている。押したら切らずに全部見せる。
+          // **Pressable にも fill を持たせる** — heroPhoto は absoluteFillObject なので、
+          // 大きさの無い親に入れると 0×0 に潰れて写真が消える（実機で被弾）
           <Pressable
+            style={StyleSheet.absoluteFill}
             onPress={() => setViewerUri(recipe.heroPhotoUri)}
             accessibilityRole="imagebutton"
             accessibilityLabel={recipe.title}
@@ -623,6 +626,7 @@ export default function RecipeDetailScreen() {
                   </Text>
                   {step.photoPath && (
                     <Pressable
+                      style={styles.stepPhotoPress}
                       onPress={() => setViewerUri(step.photoPath)}
                       accessibilityRole="imagebutton"
                     >
@@ -955,6 +959,7 @@ const styles = StyleSheet.create({
     color: Colors.paper,
     lineHeight: 24,
   },
+  stepPhotoPress: { width: '100%' },
   stepPhoto: {
     width: '100%',
     height: 140,

@@ -73,6 +73,13 @@ describe('RecipeForm の「お店の料理 / 家の料理」', () => {
     expect(queryByDisplayValue('○○屋')).toBeNull();
   });
 
+  it('家 → お店 と往復しても店名は消えない（誤タップで失わせない）', () => {
+    const { getByText, getByDisplayValue } = renderForm({ ...BASE, placeName: '○○屋' });
+    fireEvent.press(getByText('家の料理'));
+    fireEvent.press(getByText('お店の料理'));
+    expect(getByDisplayValue('○○屋')).toBeTruthy();
+  });
+
   it('新規作成は家として開く（写真経由でない入口では店名を求めない）', () => {
     const { queryByPlaceholderText, getByText } = renderForm();
     expect(queryByPlaceholderText(PLACEHOLDER)).toBeNull();

@@ -63,6 +63,12 @@ export function RecipeForm({
   const [fromStore, setFromStore] = useState<boolean>(
     () => (initialValues?.placeName ?? '').trim().length > 0,
   );
+  /**
+   * 家に切り替える直前の店名。**戻したときに書き戻す**ための控え。
+   * 実機で、家 → お店 と往復するだけで「Creperie」が黙って消えた。
+   * 誤タップで消えるのは、この画面がいちばんやってはいけないこと
+   */
+  const [stashedPlaceName, setStashedPlaceName] = useState('');
 
   const {
     control,
@@ -183,8 +189,15 @@ export function RecipeForm({
                   style={[styles.originChip, selected && styles.originChipActive]}
                   onPress={() => {
                     setFromStore(store);
-                    // 家に戻したら店名は残さない。「家の料理なのに店名がある」状態を作らない
-                    if (!store) setValue('placeName', '');
+                    if (store) {
+                      // お店へ戻したら、控えてあった店名を書き戻す（往復で消さない）
+                      if (stashedPlaceName) setValue('placeName', stashedPlaceName);
+                    } else {
+                      // 家にしたら店名は持たない。「家の料理なのに店名がある」状態を作らない。
+                      // ただし**捨てずに控える** — 戻したときに書き戻せるように
+                      setStashedPlaceName((watchedValues.placeName ?? '').trim());
+                      setValue('placeName', '');
+                    }
                   }}
                 >
                   <Text style={[styles.originChipText, selected && styles.originChipTextActive]}>
