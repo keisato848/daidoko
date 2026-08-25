@@ -48,6 +48,12 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 `| tail` などに繋いでいると**パイプ側の終了コード 0 が返って成功に見える**。
 「ビルドし直したのに変更が反映されない」の正体がこれだったことがある。
 
+**バックグラウンド実行でも同じことが起きる。** `cmd > log 2>&1; tail -3 log` の形で
+`run_in_background` に投げると、**通知に出る終了コードは最後の `tail` のもの**なので、
+ビルドが落ちていても「完了（exit code 0）」と表示される（2026-08-26 に被弾）。
+ログの中身を見るまで成功と思い込まないこと。判定するなら
+`cmd > log 2>&1 || echo BUILD_FAILED` のように**失敗を本文へ出す**。
+
 **インストールできて起動もするのに画面が真っ黒なら、APK に JS バンドルが入っていない。**
 `build-android.mjs` は `EXPO_PUBLIC_*` が変わると JS バンドルの出力を消して作り直させるが、
 このとき `intermediates/assets` まで消すため **`mergeReleaseAssets` の差分状態と食い違う**。
