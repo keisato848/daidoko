@@ -161,6 +161,11 @@ adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:
 
 （画像自体は実写真をコピーするか、System.Drawing 等で生成した「料理らしい」画像。not_a_dish 判定される画像は無料枠を消費しない）
 
+**アプリ内のカメラで撮った写真はギャラリーに残らない。** `expo-image-picker` の
+`launchCameraAsync` はアプリのキャッシュへ書くので、`/sdcard/DCIM` にも MediaStore にも出ない
+（2026-08-23 に探し回った）。**同じ写真でもう一度試したいなら、端末の標準カメラで撮って
+ギャラリーから選ぶ**。release ビルドではアプリのキャッシュを adb で読めない。
+
 **紙面レシピ（`/infer/recipe-page`）の検証は合成画像では通らない。** 文字を描画しただけの平坦な画像は
 `found=false`（読めなかった扱い）になり、画面には「レシピを読み取れませんでした」しか出ないので
 **実装の不具合と見分けが付かない**。端末で撮った実物の写真（食品パッケージの表と裏、レシピ本の見開き）を使う。
