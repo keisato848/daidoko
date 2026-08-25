@@ -104,7 +104,32 @@ done
 **端末に検証ビルドが入ったままなら、必ず申し送る。** `EXPO_PUBLIC_*` を仕込んだビルドは
 無料枠 0・テスト広告・サンプルデータ入りで、普段使いには向かない。Play 版へ戻す必要がある。
 
-## 5. 申し送り（報告に必ず書く）
+## 5. 状態は**実物に聞く**（ドキュメントを実態と思わない）
+
+**リリース済みか・公開されたか・審査が通ったかを、リポジトリの文書から答えてはいけない。**
+文書は書かれた時点の記録で、外の状態（ストア・サーバー）は文書と無関係に進む。
+
+2026-08-26 に実際にやらかした: `SUBMISSION.md`（8/19 時点）と、残っていた
+`browser-tasks-post-release.md` を根拠に「iOS は未提出」と**2 度**報告した。
+実際は **App Store・Play とも 1.11.0 が公開済み**だった。
+**タスクファイルの消し忘れを「未完了」と読み違えた**のが直接の原因。
+
+読み取り専用で確かめられる（どちらも鍵は配線済み・**書き込みはしない**）:
+
+```bash
+# Play: production トラックに何が載っているか
+#   scripts/release/lib/play-api.mjs の getAccessToken() を使い、
+#   edits.insert → edits/{id}/tracks を GET → edits を DELETE（commit しないので無変更）
+
+# App Store Connect: どのバージョンが READY_FOR_SALE か
+#   eas.json の submit.production.ios（ascApiKeyPath / ascApiKeyId / ascApiKeyIssuerId / ascAppId）
+#   から ES256 の JWT を作り、/v1/apps/{id}/appStoreVersions を GET
+```
+
+確かめた結果が文書と食い違ったら、**文書を直してから報告する**（§3 と同じ）。
+古い節は消さず「【履歴】」に落として、**判断に使わない**と明記する。
+
+## 6. 申し送り（報告に必ず書く）
 
 - **未完了**と、その理由（判断待ち / ブロック要因 / スコープ外にした）
 - **利用者の判断を待っているもの**（選択肢と、こちらの推奨）
@@ -112,7 +137,7 @@ done
   （サーバーのデプロイとアプリのリリースは別物）
 - 触った端末・サーバーの状態（§4 で戻せなかったもの）
 
-## 6. 品質ゲート（PR を出すなら）
+## 7. 品質ゲート（PR を出すなら）
 
 ```bash
 pnpm -r typecheck && pnpm -r lint && pnpm -r test
