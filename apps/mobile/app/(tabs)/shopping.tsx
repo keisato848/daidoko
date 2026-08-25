@@ -152,13 +152,19 @@ export default function ShoppingListScreen() {
   return (
     <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityLabel={t('common.close')}
-        >
-          <X size={20} color={Colors.muted} />
-        </Pressable>
+        {/* タブになったので閉じる必要が無い。通知や他画面から push で来たときだけ戻れるように、
+            戻れるとき（`canGoBack`）だけ ✕ を出す */}
+        {router.canGoBack() ? (
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={12}
+            accessibilityLabel={t('common.close')}
+          >
+            <X size={20} color={Colors.muted} />
+          </Pressable>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
         <Text style={styles.headerTitle}>{t('pantry.shopping.title')}</Text>
         <View style={styles.headerActions}>
           <HelpButton onPress={coach.show} />
@@ -346,6 +352,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
   headerLink: { fontSize: 13, color: Colors.gold },
+  headerSpacer: { width: 20 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   addRow: {
     flexDirection: 'row',

@@ -20,6 +20,8 @@ const home = {
     gallery: 'ギャラリー',
     shoppingLabel: '買物',
     shopping: '買い物リスト',
+    settingsLabel: '設定',
+    settings: '設定',
     helpLabel: '使い方',
   },
 

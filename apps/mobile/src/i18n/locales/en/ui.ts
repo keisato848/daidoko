@@ -70,6 +70,7 @@ const ui: typeof ja = {
     recipes: 'Recipes',
     add: 'Add',
     pantry: 'Pantry',
+    shopping: 'Shopping',
     settings: 'Settings',
   },
 

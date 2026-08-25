@@ -19,6 +19,8 @@ const home: typeof ja = {
     gallery: 'Gallery',
     shoppingLabel: 'Cart',
     shopping: 'Shopping list',
+    settingsLabel: 'Settings',
+    settings: 'Settings',
     helpLabel: 'Help',
   },
 

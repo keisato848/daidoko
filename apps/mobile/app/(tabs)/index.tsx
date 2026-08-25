@@ -11,7 +11,7 @@ import {
   ChefHat,
   LayoutGrid,
   MessagesSquare,
-  ShoppingCart,
+  Settings as SettingsIcon,
   Store,
   Trash2,
   X,
@@ -302,16 +302,18 @@ export default function HomeScreen() {
               <LayoutGrid size={18} color={Colors.goldDim} />
               <Text style={styles.headerActionLabel}>{t('home.action.galleryLabel')}</Text>
             </Pressable>
+            {/* 買い物はボトムタブへ出したので、ここは重複。空いた枠に設定を置く
+                （設定はタブから降ろした — 滅多に開かないのに下端の一等地にあった） */}
             <Pressable
               ref={cartRef}
               collapsable={false}
               style={styles.headerAction}
-              onPress={() => router.push('/(tabs)/shopping')}
+              onPress={() => router.push('/(tabs)/settings')}
               hitSlop={8}
-              accessibilityLabel={t('home.action.shopping')}
+              accessibilityLabel={t('home.action.settings')}
             >
-              <ShoppingCart size={18} color={Colors.goldDim} />
-              <Text style={styles.headerActionLabel}>{t('home.action.shoppingLabel')}</Text>
+              <SettingsIcon size={18} color={Colors.goldDim} />
+              <Text style={styles.headerActionLabel}>{t('home.action.settingsLabel')}</Text>
             </Pressable>
             <View style={styles.headerAction}>
               <HelpButton onPress={coach.show} size={18} />
