@@ -37,6 +37,9 @@ App Store の App Privacy を書き換える必要が出る**（2026-08 に審�
 
 ## 手順
 
+> **ブラウザ操作セッションへの依頼文は `docs/browser-tasks-firebase.md` にある。**
+> 手順 1〜3（コンソール作業）はそちらを渡せばよい。
+
 ### 1. Firebase プロジェクトを作る（利用者・ブラウザ）
 
 1. https://console.firebase.google.com/ → プロジェクトを追加
