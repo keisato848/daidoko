@@ -53,6 +53,25 @@ export function ShoppingPickSheet({ visible, rows, onCancel, onConfirm }: Props)
     <BottomSheet visible={visible} onClose={onCancel} title={t('recipe.detail.shoppingPick.title')}>
       <Text style={styles.body}>{t('recipe.detail.shoppingPick.body')}</Text>
 
+      {/* 一括操作は**リストの上**に置く。7 日ぶんで 30 行を超えると、
+          下に置いたぶんだけスクロールしないと届かない */}
+      <View style={styles.bulkRow}>
+        <Pressable
+          style={styles.bulkButton}
+          onPress={() => setChecked(rows.map(() => true))}
+          accessibilityRole="button"
+        >
+          <Text style={styles.bulkText}>{t('recipe.detail.shoppingPick.selectAll')}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.bulkButton}
+          onPress={() => setChecked(rows.map(() => false))}
+          accessibilityRole="button"
+        >
+          <Text style={styles.bulkText}>{t('recipe.detail.shoppingPick.clearAll')}</Text>
+        </Pressable>
+      </View>
+
       <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
         {rows.map((row, index) => {
           const reason = reasonFor(row);
@@ -99,6 +118,22 @@ const styles = StyleSheet.create({
     fontSize: Typography.size.sm,
     color: Colors.paperDim,
     marginBottom: 12,
+  },
+  bulkRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  bulkButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  bulkText: {
+    fontSize: Typography.size.xs,
+    color: Colors.paperDim,
   },
   list: {
     maxHeight: 360,

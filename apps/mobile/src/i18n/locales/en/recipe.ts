@@ -129,6 +129,8 @@ const recipe: typeof ja = {
       inPantry: 'In pantry: {{amount}}',
       inPantryUnknown: 'In pantry',
       onList: 'On the list',
+      selectAll: 'Select all',
+      clearAll: 'Clear all',
       add: 'Add',
       addNone: 'Pick at least one',
     },

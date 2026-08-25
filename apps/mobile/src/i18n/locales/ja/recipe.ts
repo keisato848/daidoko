@@ -145,6 +145,8 @@ const recipe = {
       inPantry: '在庫 {{amount}}',
       inPantryUnknown: '在庫あり',
       onList: 'リストにあり',
+      selectAll: 'すべて選択',
+      clearAll: 'すべて解除',
       add: '追加',
       addNone: '選んでください',
     },

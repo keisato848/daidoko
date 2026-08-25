@@ -26,6 +26,7 @@ import {
 } from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
+import { PhotoViewer } from '../../../src/components/PhotoViewer';
 import { ShoppingPickSheet } from '../../../src/components/ShoppingPickSheet';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../../src/components/HelpButton';
@@ -106,6 +107,8 @@ export default function RecipeDetailScreen() {
   const [webShareBlocked, setWebShareBlocked] = useState(true);
   const [webSharePublishing, setWebSharePublishing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  /** 全画面で見ている写真。null = 閉じている。一覧・詳細は cover で切っているので逃げ道を置く */
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
   /** 選択シートの中身。null = 出さない（#214） */
   const [pickRows, setPickRows] = useState<readonly ShoppingPlanRow[] | null>(null);
   // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
@@ -376,11 +379,18 @@ export default function RecipeDetailScreen() {
     <View style={styles.container}>
       <View style={styles.hero}>
         {recipe.heroPhotoUri ? (
-          <Image
-            source={{ uri: recipe.heroPhotoUri }}
-            style={styles.heroPhoto}
-            resizeMode="cover"
-          />
+          // 表紙は cover で切っている。押したら切らずに全部見せる
+          <Pressable
+            onPress={() => setViewerUri(recipe.heroPhotoUri)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={recipe.title}
+          >
+            <Image
+              source={{ uri: recipe.heroPhotoUri }}
+              style={styles.heroPhoto}
+              resizeMode="cover"
+            />
+          </Pressable>
         ) : (
           <Text style={styles.heroEmoji}>{getRecipeEmoji(recipe.title)}</Text>
         )}
@@ -612,11 +622,16 @@ export default function RecipeDetailScreen() {
                     {convertTemperaturesForDisplay(step.body, unitSystem)}
                   </Text>
                   {step.photoPath && (
-                    <Image
-                      source={{ uri: step.photoPath }}
-                      style={styles.stepPhoto}
-                      resizeMode="cover"
-                    />
+                    <Pressable
+                      onPress={() => setViewerUri(step.photoPath)}
+                      accessibilityRole="imagebutton"
+                    >
+                      <Image
+                        source={{ uri: step.photoPath }}
+                        style={styles.stepPhoto}
+                        resizeMode="cover"
+                      />
+                    </Pressable>
                   )}
                   {step.timerSec != null && (
                     <View style={styles.timerBadge}>
@@ -727,6 +742,8 @@ export default function RecipeDetailScreen() {
         onNext={coach.next}
         onSkip={coach.skip}
       />
+
+      <PhotoViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
 
       <ShoppingPickSheet
         visible={pickRows !== null}
