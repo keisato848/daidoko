@@ -152,19 +152,11 @@ export default function ShoppingListScreen() {
   return (
     <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
-        {/* タブになったので閉じる必要が無い。通知や他画面から push で来たときだけ戻れるように、
-            戻れるとき（`canGoBack`）だけ ✕ を出す */}
-        {router.canGoBack() ? (
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={12}
-            accessibilityLabel={t('common.close')}
-          >
-            <X size={20} color={Colors.muted} />
-          </Pressable>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+        {/* タブになったので閉じるボタンは置かない。
+            `canGoBack()` はタブを切り替えただけでも true を返すので判定に使えず、
+            出したままだと「タブなのに ✕ がある」状態になる（実機で確認）。
+            通知や他画面から来た場合も、タブバーと Android の戻るキーで移動できる */}
+        <View style={styles.headerSpacer} />
         <Text style={styles.headerTitle}>{t('pantry.shopping.title')}</Text>
         <View style={styles.headerActions}>
           <HelpButton onPress={coach.show} />
