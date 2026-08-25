@@ -63,7 +63,9 @@ App Store の App Privacy を書き換える必要が出る**（2026-08 に審�
 
 ### 4. EAS に FCM v1 の資格情報を登録する（利用者・1 回だけ）
 
-サーバー（Expo Push）が FCM へ送るために要る。**TTY が必要なので利用者の端末で。**
+FCM へ実際に送るのは **Expo Push** で、だいどこのサーバーは `exp.host` へ投げるだけ
+（`apps/server/src/routes/sync.ts`）。だから鍵の置き場所は **EAS であって Railway ではない。**
+**`eas credentials` は TTY が要るので利用者の端末で実行する。**
 
 ```powershell
 cd C:\Projects\daidoko\apps\mobile
@@ -75,6 +77,9 @@ pnpm exec eas credentials -p android
 鍵は Firebase コンソールの
 **プロジェクトの設定 → サービス アカウント → 新しい秘密鍵を生成** で作る JSON。
 **これもリポジトリに入れない**（`C:/secure/` へ）。
+
+expo.dev の Credentials 画面からアップロードする道もあるが、**秘密鍵のアップロードは
+ブラウザ操作セッションに代行させない**（`console-browser-ops` §1）。どちらの経路でも利用者の手で行う。
 
 ### 5. 確認（こちらで実施）
 
