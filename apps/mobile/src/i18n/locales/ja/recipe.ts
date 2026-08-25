@@ -29,6 +29,10 @@ const recipe = {
     descriptionLabel: '説明',
     descriptionPlaceholder: 'レシピの簡単な説明（任意）',
     /** お店の名前。あとから足せることが大事なので、常に出す（初回限定にしない） */
+    /** お店の料理か家の料理か（R1）。写真から作ったあとでも、ここで直せる */
+    originLabel: 'この料理は',
+    originStore: 'お店の料理',
+    originHome: '家の料理',
     placeLabel: 'お店の名前',
     placePlaceholder: '例: 麻婆豆腐の○○屋（任意）',
     minutesSuffix: '分',

@@ -8,7 +8,7 @@ import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { KeyboardAwareScroll } from './KeyboardAwareScroll';
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t, tCount, tDynamic } from '../i18n';
 import { getTagsForFamily } from '../services/tag.service';
 import { recipeFormSchema, type RecipeFormData } from '../validation/recipe.schema';
@@ -59,6 +59,10 @@ export function RecipeForm({
 }: RecipeFormProps) {
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  /** お店の料理か（R1）。**店名が入っていればお店**として開く。写真から作った直後は店名が入る */
+  const [fromStore, setFromStore] = useState<boolean>(
+    () => (initialValues?.placeName ?? '').trim().length > 0,
+  );
 
   const {
     control,
@@ -158,14 +162,47 @@ export function RecipeForm({
             multiline
             style={styles.multilineInput}
           />
-          {/* お店の名前はレシピの属性。**常に出す** — 写真から作った初回だけでなく、
-              あとから思い出して足せることがこの欄の存在理由（記録側に持つと直せない） */}
-          <FormField
-            label={t('recipe.form.placeLabel')}
-            value={watchedValues.placeName ?? ''}
-            onChangeText={(v) => setValue('placeName', v)}
-            placeholder={t('recipe.form.placePlaceholder')}
-          />
+          {/* お店の料理か家の料理か（R1）。写真から作ると既定はお店になるので、
+              **あとから直せる場所がここ**。切り替えは店名の有無で表す —
+              専用の列を足すより、画面に出ている事実（お店の名前）と一致していた方が
+              利用者に見える状態が 1 つで済む */}
+          <Text style={styles.originLabel}>{t('recipe.form.originLabel')}</Text>
+          <View style={styles.originToggle}>
+            {(
+              [
+                [true, t('recipe.form.originStore')],
+                [false, t('recipe.form.originHome')],
+              ] as const
+            ).map(([store, label]) => {
+              const selected = fromStore === store;
+              return (
+                <Pressable
+                  key={String(store)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  style={[styles.originChip, selected && styles.originChipActive]}
+                  onPress={() => {
+                    setFromStore(store);
+                    // 家に戻したら店名は残さない。「家の料理なのに店名がある」状態を作らない
+                    if (!store) setValue('placeName', '');
+                  }}
+                >
+                  <Text style={[styles.originChipText, selected && styles.originChipTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {/* お店の名前はレシピの属性。**あとから思い出して足せる**ことがこの欄の存在理由 */}
+          {fromStore && (
+            <FormField
+              label={t('recipe.form.placeLabel')}
+              value={watchedValues.placeName ?? ''}
+              onChangeText={(v) => setValue('placeName', v)}
+              placeholder={t('recipe.form.placePlaceholder')}
+            />
+          )}
           <View style={styles.stepperRow}>
             <NumberStepper
               label={t('common.servings')}
@@ -349,6 +386,35 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: '#FF6B6B',
     marginBottom: 8,
+  },
+  originLabel: {
+    fontSize: Typography.size.sm,
+    color: Colors.paperDim,
+    marginBottom: 6,
+  },
+  originToggle: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  originChip: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  originChipActive: {
+    borderColor: Colors.gold,
+    backgroundColor: '#1C1409',
+  },
+  originChipText: {
+    fontSize: Typography.size.sm,
+    color: Colors.paperDim,
+  },
+  originChipTextActive: {
+    color: Colors.gold,
   },
   stepperRow: {
     flexDirection: 'row',

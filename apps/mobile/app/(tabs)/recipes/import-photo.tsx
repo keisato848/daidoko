@@ -306,31 +306,6 @@ export default function ImportPhotoScreen() {
   if (phase === 'preview') {
     return (
       <View style={styles.container}>
-        {/* どこで食べたか（R1）。店なら調理記録は「食べた」になり、再現したい棚に入る */}
-        <View style={styles.placeBar}>
-          <View style={styles.placeToggle}>
-            {(
-              [
-                ['eaten_out', t('log.kind.eatenOut')],
-                ['cooked', t('log.kind.cooked')],
-              ] as const
-            ).map(([value, label]) => (
-              <Pressable
-                key={value}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: logKind === value }}
-                style={[styles.placeChip, logKind === value && styles.placeChipActive]}
-                onPress={() => setLogKind(value)}
-              >
-                <Text
-                  style={[styles.placeChipText, logKind === value && styles.placeChipTextActive]}
-                >
-                  {label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
         <RecipeForm
           initialValues={
             photoResult?.draft
@@ -474,6 +449,35 @@ export default function ImportPhotoScreen() {
               )}
               <Text style={styles.modalTitle}>{t('recipe.photo.commentTitle')}</Text>
               <Text style={styles.modalHint}>{t('recipe.photo.commentHint')}</Text>
+              {/* この写真が何なのかを**最初に決める場所**（R1）。
+                  以前はプレビューの最上部にあったが、感想を書くこの画面の方が、
+                  「どこで食べたか」を思い出しているタイミングと合う。
+                  既定はお店（この機能の主役の流れ）。あとからレシピの編集でも直せる */}
+              <View style={styles.placeToggle}>
+                {(
+                  [
+                    ['eaten_out', t('log.kind.eatenOut')],
+                    ['cooked', t('log.kind.cooked')],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Pressable
+                    key={value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: logKind === value }}
+                    style={[styles.placeChip, logKind === value && styles.placeChipActive]}
+                    onPress={() => setLogKind(value)}
+                  >
+                    <Text
+                      style={[
+                        styles.placeChipText,
+                        logKind === value && styles.placeChipTextActive,
+                      ]}
+                    >
+                      {label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
               <TextInput
                 style={styles.modalInput}
                 value={notes}
@@ -501,15 +505,6 @@ export default function ImportPhotoScreen() {
 }
 
 const styles = StyleSheet.create({
-  placeBar: {
-    paddingHorizontal: 20,
-    // 画面最上部に出るのでステータスバー分を空ける（この画面の header と同じ値）
-    paddingTop: 54,
-    paddingBottom: 8,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
   placeToggle: {
     flexDirection: 'row',
     gap: 8,
