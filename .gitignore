@@ -84,3 +84,7 @@ Temp/
 !.claude/settings.json
 chat.json
 nul
+
+# FCM の設定ファイル（API キーを含む）。C:/secure/ に置く — docs/fcm-setup.md
+google-services.json
+**/google-services.json
