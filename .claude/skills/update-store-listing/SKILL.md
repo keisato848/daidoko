@@ -41,8 +41,28 @@ description: Google Play ストア掲載（ja-JP / en-US のアプリ名・説�
 表示順は README.md の表 = `update-play-screenshots.mjs` の ORDER 配列。変えるときは両方更新）。
 **言語ごとにスクショを入れないと、その言語の掲載は日本語の画面のまま出る。**
 
+0. **撮る前に「どの版を撮るのか」を確定させる。** 掲載物に写ってよいのは**公開済みの UI だけ**。
+   - **ビルド元はリリース済みのタグから**。`git worktree add <dir> v<version>-play-<versionCode>`
+     で切り出して組む（開発中のブランチで組むと未公開の画面が混ざる）
+   - **端末に入っているビルドが何かを必ず確かめる。`versionName` では分からない。**
+     2026-08-26 に、AQUOS の `versionName=1.11.0` を信じて撮ろうとしたが、中身は未マージの
+     `feat/shopping-pick`（ボトムタブに「買物」が増えていた）だった。
+     画面を 1 枚撮って**タブバーと主要導線が公開版と一致するか**を目で見るのが確実
+   - `EXPO_PUBLIC_ADMOB_*` は**付けない**（掲載物にテスト広告が写り込む事故を防ぐ）
+
 1. ストアショット用リリース APK をビルド（サンプルデータ有効＋コーチマーク無効。エミュレータは x86_64）:
    `EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 node scripts/agent/build-android.mjs --arch x86_64`
+   **新しい worktree で初回に組むときは `--prebuild` が要る**（`android/` は gitignore なので
+   存在しない。無いまま叩くと「gradlew.bat が認識されていません」という、PATH の問題に
+   見えるエラーで止まる）
+
+   > **実機で撮るなら、サンプルデータが入らないことに先に気づくこと。**
+   > `EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1` は **DB が空のときしかシードしない**（`app_meta` の版で判定）。
+   > 実機には利用者のデータが入っているので、そのまま撮ると検証で作った半端なレシピが並ぶ。
+   > **エミュレータで撮るのが既定**（`-wipe-data` で必ず空から始まる）。
+   > 実機で撮る必要があるなら、アプリのデータ全消しは利用者の判断（フックが止める）なので、
+   > **先に許可を得る**か、別 applicationId のビルドを併存させる。
+
 2. クリーンなエミュレータを起動（**1080x2400 の `daidoko_e2e_fresh_api36` を使う** — 既存掲載と同解像度）:
    `emulator -avd daidoko_e2e_fresh_api36 -wipe-data -no-snapshot`
    ※ wipe 直後の SystemUI ANR ダイアログは capture スクリプトが dumpsys で検出して自動で閉じる
