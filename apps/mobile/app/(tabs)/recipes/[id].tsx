@@ -26,6 +26,8 @@ import {
 } from 'react-native';
 
 import { Avatar } from '../../../src/components/Avatar';
+import { PhotoViewer } from '../../../src/components/PhotoViewer';
+import { ShoppingPickSheet } from '../../../src/components/ShoppingPickSheet';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../../src/components/HelpButton';
 import { EmptyState } from '../../../src/components/EmptyState';
@@ -38,11 +40,12 @@ import { Toast } from '../../../src/components/Toast';
 import { Colors } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { t, tCount } from '../../../src/i18n';
+import { canSkipSelection, type ShoppingPlanRow } from '../../../src/utils/shoppingPlan';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
 import { dialog } from '../../../src/services/dialog.service';
 import {
-  addMissingRecipeIngredientsToList,
-  describeAddMissingResult,
+  addSelectedIngredientsToList,
+  buildRecipeShoppingPlan,
 } from '../../../src/services/shopping-list.service';
 import {
   deleteRecipe,
@@ -104,6 +107,10 @@ export default function RecipeDetailScreen() {
   const [webShareBlocked, setWebShareBlocked] = useState(true);
   const [webSharePublishing, setWebSharePublishing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  /** 全画面で見ている写真。null = 閉じている。一覧・詳細は cover で切っているので逃げ道を置く */
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
+  /** 選択シートの中身。null = 出さない（#214） */
+  const [pickRows, setPickRows] = useState<readonly ShoppingPlanRow[] | null>(null);
   // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
   const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
   const unitSystem = useUnitSystemStore((state) => state.system);
@@ -308,22 +315,37 @@ export default function RecipeDetailScreen() {
     }
   };
 
+  /**
+   * 材料を買い物リストへ（#214）。
+   *
+   * **除外が出たときだけシートを出す。** 全部足りないなら今までどおり 1 タップで入る。
+   * 在庫にある材料を黙って消すと「なぜ卵が入らなかったのか」が分からず、
+   * 卵が 1 個しか無いのに 3 個要る場面で行き止まりになる。
+   */
   const handleAddMissingToList = async () => {
     if (!recipe) return;
-    const outcome = describeAddMissingResult(await addMissingRecipeIngredientsToList(recipe.id));
-    let message: string;
-    if (outcome.kind === 'added') {
-      const head = tCount('recipe.detail.shoppingAdded', outcome.added);
-      message =
-        outcome.alreadyOnList > 0
-          ? `${head}\n${tCount('recipe.detail.shoppingAlreadyOnList', outcome.alreadyOnList)}`
-          : head;
-    } else if (outcome.kind === 'all-on-list') {
-      message = t('recipe.detail.shoppingAllOnList');
-    } else {
-      message = t('recipe.detail.shoppingNothingMissing');
+    const plan = await buildRecipeShoppingPlan(recipe.id);
+    if (plan.length === 0) return;
+    if (canSkipSelection(plan)) {
+      await commitShoppingSelection(plan);
+      return;
     }
-    void dialog.alert({ title: t('recipe.detail.shoppingTitle'), message });
+    setPickRows(plan);
+  };
+
+  const commitShoppingSelection = async (rows: ShoppingPlanRow[]) => {
+    if (!recipe) return;
+    setPickRows(null);
+    const added = await addSelectedIngredientsToList(recipe.id, rows);
+    if (added > 0) {
+      setToastMessage(tCount('recipe.detail.shoppingAdded', added));
+      return;
+    }
+    // 選んだのに 1 件も入らない = 同じ名前が未購入で並んでいるとき
+    void dialog.alert({
+      title: t('recipe.detail.shoppingTitle'),
+      message: t('recipe.detail.shoppingAllOnList'),
+    });
   };
 
   if (isLoading) {
@@ -357,11 +379,21 @@ export default function RecipeDetailScreen() {
     <View style={styles.container}>
       <View style={styles.hero}>
         {recipe.heroPhotoUri ? (
-          <Image
-            source={{ uri: recipe.heroPhotoUri }}
-            style={styles.heroPhoto}
-            resizeMode="cover"
-          />
+          // 表紙は cover で切っている。押したら切らずに全部見せる。
+          // **Pressable にも fill を持たせる** — heroPhoto は absoluteFillObject なので、
+          // 大きさの無い親に入れると 0×0 に潰れて写真が消える（実機で被弾）
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setViewerUri(recipe.heroPhotoUri)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={recipe.title}
+          >
+            <Image
+              source={{ uri: recipe.heroPhotoUri }}
+              style={styles.heroPhoto}
+              resizeMode="cover"
+            />
+          </Pressable>
         ) : (
           <Text style={styles.heroEmoji}>{getRecipeEmoji(recipe.title)}</Text>
         )}
@@ -593,11 +625,17 @@ export default function RecipeDetailScreen() {
                     {convertTemperaturesForDisplay(step.body, unitSystem)}
                   </Text>
                   {step.photoPath && (
-                    <Image
-                      source={{ uri: step.photoPath }}
-                      style={styles.stepPhoto}
-                      resizeMode="cover"
-                    />
+                    <Pressable
+                      style={styles.stepPhotoPress}
+                      onPress={() => setViewerUri(step.photoPath)}
+                      accessibilityRole="imagebutton"
+                    >
+                      <Image
+                        source={{ uri: step.photoPath }}
+                        style={styles.stepPhoto}
+                        resizeMode="cover"
+                      />
+                    </Pressable>
                   )}
                   {step.timerSec != null && (
                     <View style={styles.timerBadge}>
@@ -707,6 +745,15 @@ export default function RecipeDetailScreen() {
         total={coach.total}
         onNext={coach.next}
         onSkip={coach.skip}
+      />
+
+      <PhotoViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
+
+      <ShoppingPickSheet
+        visible={pickRows !== null}
+        rows={pickRows ?? []}
+        onCancel={() => setPickRows(null)}
+        onConfirm={(selected) => void commitShoppingSelection(selected)}
       />
 
       <Toast
@@ -912,6 +959,7 @@ const styles = StyleSheet.create({
     color: Colors.paper,
     lineHeight: 24,
   },
+  stepPhotoPress: { width: '100%' },
   stepPhoto: {
     width: '100%',
     height: 140,

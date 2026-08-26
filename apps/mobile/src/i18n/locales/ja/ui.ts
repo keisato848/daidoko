@@ -85,6 +85,7 @@ const ui = {
     recipes: 'レシピ',
     add: '追加',
     pantry: '在庫',
+    shopping: '買物',
     settings: '設定',
   },
 

@@ -18,6 +18,9 @@ const recipe: typeof ja = {
     readingLabel: 'Reading',
     readingPlaceholder: 'e.g. beef stew',
     descriptionLabel: 'Description',
+    originLabel: 'This dish is',
+    originStore: 'From a restaurant',
+    originHome: 'Made at home',
     placeLabel: 'Restaurant name',
     placePlaceholder: 'e.g. Joe’s Diner (optional)',
     descriptionPlaceholder: 'A short description (optional)',
@@ -118,6 +121,22 @@ const recipe: typeof ja = {
       other: '{{count}} were already on the list',
     },
     addMissingLabel: 'Add missing ingredients to the shopping list',
+
+    /**
+     * Selection sheet (#214). Items already in the pantry stay on the list,
+     * unchecked with the reason shown — the user decides, not the app.
+     */
+    shoppingPick: {
+      title: 'Add to shopping list',
+      body: "Checked items get added. Pick the ones you're short of, even if you have some.",
+      inPantry: 'In pantry: {{amount}}',
+      inPantryUnknown: 'In pantry',
+      onList: 'On the list',
+      selectAll: 'Select all',
+      clearAll: 'Clear all',
+      add: 'Add',
+      addNone: 'Pick at least one',
+    },
 
     emptyMemo: 'No notes yet',
     emptyHistory: 'No cooking records yet',

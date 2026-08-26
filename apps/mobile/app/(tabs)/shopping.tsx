@@ -152,13 +152,11 @@ export default function ShoppingListScreen() {
   return (
     <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          accessibilityLabel={t('common.close')}
-        >
-          <X size={20} color={Colors.muted} />
-        </Pressable>
+        {/* タブになったので閉じるボタンは置かない。
+            `canGoBack()` はタブを切り替えただけでも true を返すので判定に使えず、
+            出したままだと「タブなのに ✕ がある」状態になる（実機で確認）。
+            通知や他画面から来た場合も、タブバーと Android の戻るキーで移動できる */}
+        <View style={styles.headerSpacer} />
         <Text style={styles.headerTitle}>{t('pantry.shopping.title')}</Text>
         <View style={styles.headerActions}>
           <HelpButton onPress={coach.show} />
@@ -346,6 +344,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
   headerLink: { fontSize: 13, color: Colors.gold },
+  headerSpacer: { width: 20 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   addRow: {
     flexDirection: 'row',

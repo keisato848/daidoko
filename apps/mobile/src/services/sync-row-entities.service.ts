@@ -112,6 +112,7 @@ async function buildShoppingItemChange(id: string, deletedAt: string): Promise<O
         amount: row.amount,
         checked: row.checked,
         source: row.source,
+        recipeId: row.recipeId,
         sortOrder: row.sortOrder,
         storeGroup: row.storeGroup,
         createdAt: row.createdAt,
@@ -376,6 +377,23 @@ export async function listRowSyncableEntities(): Promise<
 
 // ── 受信: payload → DB ──────────────────────────────────────────────────────
 
+/**
+ * 受信した `recipeId` を、**手元にそのレシピがあるときだけ**返す（v4・§5-2b）。
+ *
+ * `PRAGMA foreign_keys = ON` なので、まだ届いていないレシピを指すと insert が落ち、
+ * **その品目が丸ごと入らない**。買い物リストから品目が消える方が、
+ * 「レシピへ飛べない」より明確に悪いので、繋がらないときは null に倒す。
+ */
+async function localRecipeIdOrNull(recipeId: string | null | undefined): Promise<string | null> {
+  if (!recipeId) return null;
+  const rows = await getDb()
+    .select({ id: schema.recipes.id })
+    .from(schema.recipes)
+    .where(eq(schema.recipes.id, recipeId))
+    .limit(1);
+  return rows.length > 0 ? recipeId : null;
+}
+
 async function applyShoppingItem(payload: RowSyncPayload): Promise<ApplyOutcome> {
   if (payload.entity !== SYNC_ENTITY_SHOPPING_ITEM) return 'skipped';
   const db = getDb();
@@ -396,6 +414,9 @@ async function applyShoppingItem(payload: RowSyncPayload): Promise<ApplyOutcome>
   // サーバーへ出ていく（利用者は個人のつもりのまま）。共有をやめる決定はこの端末のもの
   if (local && !isShared(local.shared)) return 'skipped';
 
+  // **手元にあるときだけ繋ぐ**（v4）。insert と update の両方で使う
+  const resolvedRecipeId = await localRecipeIdOrNull(item.recipeId);
+
   await db
     .insert(schema.shoppingItems)
     .values({
@@ -406,7 +427,7 @@ async function applyShoppingItem(payload: RowSyncPayload): Promise<ApplyOutcome>
       amount: item.amount,
       checked: item.checked,
       source: item.source,
-      recipeId: null, // 受信側に無いレシピを指すと外部キーで落ちる（設計 §5-2b）
+      recipeId: resolvedRecipeId,
       sortOrder: item.sortOrder,
       storeGroup: item.storeGroup,
       createdBy: null,
@@ -424,6 +445,9 @@ async function applyShoppingItem(payload: RowSyncPayload): Promise<ApplyOutcome>
         amount: item.amount,
         checked: item.checked,
         source: item.source,
+        // 解決できたときだけ書く。解決できないからといって**既に繋がっている行を切らない**
+        // （送信元にレシピがあり、こちらにまだ届いていないだけのことがある）
+        ...(resolvedRecipeId ? { recipeId: resolvedRecipeId } : {}),
         sortOrder: item.sortOrder,
         storeGroup: item.storeGroup,
         checkedAt: item.checkedAt,

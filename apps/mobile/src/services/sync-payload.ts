@@ -31,6 +31,16 @@ import { z } from 'zod';
  */
 export const SYNC_PAYLOAD_SCHEMA_VERSION = 3; // v3: 在庫数量の持ち分（S2-B・§5-3）
 
+/**
+ * **省略可のフィールドを足すときはバージョンを上げないこと。**
+ *
+ * `parseSyncPayload` は `version > SYNC_PAYLOAD_SCHEMA_VERSION` の payload を**丸ごと捨てる**。
+ * 1.11.0（v3）が既に公開されているので、v4 を送ると v3 の端末では
+ * **その種別の変更が 1 件も届かなくなる**（recipeId が繋がらないどころではない）。
+ * zod は非 strict なので、古い端末は知らないキーを黙って無視して残りを適用する。
+ * バージョンを上げるのは「古い端末に解釈させては困る」破壊的変更のときだけ。
+ */
+
 export const SYNC_ENTITY_RECIPE = 'recipe';
 export const SYNC_ENTITY_RECIPE_BOOK = 'recipe_book';
 export const SYNC_ENTITY_SHOPPING_ITEM = 'shopping_item';
@@ -185,6 +195,13 @@ export interface ShoppingItemSyncPayload {
     /** 0 = 未チェック / 1 = 買った */
     checked: number;
     source: string;
+    /**
+     * どのレシピから足したか（v4）。**受信側はこのレシピが手元にあるときだけ設定する** —
+     * `PRAGMA foreign_keys = ON` なので、まだ届いていないレシピを指すと
+     * **その品目が丸ごと入らない**（買い物リストから消える方が、レシピへ飛べないより悪い）。
+     * v3 以前の送信元は付けてこないので省略可。
+     */
+    recipeId?: string | null;
     sortOrder: number;
     storeGroup: string | null;
     createdAt: string;
@@ -378,6 +395,8 @@ const shoppingItemPayloadSchema = z.object({
     amount: nullableText,
     checked: z.number(),
     source: z.string(),
+    /** v4。古い送信元は付けてこないので optional */
+    recipeId: nullableText.optional(),
     sortOrder: z.number(),
     storeGroup: nullableText,
     createdAt: z.string().min(1),

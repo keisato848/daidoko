@@ -29,6 +29,10 @@ const recipe = {
     descriptionLabel: '説明',
     descriptionPlaceholder: 'レシピの簡単な説明（任意）',
     /** お店の名前。あとから足せることが大事なので、常に出す（初回限定にしない） */
+    /** お店の料理か家の料理か（R1）。写真から作ったあとでも、ここで直せる */
+    originLabel: 'この料理は',
+    originStore: 'お店の料理',
+    originHome: '家の料理',
     placeLabel: 'お店の名前',
     placePlaceholder: '例: 麻婆豆腐の○○屋（任意）',
     minutesSuffix: '分',
@@ -134,6 +138,22 @@ const recipe = {
       other: '{{count}}件はすでにリストにありました',
     } satisfies PluralMessage,
     addMissingLabel: '足りない材料を買い物リストに追加',
+
+    /**
+     * 選択シート（#214）。在庫にある材料を一覧から**消さずに**、
+     * チェックを外した状態で理由を添えて見せる。引き算はアプリではなく利用者がやる。
+     */
+    shoppingPick: {
+      title: '買い物リストに追加',
+      body: 'チェックしたものを追加します。在庫にあるものも、足りなければ選べます。',
+      inPantry: '在庫 {{amount}}',
+      inPantryUnknown: '在庫あり',
+      onList: 'リストにあり',
+      selectAll: 'すべて選択',
+      clearAll: 'すべて解除',
+      add: '追加',
+      addNone: '選んでください',
+    },
 
     emptyMemo: 'メモはまだありません',
     emptyHistory: 'まだ調理記録がありません',

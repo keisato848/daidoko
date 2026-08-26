@@ -142,6 +142,56 @@ describe('sync-payload — レシピ帖', () => {
   });
 });
 
+describe('sync-payload — 買い物の recipeId（v4 相当・版は上げない）', () => {
+  function shoppingPayload(recipeId?: string | null) {
+    return {
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: SYNC_ENTITY_SHOPPING_ITEM,
+      item: {
+        id: 's1',
+        name: '卵',
+        nameNormalized: '卵',
+        amount: '1個',
+        checked: 0,
+        source: 'recipe',
+        ...(recipeId !== undefined ? { recipeId } : {}),
+        sortOrder: 0,
+        storeGroup: null,
+        createdAt: '2026-08-25T00:00:00.000Z',
+        checkedAt: null,
+        updatedAt: '2026-08-25T00:00:00.000Z',
+      },
+    } as const;
+  }
+
+  it('recipeId を運ぶ', () => {
+    const parsed = parseSyncPayload(
+      SYNC_ENTITY_SHOPPING_ITEM,
+      JSON.stringify(shoppingPayload('recipe-1')),
+    );
+    expect(parsed).not.toBeNull();
+    expect((parsed as { item: { recipeId?: string | null } }).item.recipeId).toBe('recipe-1');
+  });
+
+  it('**recipeId が無い古い送信元も受けられる**（省略可にしてある）', () => {
+    const parsed = parseSyncPayload(SYNC_ENTITY_SHOPPING_ITEM, JSON.stringify(shoppingPayload()));
+    expect(parsed).not.toBeNull();
+    expect((parsed as { item: { recipeId?: string | null } }).item.recipeId).toBeUndefined();
+  });
+
+  it('null も運べる（レシピ由来でない品目）', () => {
+    const parsed = parseSyncPayload(
+      SYNC_ENTITY_SHOPPING_ITEM,
+      JSON.stringify(shoppingPayload(null)),
+    );
+    expect((parsed as { item: { recipeId?: string | null } }).item.recipeId).toBeNull();
+  });
+
+  it('版は 3 のまま。上げると公開済みの 1.11.0 が買い物の変更を丸ごと捨てる', () => {
+    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(3);
+  });
+});
+
 describe('sync-payload — 壊れた入力', () => {
   it('null・空文字は null', () => {
     expect(parseSyncPayload(SYNC_ENTITY_RECIPE, null)).toBeNull();

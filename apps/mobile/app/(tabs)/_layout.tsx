@@ -1,6 +1,6 @@
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Tabs } from 'expo-router';
-import { Home, BookOpen, Plus, Refrigerator, Settings } from 'lucide-react-native';
+import { Home, BookOpen, Plus, Refrigerator, ShoppingCart } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
@@ -64,11 +64,18 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <Refrigerator size={size} color={color} />,
         }}
       />
+      {/*
+        買い物リストは**店で片手で開く**画面なのに、入口がホーム最上部の小さなアイコン 1 つ
+        （しかも在庫からは戻れない一方通行）だった。在庫を #182 でタブへ出したのと同じ理由で、
+        買物もタブへ出す。空いた枠は設定を降ろして作る — 設定は滅多に開かないのに
+        下端の一等地を占めていた。設定はホームのヘッダ（歯車）から開く。
+        並びは「追加」を中央に保つため ホーム / レシピ / 追加 / 在庫 / 買物。
+      */}
       <Tabs.Screen
-        name="settings"
+        name="shopping"
         options={{
-          title: t('ui.tab.settings'),
-          tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
+          title: t('ui.tab.shopping'),
+          tabBarIcon: ({ color, size }) => <ShoppingCart size={size} color={color} />,
         }}
       />
       {/* Non-tab screens within the (tabs) group — hidden from tab bar */}
@@ -76,7 +83,7 @@ export default function TabLayout() {
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />
       <Tabs.Screen name="ai-key" options={{ href: null }} />
-      <Tabs.Screen name="shopping" options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen name="scan-barcode" options={{ href: null }} />
       <Tabs.Screen name="receipt" options={{ href: null }} />
       <Tabs.Screen name="cookable" options={{ href: null }} />

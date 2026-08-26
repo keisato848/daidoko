@@ -1,0 +1,7 @@
+The shopping list now has its own tab at the bottom, within reach of one thumb while you shop.
+
+When adding a recipe's ingredients, items you already have stay on the list instead of disappearing, so you can still pick them when one egg isn't enough for three.
+
+Tap a photo to see the whole picture, uncropped.
+
+A recipe made from a photo can now be switched between "from a restaurant" and "made at home" afterwards.

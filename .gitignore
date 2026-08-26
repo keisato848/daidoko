@@ -84,3 +84,11 @@ Temp/
 !.claude/settings.json
 chat.json
 nul
+
+# EAS のローカル署名設定（秘密のパスを含む・絶対にコミットしない）
+credentials.json
+apps/mobile/credentials.json
+
+# FCM の設定ファイル（API キーを含む）。C:/secure/ に置く — docs/fcm-setup.md
+google-services.json
+**/google-services.json
