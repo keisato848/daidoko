@@ -28,8 +28,14 @@ Claude in Chrome（mcp\_\_claude-in-chrome\_\_\*）でメインループが実�
 1. **egress ポリシーでコンソール系ホストが全部 403**（CONNECT 拒否）。実測で全滅:
    `play.google.com` / `playconsole.google.com` / `admob.google.com` / `apps.admob.com` /
    `appstoreconnect.apple.com` / `api.appstoreconnect.apple.com`。
-   Playwright を使っても同じ（プロキシの手前で切られるのでブラウザの種類は無関係）。
    `developers.google.com` すら塞がっていて API ドキュメントも読めない。
+
+   **コンテナ同梱の Chromium を直接起動しても同じ**（2026-08-26 に実測）。
+   `/opt/pw-browsers/chromium-1194/chrome-linux/chrome --headless=new --proxy-server=$HTTPS_PROXY --dump-dom <url>`
+   で 3 コンソールとも **`ERR_TUNNEL_CONNECTION_FAILED`**。Playwright でも拡張機能でも結果は同じ
+   （CONNECT の時点で切られるのでブラウザの種類も自動化方法も無関係）。
+   対照実験として許可ホスト（`github.com`）を同じ Chrome で開くと **CONNECT は通り** TLS 段階まで進む
+   ので、これはブラウザ設定の不備ではなく **egress ポリシーそのもの**だと切り分けられる。
 2. **資格情報がコンテナに無い**。`C:/secure/play-service-account.json` はローカル Windows のパスで、
    リモートには存在しない（`PLAY_SERVICE_ACCOUNT_KEY` 未設定・ASC の `.p8` も無し）。
    `androidpublisher.googleapis.com` と `admob.googleapis.com` はホストには届くが 401。
