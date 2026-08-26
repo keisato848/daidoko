@@ -18,6 +18,37 @@ Claude in Chrome（mcp\_\_claude-in-chrome\_\_\*）でメインループが実�
 3. 許可が切れると navigate が「Navigation to this domain is not allowed」で失敗 → 再許可を依頼
 4. SPA は描画待ちが要る（wait 3-5s → screenshot）。CDP screenshot timeout は数秒待って再試行
 
+## 0-0. 実行環境の前提 — リモートセッションでは実績取得も操作もできない（2026-08-26 確認）
+
+**症状**: Claude Code on the web（リモートコンテナ）のセッションで「Play / App Store / AdMob の実績
+（インストール数・広告収益）を取りたい」と頼まれても、**ブラウザ操作・API のどちらも通らない**。
+
+**原因**: 2 つ重なっている。片方だけ直しても届かない。
+
+1. **egress ポリシーでコンソール系ホストが全部 403**（CONNECT 拒否）。実測で全滅:
+   `play.google.com` / `playconsole.google.com` / `admob.google.com` / `apps.admob.com` /
+   `appstoreconnect.apple.com` / `api.appstoreconnect.apple.com`。
+   Playwright を使っても同じ（プロキシの手前で切られるのでブラウザの種類は無関係）。
+   `developers.google.com` すら塞がっていて API ドキュメントも読めない。
+2. **資格情報がコンテナに無い**。`C:/secure/play-service-account.json` はローカル Windows のパスで、
+   リモートには存在しない（`PLAY_SERVICE_ACCOUNT_KEY` 未設定・ASC の `.p8` も無し）。
+   `androidpublisher.googleapis.com` と `admob.googleapis.com` はホストには届くが 401。
+   加えて **Claude in Chrome の MCP ツール（`mcp__claude-in-chrome__*`）はリモートセッションに載らない**
+   — この SKILL の手順は全部ローカル PC のセッション前提だと思ってよい。
+
+**対処**: **この作業はローカル PC のセッションでやる。** リモートで粘らない（403 はポリシー拒否なので
+リトライしても変わらないし、迂回してはいけない）。
+
+**メール経由の代替は無い（確認済み）**: Gmail に届くのは審査ステータス（`no_reply@email.apple.com`）と
+ポリシー通知（`googleplay-noreply@google.com`）だけ。`admob-noreply@google.com` も機能告知のみで、
+**インストール数・広告収益の数字は 1 通も来ていない**。数字はコンソールにしか無い。
+
+**リポジトリに残っている唯一の実測値**は `docs/レシピ推論の評価設計.md`「本番の既定を思考オフにした」節の
+AdMob 収益 **¥16.5 / 12 日（月換算 ¥37）**（2026-08-14 時点・MAU 3 のころ）。実績を語るときの
+最後の既知値はここ。新しく取得したら同じ節か本節に日付つきで足すこと。
+
+---
+
 ## 1. 承認ゲートと代行不可の境界（最重要）
 
 | 操作                                                                    | 扱い                                                                                      |
