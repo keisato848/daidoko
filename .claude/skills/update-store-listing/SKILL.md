@@ -104,7 +104,7 @@ description: Google Play ストア掲載（ja-JP / en-US のアプリ名・説�
    >   文字が重なる（#222）。撮る前に該当画面を目で見て、崩れていたらデータ側を短くする
 
 5. **スクショはストア公開物 — 画像をユーザーに提示して承認を得る**
-6. ドライラン: `node scripts/release/update-play-screenshots.mjs --lang ja-JP --dry-run`（枚数・寸法検証）
+6. ドライラン: `node scripts/release/update-play-screenshots.mjs --lang ja-JP --dry-run`（枚数・寸法検証。**8 枚の寸法が揃っていないと止まる** — 一部だけ撮り直して混ざるのを防ぐ）
 7. 反映: `node scripts/release/update-play-screenshots.mjs --lang ja-JP`（既存全削除→順番にアップロード→commit）
    → 英語も入れるなら続けて `--lang en-US`（**edit は同時に 1 つだけ**なので言語ごとに実行）
 8. PNG の変更を PR で develop にマージ
