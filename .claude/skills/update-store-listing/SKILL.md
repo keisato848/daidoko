@@ -82,12 +82,13 @@ description: Google Play ストア掲載（ja-JP / en-US のアプリ名・説�
      （アプリ単位の言語を一時的に切り替える。終了時に端末既定へ自動で戻る。
      **サンプルデータも英語になる** — `src/db/seed.en.ts`。初回起動でシードするので
      wipe 済みの端末に入れてから撮ること）
-     > **`manual` の 2 枚（08 AI 結果 / 10 写真つき詳細）を手で撮るときも、
-     > ステータスバーは同じデモモードに揃える。** スクリプトと同じ broadcast を打てばよい:
-     > `settings put global sysui_demo_allowed 1` → `am broadcast -a com.android.systemui.demo -e command enter`
-     > → `clock hhmm 0900` / `battery level 100 plugged false` / `network wifi show level 4 fully true`
-     > → `network mobile hide` / `notifications visible false`。撮り終えたら `command exit`。
-     > 揃え忘れると 8 枚のうち 2 枚だけ時計と通知アイコンが違う
+
+   > **`manual` の 2 枚（08 AI 結果 / 10 写真つき詳細）を手で撮るときも、
+   > ステータスバーは同じデモモードに揃える。** スクリプトと同じ broadcast を打てばよい:
+   > `settings put global sysui_demo_allowed 1` → `am broadcast -a com.android.systemui.demo -e command enter`
+   > → `clock hhmm 0900` / `battery level 100 plugged false` / `network wifi show level 4 fully true`
+   > → `network mobile hide` / `notifications visible false`。撮り終えたら `command exit`。
+   > 揃え忘れると 8 枚のうち 2 枚だけ時計と通知アイコンが違う
 
    > **撮影用データを実機で作るときの注意（2026-08-26 に実際にやった手順）**
    >
