@@ -17,7 +17,7 @@
 
 ## 短い説明
 
-Photograph a dish you ate out — AI turns it into a recipe you cook at home.
+Photograph a dish you ate out — AI makes it a recipe, shared with your family.
 
 ## 詳しい説明
 
@@ -37,22 +37,33 @@ DAIDOKO closes that gap. Photograph the dish, and AI works out the ingredients, 
 ・Anything not in that list is left untouched, so your recipe stays yours
 ・Every version is kept, so you can look back at how it developed
 
+■ Shared with the family, automatically
+・Hand over an invite code — **no account, no email address**
+・Recipes, shopping list and pantry reach every phone in the family on their own
+・Choose per item whether the shopping list and pantry are shared or private
+・Everything works offline; it catches up when you are back online
+
 ■ Building your collection
 ・Search by recipe name, tag or ingredient
-・Import from a recipe URL, from pasted text, or from a photo of a page
+・Import from a recipe URL or pasted text (unlimited — no AI allowance used)
+・For a cookbook page or a food package, **just photograph it** — AI reads it (front and back into one)
 ・Cover photos and per-step photos
 ・Cooking mode shows one step at a time, large, with timers and no ads
 
 ■ Kitchen, shopping and pantry
-・Add just the ingredients you are missing to your shopping list, in one tap
+・Add the ingredients you are missing to your shopping list in one tap — items you already have are shown too, so you choose
 ・Move what you bought into the pantry — by barcode or by scanning a receipt
 ・See which recipes you can cook right now, ranked by how much you already have
 ・Get a reminder when something is running low
 
-■ Your data stays yours
-・Everything is stored on your device — no account, no sign-up
+■ Where your data lives
+・No account, no sign-up. We never hold your email address or phone number
+・**Unless you share with family, your data stays on your device**
+・Join a family group and only the items you share travel through our server.
+　Delete the group and everything on the server goes with it
 ・Backup, restore and a transfer file for moving to a new phone
-・AI features have a free daily allowance; add your own Gemini key for no limit
+・AI features include a free allowance, then a short ad unlocks one more.
+　Add your own Gemini key for no limit
 
 ■ Who it is for
 ・Anyone who wants to recreate a restaurant dish at home
