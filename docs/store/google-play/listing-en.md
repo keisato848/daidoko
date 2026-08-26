@@ -1,12 +1,12 @@
 # Google Play Listing (EN)
 
-更新日: 2026-08-10
-対象ビルド: Android 1.5.0 / versionCode 10017（多言語対応の初回）
+更新日: 2026-08-26
+対象ビルド: Android 1.12.0 / versionCode 10029
 反映方法: androidpublisher API（edits.listings）で CLI 更新
 
-**日本語版の訳ではない。** listing-ja.md は 1.3.0 当時のもので、主役機能
-（お店の味を再現するループ）が反映されていない。英語版は現在の製品像で書いている。
-日本語版を後で書き直すときは、こちらに揃える。
+**日本語版の訳ではない。** listing-ja.md は #115 で主役機能（お店の味を再現するループ）に
+書き直し済みで、こちらと同じ製品像を語っている。訳ではなく**同じ訴求の別文面**なので、
+どちらかを直すときは必ず両方を見ること。
 
 過大な主張をしないこと。**アレルゲンの検出はしていない**（`docs/privacy-policy.md` §7）ので、
 「アレルギー対応」に読める書き方をしない。
@@ -17,7 +17,7 @@
 
 ## 短い説明
 
-Photograph a dish you ate out — AI makes it a recipe, shared with your family.
+Photograph a restaurant dish — AI turns it into a recipe your family shares.
 
 ## 詳しい説明
 
@@ -28,7 +28,8 @@ DAIDOKO closes that gap. Photograph the dish, and AI works out the ingredients, 
 ■ From a photo to a recipe
 ・One photo is all it takes — AI drafts the ingredients, amounts and steps
 ・Add the restaurant name or a note about the taste for a closer result
-・Everything the AI is unsure about is marked as an estimate, not stated as fact
+・Amounts and timings a photo cannot settle come back as a guide, not as fact
+・Every AI-made recipe carries a note saying the AI estimated it
 ・You always review and edit the draft before it is saved
 
 ■ Getting closer to the taste
@@ -41,7 +42,8 @@ DAIDOKO closes that gap. Photograph the dish, and AI works out the ingredients, 
 ・Hand over an invite code — **no account, no email address**
 ・Recipes, shopping list and pantry reach every phone in the family on their own
 ・Choose per item whether the shopping list and pantry are shared or private
-・Everything works offline; it catches up when you are back online
+・Your recipes, shopping list, pantry and cooking mode work offline; they catch up when you are back online
+・Only the AI features and URL import need a connection
 
 ■ Building your collection
 ・Search by recipe name, tag or ingredient
@@ -74,8 +76,8 @@ DAIDOKO closes that gap. Photograph the dish, and AI works out the ingredients, 
 ■ Permissions
 ・Camera: photographing dishes, reading text, scanning barcodes
 ・Photos and media: choosing an image from your library
-・Notifications: low-stock reminders (handled entirely on your device)
+・Notifications: low-stock reminders (on your device), cooking timers, and family-sync updates
 
-Note on AI: only when you use an AI feature, the photo or ingredient names you selected are sent for analysis. You are told before it happens, and nothing is stored on our servers.
+Note on AI: the photo or ingredient names you choose are sent for analysis only when you use an AI feature. You are told before it happens, and nothing is stored on our servers.
 
 DAIDOKO does not detect allergens. Always check the ingredients yourself, especially if you have food allergies.
