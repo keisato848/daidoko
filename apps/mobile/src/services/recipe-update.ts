@@ -47,8 +47,14 @@ function keep<T>(given: T | undefined, current: T): T {
   return given === undefined ? current : given;
 }
 
-/** 空文字は「消す」の意味なので null に寄せる。`undefined` は素通し（＝触らない）。 */
-function blankToNull(value: string | null | undefined): string | null | undefined {
+/**
+ * 空文字は「消す」の意味なので null に寄せる。`undefined` は素通し（＝触らない）。
+ *
+ * `createRecipe` からも使う — **作成と更新で `''` の扱いが違うと、
+ * 相談・写真レシピで作ったレシピが `title_reading = ''` で入り、最初の編集で
+ * 初めて null に化ける**（同じ値なのに保存経路で形が変わる）。
+ */
+export function blankToNull(value: string | null | undefined): string | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
   return value.trim() ? value.trim() : null;

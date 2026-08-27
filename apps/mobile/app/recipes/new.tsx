@@ -37,8 +37,13 @@ export default function NewRecipeScreen() {
         steps: data.steps.map((s) => ({
           body: s.body,
           timerSec: s.timerSec,
+          photoPath: s.photoPath || undefined,
         })),
         tags: data.tags,
+        // **欄を明示列挙する作成経路は、足し忘れると黙って消える。**
+        // 店名・表紙写真・手順写真がここで抜けていた（他の 6 経路は data を丸ごと渡すので無事）
+        coverPhotoPath: data.coverPhotoPath || undefined,
+        placeName: data.placeName || undefined,
       };
 
       await createRecipe(input);

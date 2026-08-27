@@ -309,6 +309,25 @@ describe('recipe.service (mock/web)', () => {
       expect(detail.placeName).toBe('おふくろの味');
     });
 
+    /**
+     * 手入力の作成画面（`recipes/new.tsx`）だけが**欄を明示列挙**していて、
+     * `placeName` が抜けていた。フォームに「お店の名前」があるのに保存されない状態で、
+     * 実機（Pixel 9a・1.12.1）で見つけた。他の 6 経路は `data` を丸ごと渡すので無事だった。
+     */
+    it('作成でも店名が保存される（欄の列挙漏れの回帰）', async () => {
+      const id = await createRecipe({
+        title: 'カルパッチョ',
+        placeName: 'トラットリア',
+        ingredients: [{ name: '牛肉' }],
+        steps: [{ body: '切る' }],
+        tags: [],
+      });
+
+      const detail = await getRecipeDetail(id);
+      assertDefined(detail);
+      expect(detail.placeName).toBe('トラットリア');
+    });
+
     it('明示的に null / 空文字を渡した欄は消える（#220）', async () => {
       const id = await createRecipe({
         title: '味噌汁',
