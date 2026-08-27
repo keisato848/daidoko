@@ -48,7 +48,7 @@ type Phase = 'input' | 'processing' | 'preview' | 'saving';
 function toFormData(recipe: RecipeDetail): RecipeFormData {
   return {
     title: recipe.title,
-    titleReading: '',
+    titleReading: recipe.titleReading ?? '',
     description: recipe.description ?? '',
     ...(recipe.servings !== null && { servings: recipe.servings }),
     ...(recipe.cookTimeMin !== null && { cookTimeMin: recipe.cookTimeMin }),
@@ -213,8 +213,13 @@ export default function RefineRecipeScreen() {
       // 黙って消えていた — 味を近づけるたびに店名まで失われていた（#220）
       await updateRecipe(recipe.id, {
         title: refined.title,
-        // 料理名が変われば読みも変わる。AI が返したときだけ差し替える
-        ...(refined.titleReading ? { titleReading: refined.titleReading } : {}),
+        // **料理名が変わったときだけ**読みを差し替える。
+        // AI は現在の読みがなを渡されていない（RefineRecipeSnapshot に無い）ので、
+        // 題名が同じなのに差し替えると、利用者が入れた かな が推測値に置き換わる。
+        // しかも差分プレビュー（recipeDiff）は読みがなを見ないので、黙って変わってしまう
+        ...(refined.titleReading && refined.title !== recipe.title
+          ? { titleReading: refined.titleReading }
+          : {}),
         ...(refined.description ? { description: refined.description } : {}),
         ...(refined.servings !== undefined && { servings: refined.servings }),
         ...(refined.cookTimeMin !== undefined && { cookTimeMin: refined.cookTimeMin }),

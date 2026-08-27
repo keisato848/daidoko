@@ -506,16 +506,24 @@ const styles = StyleSheet.create({
   overlayRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    // レシピ詳細の材料行と同じ扱い（#222）。**ここは同じ getRecipeDetail の材料を
+    // 同じ形で並べているので、詳細だけ直すと料理中の材料シートに重なりが残る**
+    alignItems: 'flex-start',
+    gap: 12,
     paddingVertical: 9,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   overlayIngName: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 15, // base: 材料名（オーバーレイ）
     fontWeight: '400',
     color: Colors.paper,
   },
   overlayIngAmount: {
+    flexShrink: 0,
+    textAlign: 'right',
     fontSize: 15, // base: 分量（オーバーレイ）
     fontWeight: '400',
     color: Colors.goldDim,

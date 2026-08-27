@@ -3,6 +3,7 @@
  * Supports read/write operations for CRUD testing without SQLite
  */
 import { generateId } from '../utils/id';
+import { resolveRecipeUpdate } from '../services/recipe-update';
 import type {
   CookingPhotoItem,
   RecipeDetail,
@@ -390,18 +391,29 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
     : undefined;
   const nextRevNum = (currentRev?.revisionNumber ?? 0) + 1;
 
-  // **渡されなかった欄は現行値を引き継ぐ**（実装側 `recipe.service.updateRecipe` と同じ規則。
-  // `undefined` = 触らない / `null`・空文字 = 消す。片方だけ直すと jest だけ緑になる — #220）
-  const keep = <T>(given: T | undefined, current: T): T => (given === undefined ? current : given);
-  const blankToNull = (value: string | null | undefined): string | null | undefined =>
-    value == null ? (value === undefined ? undefined : null) : value.trim() ? value.trim() : null;
+  // **引き継ぎ規則は実装と同じ純関数を使う**（手写しにすると、jest は mock 側しか通らないので
+  // 実装だけ壊れても緑になる — #220 はそれで 3 か月出荷された）
+  const next = resolveRecipeUpdate(input, {
+    titleReading: recipe.titleReading ?? null,
+    coverPhotoPath: recipe.coverPhotoPath ?? null,
+    placeName: recipe.placeName ?? null,
+    revision: currentRev
+      ? {
+          servings: currentRev.servings,
+          cookTimeMin: currentRev.cookTimeMin,
+          prepTimeMin: currentRev.prepTimeMin,
+          description: currentRev.description,
+          sourceId: currentRev.sourceId,
+        }
+      : null,
+  });
 
   // Update recipe
   recipe.title = input.title;
-  recipe.titleReading = keep(blankToNull(input.titleReading), recipe.titleReading ?? null);
+  recipe.titleReading = next.titleReading;
   recipe.currentRevId = revId;
-  recipe.coverPhotoPath = keep(input.coverPhotoPath, recipe.coverPhotoPath ?? null);
-  recipe.placeName = keep(blankToNull(input.placeName), recipe.placeName ?? null);
+  recipe.coverPhotoPath = next.coverPhotoPath;
+  recipe.placeName = next.placeName;
   recipe.updatedAt = now;
 
   // Add new revision
@@ -410,12 +422,12 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
     recipeId,
     revisionNumber: nextRevNum,
     isMajor: input.isMajor ?? true,
-    servings: keep(input.servings, currentRev?.servings ?? null),
-    cookTimeMin: keep(input.cookTimeMin, currentRev?.cookTimeMin ?? null),
-    prepTimeMin: keep(input.prepTimeMin, currentRev?.prepTimeMin ?? null),
-    description: keep(blankToNull(input.description), currentRev?.description ?? null),
+    servings: next.servings,
+    cookTimeMin: next.cookTimeMin,
+    prepTimeMin: next.prepTimeMin,
+    description: next.description,
     authorNote: input.authorNote ?? null,
-    sourceId: input.sourceId ?? currentRev?.sourceId ?? null,
+    sourceId: next.sourceId,
     createdBy: 'user-kei',
     createdAt: now,
   });
