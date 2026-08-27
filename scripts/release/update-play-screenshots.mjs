@@ -73,6 +73,26 @@ const plan = ORDER.map((file) => {
   return { file, path: p, dims: `${w}x${h}`, kb: Math.round(b.length / 1024) };
 });
 
+/**
+ * **8 枚の寸法が揃っているか。** Play の要件（320..3840）は 1 枚ごとの検査なので、
+ * 1080x2400 のエミュレータで撮ったものと 1080x2432 の実機で撮ったものが混ざっても
+ * 素通りする。掲載グリッドでは高さの違いがそのまま見えるので、ここで止める
+ * （2026-08-26 の公開前点検で、自動 6 枚だけ撮り直すと混ざり得ることが分かった）。
+ */
+const dimsSeen = [...new Set(plan.map((s) => s.dims))];
+if (dimsSeen.length > 1) {
+  const byDim = dimsSeen
+    .map(
+      (d) =>
+        `${d}: ${plan
+          .filter((s) => s.dims === d)
+          .map((s) => s.file)
+          .join(', ')}`,
+    )
+    .join(' / ');
+  throw new Error(`スクショの寸法が揃っていません（同じ端末で撮り直すこと） — ${byDim}`);
+}
+
 console.log(`plan (${plan.length} files, ${LANG}/${IMAGE_TYPE}):`);
 for (const [i, s] of plan.entries()) console.log(`  ${i + 1}. ${s.file} ${s.dims} ${s.kb}KB`);
 
