@@ -6,7 +6,9 @@ function detail(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
   return {
     id: 'recipe-1',
     title: '肉じゃが',
+    titleReading: 'にくじゃが',
     servings: 2,
+    prepTimeMin: null,
     cookTimeMin: 30,
     description: '冷めても美味しい。翌日はカレーに。',
     rating: null,
@@ -23,6 +25,7 @@ function detail(overrides: Partial<RecipeDetail> = {}): RecipeDetail {
     heroPhotoUri: null,
     coverPhotoPath: null,
     pinnedAt: null,
+    placeName: null,
     ...overrides,
   };
 }

@@ -29,7 +29,9 @@ describe('buildSharePayload', () => {
   const recipe: RecipeDetail = {
     id: 'r1',
     title: '肉じゃが',
+    titleReading: 'にくじゃが',
     servings: 4,
+    prepTimeMin: null,
     cookTimeMin: 30,
     description: ' 甘めの味付け ',
     rating: null,
@@ -42,6 +44,7 @@ describe('buildSharePayload', () => {
     heroPhotoUri: null,
     coverPhotoPath: null,
     pinnedAt: null,
+    placeName: null,
   };
 
   it('attested: true が必ず載る（確認ダイアログ通過後にのみ呼ばれる前提）', () => {
