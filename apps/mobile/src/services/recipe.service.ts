@@ -19,6 +19,7 @@ import { generateId } from '../utils/id';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
 import { getAliasMap } from './name-alias.service';
 import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
+import { resolveRecipeUpdate } from './recipe-update';
 import { SYNC_ENTITY_RECIPE } from './sync-payload';
 import { enqueueSyncEntity } from './sync-queue.service';
 import type {
@@ -516,18 +517,10 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
   const revId = generateId();
   const now = nowIso();
 
-  /**
-   * **渡されなかった欄は現行値を引き継ぐ**（`undefined` = 触らない / `null`・空文字 = 消す）。
-   *
-   * 以前は全置換で、渡さなかった欄が黙って `null` になっていた。呼び出し元は
-   * `edit.tsx` と `refine.tsx` の 2 つしか無いのに **2 つとも `titleReading` と
-   * `prepTimeMin` を落としていた**（#220）。`refine` は `placeName` も落としており、
-   * 「お店の味に近づける」を通すたびに店名が消えていた。
-   *
-   * 画面ごとに塞ぐと呼び出し元が増えるたび同じ穴が開くので、ここで受ける。
-   */
+  // **渡されなかった欄は現行値を引き継ぐ。** 規則の実体は services/recipe-update.ts
+  // （mock と手写しで二重化すると、jest は mock 側しか通らないので実装だけ壊れても緑になる）
   const previousRev = recipe[0].currentRevId
-    ? (
+    ? ((
         await db
           .select({
             sourceId: schema.recipeRevisions.sourceId,
@@ -539,29 +532,15 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
           .from(schema.recipeRevisions)
           .where(eq(schema.recipeRevisions.id, recipe[0].currentRevId))
           .limit(1)
-      )[0]
-    : undefined;
+      )[0] ?? null)
+    : null;
 
-  const keep = <T>(given: T | undefined, current: T): T => (given === undefined ? current : given);
-  const blankToNull = (value: string | null | undefined): string | null | undefined =>
-    value == null ? (value === undefined ? undefined : null) : value.trim() ? value.trim() : null;
-
-  // 出所は引き継ぐ。編集で落とすと **URL 取り込みの印が消え、Web 共有の出所ゲート
-  // （sources.type='url' で判定）が外れて他人のサイト由来のレシピを公開できてしまう**。
-  // 同期でも現行リビジョンの出所しか運ばないので、ここで切れると受信側で素通りになる。
-  const carriedSourceId = input.sourceId ?? previousRev?.sourceId ?? null;
-
-  const nextTitleReading = keep(blankToNull(input.titleReading), recipe[0].titleReading);
-  const nextPlaceName = keep(blankToNull(input.placeName), recipe[0].placeName);
-  const nextCoverPhotoPath = keep(
-    input.coverPhotoPath === undefined ? undefined : toStoredPhotoPath(input.coverPhotoPath),
-    recipe[0].coverPhotoPath,
-  );
-  // 数値の欄は `null` が「消す」。`?? undefined` に潰すと、フォームで空にしても消せなくなる
-  const nextServings = keep(input.servings, previousRev?.servings ?? null);
-  const nextCookTimeMin = keep(input.cookTimeMin, previousRev?.cookTimeMin ?? null);
-  const nextPrepTimeMin = keep(input.prepTimeMin, previousRev?.prepTimeMin ?? null);
-  const nextDescription = keep(blankToNull(input.description), previousRev?.description ?? null);
+  const next = resolveRecipeUpdate(input, {
+    titleReading: recipe[0].titleReading,
+    coverPhotoPath: recipe[0].coverPhotoPath,
+    placeName: recipe[0].placeName,
+    revision: previousRev,
+  });
 
   // Insert new revision
   await db.insert(schema.recipeRevisions).values({
@@ -569,13 +548,13 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
     recipeId,
     revisionNumber: nextRevNum,
     isMajor: input.isMajor ?? true,
-    servings: nextServings,
-    cookTimeMin: nextCookTimeMin,
-    prepTimeMin: nextPrepTimeMin,
-    description: nextDescription,
+    servings: next.servings,
+    cookTimeMin: next.cookTimeMin,
+    prepTimeMin: next.prepTimeMin,
+    description: next.description,
     // 版のメモは「この版で何を変えたか」なので引き継がない。渡されなければ無し
     authorNote: input.authorNote ?? null,
-    sourceId: carriedSourceId,
+    sourceId: next.sourceId,
     createdBy: USER_ID,
     createdAt: now,
   });
@@ -585,10 +564,10 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
     .update(schema.recipes)
     .set({
       title: input.title,
-      titleReading: nextTitleReading,
+      titleReading: next.titleReading,
       currentRevId: revId,
-      coverPhotoPath: nextCoverPhotoPath,
-      placeName: nextPlaceName,
+      coverPhotoPath: next.coverPhotoPath,
+      placeName: next.placeName,
       updatedAt: now,
     })
     .where(eq(schema.recipes.id, recipeId));
@@ -628,7 +607,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
   }
 
   // Update FTS index。**引き継いだ読みがなを入れる**（input のままだと空で貼り直してしまう）
-  await updateFtsForRecipe(recipeId, { ...input, titleReading: nextTitleReading });
+  await updateFtsForRecipe(recipeId, { ...input, titleReading: next.titleReading });
 
   await enqueueSyncEntity(SYNC_ENTITY_RECIPE, recipeId);
 
