@@ -50,7 +50,20 @@ node scripts/release/capture-ios-screenshots.mjs     # 9:41・満充電に固定
 - **ストア公開物なのでユーザーに提示して承認を得る**。アップロードは App Store Connect Web UI か fastlane deliver
   （Play のような API 一括スクリプトは未整備）。
 
-## 3. EAS iOS 本番ビルド（クラウド・Mac のローカルビルド不要）
+## 3. EAS iOS 本番ビルド（**クラウド一択**）
+
+> **ローカル Mac ビルドは「不要」ではなく「使えない」**（2026-08-27 実測）。
+> Apple は 2026-04-28 以降 **Xcode 26 + iOS 26 SDK** を要求し、手元の Mac は
+> Xcode 16.4 / iOS 18.5 SDK。`eas build --local` の成果物は
+> `SUBMISSION_SERVICE_IOS_SDK_VERSION_ERROR` で弾かれる。
+> **しかもアップロードは成功して Apple 側で拒否される**ので失敗が分かるのが遅い。
+>
+> **Xcode を上げれば済む話ではない** — この Mac は macOS Tahoe 26 の対象外で、
+> 入れられるのは Xcode 26.3 まで（要 40GB の掃除）。詳しくは
+> `docs/リリース手順.md` §7-4 に制約の連鎖を実測値つきで書いてある。
+>
+> **EAS の無料枠が尽きたら翌月 1 日のリセットを待つ。**`--local` は枠を消費しないが、
+> **枠の問題ではなく SDK の問題**なので回避策にならない。
 
 ```bash
 git checkout main && git pull            # EAS はローカル作業ディレクトリをアップロードするため main を使う
