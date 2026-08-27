@@ -315,3 +315,24 @@ export function buildClaims(
 export function isContested(claims: Record<string, number[]>, pantryItemId: string): boolean {
   return (claims[pantryItemId] ?? []).length >= 2;
 }
+
+/**
+ * 保存する `reason` の文字列表現（`kind:subject`）。
+ * 画面は i18n の鍵に戻して表示する。**文字列に押し込むのは保存形式を増やさないため**で、
+ * 往復できることをテストで固定しておく（片方だけ直すと理由が黙って消える）。
+ */
+export function encodeReason(kind: MenuReasonKind, subject: string | null): string {
+  return `${kind}:${subject ?? ''}`;
+}
+
+export function decodeReason(reason: string): { kind: MenuReasonKind | null; subject: string } {
+  const index = reason.indexOf(':');
+  if (index < 0) return { kind: null, subject: '' };
+  const kind = reason.slice(0, index);
+  const subject = reason.slice(index + 1);
+  const known: MenuReasonKind[] = ['expiry', 'coverage', 'pinned', 'few-missing'];
+  return {
+    kind: (known as string[]).includes(kind) ? (kind as MenuReasonKind) : null,
+    subject,
+  };
+}

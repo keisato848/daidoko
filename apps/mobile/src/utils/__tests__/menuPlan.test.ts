@@ -8,6 +8,8 @@
 import {
   buildClaims,
   buildMenu,
+  decodeReason,
+  encodeReason,
   expiryUrgency,
   isContested,
   isServingAmount,
@@ -281,5 +283,29 @@ describe('buildClaims — 引き当てグラフ', () => {
   it('知らない recipeId は黙って飛ばす（削除されたレシピ）', () => {
     const claims = buildClaims([{ day: 1, recipeId: 'gone' }], recipes, stocks);
     expect(claims).toEqual({});
+  });
+});
+
+describe('encodeReason / decodeReason — 保存形式の往復', () => {
+  it.each([
+    ['expiry', 'なす'],
+    ['coverage', '6'],
+    ['pinned', null],
+    ['few-missing', '2'],
+  ] as const)('%s は往復する', (kind, subject) => {
+    const decoded = decodeReason(encodeReason(kind, subject));
+    expect(decoded.kind).toBe(kind);
+    expect(decoded.subject).toBe(subject ?? '');
+  });
+
+  it('subject に「:」が入っても壊れない（在庫名は自由文）', () => {
+    const decoded = decodeReason(encodeReason('expiry', 'A:B'));
+    expect(decoded.kind).toBe('expiry');
+    expect(decoded.subject).toBe('A:B');
+  });
+
+  it('知らない種別は null に落ちる（画面は理由を出さない）', () => {
+    expect(decodeReason('bogus:x').kind).toBeNull();
+    expect(decodeReason('').kind).toBeNull();
   });
 });

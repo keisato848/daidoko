@@ -12,7 +12,13 @@
  */
 import { getAppMeta, setAppMeta } from './app-meta.service';
 import { isNativePlatform } from '../db/client';
-import { buildClaims, buildMenu, type MenuPantryItem, type MenuRecipe } from '../utils/menuPlan';
+import {
+  buildClaims,
+  buildMenu,
+  encodeReason,
+  type MenuPantryItem,
+  type MenuRecipe,
+} from '../utils/menuPlan';
 
 const MENU_PLAN_KEY = 'menu_plan';
 
@@ -171,7 +177,7 @@ export async function generateMenuPlan(days: number): Promise<MenuPlanView | nul
       day: day.day,
       recipeId: day.recipeId,
       title: day.title,
-      reason: `${day.reason}:${day.reasonSubject ?? ''}`,
+      reason: encodeReason(day.reason, day.reasonSubject),
       doneAt: null,
     })),
   };
@@ -296,7 +302,7 @@ export async function replaceMenuDay(day: number): Promise<MenuPlanView | null> 
             day: d.day,
             recipeId: pick.recipeId,
             title: pick.title,
-            reason: `${pick.reason}:${pick.reasonSubject ?? ''}`,
+            reason: encodeReason(pick.reason, pick.reasonSubject),
             doneAt: null,
           }
         : d,

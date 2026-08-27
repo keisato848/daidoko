@@ -31,6 +31,7 @@ import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
 import { t, tCount } from '../../src/i18n';
+import { getMenuPlan } from '../../src/services/menu-plan.service';
 import { formatMonthDay, formatMonthLabel } from '../../src/i18n/format';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
 import { dialog } from '../../src/services/dialog.service';
@@ -118,16 +119,26 @@ export default function HomeScreen() {
    * 在庫を使っていない人のホームは変えない（0 件のときに出しても押した先が空になるだけ）。
    */
   const [hasStock, setHasStock] = useState(false);
+  /**
+   * 献立の「次の一品」（#215）。まだ作っていない最初の日のレシピ名。
+   * 献立が無ければ null で、カードは組む導線だけを出す。
+   * **自動モード（§10.11）が入るまで日付を持たない**ので「今日」とは言わない。
+   */
+  const [nextMenuTitle, setNextMenuTitle] = useState<string | null>(null);
 
   const loadTimeline = useCallback(async () => {
-    const [entries, want, inStock] = await Promise.all([
+    const [entries, want, inStock, menu] = await Promise.all([
       getTimeline(),
       getWantToCookRecipes(),
       getInStockNormalizedNames().catch((): string[] => []),
+      getMenuPlan().catch(() => null),
     ]);
     setAllEntries(entries);
     setWantList(want);
     setHasStock(inStock.length > 0);
+    // まだ作っていない最初の日。削除されたレシピの日は飛ばす
+    const next = menu?.days.find((d) => d.doneAt === null && !d.missing) ?? null;
+    setNextMenuTitle(next ? next.title : null);
     setLoading(false);
   }, []);
 
@@ -339,6 +350,27 @@ export default function HomeScreen() {
           ListHeaderComponent={
             !selectMode ? (
               <View>
+                {/* 献立カード（#215・決定変更 A/B・2026-08-28）。
+                    ここが献立の**主入口**。「献立」は実検索語で、検索で来た人が
+                    4 番目のタブを開かないと気づけないのは #182 の再演になる。
+                    自動モード（§10.11）が入るまでは日付を持たないので「次の一品」と言う。
+                    献立が無いときは組む導線だけを出す（勝手に組まない・§10.7） */}
+                <PressableScale
+                  style={styles.menuCard}
+                  scaleTo={0.98}
+                  onPress={() => router.push('/(tabs)/menu')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('menu.title')}
+                >
+                  <View style={styles.menuCardHead}>
+                    <CalendarDays size={16} color={Colors.gold} />
+                    <Text style={styles.menuCardLabel}>
+                      {nextMenuTitle ? t('menu.card.nextTitle') : t('menu.title')}
+                    </Text>
+                  </View>
+                  <Text style={styles.menuCardBody}>{nextMenuTitle ?? t('menu.card.empty')}</Text>
+                </PressableScale>
+
                 {/* 主役への直行。FAB（＋ → 追加方法選択）は残すが、写真からレシピだけは
                     1タップで届かせる（`docs/お店の味を再現設計.md` §4.3 問題2） */}
                 <PressableScale
@@ -485,6 +517,17 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  menuCard: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    backgroundColor: Colors.bgCard,
+  },
+  menuCardHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  menuCardLabel: { fontSize: 12, color: Colors.gold, letterSpacing: 0.5 },
+  menuCardBody: { fontSize: 15, color: Colors.paper, lineHeight: 21 },
   eatenOutBadge: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -18,6 +18,7 @@ import family from './family';
 import home from './home';
 import log from './log';
 import notification from './notification';
+import menu from './menu';
 import pantry from './pantry';
 import paywall from './paywall';
 import recipe from './recipe';
@@ -36,6 +37,7 @@ const en: typeof jaDict = {
   home,
   log,
   notification,
+  menu,
   pantry,
   paywall,
   recipe,

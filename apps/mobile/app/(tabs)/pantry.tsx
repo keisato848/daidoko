@@ -7,6 +7,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Bell,
+  CalendarDays,
   ChefHat,
   Minus,
   Plus,
@@ -290,6 +291,14 @@ export default function PantryScreen() {
           <Text style={styles.cookableText}>{t('pantry.action.cookable')}</Text>
         </Pressable>
       )}
+
+      {/* 献立（#215）。「作れるレシピ」は**いま作れる 1 品**しか出さず、買い物は
+          「何日分」で考える。その間を埋める入口（設計 §10.1）。
+          主入口はホームのカードで、ここは入口の一つ（決定変更 A・2026-08-28） */}
+      <Pressable style={styles.cookableButton} onPress={() => router.push('/(tabs)/menu')}>
+        <CalendarDays size={16} color={Colors.gold} />
+        <Text style={styles.cookableText}>{t('menu.title')}</Text>
+      </Pressable>
 
       <GroupChips
         groups={groups}
