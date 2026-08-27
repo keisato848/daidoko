@@ -65,34 +65,55 @@ const created = await client.post('/v1/appStoreVersions', {
 });
 console.log(`作成しました: ${created.data.id} (${created.data.attributes.appStoreState})`);
 
-// ロケールを写す（説明・キーワード等。**写さないと空のロケールから始まる**）
+/**
+ * **ASC はロケールもスクショも前のバージョンから自動で引き継ぐ**（2026-08-27 に実測）。
+ * 1.12.1 を作った直後に見たら、`ja` の説明・キーワードも `APP_IPHONE_67` の 8 枚も
+ * そのまま入っていた。**つまり `--copy-from` は本来要らない。**
+ *
+ * 引き継がれた内容は**前のバージョンのもの**なので、掲載を直したいなら
+ * `update-appstore-listing.mjs` / `update-appstore-screenshots.mjs` で上書きする。
+ *
+ * `--copy-from` は、引き継ぎが効かなかったときの保険として残してある。
+ * 既にあるロケールは POST が 409 になるので PATCH に倒す。
+ */
 if (args.copyFrom) {
   const from = versions.find((v) => v.attributes.versionString === args.copyFrom);
   if (!from) throw new Error(`--copy-from ${args.copyFrom} が見つかりません`);
   const fromLocs = await client.getAll(
     `/v1/appStoreVersions/${from.id}/appStoreVersionLocalizations`,
   );
+  const existing = await client.getAll(
+    `/v1/appStoreVersions/${created.data.id}/appStoreVersionLocalizations`,
+  );
+
   for (const l of fromLocs) {
     const a = l.attributes;
-    await client.post('/v1/appStoreVersionLocalizations', {
-      data: {
-        type: 'appStoreVersionLocalizations',
-        attributes: {
-          locale: a.locale,
-          ...(a.description ? { description: a.description } : {}),
-          ...(a.keywords ? { keywords: a.keywords } : {}),
-          ...(a.promotionalText ? { promotionalText: a.promotionalText } : {}),
-          ...(a.supportUrl ? { supportUrl: a.supportUrl } : {}),
-          ...(a.marketingUrl ? { marketingUrl: a.marketingUrl } : {}),
+    const attributes = {
+      ...(a.description ? { description: a.description } : {}),
+      ...(a.keywords ? { keywords: a.keywords } : {}),
+      ...(a.promotionalText ? { promotionalText: a.promotionalText } : {}),
+      ...(a.supportUrl ? { supportUrl: a.supportUrl } : {}),
+      ...(a.marketingUrl ? { marketingUrl: a.marketingUrl } : {}),
+    };
+    const already = existing.find((e) => e.attributes.locale === a.locale);
+    if (already) {
+      await client.patch(`/v1/appStoreVersionLocalizations/${already.id}`, {
+        data: { type: 'appStoreVersionLocalizations', id: already.id, attributes },
+      });
+      console.log(`  ロケールは自動で引き継がれていた（上書きした）: ${a.locale}`);
+    } else {
+      await client.post('/v1/appStoreVersionLocalizations', {
+        data: {
+          type: 'appStoreVersionLocalizations',
+          attributes: { locale: a.locale, ...attributes },
+          relationships: {
+            appStoreVersion: { data: { type: 'appStoreVersions', id: created.data.id } },
+          },
         },
-        relationships: {
-          appStoreVersion: { data: { type: 'appStoreVersions', id: created.data.id } },
-        },
-      },
-    });
-    console.log(`  ロケールを写した: ${a.locale}`);
+      });
+      console.log(`  ロケールを写した: ${a.locale}`);
+    }
   }
-  console.log('※ スクショは写らない（新しいバージョンには入れ直しが要る）');
 }
 
 console.log('\n次:');
