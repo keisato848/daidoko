@@ -64,6 +64,8 @@ module.exports = [
       'apps/mobile/src/utils/recipeTextParser.ts',
       'apps/mobile/src/utils/recipeTextNormalizer.ts',
       'apps/mobile/src/utils/stepTimer.ts',
+      // 献立の「取り分け」判定語彙（「大さじ」「少々」）。レシピ本文と照合する語であって画面の文言ではない
+      'apps/mobile/src/utils/menuPlan.ts',
       'apps/mobile/src/utils/itemMatch.ts',
       'apps/mobile/src/utils/itemName.ts',
       'apps/mobile/src/utils/kana.ts',
