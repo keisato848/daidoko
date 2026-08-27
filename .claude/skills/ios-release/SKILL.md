@@ -16,6 +16,32 @@ iOS の AI は「無料枠1日1回 ＋ BYOK」。広告/課金の導線は iOS �
 
 - **Apple Developer Program 登録**（年 $99）。App Store Connect でアプリ枠を作成（bundle id `com.daidoko.app`）。
 - Mac に **Xcode**（＋Command Line Tools）、**CocoaPods**、**Node/pnpm**、**EAS CLI**（`npm i -g eas-cli`）。
+- **リポジトリを iCloud 同期の外に置く**（2026-08-27 に実害が出た）。
+
+  > macOS の「デスクトップと書類フォルダ」を iCloud Drive に同期する設定がオンだと、
+  > `~/Documents/` 配下のリポジトリが同期対象になる。**iOS のローカルビルドが不定期に壊れる。**
+  >
+  > 確認: `defaults read com.apple.finder FXICloudDriveDocuments` が `1` なら同期対象。
+  >
+  > 実際に起きたこと:
+  >
+  > 1. **競合コピーが作られる** — `app 2.xcodeproj` / `Pods 2` / `node_modules/drizzle-orm 2` 等。
+  >    iCloud が同期の競合を解決するときに作る「 2」付きのファイル
+  > 2. **`pod install` が止まる** — `app.xcodeproj` と `app 2.xcodeproj` が両方あるため
+  >    `[!] Could not automatically select an Xcode project`
+  > 3. **ファイル読み取りが中断される** — `Errno::ECANCELED - Operation canceled @ io_fread`。
+  >    ファイル自体は壊れていない（`head` では読める）。iCloud のファイルプロバイダが中断している。
+  >    **毎回は出ない**（3 回目で通った）ので「たまに失敗する」という一番厄介な形になる
+  > 4. **ビルドが失敗する** — `pod install` が最後まで通っていないため
+  >    `no type or protocol named EXPermissionsRequester` 等で落ちる
+  >
+  > **EAS のクラウドビルドでは表面化しない**（一時ディレクトリへコピーして prebuild し直すため。
+  > ただしログには `The ios project is malformed, project files will be cleared and reinitialized`
+  > が出る）。**ローカルビルド・`pod install`・シミュレータ確認だけが直撃を受ける。**
+  >
+  > `node_modules` と `ios/Pods` は数万ファイルあり、再生成できるものなので、
+  > **そもそも同期する意味がない**。`~/Projects` のような同期外へ移すのが本筋。
+
 - リポジトリを clone し、**リポジトリルートで** `pnpm install`（`.npmrc` が `node-linker=hoisted`。
   `apps/mobile` 内では実行しない）。
 
