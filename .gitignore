@@ -92,3 +92,4 @@ apps/mobile/credentials.json
 # FCM の設定ファイル（API キーを含む）。C:/secure/ に置く — docs/fcm-setup.md
 google-services.json
 **/google-services.json
+docs/store/ios-analytics/
