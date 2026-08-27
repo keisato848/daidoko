@@ -19,7 +19,7 @@ import { generateId } from '../utils/id';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
 import { getAliasMap } from './name-alias.service';
 import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
-import { resolveRecipeUpdate } from './recipe-update';
+import { blankToNull, resolveRecipeUpdate } from './recipe-update';
 import { SYNC_ENTITY_RECIPE } from './sync-payload';
 import { enqueueSyncEntity } from './sync-queue.service';
 import type {
@@ -364,11 +364,12 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
     id: recipeId,
     familyId: FAMILY_ID,
     title: input.title,
-    titleReading: input.titleReading ?? null,
+    // 作成と更新で `''` の扱いを揃える（recipe-update.ts の規則）
+    titleReading: blankToNull(input.titleReading) ?? null,
     currentRevId: revId,
     status: 'active',
     coverPhotoPath: toStoredPhotoPath(input.coverPhotoPath),
-    placeName: input.placeName?.trim() ? input.placeName.trim() : null,
+    placeName: blankToNull(input.placeName) ?? null,
     createdBy: USER_ID,
     createdAt: now,
     updatedAt: now,
