@@ -15,6 +15,31 @@ node scripts/release/capture-store-screenshots.mjs \
   一度きりなので、**データを消した端末に入れてから**撮ること（`-wipe-data` でエミュを起動し直す）
 - 反映: `node scripts/release/update-play-screenshots.mjs --lang en-US`（下表の順に upload）
 
+## 現在の中身（2026-08-27 更新・1.12.1 / versionCode 10031）
+
+**エミュレータ `daidoko_e2e_fresh_api36`（1080x2400）で全 8 枚を撮り直した。**
+旧版は #217 / #219 より前の **4 タブ UI**（ホーム/レシピ/追加/設定）で、
+買物・在庫のタブが無かった。
+
+- 全画面が英語シード（`seed.en.ts`）。**単位もヤード・ポンド法に換算されている**
+  （0.38 oz / 1 tbsp / 4 cups）
+- ヒーロー（`10`）は同梱のシード写真（Creamy Scrambled Egg Toast）
+- `08` は**本番サーバー経由の実物の AI 下書き**（Fried Polenta with Creamy Sauce and Herbs）。
+  撮影後に破棄したので蔵書には残っていない（`01` / `02` はシードのみ）
+
+> **日本語版（1080x2432・実機）とは解像度が違うが、寸法の検証は言語ごとなので問題ない。**
+> 日本語版は実際の料理写真を使っており、英語版はシードのみ — この差は意図的。
+
+### 撮るときに踏んだこと
+
+- **`adb push` が無言で失敗する**（`docs/開発ハーネス.md` §4）。base64 で流し込む
+- `MEDIA_SCANNER_SCAN_FILE` のブロードキャストは効かない。
+  `content call --uri content://media/external --method scan_volume --arg external_primary`
+- **スクリプトの `--locale` は終了時に端末既定へ戻す。** 手動ショット（`08` / `10`）を撮る前に
+  `cmd locale set-app-locales com.daidoko.app --locales en-US` を打ち直すこと
+- デモモードは script が `enter` し直すと Wi-Fi が消えることがある。手で入れてから
+  `--keep-status-bar` で撮ると揃う
+
 | 順  | ファイル                     | 内容                                     |
 | --- | ---------------------------- | ---------------------------------------- |
 | 1   | `10-recipe-detail-photo.png` | 料理写真つきレシピ詳細（ヒーロー）       |
