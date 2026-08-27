@@ -154,7 +154,14 @@ export default function CookingModeScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>{recipeTitle}</Text>
+        {/*
+          長いレシピ名でステップ数に食い込まないよう、**名前だけを 1 行に切る**。
+          「マッシュルームとベーコンの詰め物アヒージョ1 / 9」のように、名前と
+          ステップ数が隙間なくつながって右端で見切れていた（#222）
+        */}
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {recipeTitle}
+        </Text>
         <Text style={styles.headerStep}>
           {currentStep + 1} / {steps.length}
         </Text>
@@ -298,16 +305,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   headerTitle: {
+    // 名前だけを縮ませる。ステップ数は縮ませない（#222）
+    flex: 1,
+    textAlign: 'center',
     fontSize: 15, // base: レシピ名（コンパクト表示）
     fontWeight: '500',
     color: Colors.paperDim,
     letterSpacing: 0.5,
   },
   headerStep: {
+    flexShrink: 0,
     fontSize: 13, // sm: ステップカウンター
     fontWeight: '400',
     color: Colors.paperDim,

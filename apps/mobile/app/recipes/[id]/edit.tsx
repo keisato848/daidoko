@@ -25,11 +25,13 @@ export default function EditRecipeScreen() {
       if (!detail) return;
       setInitialValues({
         title: detail.title,
-        titleReading: '',
+        // **決め打ちの '' に戻さない。** ここを読まないと、開いて更新するだけで
+        // 読みがなが消える（#220 — 2026-05-08 から 1.11.x まで出荷され続けた）
+        titleReading: detail.titleReading ?? '',
         description: detail.description ?? '',
         servings: detail.servings ?? undefined,
         cookTimeMin: detail.cookTimeMin ?? undefined,
-        prepTimeMin: undefined,
+        prepTimeMin: detail.prepTimeMin ?? undefined,
         ingredients: detail.ingredients.map((ing) => ({
           name: ing.name,
           amount: ing.amount ?? '',
@@ -52,13 +54,16 @@ export default function EditRecipeScreen() {
     async (data: RecipeFormData) => {
       if (!id) return;
 
+      // この画面はフォームの全欄を持っているので、**空なら `null` を明示して渡す**。
+      // `undefined` は `updateRecipe` では「触らない」の意味なので、
+      // `|| undefined` にすると欄を空にしても消せなくなる（types.ts の UpdateRecipeInput）
       const input: UpdateRecipeInput = {
         title: data.title,
-        titleReading: data.titleReading || undefined,
-        description: data.description || undefined,
-        servings: data.servings,
-        cookTimeMin: data.cookTimeMin,
-        prepTimeMin: data.prepTimeMin,
+        titleReading: data.titleReading || null,
+        description: data.description || null,
+        servings: data.servings ?? null,
+        cookTimeMin: data.cookTimeMin ?? null,
+        prepTimeMin: data.prepTimeMin ?? null,
         isMajor: true,
         ingredients: data.ingredients.map((ing) => ({
           name: ing.name,
@@ -72,8 +77,8 @@ export default function EditRecipeScreen() {
           photoPath: s.photoPath || undefined,
         })),
         tags: data.tags,
-        coverPhotoPath: data.coverPhotoPath || undefined,
-        placeName: data.placeName || undefined,
+        coverPhotoPath: data.coverPhotoPath || null,
+        placeName: data.placeName || null,
       };
 
       await updateRecipe(id, input);
