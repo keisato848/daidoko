@@ -1,0 +1,7 @@
+Fixed a bug where editing and saving a recipe cleared its reading, breaking kana search.
+
+Fixed a bug where "get closer to the restaurant taste" dropped the restaurant name.
+
+Fixed a black preview right after choosing a cover photo. The photo itself was always saved correctly.
+
+Fixed overlapping text when an ingredient or recipe name is long.
