@@ -3,7 +3,7 @@
   "versionCode": 10027,
   "verifiedAt": "2026-08-23T22:23:49.214Z",
   "device": {
-    "serial": "359971911306313",
+    "serialHash": "a21c401427d6",
     "model": "SH-RM19s",
     "abi": "arm64-v8a",
     "isEmulator": false
