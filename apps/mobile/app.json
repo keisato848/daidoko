@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.daidoko.app",
       "buildNumber": "10031",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleLocalizations": ["ja", "en"]
       },
       "associatedDomains": ["applinks:daidoko-production.up.railway.app"]
     },
