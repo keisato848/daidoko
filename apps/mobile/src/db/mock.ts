@@ -247,8 +247,10 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
   return {
     id: recipe.id,
     title: recipe.title,
+    titleReading: recipe.titleReading ?? null,
     servings: rev?.servings ?? null,
     cookTimeMin: rev?.cookTimeMin ?? null,
+    prepTimeMin: rev?.prepTimeMin ?? null,
     description: rev?.description ?? null,
     rating: avgRating,
     tags,
@@ -315,6 +317,9 @@ export function createMockRecipe(input: SaveRecipeInput): string {
     currentRevId: revId,
     status: 'active',
     coverPhotoPath: input.coverPhotoPath ?? null,
+    // 実装側（recipe.service.createRecipe）と同じく店名も保存する。
+    // ここが抜けていたので、mock 経路のテストでは店名の欠落を検出できなかった
+    placeName: input.placeName?.trim() ? input.placeName.trim() : null,
     createdBy: 'user-kei',
     createdAt: now,
     updatedAt: now,
@@ -385,11 +390,18 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
     : undefined;
   const nextRevNum = (currentRev?.revisionNumber ?? 0) + 1;
 
+  // **渡されなかった欄は現行値を引き継ぐ**（実装側 `recipe.service.updateRecipe` と同じ規則。
+  // `undefined` = 触らない / `null`・空文字 = 消す。片方だけ直すと jest だけ緑になる — #220）
+  const keep = <T>(given: T | undefined, current: T): T => (given === undefined ? current : given);
+  const blankToNull = (value: string | null | undefined): string | null | undefined =>
+    value == null ? (value === undefined ? undefined : null) : value.trim() ? value.trim() : null;
+
   // Update recipe
   recipe.title = input.title;
-  recipe.titleReading = input.titleReading ?? null;
+  recipe.titleReading = keep(blankToNull(input.titleReading), recipe.titleReading ?? null);
   recipe.currentRevId = revId;
-  recipe.coverPhotoPath = input.coverPhotoPath ?? null;
+  recipe.coverPhotoPath = keep(input.coverPhotoPath, recipe.coverPhotoPath ?? null);
+  recipe.placeName = keep(blankToNull(input.placeName), recipe.placeName ?? null);
   recipe.updatedAt = now;
 
   // Add new revision
@@ -398,12 +410,12 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
     recipeId,
     revisionNumber: nextRevNum,
     isMajor: input.isMajor ?? true,
-    servings: input.servings ?? null,
-    cookTimeMin: input.cookTimeMin ?? null,
-    prepTimeMin: input.prepTimeMin ?? null,
-    description: input.description ?? null,
+    servings: keep(input.servings, currentRev?.servings ?? null),
+    cookTimeMin: keep(input.cookTimeMin, currentRev?.cookTimeMin ?? null),
+    prepTimeMin: keep(input.prepTimeMin, currentRev?.prepTimeMin ?? null),
+    description: keep(blankToNull(input.description), currentRev?.description ?? null),
     authorNote: input.authorNote ?? null,
-    sourceId: input.sourceId ?? null,
+    sourceId: input.sourceId ?? currentRev?.sourceId ?? null,
     createdBy: 'user-kei',
     createdAt: now,
   });

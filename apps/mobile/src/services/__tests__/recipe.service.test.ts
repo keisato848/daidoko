@@ -267,6 +267,76 @@ describe('recipe.service (mock/web)', () => {
         stepCount: 1,
       });
     });
+
+    /**
+     * #220 の回帰。**渡されなかった欄で既存の値を潰さない。**
+     *
+     * 2026-05-08 から 1.11.x まで、編集画面が `titleReading: ''` を決め打ちしていて
+     * 「開いて更新しただけで読みがなが消える」状態が出荷され続けていた。
+     * `refine`（お店の味に近づける）は `placeName` も落としていた。
+     */
+    it('渡されなかった欄は現行値を引き継ぐ（#220）', async () => {
+      const id = await createRecipe({
+        title: '肉じゃが',
+        titleReading: 'にくじゃが',
+        servings: 4,
+        cookTimeMin: 40,
+        prepTimeMin: 15,
+        description: '定番の煮物',
+        placeName: 'おふくろの味',
+        ingredients: [{ name: 'じゃがいも' }],
+        steps: [{ body: '煮る' }],
+        tags: ['煮物'],
+      });
+
+      // refine のように、持っている欄だけを渡す
+      await updateRecipe(id, {
+        title: '肉じゃが（甘さひかえめ）',
+        ingredients: [{ name: 'じゃがいも' }],
+        steps: [{ body: '煮る' }],
+        tags: ['煮物'],
+        isMajor: false,
+      });
+
+      const detail = await getRecipeDetail(id);
+      assertDefined(detail);
+      expect(detail.title).toBe('肉じゃが（甘さひかえめ）');
+      expect(detail.titleReading).toBe('にくじゃが');
+      expect(detail.prepTimeMin).toBe(15);
+      expect(detail.servings).toBe(4);
+      expect(detail.cookTimeMin).toBe(40);
+      expect(detail.description).toBe('定番の煮物');
+      expect(detail.placeName).toBe('おふくろの味');
+    });
+
+    it('明示的に null / 空文字を渡した欄は消える（#220）', async () => {
+      const id = await createRecipe({
+        title: '味噌汁',
+        titleReading: 'みそしる',
+        servings: 2,
+        placeName: 'だし処',
+        ingredients: [{ name: '豆腐' }],
+        steps: [{ body: '温める' }],
+        tags: [],
+      });
+
+      // 編集画面のように、フォームが持つ欄をすべて渡す（空なら null）
+      await updateRecipe(id, {
+        title: '味噌汁',
+        titleReading: null,
+        placeName: null,
+        servings: null,
+        ingredients: [{ name: '豆腐' }],
+        steps: [{ body: '温める' }],
+        tags: [],
+      });
+
+      const detail = await getRecipeDetail(id);
+      assertDefined(detail);
+      expect(detail.titleReading).toBeNull();
+      expect(detail.placeName).toBeNull();
+      expect(detail.servings).toBeNull();
+    });
   });
 
   describe('recipe memos', () => {

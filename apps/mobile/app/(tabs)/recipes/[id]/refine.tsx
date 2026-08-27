@@ -208,8 +208,13 @@ export default function RefineRecipeScreen() {
     if (!recipe || !refined) return;
     setPhase('saving');
     try {
+      // **持っていない欄は渡さない**（`updateRecipe` が現行値を引き継ぐ）。
+      // 以前はここで渡さなかった `titleReading` / `prepTimeMin` / `placeName` が
+      // 黙って消えていた — 味を近づけるたびに店名まで失われていた（#220）
       await updateRecipe(recipe.id, {
         title: refined.title,
+        // 料理名が変われば読みも変わる。AI が返したときだけ差し替える
+        ...(refined.titleReading ? { titleReading: refined.titleReading } : {}),
         ...(refined.description ? { description: refined.description } : {}),
         ...(refined.servings !== undefined && { servings: refined.servings }),
         ...(refined.cookTimeMin !== undefined && { cookTimeMin: refined.cookTimeMin }),

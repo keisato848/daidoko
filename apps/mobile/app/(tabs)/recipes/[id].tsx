@@ -908,16 +908,26 @@ const styles = StyleSheet.create({
   ingredientRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    // 名前と分量が同じ行にあるので、**名前だけを縮ませて分量は縮ませない**。
+    // 既定（flexShrink: 1 が両方に効く）だと、AI が付ける長い材料名
+    // （「牛肉（ローストビーフ用薄切り、または牛モモ肉ブロック）」等）で名前が
+    // 2 行に折り返し、その上に分量が重なって描かれていた（#222）
+    alignItems: 'flex-start',
+    gap: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   ingredientName: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: '400',
     color: Colors.paper,
   },
   ingredientAmount: {
+    flexShrink: 0,
+    textAlign: 'right',
     fontSize: 15,
     fontWeight: '400',
     color: Colors.goldDim,
