@@ -15,7 +15,7 @@ node scripts/release/capture-store-screenshots.mjs \
   一度きりなので、**データを消した端末に入れてから**撮ること（`-wipe-data` でエミュを起動し直す）
 - 反映: `node scripts/release/update-play-screenshots.mjs --lang en-US`（下表の順に upload）
 
-## 現在の中身（2026-08-28 更新・1.12.2 / versionCode 10032）
+## 現在の中身（2026-08-28 更新・1.12.3 / versionCode 10033）
 
 **エミュレータ `daidoko_e2e_fresh_api36`（1080x2400）で撮っている。**
 
@@ -38,8 +38,12 @@ node scripts/release/capture-store-screenshots.mjs \
 - 全画面が英語シード（`seed.en.ts`）。**単位もヤード・ポンド法に換算されている**
   （0.38 oz / 1 tbsp / 4 cups）
 - ヒーロー（`10`）は同梱のシード写真（Creamy Scrambled Egg Toast）
-- `08` は**本番サーバー経由の実物の AI 下書き**（Fried Polenta with Creamy Sauce and Herbs）。
-  撮影後に破棄したので蔵書には残っていない（`01` / `02` はシードのみ）
+- `08` は**本番サーバー経由の実物の AI 下書き**（Beef Carpaccio with Parmesan and Herb
+  Dressing — ja 版と同じカルパッチョ写真）。撮影後に破棄したので蔵書には残っていない
+- **1.12.3 で `07` と `08` を差し替えた**: `07` は無料枠の説明が
+  「1 free creation left ＋ Watch an ad for more · unlimited with your own AI key」の
+  2 行になり、`08` は Reading 欄（ふりがなの直訳残り）が消えた
+  （ペルソナレビュー docs/reviews/persona/1.12.2.md の high #1・#9）
 
 > **日本語版（1080x2432・実機）とは解像度が違うが、寸法の検証は言語ごとなので問題ない。**
 > 日本語版は実際の料理写真を使っており、英語版はシードのみ — この差は意図的。
