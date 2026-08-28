@@ -84,9 +84,11 @@ node scripts/release/capture-ios-screenshots.mjs     # 9:41・満充電に固定
 > `SUBMISSION_SERVICE_IOS_SDK_VERSION_ERROR` で弾かれる。
 > **しかもアップロードは成功して Apple 側で拒否される**ので失敗が分かるのが遅い。
 >
-> **Xcode を上げれば済む話ではない** — この Mac は macOS Tahoe 26 の対象外で、
-> 入れられるのは Xcode 26.3 まで（要 40GB の掃除）。詳しくは
-> `docs/リリース手順.md` §7-4 に制約の連鎖を実測値つきで書いてある。
+> **Xcode は上げようがない** — この Mac は macOS Tahoe 26 の対象外で、かつ
+> **Xcode 26 に Intel 版が無い**（arm64 単独ビルドしか配布されていない）。
+> `xcodes list` は `[Universal]` と表示するが嘘で、入れても `bad CPU type in executable`
+> になる（2026-08-28 実測・XcodesOrg/xcodes#456）。**入れる前に `lipo -archs` で実体を見ること。**
+> 詳しくは `docs/リリース手順.md` §7-4。
 >
 > **EAS の無料枠が尽きたら翌月 1 日のリセットを待つ。**`--local` は枠を消費しないが、
 > **枠の問題ではなく SDK の問題**なので回避策にならない。

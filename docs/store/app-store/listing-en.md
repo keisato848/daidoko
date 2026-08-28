@@ -1,7 +1,7 @@
 # App Store 掲載情報（EN）
 
 作成日: 2026-08-27
-対象ビルド: iOS 1.12.1 / build 10031（App ID `6800964382`）
+対象ビルド: iOS 1.12.2 / build 10032（App ID `6800964382`・公開中は 1.12.0 / 10029）
 反映方法: App Store Connect API（`appStoreVersionLocalizations` / `appInfoLocalizations`）
 
 **App Store に英語ロケールを新設するための原稿**（それまで ASC は `ja` のみ）。
@@ -111,6 +111,8 @@ Fixed a bug where "get closer to the restaurant taste" dropped the restaurant na
 Fixed a black preview right after choosing a cover photo. The photo itself was always saved correctly.
 
 Fixed overlapping text when an ingredient or recipe name is long.
+
+Fixed the labels on the bottom tab bar being cut off at the edge of the screen on some devices.
 
 ## URL・その他
 
