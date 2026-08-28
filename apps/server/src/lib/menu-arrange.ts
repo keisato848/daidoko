@@ -50,6 +50,13 @@ export interface MenuArrangement {
 export interface MenuArrangeRaw {
   days?: { day?: number; recipeId?: string; why?: string }[];
   note?: string;
+  /** 実測トークン数。評価ハーネス（menu-eval.ts）のコスト換算用（vision-recipe.ts と同形）。 */
+  usage?: {
+    promptTokens: number;
+    outputTokens: number;
+    thoughtsTokens: number;
+    totalTokens: number;
+  };
 }
 
 export interface MenuArrangeProvider {
@@ -274,10 +281,26 @@ export class GeminiMenuArrangeProvider implements MenuArrangeProvider {
         }
         const json = (await res.json()) as {
           candidates?: { content?: { parts?: { text?: string }[] } }[];
+          usageMetadata?: {
+            promptTokenCount?: number;
+            candidatesTokenCount?: number;
+            thoughtsTokenCount?: number;
+            totalTokenCount?: number;
+          };
         };
         const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new MenuArrangeRequestError('Gemini returned no content');
-        return JSON.parse(text) as MenuArrangeRaw;
+        const parsed = JSON.parse(text) as MenuArrangeRaw;
+        const meta = json.usageMetadata;
+        if (meta) {
+          parsed.usage = {
+            promptTokens: meta.promptTokenCount ?? 0,
+            outputTokens: meta.candidatesTokenCount ?? 0,
+            thoughtsTokens: meta.thoughtsTokenCount ?? 0,
+            totalTokens: meta.totalTokenCount ?? 0,
+          };
+        }
+        return parsed;
       } catch (err) {
         if (err instanceof MenuArrangeQuotaError) throw err;
         lastError = err instanceof Error ? err : new MenuArrangeRequestError(String(err));

@@ -93,3 +93,4 @@ apps/mobile/credentials.json
 google-services.json
 **/google-services.json
 docs/store/ios-analytics/
+docs/eval/cover-image/*.jpg

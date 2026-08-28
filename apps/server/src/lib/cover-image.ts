@@ -17,9 +17,13 @@
  * ヘッダ・`generateContent` の `?key=` クエリではない）が正式な経路として
  * 案内されている。`responseModalities`/`generationConfig.imageConfig` のような
  * `generateContent` 系のフィールド名はこのモデル系のドキュメントには出てこない。
- * **この表面は WebFetch 経由の確認であり実機未検証**（designDeviations に明記）。
- * ずれていた場合は本ファイルと下記レスポンス解釈だけを直せばよい
- * （契約 `CoverImageProvider` は変えずに済む設計にしてある）。
+ * エンドポイント・認証ヘッダ・リクエスト body（`response_format.image_size: '1K'`
+ * まで含め）は 2026-08-29 の実呼び出しで検証済み（200 応答・
+ * `scripts/cover-image-check.ts probe`）。**ただしレスポンス側の形はドキュメントと
+ * 違った** — `output_image.data` ではなく `steps[]` の中の
+ * `type: 'model_output'` → `content[].type === 'image'` から拾う（下記
+ * `extractModelOutputImage` 参照）。ずれていた場合は本ファイルとレスポンス解釈
+ * だけを直せばよい（契約 `CoverImageProvider` は変えずに済む設計にしてある）。
  *
  * ## モデルは env で差し替え可能
  *
@@ -99,6 +103,37 @@ export function buildCoverImagePrompt(input: CoverImageInput): string {
 const GEMINI_INTERACTIONS_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/interactions';
 
+/**
+ * Interactions API の実応答の形（2026-08-29 実機呼び出しで検証・
+ * `scripts/cover-image-check.ts probe` の結果）。
+ * `output_image.data` ではなく、トップレベル `steps: [...]` の中に
+ * `type: 'thought'`（`signature` フィールドに巨大な不透明文字列。画像ではない）と
+ * `type: 'model_output'`（`content: [{ type: 'image', data, mime_type }]`）が
+ * 混在して返る。画像は必ず `model_output` の `content[].type === 'image'` から
+ * 取ること — `thought.signature` を誤って拾うと壊れた（デコード不能な）画像になる。
+ */
+interface InteractionsResponse {
+  steps?: Array<{
+    type?: string;
+    content?: Array<{ type?: string; data?: string; mime_type?: string }>;
+  }>;
+}
+
+function extractModelOutputImage(
+  json: InteractionsResponse,
+): { data: string; mimeType: string } | null {
+  for (const step of json.steps ?? []) {
+    if (step.type !== 'model_output') continue;
+    for (const item of step.content ?? []) {
+      if (item.type !== 'image') continue;
+      if (typeof item.data === 'string' && typeof item.mime_type === 'string') {
+        return { data: item.data, mimeType: item.mime_type };
+      }
+    }
+  }
+  return null;
+}
+
 /** サーバーの時間予算（設計 §5 の確定: 55 秒・リトライなし）。 */
 export const REQUEST_TIMEOUT_MS = 55_000;
 export const MAX_ATTEMPTS = 1;
@@ -153,15 +188,12 @@ export class GeminiCoverImageProvider implements CoverImageProvider {
         throw new CoverImageRequestError(`Gemini ${res.status}: ${detail}`);
       }
 
-      const json = (await res.json()) as {
-        output_image?: { data?: string; mime_type?: string };
-      };
-      const dataBase64 = json.output_image?.data;
-      const mimeType = json.output_image?.mime_type;
-      if (!dataBase64 || !mimeType) {
+      const json = (await res.json()) as InteractionsResponse;
+      const found = extractModelOutputImage(json);
+      if (!found) {
         throw new CoverImageRequestError('Gemini returned no image');
       }
-      return { mimeType, dataBase64 };
+      return { mimeType: found.mimeType, dataBase64: found.data };
     } catch (err) {
       if (err instanceof CoverImageQuotaError || err instanceof CoverImageRequestError) throw err;
       if (err instanceof Error && err.name === 'AbortError') {

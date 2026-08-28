@@ -1,0 +1,562 @@
+{
+  "_comment": [
+    "menu-eval (M2 献立AI並べ替え) の評価セット。docs/買い物リスト・在庫設計.md §10.10.5。",
+    "個人情報ゼロ・シード由来+自作の合成タイトルのみ（apps/mobile/src/db/seed.ts の実レシピ7件と",
+    "STRESS_TITLES を土台に、和/洋/中が揃うよう自作タイトルを足した）。",
+    "各 candidate の label（mainCategory・genre）は機械採点用の正解ラベル。",
+    "ハーネス（menu-eval.ts）は provider に渡す前に label を必ず剥がすこと（見せたら試験にならない）。",
+    "genre コード: wa=和 / yo=洋 / chu=中。mainCategory: beef/pork/chicken/fish/egg/tofu/vegetable。"
+  ],
+  "cases": [
+    {
+      "id": "baseline-7",
+      "note": "seed.ts 実レシピ7件そのまま。M1 は隣接に同系統・同ジャンルが並ぶ現実的な並び。E/F 両方の誘発ケース。",
+      "days": 7,
+      "outputLocale": "ja",
+      "pantry": [
+        "玉ねぎ",
+        "にんじん",
+        "醤油",
+        "みりん",
+        "砂糖",
+        "だし汁",
+        "鶏もも肉",
+        "米",
+        "卵",
+        "食パン",
+        "バター"
+      ],
+      "recentTitles": ["オムライス"],
+      "candidates": [
+        {
+          "id": "karaage",
+          "title": "唐揚げ",
+          "cookTimeMin": 25,
+          "coveragePct": 60,
+          "missing": ["にんにく", "しょうが", "酒"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "takikomi",
+          "title": "炊き込みご飯",
+          "cookTimeMin": 45,
+          "coveragePct": 70,
+          "missing": ["ごぼう", "油揚げ"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "nikujaga",
+          "title": "肉じゃが",
+          "cookTimeMin": 30,
+          "coveragePct": 50,
+          "missing": ["牛薄切り肉", "じゃがいも"],
+          "label": { "mainCategory": "beef", "genre": "wa" }
+        },
+        {
+          "id": "hamburg",
+          "title": "ハンバーグ",
+          "cookTimeMin": 35,
+          "coveragePct": 40,
+          "missing": ["合い挽き肉", "パン粉", "ウスターソース"],
+          "label": { "mainCategory": "beef", "genre": "yo" }
+        },
+        {
+          "id": "tonjiru",
+          "title": "豚汁",
+          "cookTimeMin": 20,
+          "coveragePct": 65,
+          "missing": ["豚バラ肉", "ごぼう"],
+          "label": { "mainCategory": "pork", "genre": "wa" }
+        },
+        {
+          "id": "misoshiru",
+          "title": "味噌汁",
+          "cookTimeMin": 10,
+          "coveragePct": 90,
+          "missing": ["わかめ"],
+          "label": { "mainCategory": "vegetable", "genre": "wa" }
+        },
+        {
+          "id": "eggtoast",
+          "title": "ふわとろスクランブルエッグトースト",
+          "cookTimeMin": 10,
+          "coveragePct": 100,
+          "missing": [],
+          "label": { "mainCategory": "egg", "genre": "yo" }
+        }
+      ]
+    },
+    {
+      "id": "chicken-top",
+      "note": "上位5件が全部鶏。X=5 で選び直しを強制し、主菜の系統の散り（E）を誘発する。",
+      "days": 5,
+      "outputLocale": "ja",
+      "pantry": [
+        "米",
+        "卵",
+        "玉ねぎ",
+        "にんじん",
+        "醤油",
+        "みりん",
+        "だし汁",
+        "食パン",
+        "バター",
+        "鶏もも肉"
+      ],
+      "recentTitles": ["ハンバーグ"],
+      "candidates": [
+        {
+          "id": "karaage",
+          "title": "唐揚げ",
+          "cookTimeMin": 25,
+          "coveragePct": 65,
+          "missing": ["にんにく", "しょうが"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "chicken-curry",
+          "title": "チキンカレー",
+          "cookTimeMin": 40,
+          "coveragePct": 55,
+          "missing": ["カレールー", "じゃがいも"],
+          "label": { "mainCategory": "chicken", "genre": "yo" }
+        },
+        {
+          "id": "oyakodon",
+          "title": "親子丼",
+          "cookTimeMin": 20,
+          "coveragePct": 80,
+          "missing": ["三つ葉"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "takikomi",
+          "title": "炊き込みご飯",
+          "cookTimeMin": 45,
+          "coveragePct": 60,
+          "missing": ["ごぼう", "油揚げ"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "teriyaki-chicken",
+          "title": "鶏の照り焼き",
+          "cookTimeMin": 20,
+          "coveragePct": 75,
+          "missing": ["みりん"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "tonjiru",
+          "title": "豚汁",
+          "cookTimeMin": 20,
+          "coveragePct": 50,
+          "missing": ["豚バラ肉", "大根"],
+          "label": { "mainCategory": "pork", "genre": "wa" }
+        },
+        {
+          "id": "eggtoast",
+          "title": "ふわとろスクランブルエッグトースト",
+          "cookTimeMin": 10,
+          "coveragePct": 100,
+          "missing": [],
+          "label": { "mainCategory": "egg", "genre": "yo" }
+        }
+      ]
+    },
+    {
+      "id": "chinese-top",
+      "note": "上位5件が全部中華。X=5 でジャンルの散り（F）を誘発する。副次的に主菜も豚に偏る。",
+      "days": 5,
+      "outputLocale": "ja",
+      "pantry": ["キャベツ", "にんじん", "玉ねぎ", "醤油", "味噌", "だし汁", "豆腐", "にんにく"],
+      "recentTitles": ["オムライス"],
+      "candidates": [
+        {
+          "id": "mapo-tofu",
+          "title": "麻婆豆腐",
+          "cookTimeMin": 25,
+          "coveragePct": 70,
+          "missing": ["豆板醤", "ひき肉"],
+          "label": { "mainCategory": "tofu", "genre": "chu" }
+        },
+        {
+          "id": "gyoza",
+          "title": "餃子",
+          "cookTimeMin": 30,
+          "coveragePct": 55,
+          "missing": ["豚ひき肉", "ニラ", "餃子の皮"],
+          "label": { "mainCategory": "pork", "genre": "chu" }
+        },
+        {
+          "id": "yakisoba",
+          "title": "焼きそば",
+          "cookTimeMin": 15,
+          "coveragePct": 80,
+          "missing": ["焼きそば麺"],
+          "label": { "mainCategory": "pork", "genre": "chu" }
+        },
+        {
+          "id": "ramen",
+          "title": "ラーメン",
+          "cookTimeMin": 20,
+          "coveragePct": 45,
+          "missing": ["中華麺", "チャーシュー", "メンマ"],
+          "label": { "mainCategory": "pork", "genre": "chu" }
+        },
+        {
+          "id": "hoikoro",
+          "title": "回鍋肉",
+          "cookTimeMin": 20,
+          "coveragePct": 60,
+          "missing": ["豚バラ肉", "キャベツ", "豆板醤"],
+          "label": { "mainCategory": "pork", "genre": "chu" }
+        },
+        {
+          "id": "nikujaga",
+          "title": "肉じゃが",
+          "cookTimeMin": 30,
+          "coveragePct": 50,
+          "missing": ["牛薄切り肉"],
+          "label": { "mainCategory": "beef", "genre": "wa" }
+        },
+        {
+          "id": "misoshiru",
+          "title": "味噌汁",
+          "cookTimeMin": 10,
+          "coveragePct": 90,
+          "missing": ["わかめ"],
+          "label": { "mainCategory": "vegetable", "genre": "wa" }
+        }
+      ]
+    },
+    {
+      "id": "few-candidates",
+      "note": "候補4件しかないのに X=7。埋めない契約（埋め過ぎ）を破っていないか。",
+      "days": 7,
+      "outputLocale": "ja",
+      "pantry": ["玉ねぎ", "にんじん", "醤油", "みりん", "砂糖", "だし汁", "味噌"],
+      "recentTitles": [],
+      "candidates": [
+        {
+          "id": "nikujaga",
+          "title": "肉じゃが",
+          "cookTimeMin": 30,
+          "coveragePct": 60,
+          "missing": ["牛薄切り肉"],
+          "label": { "mainCategory": "beef", "genre": "wa" }
+        },
+        {
+          "id": "misoshiru",
+          "title": "味噌汁",
+          "cookTimeMin": 10,
+          "coveragePct": 90,
+          "missing": ["わかめ"],
+          "label": { "mainCategory": "vegetable", "genre": "wa" }
+        },
+        {
+          "id": "hamburg",
+          "title": "ハンバーグ",
+          "cookTimeMin": 35,
+          "coveragePct": 45,
+          "missing": ["合い挽き肉", "パン粉"],
+          "label": { "mainCategory": "beef", "genre": "yo" }
+        },
+        {
+          "id": "karaage",
+          "title": "唐揚げ",
+          "cookTimeMin": 25,
+          "coveragePct": 55,
+          "missing": ["にんにく", "しょうが"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        }
+      ]
+    },
+    {
+      "id": "exact-candidates",
+      "note": "候補7件ちょうど全部和食で X=7。ジャンル(F)は散らしようが無い中、やってもいない工夫を嘘をつかないか。",
+      "days": 7,
+      "outputLocale": "ja",
+      "pantry": ["玉ねぎ", "にんじん", "醤油", "みりん", "砂糖", "だし汁", "米", "卵", "味噌"],
+      "recentTitles": ["ハンバーグ"],
+      "candidates": [
+        {
+          "id": "nikujaga",
+          "title": "肉じゃが",
+          "cookTimeMin": 30,
+          "coveragePct": 60,
+          "missing": ["牛薄切り肉"],
+          "label": { "mainCategory": "beef", "genre": "wa" }
+        },
+        {
+          "id": "misoshiru",
+          "title": "味噌汁",
+          "cookTimeMin": 10,
+          "coveragePct": 90,
+          "missing": ["わかめ"],
+          "label": { "mainCategory": "vegetable", "genre": "wa" }
+        },
+        {
+          "id": "karaage",
+          "title": "唐揚げ",
+          "cookTimeMin": 25,
+          "coveragePct": 55,
+          "missing": ["にんにく", "しょうが"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "takikomi",
+          "title": "炊き込みご飯",
+          "cookTimeMin": 45,
+          "coveragePct": 65,
+          "missing": ["ごぼう", "油揚げ"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "tonjiru",
+          "title": "豚汁",
+          "cookTimeMin": 20,
+          "coveragePct": 70,
+          "missing": ["豚バラ肉"],
+          "label": { "mainCategory": "pork", "genre": "wa" }
+        },
+        {
+          "id": "oyakodon",
+          "title": "親子丼",
+          "cookTimeMin": 20,
+          "coveragePct": 80,
+          "missing": ["三つ葉"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "okonomiyaki",
+          "title": "お好み焼き",
+          "cookTimeMin": 25,
+          "coveragePct": 50,
+          "missing": ["豚バラ肉", "キャベツ", "山芋"],
+          "label": { "mainCategory": "pork", "genre": "wa" }
+        }
+      ]
+    },
+    {
+      "id": "recent-repeat",
+      "note": "直近に作った料理（recentTitles[0]）が候補1位。X=5（全件は使わない）。前半の日に置かないか。",
+      "days": 5,
+      "outputLocale": "ja",
+      "pantry": [
+        "玉ねぎ",
+        "にんじん",
+        "醤油",
+        "みりん",
+        "砂糖",
+        "だし汁",
+        "米",
+        "卵",
+        "食パン",
+        "バター"
+      ],
+      "recentTitles": ["肉じゃが", "味噌汁"],
+      "candidates": [
+        {
+          "id": "nikujaga",
+          "title": "肉じゃが",
+          "cookTimeMin": 30,
+          "coveragePct": 70,
+          "missing": ["牛薄切り肉"],
+          "label": { "mainCategory": "beef", "genre": "wa" }
+        },
+        {
+          "id": "hamburg",
+          "title": "ハンバーグ",
+          "cookTimeMin": 35,
+          "coveragePct": 45,
+          "missing": ["合い挽き肉", "パン粉"],
+          "label": { "mainCategory": "beef", "genre": "yo" }
+        },
+        {
+          "id": "karaage",
+          "title": "唐揚げ",
+          "cookTimeMin": 25,
+          "coveragePct": 60,
+          "missing": ["にんにく", "しょうが"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "misoshiru",
+          "title": "味噌汁",
+          "cookTimeMin": 10,
+          "coveragePct": 90,
+          "missing": ["わかめ"],
+          "label": { "mainCategory": "vegetable", "genre": "wa" }
+        },
+        {
+          "id": "tonjiru",
+          "title": "豚汁",
+          "cookTimeMin": 20,
+          "coveragePct": 65,
+          "missing": ["豚バラ肉"],
+          "label": { "mainCategory": "pork", "genre": "wa" }
+        },
+        {
+          "id": "takikomi",
+          "title": "炊き込みご飯",
+          "cookTimeMin": 45,
+          "coveragePct": 55,
+          "missing": ["ごぼう", "油揚げ"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "eggtoast",
+          "title": "ふわとろスクランブルエッグトースト",
+          "cookTimeMin": 10,
+          "coveragePct": 100,
+          "missing": [],
+          "label": { "mainCategory": "egg", "genre": "yo" }
+        }
+      ]
+    },
+    {
+      "id": "near-dup-titles",
+      "note": "カレー3種（チキン/ポーク/キーマ）を隣接させる。タイトルが近似する中で系統推定できるか。",
+      "days": 7,
+      "outputLocale": "ja",
+      "pantry": ["玉ねぎ", "にんじん", "じゃがいも", "醤油", "味噌", "だし汁", "豆腐"],
+      "recentTitles": ["牛丼"],
+      "candidates": [
+        {
+          "id": "chicken-curry",
+          "title": "チキンカレー",
+          "cookTimeMin": 40,
+          "coveragePct": 55,
+          "missing": ["カレールー", "じゃがいも"],
+          "label": { "mainCategory": "chicken", "genre": "yo" }
+        },
+        {
+          "id": "pork-curry",
+          "title": "ポークカレー",
+          "cookTimeMin": 40,
+          "coveragePct": 50,
+          "missing": ["カレールー", "豚肉"],
+          "label": { "mainCategory": "pork", "genre": "yo" }
+        },
+        {
+          "id": "keema-curry",
+          "title": "キーマカレー",
+          "cookTimeMin": 35,
+          "coveragePct": 45,
+          "missing": ["合い挽き肉", "カレー粉"],
+          "label": { "mainCategory": "beef", "genre": "yo" }
+        },
+        {
+          "id": "karaage",
+          "title": "唐揚げ",
+          "cookTimeMin": 25,
+          "coveragePct": 65,
+          "missing": ["にんにく", "しょうが"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "mapo-tofu",
+          "title": "麻婆豆腐",
+          "cookTimeMin": 25,
+          "coveragePct": 70,
+          "missing": ["豆板醤", "ひき肉"],
+          "label": { "mainCategory": "tofu", "genre": "chu" }
+        },
+        {
+          "id": "hamburg",
+          "title": "ハンバーグ",
+          "cookTimeMin": 35,
+          "coveragePct": 40,
+          "missing": ["合い挽き肉", "パン粉"],
+          "label": { "mainCategory": "beef", "genre": "yo" }
+        },
+        {
+          "id": "misoshiru",
+          "title": "味噌汁",
+          "cookTimeMin": 10,
+          "coveragePct": 90,
+          "missing": ["わかめ"],
+          "label": { "mainCategory": "vegetable", "genre": "wa" }
+        }
+      ]
+    },
+    {
+      "id": "en-locale",
+      "note": "baseline-7 の en 版。why/note に日本語が混ざらないか。",
+      "days": 7,
+      "outputLocale": "en",
+      "pantry": [
+        "玉ねぎ",
+        "にんじん",
+        "醤油",
+        "みりん",
+        "砂糖",
+        "だし汁",
+        "鶏もも肉",
+        "米",
+        "卵",
+        "食パン",
+        "バター"
+      ],
+      "recentTitles": ["オムライス"],
+      "candidates": [
+        {
+          "id": "karaage",
+          "title": "唐揚げ",
+          "cookTimeMin": 25,
+          "coveragePct": 60,
+          "missing": ["にんにく", "しょうが", "酒"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "takikomi",
+          "title": "炊き込みご飯",
+          "cookTimeMin": 45,
+          "coveragePct": 70,
+          "missing": ["ごぼう", "油揚げ"],
+          "label": { "mainCategory": "chicken", "genre": "wa" }
+        },
+        {
+          "id": "nikujaga",
+          "title": "肉じゃが",
+          "cookTimeMin": 30,
+          "coveragePct": 50,
+          "missing": ["牛薄切り肉", "じゃがいも"],
+          "label": { "mainCategory": "beef", "genre": "wa" }
+        },
+        {
+          "id": "hamburg",
+          "title": "ハンバーグ",
+          "cookTimeMin": 35,
+          "coveragePct": 40,
+          "missing": ["合い挽き肉", "パン粉", "ウスターソース"],
+          "label": { "mainCategory": "beef", "genre": "yo" }
+        },
+        {
+          "id": "tonjiru",
+          "title": "豚汁",
+          "cookTimeMin": 20,
+          "coveragePct": 65,
+          "missing": ["豚バラ肉", "ごぼう"],
+          "label": { "mainCategory": "pork", "genre": "wa" }
+        },
+        {
+          "id": "misoshiru",
+          "title": "味噌汁",
+          "cookTimeMin": 10,
+          "coveragePct": 90,
+          "missing": ["わかめ"],
+          "label": { "mainCategory": "vegetable", "genre": "wa" }
+        },
+        {
+          "id": "eggtoast",
+          "title": "ふわとろスクランブルエッグトースト",
+          "cookTimeMin": 10,
+          "coveragePct": 100,
+          "missing": [],
+          "label": { "mainCategory": "egg", "genre": "yo" }
+        }
+      ]
+    }
+  ]
+}

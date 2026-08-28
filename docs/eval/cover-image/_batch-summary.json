@@ -1,0 +1,86 @@
+[
+  {
+    "id": "nikujaga",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 7760
+  },
+  {
+    "id": "misoshiru",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 6331
+  },
+  {
+    "id": "karaage",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 7089
+  },
+  {
+    "id": "curry-rice",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 7358
+  },
+  {
+    "id": "dashimaki-tamago",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 6785
+  },
+  {
+    "id": "horenso-no-ohitashi",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 6742
+  },
+  {
+    "id": "shogayaki",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 6521
+  },
+  {
+    "id": "takikomigohan",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 5871
+  },
+  {
+    "id": "mapo-tofu",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 6143
+  },
+  {
+    "id": "napolitan",
+    "model": "gemini-3.1-flash-lite-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 7792
+  },
+  {
+    "id": "nikujaga",
+    "model": "gemini-3.1-flash-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 14585
+  },
+  {
+    "id": "misoshiru",
+    "model": "gemini-3.1-flash-image",
+    "ok": true,
+    "detail": "image/jpeg",
+    "ms": 13732
+  }
+]

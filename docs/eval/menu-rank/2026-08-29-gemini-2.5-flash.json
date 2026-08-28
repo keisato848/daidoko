@@ -1,0 +1,931 @@
+[
+  {
+    "caseId": "baseline-7",
+    "run": 1,
+    "ok": true,
+    "elapsedMs": 2509,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 7,
+    "candidateCount": 7,
+    "rawDaysCount": 7,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "eggtoast",
+        "why": "在庫の材料で全て作れるため、買い足しなしで手軽に作れます。"
+      },
+      {
+        "day": 2,
+        "recipeId": "karaage",
+        "why": "直近のオムライスが卵料理だったので、鶏肉の主菜を選びました。"
+      },
+      {
+        "day": 3,
+        "recipeId": "takikomi",
+        "why": "前の日が揚げ物だったので、和風の炊き込みご飯で変化をつけます。"
+      },
+      {
+        "day": 4,
+        "recipeId": "nikujaga",
+        "why": "調理時間が長くない肉じゃがを選び、前の日とは異なる肉料理にしました。"
+      },
+      {
+        "day": 5,
+        "recipeId": "tonjiru",
+        "why": "豚汁は調理時間が短く、前の日の肉じゃがとは異なる和食です。"
+      },
+      {
+        "day": 6,
+        "recipeId": "hamburg",
+        "why": "前の日が和食だったので、洋食のハンバーグで変化をつけます。"
+      },
+      {
+        "day": 7,
+        "recipeId": "misoshiru",
+        "why": "調理時間が短く、他の料理とのバランスを考えて選びました。"
+      }
+    ],
+    "contractViolationCount": 0,
+    "dupMainBaseline": 2,
+    "dupMainAi": 1,
+    "dupGenreBaseline": 3,
+    "dupGenreAi": 3,
+    "coverageBaselineAvg": 67.85714285714286,
+    "coverageAiAvg": 67.85714285714286,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 7,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.13678749999999998
+  },
+  {
+    "caseId": "baseline-7",
+    "run": 2,
+    "ok": true,
+    "elapsedMs": 2409,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 7,
+    "candidateCount": 7,
+    "rawDaysCount": 7,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "eggtoast",
+        "why": "在庫の材料で全て作れるため、買い足しなしで手軽に作れます。"
+      },
+      {
+        "day": 2,
+        "recipeId": "tonjiru",
+        "why": "調理時間が短く、前の日と異なる和食の汁物で変化をつけます。"
+      },
+      {
+        "day": 3,
+        "recipeId": "karaage",
+        "why": "鶏肉を使ったメイン料理で、前の日と主菜の系統を変えました。"
+      },
+      {
+        "day": 4,
+        "recipeId": "takikomi",
+        "why": "調理時間が長めなので、中間の日に配置し、和食が続かないようにしました。"
+      },
+      {
+        "day": 5,
+        "recipeId": "nikujaga",
+        "why": "肉じゃがは和食ですが、前の日とは異なる主菜で変化をつけます。"
+      },
+      {
+        "day": 6,
+        "recipeId": "hamburg",
+        "why": "洋食のハンバーグを選び、和食が続かないようにしました。"
+      },
+      {
+        "day": 7,
+        "recipeId": "misoshiru",
+        "why": "調理時間が短く、他の料理とのバランスを考慮して選びました。"
+      }
+    ],
+    "contractViolationCount": 0,
+    "dupMainBaseline": 2,
+    "dupMainAi": 2,
+    "dupGenreBaseline": 3,
+    "dupGenreAi": 3,
+    "coverageBaselineAvg": 67.85714285714286,
+    "coverageAiAvg": 67.85714285714286,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 7,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.13678749999999998
+  },
+  {
+    "caseId": "chicken-top",
+    "run": 1,
+    "ok": true,
+    "elapsedMs": 2173,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 5,
+    "candidateCount": 7,
+    "rawDaysCount": 5,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "oyakodon",
+        "why": "鶏肉が在庫にあるので、親子丼はいまある材料でほぼ作れます。"
+      },
+      {
+        "day": 2,
+        "recipeId": "eggtoast",
+        "why": "調理時間が短く、卵と食パンが在庫にあるので手軽に作れます。"
+      },
+      {
+        "day": 3,
+        "recipeId": "takikomi",
+        "why": "前の日が洋食なので和食を選びました。米とだし汁は在庫にあります。"
+      },
+      {
+        "day": 4,
+        "recipeId": "chicken-curry",
+        "why": "前の日が和食なので洋食を選びました。玉ねぎ、にんじんは在庫にあります。"
+      },
+      {
+        "day": 5,
+        "recipeId": "karaage",
+        "why": "調理時間が短めなので、週末に向けて準備しやすい一品です。"
+      }
+    ],
+    "note": "後半の献立は、いくつか材料の買い足しが必要になります。",
+    "contractViolationCount": 0,
+    "dupMainBaseline": 4,
+    "dupMainAi": 2,
+    "dupGenreBaseline": 2,
+    "dupGenreAi": 0,
+    "coverageBaselineAvg": 67,
+    "coverageAiAvg": 72,
+    "coverageDiff": 5,
+    "bannedHits": [
+      {
+        "day": 5,
+        "field": "why",
+        "pattern": "曜日",
+        "text": "調理時間が短めなので、週末に向けて準備しやすい一品です。"
+      }
+    ],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 5,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.1200475
+  },
+  {
+    "caseId": "chicken-top",
+    "run": 2,
+    "ok": true,
+    "elapsedMs": 2001,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 5,
+    "candidateCount": 7,
+    "rawDaysCount": 5,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "oyakodon",
+        "why": "鶏肉が在庫にあり、調理時間も短く、ほとんどの材料が揃っています。"
+      },
+      {
+        "day": 2,
+        "recipeId": "eggtoast",
+        "why": "前の日が和食なので洋食に。調理時間も短く、すべての材料が揃っています。"
+      },
+      {
+        "day": 3,
+        "recipeId": "takikomi",
+        "why": "前の日が洋食なので和食に。鶏肉以外の主菜として選びました。"
+      },
+      {
+        "day": 4,
+        "recipeId": "teriyaki-chicken",
+        "why": "前の日が炊き込みご飯なので、鶏肉を使った別の和食を選びました。"
+      },
+      {
+        "day": 5,
+        "recipeId": "chicken-curry",
+        "why": "調理時間が長めなので週末に。在庫の鶏肉も使えます。"
+      }
+    ],
+    "note": "後半は買い足しが前提になります。",
+    "contractViolationCount": 0,
+    "dupMainBaseline": 4,
+    "dupMainAi": 2,
+    "dupGenreBaseline": 2,
+    "dupGenreAi": 1,
+    "coverageBaselineAvg": 67,
+    "coverageAiAvg": 74,
+    "coverageDiff": 7,
+    "bannedHits": [
+      {
+        "day": 5,
+        "field": "why",
+        "pattern": "曜日",
+        "text": "調理時間が長めなので週末に。在庫の鶏肉も使えます。"
+      }
+    ],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 5,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.11810999999999999
+  },
+  {
+    "caseId": "chinese-top",
+    "run": 1,
+    "ok": true,
+    "elapsedMs": 1819,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 5,
+    "candidateCount": 7,
+    "rawDaysCount": 5,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "yakisoba",
+        "why": "調理時間が短く、家にある材料で作れる焼きそばを選びました。"
+      },
+      {
+        "day": 2,
+        "recipeId": "mapo-tofu",
+        "why": "前日が麺料理なので、豆腐を使った中華の麻婆豆腐にしました。"
+      },
+      {
+        "day": 3,
+        "recipeId": "nikujaga",
+        "why": "前日が中華なので、和食の肉じゃがに。調理時間は長めですが、材料は牛肉のみです。"
+      },
+      {
+        "day": 4,
+        "recipeId": "hoikoro",
+        "why": "前日が和食なので、豚肉とキャベツを使う回鍋肉にしました。"
+      },
+      {
+        "day": 5,
+        "recipeId": "gyoza",
+        "why": "前日が豚肉料理ですが、餃子は調理時間が長めなので週末に。"
+      }
+    ],
+    "note": "後半は買い足しが前提になります。",
+    "contractViolationCount": 0,
+    "dupMainBaseline": 3,
+    "dupMainAi": 1,
+    "dupGenreBaseline": 4,
+    "dupGenreAi": 2,
+    "coverageBaselineAvg": 62,
+    "coverageAiAvg": 63,
+    "coverageDiff": 1,
+    "bannedHits": [
+      {
+        "day": 5,
+        "field": "why",
+        "pattern": "曜日",
+        "text": "前日が豚肉料理ですが、餃子は調理時間が長めなので週末に。"
+      }
+    ],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 5,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.11849749999999999
+  },
+  {
+    "caseId": "chinese-top",
+    "run": 2,
+    "ok": true,
+    "elapsedMs": 1847,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 5,
+    "candidateCount": 7,
+    "rawDaysCount": 5,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "yakisoba",
+        "why": "調理時間が短く、家にある材料で作れる焼きそばを選びました。"
+      },
+      {
+        "day": 2,
+        "recipeId": "mapo-tofu",
+        "why": "前日が麺料理なので、豆腐を使った中華の麻婆豆腐にしました。"
+      },
+      {
+        "day": 3,
+        "recipeId": "nikujaga",
+        "why": "肉と野菜のバランスを考え、和食の肉じゃがを提案します。"
+      },
+      {
+        "day": 4,
+        "recipeId": "hoikoro",
+        "why": "前日が和食なので、豚肉とキャベツを使う回鍋肉にしました。"
+      },
+      {
+        "day": 5,
+        "recipeId": "gyoza",
+        "why": "調理時間はやや長めですが、家族で楽しめる餃子を選びました。"
+      }
+    ],
+    "contractViolationCount": 0,
+    "dupMainBaseline": 3,
+    "dupMainAi": 1,
+    "dupGenreBaseline": 4,
+    "dupGenreAi": 2,
+    "coverageBaselineAvg": 62,
+    "coverageAiAvg": 63,
+    "coverageDiff": 1,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 5,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.11036
+  },
+  {
+    "caseId": "few-candidates",
+    "run": 1,
+    "ok": true,
+    "elapsedMs": 1992,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 7,
+    "candidateCount": 4,
+    "rawDaysCount": 4,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "nikujaga",
+        "why": "定番の肉じゃがは、調理時間も中程度で、ある材料で作れる割合も高めです。"
+      },
+      {
+        "day": 2,
+        "recipeId": "karaage",
+        "why": "前日が和食なので、鶏肉の唐揚げで主菜の食材と系統を変えました。"
+      },
+      {
+        "day": 3,
+        "recipeId": "hamburg",
+        "why": "前日が鶏肉なので、合い挽き肉を使うハンバーグで食材を変えました。"
+      },
+      {
+        "day": 4,
+        "recipeId": "misoshiru",
+        "why": "調理時間が短い味噌汁を挟み、献立に変化をつけました。"
+      }
+    ],
+    "note": "日数が不足しているため、4日分の献立を提案します。",
+    "contractViolationCount": 0,
+    "dupMainBaseline": 0,
+    "dupMainAi": 0,
+    "dupGenreBaseline": 1,
+    "dupGenreAi": 1,
+    "coverageBaselineAvg": 62.5,
+    "coverageAiAvg": 62.5,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 4,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.10385
+  },
+  {
+    "caseId": "few-candidates",
+    "run": 2,
+    "ok": true,
+    "elapsedMs": 1774,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 7,
+    "candidateCount": 4,
+    "rawDaysCount": 4,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "nikujaga",
+        "why": "家にある材料で作れる肉じゃがを提案します。"
+      },
+      {
+        "day": 2,
+        "recipeId": "karaage",
+        "why": "前日と異なる鶏肉の主菜で、調理時間も短めです。"
+      },
+      {
+        "day": 3,
+        "recipeId": "hamburg",
+        "why": "前日と異なる洋食の主菜で、合い挽き肉を買い足せば作れます。"
+      },
+      {
+        "day": 4,
+        "recipeId": "misoshiru",
+        "why": "調理時間が短く、わかめを買い足すだけで作れます。"
+      }
+    ],
+    "note": "候補が4品のため、4日間の献立を提案します。",
+    "contractViolationCount": 0,
+    "dupMainBaseline": 0,
+    "dupMainAi": 0,
+    "dupGenreBaseline": 1,
+    "dupGenreAi": 1,
+    "coverageBaselineAvg": 62.5,
+    "coverageAiAvg": 62.5,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 4,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.0992
+  },
+  {
+    "caseId": "exact-candidates",
+    "run": 1,
+    "ok": true,
+    "elapsedMs": 2246,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 7,
+    "candidateCount": 7,
+    "rawDaysCount": 7,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "oyakodon",
+        "why": "鶏肉と卵で手軽に作れ、調理時間も短く、在庫の卵も使えます。"
+      },
+      {
+        "day": 2,
+        "recipeId": "nikujaga",
+        "why": "前日が鶏肉なので、牛肉を使った肉じゃがで主菜の食材を変えました。"
+      },
+      {
+        "day": 3,
+        "recipeId": "karaage",
+        "why": "前日が和食なので、唐揚げで中華風の味付けを取り入れました。"
+      },
+      {
+        "day": 4,
+        "recipeId": "takikomi",
+        "why": "調理時間が長めなので、中間の日に配置し、和食に戻しました。"
+      },
+      {
+        "day": 5,
+        "recipeId": "okonomiyaki",
+        "why": "前日がご飯ものなので、お好み焼きで粉ものを取り入れました。"
+      },
+      {
+        "day": 6,
+        "recipeId": "tonjiru",
+        "why": "豚肉と野菜が摂れる豚汁で、前日の粉ものから汁物に変えました。"
+      },
+      {
+        "day": 7,
+        "recipeId": "misoshiru",
+        "why": "調理時間が短く、在庫の味噌も使えるため、手軽に作れます。"
+      }
+    ],
+    "contractViolationCount": 0,
+    "dupMainBaseline": 1,
+    "dupMainAi": 2,
+    "dupGenreBaseline": 6,
+    "dupGenreAi": 6,
+    "coverageBaselineAvg": 67.14285714285714,
+    "coverageAiAvg": 67.14285714285714,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 7,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.138043
+  },
+  {
+    "caseId": "exact-candidates",
+    "run": 2,
+    "ok": true,
+    "elapsedMs": 2314,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 7,
+    "candidateCount": 7,
+    "rawDaysCount": 7,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "oyakodon",
+        "why": "直近に作ったハンバーグが肉料理なので、卵がメインの親子丼にしました。"
+      },
+      {
+        "day": 2,
+        "recipeId": "misoshiru",
+        "why": "調理時間が短く、在庫の材料で作れるため、手軽に準備できます。"
+      },
+      {
+        "day": 3,
+        "recipeId": "karaage",
+        "why": "前の日が汁物だったので、鶏肉を使った揚げ物で献立に変化をつけます。"
+      },
+      {
+        "day": 4,
+        "recipeId": "tonjiru",
+        "why": "前の日が揚げ物だったので、豚肉と野菜たっぷりの汁物でバランスを取ります。"
+      },
+      {
+        "day": 5,
+        "recipeId": "nikujaga",
+        "why": "前の日が汁物だったので、和食の定番である肉じゃがを選びました。"
+      },
+      {
+        "day": 6,
+        "recipeId": "takikomi",
+        "why": "前の日が肉料理だったので、炊き込みご飯で主食に変化をつけます。"
+      },
+      {
+        "day": 7,
+        "recipeId": "okonomiyaki",
+        "why": "前の日がご飯ものだったので、お好み焼きで粉物を取り入れました。"
+      }
+    ],
+    "note": "後半の献立は、いくつか材料の買い足しが必要になります。",
+    "contractViolationCount": 0,
+    "dupMainBaseline": 1,
+    "dupMainAi": 0,
+    "dupGenreBaseline": 6,
+    "dupGenreAi": 6,
+    "coverageBaselineAvg": 67.14285714285714,
+    "coverageAiAvg": 67.14285714285714,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 7,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.1446305
+  },
+  {
+    "caseId": "recent-repeat",
+    "run": 1,
+    "ok": true,
+    "elapsedMs": 2109,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 5,
+    "candidateCount": 7,
+    "rawDaysCount": 5,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "eggtoast",
+        "why": "在庫の材料で全て作れるため、買い足しなしで手軽に作れます。"
+      },
+      {
+        "day": 2,
+        "recipeId": "karaage",
+        "why": "前の日がパン食なので、和食の唐揚げで変化をつけます。"
+      },
+      {
+        "day": 3,
+        "recipeId": "tonjiru",
+        "why": "調理時間が20分と短く、前の日の唐揚げとは異なる主菜です。"
+      },
+      {
+        "day": 4,
+        "recipeId": "hamburg",
+        "why": "前の日が豚肉なので、合い挽き肉のハンバーグで食材を変えます。"
+      },
+      {
+        "day": 5,
+        "recipeId": "takikomi",
+        "why": "調理時間が長めなので週末に、ご飯ものとして選びました。"
+      }
+    ],
+    "note": "後半の献立は、いくつか材料の買い足しが必要になります。",
+    "contractViolationCount": 0,
+    "dupMainBaseline": 1,
+    "dupMainAi": 0,
+    "dupGenreBaseline": 2,
+    "dupGenreAi": 1,
+    "coverageBaselineAvg": 66,
+    "coverageAiAvg": 65,
+    "coverageDiff": -1,
+    "bannedHits": [
+      {
+        "day": 5,
+        "field": "why",
+        "pattern": "曜日",
+        "text": "調理時間が長めなので週末に、ご飯ものとして選びました。"
+      }
+    ],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 5,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.117056
+  },
+  {
+    "caseId": "recent-repeat",
+    "run": 2,
+    "ok": true,
+    "elapsedMs": 1808,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 5,
+    "candidateCount": 7,
+    "rawDaysCount": 5,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "eggtoast",
+        "why": "在庫の材料で全て作れるため、買い足しなしで手軽に作れます。"
+      },
+      {
+        "day": 2,
+        "recipeId": "karaage",
+        "why": "前の日がパン食なので、和食の唐揚げで変化をつけます。"
+      },
+      {
+        "day": 3,
+        "recipeId": "tonjiru",
+        "why": "調理時間が短く、前の日の肉料理とは異なる汁物でバランスを取ります。"
+      },
+      {
+        "day": 4,
+        "recipeId": "hamburg",
+        "why": "前の日が汁物なので、主菜としてハンバーグを選びました。"
+      },
+      {
+        "day": 5,
+        "recipeId": "takikomi",
+        "why": "調理時間が長めなので週末に、前の日の洋食から和食に戻します。"
+      }
+    ],
+    "contractViolationCount": 0,
+    "dupMainBaseline": 1,
+    "dupMainAi": 0,
+    "dupGenreBaseline": 2,
+    "dupGenreAi": 1,
+    "coverageBaselineAvg": 66,
+    "coverageAiAvg": 65,
+    "coverageDiff": -1,
+    "bannedHits": [
+      {
+        "day": 5,
+        "field": "why",
+        "pattern": "曜日",
+        "text": "調理時間が長めなので週末に、前の日の洋食から和食に戻します。"
+      }
+    ],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 5,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.10969349999999999
+  },
+  {
+    "caseId": "near-dup-titles",
+    "run": 1,
+    "ok": true,
+    "elapsedMs": 2647,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 7,
+    "candidateCount": 7,
+    "rawDaysCount": 7,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "mapo-tofu",
+        "why": "調理時間が短く、在庫の豆腐を活かせる麻婆豆腐を選びました。"
+      },
+      {
+        "day": 2,
+        "recipeId": "karaage",
+        "why": "前日が中華なので、和食の唐揚げに。調理時間も短めです。"
+      },
+      {
+        "day": 3,
+        "recipeId": "chicken-curry",
+        "why": "前日が鶏肉なので、主菜の肉が被らないようカレーにしました。"
+      },
+      {
+        "day": 4,
+        "recipeId": "hamburg",
+        "why": "前日がカレーなので、洋食のハンバーグを選びました。"
+      },
+      {
+        "day": 5,
+        "recipeId": "keema-curry",
+        "why": "調理時間が短く、前日の洋食からカレーに戻しました。"
+      },
+      {
+        "day": 6,
+        "recipeId": "pork-curry",
+        "why": "前日がひき肉なので、豚肉のカレーで主菜を変えました。"
+      },
+      {
+        "day": 7,
+        "recipeId": "misoshiru",
+        "why": "調理時間が短く、在庫のだし汁と味噌で作れる味噌汁を選びました。"
+      }
+    ],
+    "contractViolationCount": 0,
+    "dupMainBaseline": 0,
+    "dupMainAi": 2,
+    "dupGenreBaseline": 2,
+    "dupGenreAi": 3,
+    "coverageBaselineAvg": 59.285714285714285,
+    "coverageAiAvg": 59.285714285714285,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 7,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.1362295
+  },
+  {
+    "caseId": "near-dup-titles",
+    "run": 2,
+    "ok": true,
+    "elapsedMs": 2100,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "ja",
+    "days": 7,
+    "candidateCount": 7,
+    "rawDaysCount": 7,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "mapo-tofu",
+        "why": "在庫の豆腐を使い、調理時間も短めなので手早く作れます。"
+      },
+      {
+        "day": 2,
+        "recipeId": "karaage",
+        "why": "前日が中華なので和食の唐揚げに。調理時間も短く、家族にも人気です。"
+      },
+      {
+        "day": 3,
+        "recipeId": "chicken-curry",
+        "why": "前日が鶏肉なので、肉の種類を変えてチキンカレーを選びました。"
+      },
+      {
+        "day": 4,
+        "recipeId": "hamburg",
+        "why": "前日がカレーなので、洋食のハンバーグで変化をつけます。"
+      },
+      {
+        "day": 5,
+        "recipeId": "keema-curry",
+        "why": "調理時間が短めのキーマカレーで、前日の洋食からカレーに戻します。"
+      },
+      {
+        "day": 6,
+        "recipeId": "pork-curry",
+        "why": "前日がカレーなので、肉の種類を変えてポークカレーを選びました。"
+      },
+      {
+        "day": 7,
+        "recipeId": "misoshiru",
+        "why": "調理時間が短く、在庫の味噌とだし汁で作れる味噌汁を選びました。"
+      }
+    ],
+    "contractViolationCount": 0,
+    "dupMainBaseline": 0,
+    "dupMainAi": 2,
+    "dupGenreBaseline": 2,
+    "dupGenreAi": 3,
+    "coverageBaselineAvg": 59.285714285714285,
+    "coverageAiAvg": 59.285714285714285,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 7,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.138167
+  },
+  {
+    "caseId": "en-locale",
+    "run": 1,
+    "ok": true,
+    "elapsedMs": 2892,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "en",
+    "days": 7,
+    "candidateCount": 7,
+    "rawDaysCount": 7,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "eggtoast",
+        "why": "This quick and easy dish uses ingredients already on hand, perfect for a light meal."
+      },
+      {
+        "day": 2,
+        "recipeId": "karaage",
+        "why": "A popular chicken dish with a moderate cooking time, complementing the previous day's light meal."
+      },
+      {
+        "day": 3,
+        "recipeId": "takikomi",
+        "why": "A Japanese mixed rice dish, offering a different main ingredient from the previous day."
+      },
+      {
+        "day": 4,
+        "recipeId": "tonjiru",
+        "why": "A hearty pork soup that is quick to make, providing a different protein and cuisine style."
+      },
+      {
+        "day": 5,
+        "recipeId": "nikujaga",
+        "why": "A classic Japanese stew, offering a beef dish after pork, though some ingredients need to be purchas"
+      },
+      {
+        "day": 6,
+        "recipeId": "hamburg",
+        "why": "A Western-style main dish, varying the cuisine and protein from the previous day."
+      },
+      {
+        "day": 7,
+        "recipeId": "misoshiru",
+        "why": "A simple and quick Japanese soup, using mostly available ingredients for a lighter option."
+      }
+    ],
+    "note": "Some later dishes require purchasing missing ingredients like beef, ground meat, and root vegetables.",
+    "contractViolationCount": 0,
+    "dupMainBaseline": 2,
+    "dupMainAi": 2,
+    "dupGenreBaseline": 3,
+    "dupGenreAi": 3,
+    "coverageBaselineAvg": 67.85714285714286,
+    "coverageAiAvg": 67.85714285714286,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 7,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.1972065
+  },
+  {
+    "caseId": "en-locale",
+    "run": 2,
+    "ok": true,
+    "elapsedMs": 2147,
+    "model": "gemini-2.5-flash",
+    "outputLocale": "en",
+    "days": 7,
+    "candidateCount": 7,
+    "rawDaysCount": 7,
+    "picks": [
+      {
+        "day": 1,
+        "recipeId": "eggtoast",
+        "why": "All ingredients are in stock for this quick and easy breakfast."
+      },
+      {
+        "day": 2,
+        "recipeId": "karaage",
+        "why": "A popular chicken dish with a moderate cooking time, and most ingredients are available."
+      },
+      {
+        "day": 3,
+        "recipeId": "takikomi",
+        "why": "A Japanese rice dish to vary from the previous day's fried chicken, with good coverage."
+      },
+      {
+        "day": 4,
+        "recipeId": "nikujaga",
+        "why": "A different main ingredient (beef) from previous days, though some shopping is needed."
+      },
+      {
+        "day": 5,
+        "recipeId": "tonjiru",
+        "why": "A hearty pork soup, offering a change from heavier main dishes and a shorter cook time."
+      },
+      {
+        "day": 6,
+        "recipeId": "hamburg",
+        "why": "A Western-style dish to break up Japanese meals, though it requires several missing items."
+      },
+      {
+        "day": 7,
+        "recipeId": "misoshiru",
+        "why": "A simple, quick soup with high ingredient coverage, good for a light meal."
+      }
+    ],
+    "contractViolationCount": 0,
+    "dupMainBaseline": 2,
+    "dupMainAi": 1,
+    "dupGenreBaseline": 3,
+    "dupGenreAi": 3,
+    "coverageBaselineAvg": 67.85714285714286,
+    "coverageAiAvg": 67.85714285714286,
+    "coverageDiff": 0,
+    "bannedHits": [],
+    "whyOverLengthCount": 0,
+    "whyTotalCount": 7,
+    "jaCharsInEnCount": 0,
+    "costJpy": 0.1359815
+  }
+]
