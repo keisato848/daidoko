@@ -1,0 +1,22 @@
+{
+  "version": "1.12.3",
+  "versionCode": 10033,
+  "verifiedAt": "2026-08-28T06:41:59.070Z",
+  "device": {
+    "serialHash": "5ce6238b1531",
+    "model": "Pixel 9a",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10033,
+  "checked": [
+    "#250 写真からレシピの無料枠表示（ja）: 「無料作成：あと 0 回」が太字で読め、下に「使い切ったら広告を見て追加 ・ 自分のAIキーで使い放題」が出る。**実機は実際に枠を使い切った状態**なので、この予告が一番効く場面そのもので確認できた",
+    "#250 同（en）: 「0 free creations left」＋「Watch an ad for more · unlimited with your own AI key」",
+    "#250 開示文（写真はサーバーに送信・保存されません）が ja/en とも読める明るさ（paperDim・12px）。修正前は muted(#5A4A34) で背景と同化していた",
+    "#250 英語のレシピ作成フォームに Reading 欄が出ない（Recipe name → Description 直結）。日本語では読みがな欄が残る（エミュレータで確認・テスト RecipeForm.locale.test.tsx でも両方向固定）",
+    "1.12.2 からのアップグレードインストールでデータ保持（蔵書・無料枠の消費状態がそのまま）",
+    "adb reverse --remove-all 済み。localhost ブリッジ無しで起動・画面遷移が正常"
+  ],
+  "screenshot": "screenshots/1.12.3-10033-2026-08-28T06-41-59-070Z.png",
+  "headCommit": "daa7d8aa4a4b0fd483976414d5565408608d3e7f"
+}
