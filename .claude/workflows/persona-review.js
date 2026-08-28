@@ -112,6 +112,14 @@ const ORDER = [
 
 const version = args?.version ?? 'unknown';
 
+// **入力を先に検証する。** jaDir/enDir が無いままだと各ペルソナに
+// `undefined/10-...png` を渡してしまい、全員が静かに失敗する（初回実行の教訓）。
+for (const key of ['jaDir', 'enDir']) {
+  if (typeof args?.[key] !== 'string' || args[key].length === 0) {
+    throw new Error(`args.${key} が要ります（スクショのディレクトリ。docs/store/... を渡す）`);
+  }
+}
+
 phase('Review');
 const reviews = await parallel(
   PERSONAS.map((p) => () => {
@@ -134,6 +142,11 @@ ${files}
 
 const ok = reviews.filter(Boolean);
 log(`${ok.length}/${PERSONAS.length} ペルソナのレビューを回収`);
+// レビューが空のまま統合しても「入力なし」レポートが出るだけ（初回実行で実証済み）。
+// ここで止めて原因（エージェント登録・スキーマ検証）を直させる。
+if (ok.length === 0) {
+  throw new Error('ペルソナのレビューを 1 件も回収できなかった。統合せず中断する');
+}
 
 phase('Synthesize');
 const synthesis = await agent(
