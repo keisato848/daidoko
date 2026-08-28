@@ -10,12 +10,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { NumberStepper } from '../../../../src/components/NumberStepper';
+import { PhotoPickerField } from '../../../../src/components/PhotoPickerField';
 import { TimerWidget } from '../../../../src/components/TimerWidget';
 import { Colors } from '../../../../src/constants/theme';
 import { t, tCount } from '../../../../src/i18n';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { dialog } from '../../../../src/services/dialog.service';
-import { getRecipeDetail } from '../../../../src/services/recipe.service';
+import { isNativePlatform } from '../../../../src/db/client';
+import { resolvePhotoUri } from '../../../../src/services/photo-path';
+import { getRecipeDetail, setStepPhoto } from '../../../../src/services/recipe.service';
 import { useCookingSessionStore } from '../../../../src/stores/cooking-session.store';
 import { useTimerStore } from '../../../../src/stores/timer.store';
 import { useUnitSystemStore } from '../../../../src/stores/unitSystem.store';
@@ -223,6 +226,29 @@ export default function CookingModeScreen() {
           <Image source={{ uri: current.photoPath }} style={styles.stepPhoto} resizeMode="cover" />
         )}
 
+        {/* 手順写真をその場で記録する（2026-08-28・ユーザー要望）。
+            調理は「写真を撮る一番の現場」なのに、これまでは編集フォームまで
+            戻らないと付けられなかった。写真が無い手順にだけチップを出す —
+            集中モードの雑味を最小にする（撮り直しは詳細・編集から） */}
+        {isNativePlatform && !current.photoPath && (
+          <View style={styles.stepPhotoCapture}>
+            <PhotoPickerField
+              variant="thumb"
+              value={undefined}
+              onChange={(path) => {
+                if (!path) return;
+                void setStepPhoto(current.id, path);
+                // 画面の手順リストにも即反映（表示は絶対パスに解決してから）
+                setSteps((prev) =>
+                  prev.map((s) =>
+                    s.id === current.id ? { ...s, photoPath: resolvePhotoUri(path) } : s,
+                  ),
+                );
+              }}
+            />
+          </View>
+        )}
+
         {effectiveTimerSec != null && !timerOnCurrentStep && (
           <Pressable
             style={styles.timerButton}
@@ -403,6 +429,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 34,
     letterSpacing: 0.3,
+  },
+  stepPhotoCapture: {
+    marginTop: 14,
+    alignItems: 'center',
   },
   stepPhoto: {
     width: '100%',

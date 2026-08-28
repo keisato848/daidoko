@@ -52,8 +52,11 @@ import {
   getMemosForRecipe,
   getRecipeDetail,
   setRecipePinned,
+  setStepPhoto,
 } from '../../../src/services/recipe.service';
 import type { MemoItem, RecipeDetail, TimelineEntry } from '../../../src/services/types';
+import { PhotoPickerField } from '../../../src/components/PhotoPickerField';
+import { isNativePlatform } from '../../../src/db/client';
 import {
   getShareBlockReason,
   getWebShare,
@@ -636,6 +639,18 @@ export default function RecipeDetailScreen() {
                         resizeMode="cover"
                       />
                     </Pressable>
+                  )}
+                  {/* 写真が無い手順はその場で付けられる（2026-08-28・ユーザー要望）。
+                      編集フォームまで行かなくてよい。付いたら loadRecipe で反映 */}
+                  {isNativePlatform && !step.photoPath && (
+                    <PhotoPickerField
+                      variant="thumb"
+                      value={undefined}
+                      onChange={(path) => {
+                        if (!path) return;
+                        void setStepPhoto(step.id, path).then(() => loadRecipe());
+                      }}
+                    />
                   )}
                   {step.timerSec != null && (
                     <View style={styles.timerBadge}>
