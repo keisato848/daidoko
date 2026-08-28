@@ -16,6 +16,32 @@ iOS の AI は「無料枠1日1回 ＋ BYOK」。広告/課金の導線は iOS �
 
 - **Apple Developer Program 登録**（年 $99）。App Store Connect でアプリ枠を作成（bundle id `com.daidoko.app`）。
 - Mac に **Xcode**（＋Command Line Tools）、**CocoaPods**、**Node/pnpm**、**EAS CLI**（`npm i -g eas-cli`）。
+- **リポジトリを iCloud 同期の外に置く**（2026-08-27 に実害が出た）。
+
+  > macOS の「デスクトップと書類フォルダ」を iCloud Drive に同期する設定がオンだと、
+  > `~/Documents/` 配下のリポジトリが同期対象になる。**iOS のローカルビルドが不定期に壊れる。**
+  >
+  > 確認: `defaults read com.apple.finder FXICloudDriveDocuments` が `1` なら同期対象。
+  >
+  > 実際に起きたこと:
+  >
+  > 1. **競合コピーが作られる** — `app 2.xcodeproj` / `Pods 2` / `node_modules/drizzle-orm 2` 等。
+  >    iCloud が同期の競合を解決するときに作る「 2」付きのファイル
+  > 2. **`pod install` が止まる** — `app.xcodeproj` と `app 2.xcodeproj` が両方あるため
+  >    `[!] Could not automatically select an Xcode project`
+  > 3. **ファイル読み取りが中断される** — `Errno::ECANCELED - Operation canceled @ io_fread`。
+  >    ファイル自体は壊れていない（`head` では読める）。iCloud のファイルプロバイダが中断している。
+  >    **毎回は出ない**（3 回目で通った）ので「たまに失敗する」という一番厄介な形になる
+  > 4. **ビルドが失敗する** — `pod install` が最後まで通っていないため
+  >    `no type or protocol named EXPermissionsRequester` 等で落ちる
+  >
+  > **EAS のクラウドビルドでは表面化しない**（一時ディレクトリへコピーして prebuild し直すため。
+  > ただしログには `The ios project is malformed, project files will be cleared and reinitialized`
+  > が出る）。**ローカルビルド・`pod install`・シミュレータ確認だけが直撃を受ける。**
+  >
+  > `node_modules` と `ios/Pods` は数万ファイルあり、再生成できるものなので、
+  > **そもそも同期する意味がない**。`~/Projects` のような同期外へ移すのが本筋。
+
 - リポジトリを clone し、**リポジトリルートで** `pnpm install`（`.npmrc` が `node-linker=hoisted`。
   `apps/mobile` 内では実行しない）。
 
@@ -50,7 +76,20 @@ node scripts/release/capture-ios-screenshots.mjs     # 9:41・満充電に固定
 - **ストア公開物なのでユーザーに提示して承認を得る**。アップロードは App Store Connect Web UI か fastlane deliver
   （Play のような API 一括スクリプトは未整備）。
 
-## 3. EAS iOS 本番ビルド（クラウド・Mac のローカルビルド不要）
+## 3. EAS iOS 本番ビルド（**クラウド一択**）
+
+> **ローカル Mac ビルドは「不要」ではなく「使えない」**（2026-08-27 実測）。
+> Apple は 2026-04-28 以降 **Xcode 26 + iOS 26 SDK** を要求し、手元の Mac は
+> Xcode 16.4 / iOS 18.5 SDK。`eas build --local` の成果物は
+> `SUBMISSION_SERVICE_IOS_SDK_VERSION_ERROR` で弾かれる。
+> **しかもアップロードは成功して Apple 側で拒否される**ので失敗が分かるのが遅い。
+>
+> **Xcode を上げれば済む話ではない** — この Mac は macOS Tahoe 26 の対象外で、
+> 入れられるのは Xcode 26.3 まで（要 40GB の掃除）。詳しくは
+> `docs/リリース手順.md` §7-4 に制約の連鎖を実測値つきで書いてある。
+>
+> **EAS の無料枠が尽きたら翌月 1 日のリセットを待つ。**`--local` は枠を消費しないが、
+> **枠の問題ではなく SDK の問題**なので回避策にならない。
 
 ```bash
 git checkout main && git pull            # EAS はローカル作業ディレクトリをアップロードするため main を使う
