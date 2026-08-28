@@ -13,6 +13,7 @@
  * 使い方:
  *   node scripts/release/create-appstore-version.mjs --version 1.12.1 [--dry-run]
  *     [--copy-from 1.12.0]   # 既存バージョンのロケール（説明等）を写してから作る
+ *     [--rename]             # 編集中のバージョンがあるとき、作らずに版番号を付け替える
  */
 import {
   createAscClient,
@@ -43,11 +44,42 @@ if (existing) {
 
 const editable = await findEditableVersion(client, cfg.ascAppId);
 if (editable) {
-  throw new Error(
-    `既に編集できるバージョンがあります: ${editable.attributes.versionString} ` +
-      `(${editable.attributes.appStoreState})。\n` +
-      '**同時に編集できるバージョンは 1 つだけ**なので、そちらを使うか、先に片付けてください。',
+  /**
+   * **同時に編集できるバージョンは 1 つだけ。**
+   *
+   * 出す前に版番号が動くことは普通にある（1.12.1 を用意している最中に不具合が見つかって
+   * 1.12.2 にした、など）。作り直さなくても `versionString` は PATCH できるので、
+   * `--rename` を渡したときだけ付け替える。**掲載文もスクショもぶら下がったまま残る**ので、
+   * 消して作り直すより安全（作り直すと引き継ぎが前の公開版からになり、
+   * それまでの編集が消える）。
+   */
+  if (!args.rename) {
+    throw new Error(
+      `既に編集できるバージョンがあります: ${editable.attributes.versionString} ` +
+        `(${editable.attributes.appStoreState})。\n` +
+        '**同時に編集できるバージョンは 1 つだけ**なので、そちらを使うか、先に片付けてください。\n' +
+        `そのまま ${args.version} に付け替えるなら --rename を足してください` +
+        '（掲載文とスクショはぶら下がったまま残ります）。',
+    );
+  }
+
+  console.log(
+    `\n付け替える: ${editable.attributes.versionString} -> ${args.version}` +
+      `（${editable.attributes.appStoreState}・掲載文とスクショは保持）`,
   );
+  if (args.dryRun) {
+    console.log('--- dry-run: 送信せず終了 ---');
+    process.exit(0);
+  }
+  await client.patch(`/v1/appStoreVersions/${editable.id}`, {
+    data: {
+      type: 'appStoreVersions',
+      id: editable.id,
+      attributes: { versionString: args.version },
+    },
+  });
+  console.log(`付け替えました: ${editable.id}`);
+  process.exit(0);
 }
 
 console.log(`\n作成する: ${args.version}（PREPARE_FOR_SUBMISSION・提出はしない）`);
@@ -125,12 +157,13 @@ console.log(
 );
 
 function parseArgs(argv) {
-  const parsed = { version: null, dryRun: false, copyFrom: null };
+  const parsed = { version: null, dryRun: false, copyFrom: null, rename: false };
   for (let i = 0; i < argv.length; i += 1) {
     const t = argv[i];
     if (t === '--version') parsed.version = argv[++i];
     else if (t === '--copy-from') parsed.copyFrom = argv[++i];
     else if (t === '--dry-run') parsed.dryRun = true;
+    else if (t === '--rename') parsed.rename = true;
   }
   return parsed;
 }
