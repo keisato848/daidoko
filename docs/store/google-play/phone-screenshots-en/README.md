@@ -15,11 +15,25 @@ node scripts/release/capture-store-screenshots.mjs \
   一度きりなので、**データを消した端末に入れてから**撮ること（`-wipe-data` でエミュを起動し直す）
 - 反映: `node scripts/release/update-play-screenshots.mjs --lang en-US`（下表の順に upload）
 
-## 現在の中身（2026-08-27 更新・1.12.1 / versionCode 10031）
+## 現在の中身（2026-08-28 更新・1.12.2 / versionCode 10032）
 
-**エミュレータ `daidoko_e2e_fresh_api36`（1080x2400）で全 8 枚を撮り直した。**
-旧版は #217 / #219 より前の **4 タブ UI**（ホーム/レシピ/追加/設定）で、
-買物・在庫のタブが無かった。
+**エミュレータ `daidoko_e2e_fresh_api36`（1080x2400）で撮っている。**
+
+**2026-08-28 に 6 枚（`01` `02` `03` `04` `06` `10`）を 1.12.2 で撮り直した。**
+1.12.1 まではタブバーが下の safe-area を確保しておらず、**ジェスチャーバーの白い横棒が
+`Add` を横切り、`Recipes` / `Pantry` / `Shopping` のディセンダが切れていた**（PR #244）。
+
+**撮り直しが要るのはタブバーが写る画面だけ**なので `07` と `08` は 1.12.1 のまま維持した:
+
+- `07-photo-to-recipe`（`recipes/import-photo`）は `FULLSCREEN_CHILD_ROUTES` に入っていて
+  **撮影画面ではタブバーを隠す**
+- `08` はモーダルなのでタブバーが無い
+
+**どの枚がタブバーを持つかは、下端 200px を切り出して並べると一目で分かる。**
+1 枚ずつ開いて確かめると見落とす。
+
+2026-08-27 に全 8 枚を撮り直した時点の記録: 旧版は #217 / #219 より前の
+**4 タブ UI**（ホーム/レシピ/追加/設定）で、買物・在庫のタブが無かった。
 
 - 全画面が英語シード（`seed.en.ts`）。**単位もヤード・ポンド法に換算されている**
   （0.38 oz / 1 tbsp / 4 cups）
@@ -32,6 +46,10 @@ node scripts/release/capture-store-screenshots.mjs \
 
 ### 撮るときに踏んだこと
 
+- **wipe 直後は既定の待ち 7 秒では足りない。** 初回起動はシードを流すので、`01` `02` が
+  **ローディングのスピナーのまま撮れた**（2026-08-28）。`--wait 18000` で撮り直したら通った。
+  **PNG のファイルサイズが見分けになる** — 中身のある `01` は 191KB、`02` は 371KB なのに対し、
+  スピナーだけだと 21KB / 20KB しか無い。撮ったら必ずサイズを見る
 - **`adb push` が無言で失敗する**（`docs/開発ハーネス.md` §4）。base64 で流し込む
 - `MEDIA_SCANNER_SCAN_FILE` のブロードキャストは効かない。
   `content call --uri content://media/external --method scan_volume --arg external_primary`
