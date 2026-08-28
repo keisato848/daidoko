@@ -106,4 +106,12 @@ describe('レート上限のプール分離', () => {
     expect(GARDEN_POOL.globalDefault).toBe(100);
     expect(HARVEST_POOL.globalDefault).toBe(500);
   });
+
+  it('INFER を使い切ると /infer/menu も止まる（共有が仕様・専用プールは無い）', () => {
+    process.env['INFER_GLOBAL_DAILY_LIMIT'] = '1';
+
+    // /infer/photo などと同じ RECIPE_POOL を渡す呼び方 = /infer/menu の実装と同じ形
+    expect(checkRateLimit('ip-menu', RECIPE_POOL).allowed).toBe(true);
+    expect(checkRateLimit('ip-menu', RECIPE_POOL)).toEqual({ allowed: false, scope: 'global' });
+  });
 });

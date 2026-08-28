@@ -49,6 +49,15 @@ import {
   type RecipePageProvider,
 } from '../lib/recipe-page.js';
 import { runRecipePageAgent } from '../agents/recipe-page.agent.js';
+import {
+  GeminiMenuArrangeProvider,
+  MAX_MENU_CANDIDATES,
+  MAX_MENU_DAYS,
+  MenuArrangeConfigError,
+  type MenuArrangeProvider,
+} from '../lib/menu-arrange.js';
+import { runMenuArrangeAgent } from '../agents/menu-arrange.agent.js';
+import { peekMonthlyQuota, recordMonthlyUse } from '../lib/quota-store.js';
 
 const inferRouter = new Hono();
 
@@ -636,6 +645,146 @@ inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) =
     },
     provider,
   );
+  // Always 200 — errors are in the response body (AgentResult pattern).
+  return c.json(result);
+});
+
+// ─── 献立の並べ替え（M2・docs/買い物リスト・在庫設計.md §10.10） ───────────────
+
+const menuCandidateSchema = z.object({
+  /** 端末ローカルの recipes.id。サーバーは解釈せず echo するだけ */
+  id: z.string().min(1).max(64),
+  title: z.string().min(1).max(100),
+  cookTimeMin: z.number().int().min(1).max(999).optional(),
+  /** カバー率（%）。整数 0..100 — 小数で渡すと why に小数が漏れる余地を作るだけ */
+  coveragePct: z.number().int().min(0).max(100),
+  /** 不足材料の名前だけ。数量は契約上渡さない */
+  missing: z.array(z.string().min(1).max(50)).max(20),
+});
+
+const inferMenuSchema = z.object({
+  candidates: z.array(menuCandidateSchema).min(1).max(MAX_MENU_CANDIDATES),
+  pantry: z.array(z.string().min(1).max(50)).max(200), // 品名だけ（consult と同じ上限）
+  recentTitles: z.array(z.string().min(1).max(100)).max(50).optional(),
+  days: z.number().int().min(1).max(MAX_MENU_DAYS), // UI の 2/3/5/7 を焼き込まない
+  locale: z.enum(['ja', 'en']).optional(),
+  // unitSystem は受けない（§10.5 — 分量を出力しない推論への単位系指示は
+  // 「分量を書け」という圧力になるだけ。他ルートとの意図的な差分）
+});
+
+let menuProviderOverride: MenuArrangeProvider | null = null;
+
+export function setMenuProviderForTesting(provider: MenuArrangeProvider | null): void {
+  menuProviderOverride = provider;
+}
+
+function resolveMenuProvider(): MenuArrangeProvider {
+  return menuProviderOverride ?? new GeminiMenuArrangeProvider();
+}
+
+/** `x-device-id` の書式チェックだけ行う（乱数のインストール UUID・個人情報ではない）。 */
+const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
+
+/** 月次無料枠の N。既定 5（2026-08-28 利用者決定）。0 = 枠管理を無効化。 */
+function monthlyFreeLimit(): number {
+  const raw = process.env['INFER_MONTHLY_FREE_LIMIT'];
+  if (raw === undefined || raw.trim() === '') return 5;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 5;
+}
+
+/** 全体枠のカテゴリ。将来 infer 全体で 1 本にする方針のため最初から 'infer'。 */
+const QUOTA_CATEGORY = 'infer';
+
+inferRouter.post('/menu', zValidator('json', inferMenuSchema), async (c) => {
+  const deviceId = c.req.header('x-device-id');
+  if (!deviceId || !DEVICE_ID_PATTERN.test(deviceId)) {
+    return c.json({
+      ok: false,
+      error: { code: 'UNKNOWN', message: '端末IDが不正です', retryable: false },
+    });
+  }
+
+  // 'token' | 'premium' のときだけ月次枠チェックを飛ばす。未知の値（typo 等）は
+  // 無視して通常判定に落とす — フェイルオープンにしない
+  const quotaSource = c.req.header('x-quota-source');
+  const bypassMonthlyQuota = quotaSource === 'token' || quotaSource === 'premium';
+
+  // 月次枠（無料のローカル読み）が先。checkRateLimit は許可時に即カウンタを
+  // 増やすため、枠切れの連打が共有プールを消費してしまう（順序が本質・§10.10.1）
+  if (!bypassMonthlyQuota && !peekMonthlyQuota(deviceId, QUOTA_CATEGORY, monthlyFreeLimit())) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'FREE_QUOTA_EXCEEDED',
+        message: '今月の無料枠を使い切りました。',
+        retryable: false,
+      },
+    });
+  }
+
+  const clientId =
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous';
+  // menu 専用のプールは作らない。RECIPE_POOL（INFER_*）を共有する（§10.10.6-a）
+  const rate = checkRateLimit(clientId);
+  if (!rate.allowed) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'RATE_LIMITED',
+        message:
+          rate.scope === 'global'
+            ? '本日の利用上限に達しました。時間をおいてお試しください。'
+            : '本日の利用上限に達しました。',
+        retryable: false,
+      },
+    });
+  }
+
+  let provider: MenuArrangeProvider;
+  try {
+    provider = resolveMenuProvider();
+  } catch (err) {
+    if (err instanceof MenuArrangeConfigError) {
+      return c.json({
+        ok: false,
+        error: { code: 'AI_API_UNAVAILABLE', message: 'AI 推論が利用できません', retryable: false },
+      });
+    }
+    throw err;
+  }
+
+  const { candidates, pantry, recentTitles, days, locale } = c.req.valid('json');
+  const candidateIds = new Set(candidates.map((candidate) => candidate.id));
+  // exactOptionalPropertyTypes: zod の .optional() は `T | undefined` を作るので、
+  // 省略可フィールドはスプレッドで組み立てる（リポジトリの既定の書き方）
+  const normalizedCandidates = candidates.map((candidate) => ({
+    id: candidate.id,
+    title: candidate.title,
+    ...(candidate.cookTimeMin !== undefined && { cookTimeMin: candidate.cookTimeMin }),
+    coveragePct: candidate.coveragePct,
+    missing: candidate.missing,
+  }));
+
+  const result = await runMenuArrangeAgent(
+    {
+      candidates: normalizedCandidates,
+      pantry,
+      ...(recentTitles !== undefined && { recentTitles }),
+      days,
+      outputLocale: parseOutputLocale(locale),
+    },
+    candidateIds,
+    provider,
+  );
+
+  // 消費は provider 成功時のみ。枠を飛ばした場合（token/premium）は記録しない
+  if (result.ok && !bypassMonthlyQuota) {
+    recordMonthlyUse(deviceId, QUOTA_CATEGORY);
+  }
+
   // Always 200 — errors are in the response body (AgentResult pattern).
   return c.json(result);
 });

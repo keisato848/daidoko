@@ -67,6 +67,8 @@ export interface RateLimitPool {
 /**
  * だいどこのレシピ系（`/infer/*`・`/resolve/*`）。**既定 30 は据え置く** —
  * 「月の上限を ¥1,000 以内」の方針から逆算した値（¥0.45 × 30 回 × 30 日 ≒ ¥405）。
+ *
+ * `/infer/menu`（献立の並べ替え）もこのプールに同居する（単価 ≒¥0.35・テキストのみ・頻度は「組む」1 操作 1 回）。
  */
 export const RECIPE_POOL: RateLimitPool = {
   key: '__global__',
