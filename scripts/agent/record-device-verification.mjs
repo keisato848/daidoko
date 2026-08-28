@@ -20,6 +20,7 @@
  *   node scripts/agent/record-device-verification.mjs --allow-emulator   # 例外時のみ
  */
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,6 +58,19 @@ if (devices.length > 1 && !options.serial) {
   );
 }
 const serial = options.serial ?? devices[0].serial;
+
+/**
+ * **記録に生のシリアルを残さない。**
+ *
+ * AQUOS SH-RM19s（Sharp/docomo 系）は USB シリアルとして**IMEI をそのまま返す**。
+ * 2026-08-27 の点検で、`docs/verification/*.json` 11 件すべてに Luhn 検証を通る
+ * 有効な IMEI が入っていることが分かった（git 履歴にも 12 コミット）。
+ * IMEI は端末固有・変更不可で、漏れても取り消せない。
+ *
+ * この記録が本当に要るのは「どの端末で・エミュレータではなく実機で確かめたか」だけなので、
+ * **短いハッシュに落とす**。同じ端末なら同じ値になるので、記録どうしの照合はできる。
+ */
+const serialHash = createHash('sha256').update(serial).digest('hex').slice(0, 12);
 
 const model = getProp(serial, 'ro.product.model');
 const abi = getProp(serial, 'ro.product.cpu.abi');
@@ -107,7 +121,7 @@ const record = {
   version,
   versionCode,
   verifiedAt: stamp,
-  device: { serial, model, abi, isEmulator },
+  device: { serialHash, model, abi, isEmulator },
   installedVersionCode: installed,
   checked: options.checked,
   screenshot: `screenshots/${shotName}`,
@@ -119,7 +133,7 @@ const recordPath = join(RECORD_DIR, `${version}-${versionCode}.json`);
 writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`);
 
 console.log(`実機検証を記録しました: docs/verification/${version}-${versionCode}.json`);
-console.log(`  端末: ${model} (${serial}, ${abi})${isEmulator ? ' ※エミュレーター' : ''}`);
+console.log(`  端末: ${model} (${serialHash}, ${abi})${isEmulator ? ' ※エミュレーター' : ''}`);
 console.log(`  確認: ${options.checked.join(' / ')}`);
 console.log(`  証跡: docs/verification/screenshots/${shotName}`);
 

@@ -43,16 +43,32 @@ function extractSection(md, heading) {
   return body;
 }
 
+/**
+ * Play の掲載文は**マークダウンを解釈しない**。`**強調**` をそのまま送ると、
+ * 利用者にはアスタリスクが 4 つそのまま見える（2026-08-26 の公開前点検で
+ * 日本語版 4 か所・英語版 3 か所が残っていた）。
+ *
+ * 原稿側は読みやすさのために `**` を使いたいので、**送る直前にここで落とす**。
+ * 強調の意図は原稿に残り、Play にはプレーンテキストが届く。
+ */
+function stripMarkdownEmphasis(text) {
+  return text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '$1');
+}
+
 const md = fs.readFileSync(LISTING_MD, 'utf8');
-const TITLE = extractSection(md, 'アプリ名').replace(/^-\s*/, '').trim();
-const SHORT = extractSection(md, '短い説明');
-const FULL = extractSection(md, '詳しい説明');
+const TITLE = stripMarkdownEmphasis(extractSection(md, 'アプリ名').replace(/^-\s*/, '').trim());
+const SHORT = stripMarkdownEmphasis(extractSection(md, '短い説明'));
+const FULL = stripMarkdownEmphasis(extractSection(md, '詳しい説明'));
 
 if (TITLE.length > 30) throw new Error(`アプリ名が30字超: ${TITLE.length}`);
 if (SHORT.length > 80) throw new Error(`短い説明が80字超: ${SHORT.length}`);
 if (FULL.length > 4000) throw new Error(`詳しい説明が4000字超: ${FULL.length}`);
 console.log(`[${LANG}] ${SOURCE}`);
 console.log(`title: ${TITLE.length}字 / short: ${SHORT.length}字 / full: ${FULL.length}字`);
+
+if (/\*/.test(`${TITLE}${SHORT}${FULL}`)) {
+  throw new Error('送信するテキストに `*` が残っています（マークダウンの取りこぼし）');
+}
 
 if (DRY_RUN) {
   console.log('--- dry-run: 送信せず終了 ---');

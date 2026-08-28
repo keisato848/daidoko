@@ -154,7 +154,14 @@ export default function CookingModeScreen() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
-        <Text style={styles.headerTitle}>{recipeTitle}</Text>
+        {/*
+          長いレシピ名でステップ数に食い込まないよう、**名前だけを 1 行に切る**。
+          「マッシュルームとベーコンの詰め物アヒージョ1 / 9」のように、名前と
+          ステップ数が隙間なくつながって右端で見切れていた（#222）
+        */}
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {recipeTitle}
+        </Text>
         <Text style={styles.headerStep}>
           {currentStep + 1} / {steps.length}
         </Text>
@@ -298,16 +305,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   headerTitle: {
+    // 名前だけを縮ませる。ステップ数は縮ませない（#222）
+    flex: 1,
+    textAlign: 'center',
     fontSize: 15, // base: レシピ名（コンパクト表示）
     fontWeight: '500',
     color: Colors.paperDim,
     letterSpacing: 0.5,
   },
   headerStep: {
+    flexShrink: 0,
     fontSize: 13, // sm: ステップカウンター
     fontWeight: '400',
     color: Colors.paperDim,
@@ -494,16 +506,24 @@ const styles = StyleSheet.create({
   overlayRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    // レシピ詳細の材料行と同じ扱い（#222）。**ここは同じ getRecipeDetail の材料を
+    // 同じ形で並べているので、詳細だけ直すと料理中の材料シートに重なりが残る**
+    alignItems: 'flex-start',
+    gap: 12,
     paddingVertical: 9,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   overlayIngName: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 15, // base: 材料名（オーバーレイ）
     fontWeight: '400',
     color: Colors.paper,
   },
   overlayIngAmount: {
+    flexShrink: 0,
+    textAlign: 'right',
     fontSize: 15, // base: 分量（オーバーレイ）
     fontWeight: '400',
     color: Colors.goldDim,

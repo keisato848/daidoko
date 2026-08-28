@@ -42,6 +42,10 @@ export default function NewRecipeScreen() {
         })),
         tags: data.tags,
         coverPhotoPath: data.coverPhotoPath || undefined,
+        // **欄を明示列挙している唯一の作成経路なので、足し忘れると黙って消える。**
+        // 店名がここだけ抜けていて、フォームで入れた「お店の名前」が保存されていなかった
+        // （他の 6 経路は data を丸ごと渡すので無事だった）
+        placeName: data.placeName || undefined,
       };
 
       await createRecipe(input);

@@ -2,7 +2,7 @@
   "expo": {
     "name": "だいどこ",
     "slug": "daidoko",
-    "version": "1.12.0",
+    "version": "1.12.1",
     "orientation": "default",
     "scheme": "daidoko",
     "userInterfaceStyle": "dark",
@@ -16,15 +16,16 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.daidoko.app",
-      "buildNumber": "10029",
+      "buildNumber": "10031",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleLocalizations": ["ja", "en"]
       },
       "associatedDomains": ["applinks:daidoko-production.up.railway.app"]
     },
     "android": {
       "package": "com.daidoko.app",
-      "versionCode": 10029,
+      "versionCode": 10031,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"

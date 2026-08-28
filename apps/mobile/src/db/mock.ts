@@ -3,6 +3,7 @@
  * Supports read/write operations for CRUD testing without SQLite
  */
 import { generateId } from '../utils/id';
+import { resolveRecipeUpdate } from '../services/recipe-update';
 import type {
   CookingPhotoItem,
   RecipeDetail,
@@ -247,8 +248,10 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
   return {
     id: recipe.id,
     title: recipe.title,
+    titleReading: recipe.titleReading ?? null,
     servings: rev?.servings ?? null,
     cookTimeMin: rev?.cookTimeMin ?? null,
+    prepTimeMin: rev?.prepTimeMin ?? null,
     description: rev?.description ?? null,
     rating: avgRating,
     tags,
@@ -315,6 +318,9 @@ export function createMockRecipe(input: SaveRecipeInput): string {
     currentRevId: revId,
     status: 'active',
     coverPhotoPath: input.coverPhotoPath ?? null,
+    // 実装側（recipe.service.createRecipe）と同じく店名も保存する。
+    // ここが抜けていたので、mock 経路のテストでは店名の欠落を検出できなかった
+    placeName: input.placeName?.trim() ? input.placeName.trim() : null,
     createdBy: 'user-kei',
     createdAt: now,
     updatedAt: now,
@@ -385,11 +391,29 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
     : undefined;
   const nextRevNum = (currentRev?.revisionNumber ?? 0) + 1;
 
+  // **引き継ぎ規則は実装と同じ純関数を使う**（手写しにすると、jest は mock 側しか通らないので
+  // 実装だけ壊れても緑になる — #220 はそれで 3 か月出荷された）
+  const next = resolveRecipeUpdate(input, {
+    titleReading: recipe.titleReading ?? null,
+    coverPhotoPath: recipe.coverPhotoPath ?? null,
+    placeName: recipe.placeName ?? null,
+    revision: currentRev
+      ? {
+          servings: currentRev.servings,
+          cookTimeMin: currentRev.cookTimeMin,
+          prepTimeMin: currentRev.prepTimeMin,
+          description: currentRev.description,
+          sourceId: currentRev.sourceId,
+        }
+      : null,
+  });
+
   // Update recipe
   recipe.title = input.title;
-  recipe.titleReading = input.titleReading ?? null;
+  recipe.titleReading = next.titleReading;
   recipe.currentRevId = revId;
-  recipe.coverPhotoPath = input.coverPhotoPath ?? null;
+  recipe.coverPhotoPath = next.coverPhotoPath;
+  recipe.placeName = next.placeName;
   recipe.updatedAt = now;
 
   // Add new revision
@@ -398,12 +422,12 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
     recipeId,
     revisionNumber: nextRevNum,
     isMajor: input.isMajor ?? true,
-    servings: input.servings ?? null,
-    cookTimeMin: input.cookTimeMin ?? null,
-    prepTimeMin: input.prepTimeMin ?? null,
-    description: input.description ?? null,
+    servings: next.servings,
+    cookTimeMin: next.cookTimeMin,
+    prepTimeMin: next.prepTimeMin,
+    description: next.description,
     authorNote: input.authorNote ?? null,
-    sourceId: input.sourceId ?? null,
+    sourceId: next.sourceId,
     createdBy: 'user-kei',
     createdAt: now,
   });

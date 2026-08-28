@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { pnpmBinary, runCommand, tail, toPosixPath, unique } from './lib/runtime.mjs';
@@ -124,15 +125,22 @@ function buildValidationPlan(files) {
     (file) => file.startsWith('apps/mobile/android/') || file.startsWith('e2e/'),
   );
   const photoOrOcrChanged = files.some(
-    (file) => /photo|ocr/i.test(file) && (file.startsWith('apps/mobile/') || file.startsWith('e2e/')),
+    (file) =>
+      /photo|ocr/i.test(file) && (file.startsWith('apps/mobile/') || file.startsWith('e2e/')),
   );
 
-  if (docsFiles.length > 0) {
+  // **消したファイルを prettier に渡さない。**`git diff --name-only` は削除も返すので、
+  // ファイルを 1 つ消しただけで
+  // `No files matching the pattern were found: "app.json"` で検証全体が落ちる
+  // （2026-08-26 に実際にコミットが止まった）。他の検証はパス名を見るだけなので影響しない。
+  const docsFilesOnDisk = docsFiles.filter((file) => existsSync(join(rootDir, file)));
+
+  if (docsFilesOnDisk.length > 0) {
     addTask(
       'docs-prettier',
       'Prettier check for changed docs and markdown',
       pnpmBinary(),
-      ['exec', 'prettier', '--check', ...docsFiles],
+      ['exec', 'prettier', '--check', ...docsFilesOnDisk],
       'Keep documentation and prompts format-clean.',
       taskMap,
     );
@@ -161,21 +169,46 @@ function buildValidationPlan(files) {
   }
 
   if (sharedChanged) {
-    addWorkspaceTask('shared-lint', '@daidoko/shared lint', ['--filter', '@daidoko/shared', 'lint'], taskMap);
+    addWorkspaceTask(
+      'shared-lint',
+      '@daidoko/shared lint',
+      ['--filter', '@daidoko/shared', 'lint'],
+      taskMap,
+    );
     addWorkspaceTask(
       'shared-typecheck',
       '@daidoko/shared typecheck',
       ['--filter', '@daidoko/shared', 'typecheck'],
       taskMap,
     );
-    addWorkspaceTask('shared-test', '@daidoko/shared test', ['--filter', '@daidoko/shared', 'test'], taskMap);
-    addWorkspaceTask('mobile-typecheck', 'mobile typecheck', ['--filter', 'mobile', 'typecheck'], taskMap);
-    addWorkspaceTask('server-typecheck', 'server typecheck', ['--filter', 'server', 'typecheck'], taskMap);
+    addWorkspaceTask(
+      'shared-test',
+      '@daidoko/shared test',
+      ['--filter', '@daidoko/shared', 'test'],
+      taskMap,
+    );
+    addWorkspaceTask(
+      'mobile-typecheck',
+      'mobile typecheck',
+      ['--filter', 'mobile', 'typecheck'],
+      taskMap,
+    );
+    addWorkspaceTask(
+      'server-typecheck',
+      'server typecheck',
+      ['--filter', 'server', 'typecheck'],
+      taskMap,
+    );
   }
 
   if (serverChanged) {
     addWorkspaceTask('server-lint', 'server lint', ['--filter', 'server', 'lint'], taskMap);
-    addWorkspaceTask('server-typecheck', 'server typecheck', ['--filter', 'server', 'typecheck'], taskMap);
+    addWorkspaceTask(
+      'server-typecheck',
+      'server typecheck',
+      ['--filter', 'server', 'typecheck'],
+      taskMap,
+    );
     if (files.some((file) => file.startsWith('apps/server/src/'))) {
       const serverTargets = serverTestTargets(files);
       if (serverTargets.length > 0) {
@@ -195,7 +228,12 @@ function buildValidationPlan(files) {
 
   if (mobileChanged) {
     addWorkspaceTask('mobile-lint', 'mobile lint', ['--filter', 'mobile', 'lint'], taskMap);
-    addWorkspaceTask('mobile-typecheck', 'mobile typecheck', ['--filter', 'mobile', 'typecheck'], taskMap);
+    addWorkspaceTask(
+      'mobile-typecheck',
+      'mobile typecheck',
+      ['--filter', 'mobile', 'typecheck'],
+      taskMap,
+    );
     if (shouldRunMobileTests(files)) {
       const patterns = mobileTestPattern(files);
       if (patterns) {
@@ -221,7 +259,9 @@ function buildValidationPlan(files) {
   }
 
   if (photoOrOcrChanged) {
-    recommendations.push('Consider pnpm agent:android:e2e:ocr and pnpm agent:android:e2e:photo for OCR/photo flows.');
+    recommendations.push(
+      'Consider pnpm agent:android:e2e:ocr and pnpm agent:android:e2e:photo for OCR/photo flows.',
+    );
   }
 
   return {

@@ -19,6 +19,7 @@ import { generateId } from '../utils/id';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
 import { getAliasMap } from './name-alias.service';
 import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
+import { blankToNull, resolveRecipeUpdate } from './recipe-update';
 import { SYNC_ENTITY_RECIPE } from './sync-payload';
 import { enqueueSyncEntity } from './sync-queue.service';
 import type {
@@ -167,6 +168,7 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
 
   let servings: number | null = null;
   let cookTimeMin: number | null = null;
+  let prepTimeMin: number | null = null;
   let description: string | null = null;
 
   if (r.currentRevId) {
@@ -178,6 +180,7 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
     if (revs.length > 0) {
       servings = revs[0].servings;
       cookTimeMin = revs[0].cookTimeMin;
+      prepTimeMin = revs[0].prepTimeMin;
       description = revs[0].description;
     }
   }
@@ -225,8 +228,11 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
   return {
     id: r.id,
     title: r.title,
+    // 編集画面がここを読まないと、開いて更新しただけで消える（#220）
+    titleReading: r.titleReading,
     servings,
     cookTimeMin,
+    prepTimeMin,
     description,
     rating: avgRating,
     tags: tagRows.map((t) => t.name ?? '').filter(Boolean),
@@ -358,11 +364,12 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
     id: recipeId,
     familyId: FAMILY_ID,
     title: input.title,
-    titleReading: input.titleReading ?? null,
+    // 作成と更新で `''` の扱いを揃える（recipe-update.ts の規則）
+    titleReading: blankToNull(input.titleReading) ?? null,
     currentRevId: revId,
     status: 'active',
     coverPhotoPath: toStoredPhotoPath(input.coverPhotoPath),
-    placeName: input.placeName?.trim() ? input.placeName.trim() : null,
+    placeName: blankToNull(input.placeName) ?? null,
     createdBy: USER_ID,
     createdAt: now,
     updatedAt: now,
@@ -486,7 +493,12 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
 
   // Get current revision number
   const recipe = await db
-    .select({ currentRevId: schema.recipes.currentRevId })
+    .select({
+      currentRevId: schema.recipes.currentRevId,
+      titleReading: schema.recipes.titleReading,
+      coverPhotoPath: schema.recipes.coverPhotoPath,
+      placeName: schema.recipes.placeName,
+    })
     .from(schema.recipes)
     .where(eq(schema.recipes.id, recipeId))
     .limit(1);
@@ -506,18 +518,30 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
   const revId = generateId();
   const now = nowIso();
 
-  // 出所は引き継ぐ。編集で落とすと **URL 取り込みの印が消え、Web 共有の出所ゲート
-  // （sources.type='url' で判定）が外れて他人のサイト由来のレシピを公開できてしまう**。
-  // 同期でも現行リビジョンの出所しか運ばないので、ここで切れると受信側で素通りになる。
-  let carriedSourceId = input.sourceId ?? null;
-  if (!carriedSourceId && recipe[0].currentRevId) {
-    const previous = await db
-      .select({ sourceId: schema.recipeRevisions.sourceId })
-      .from(schema.recipeRevisions)
-      .where(eq(schema.recipeRevisions.id, recipe[0].currentRevId))
-      .limit(1);
-    carriedSourceId = previous[0]?.sourceId ?? null;
-  }
+  // **渡されなかった欄は現行値を引き継ぐ。** 規則の実体は services/recipe-update.ts
+  // （mock と手写しで二重化すると、jest は mock 側しか通らないので実装だけ壊れても緑になる）
+  const previousRev = recipe[0].currentRevId
+    ? ((
+        await db
+          .select({
+            sourceId: schema.recipeRevisions.sourceId,
+            servings: schema.recipeRevisions.servings,
+            cookTimeMin: schema.recipeRevisions.cookTimeMin,
+            prepTimeMin: schema.recipeRevisions.prepTimeMin,
+            description: schema.recipeRevisions.description,
+          })
+          .from(schema.recipeRevisions)
+          .where(eq(schema.recipeRevisions.id, recipe[0].currentRevId))
+          .limit(1)
+      )[0] ?? null)
+    : null;
+
+  const next = resolveRecipeUpdate(input, {
+    titleReading: recipe[0].titleReading,
+    coverPhotoPath: recipe[0].coverPhotoPath,
+    placeName: recipe[0].placeName,
+    revision: previousRev,
+  });
 
   // Insert new revision
   await db.insert(schema.recipeRevisions).values({
@@ -525,12 +549,13 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
     recipeId,
     revisionNumber: nextRevNum,
     isMajor: input.isMajor ?? true,
-    servings: input.servings ?? null,
-    cookTimeMin: input.cookTimeMin ?? null,
-    prepTimeMin: input.prepTimeMin ?? null,
-    description: input.description ?? null,
+    servings: next.servings,
+    cookTimeMin: next.cookTimeMin,
+    prepTimeMin: next.prepTimeMin,
+    description: next.description,
+    // 版のメモは「この版で何を変えたか」なので引き継がない。渡されなければ無し
     authorNote: input.authorNote ?? null,
-    sourceId: carriedSourceId,
+    sourceId: next.sourceId,
     createdBy: USER_ID,
     createdAt: now,
   });
@@ -540,10 +565,10 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
     .update(schema.recipes)
     .set({
       title: input.title,
-      titleReading: input.titleReading ?? null,
+      titleReading: next.titleReading,
       currentRevId: revId,
-      coverPhotoPath: toStoredPhotoPath(input.coverPhotoPath),
-      placeName: input.placeName?.trim() ? input.placeName.trim() : null,
+      coverPhotoPath: next.coverPhotoPath,
+      placeName: next.placeName,
       updatedAt: now,
     })
     .where(eq(schema.recipes.id, recipeId));
@@ -582,8 +607,8 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
     await ensureTagLinked(db, schema, recipeId, tagName);
   }
 
-  // Update FTS index
-  await updateFtsForRecipe(recipeId, input);
+  // Update FTS index。**引き継いだ読みがなを入れる**（input のままだと空で貼り直してしまう）
+  await updateFtsForRecipe(recipeId, { ...input, titleReading: next.titleReading });
 
   await enqueueSyncEntity(SYNC_ENTITY_RECIPE, recipeId);
 
@@ -658,7 +683,15 @@ async function ensureTagLinked(
   });
 }
 
-async function updateFtsForRecipe(recipeId: string, input: SaveRecipeInput): Promise<void> {
+/** FTS が要るのは 3 つだけ。作成・更新のどちらの入力型でも渡せるように絞ってある */
+async function updateFtsForRecipe(
+  recipeId: string,
+  input: {
+    title: string;
+    titleReading?: string | null;
+    ingredients: { name: string }[];
+  },
+): Promise<void> {
   try {
     const { getExpoDb } = await import('../db/client');
     const expoDb = getExpoDb();

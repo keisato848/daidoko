@@ -10,7 +10,10 @@ description: Railway 本番サーバー（apps/server）へのデプロイと疎
 ## 前提チェック
 
 1. `railway whoami` — Unauthorized なら**ユーザーに対話ターミナルで `railway login` を依頼**（セッション内の `!` 実行は非対話扱いで失敗する）
-2. `railway status` — Project: daidoko / Environment: production を確認
+2. `railway status` — Project: daidoko / Environment: production を確認。
+   **git worktree では `No linked project found` になる**（リンク情報はワークツリーごと・2026-08-23）。
+   `railway link --project daidoko --environment production --service daidoko` で繋ぎ直す
+   （対話プロンプトは引数を全部渡せば出ない）
 
 ## 手順
 

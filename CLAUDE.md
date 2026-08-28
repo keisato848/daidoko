@@ -57,17 +57,17 @@ daidoko/
 
 ### Mobile（apps/mobile）
 
-| 役割             | ライブラリ                          |
-| ---------------- | ----------------------------------- |
-| フレームワーク   | Expo SDK 54                         |
-| ナビゲーション   | Expo Router v6（ファイルベース）    |
-| ローカル DB      | expo-sqlite + Drizzle ORM           |
-| サーバー状態     | TanStack Query v5                   |
-| クライアント状態 | Zustand                             |
-| フォーム         | React Hook Form + Zod               |
-| カメラ / OCR     | react-native-vision-camera + ML Kit |
-| アニメーション   | Reanimated 3                        |
-| アイコン         | Lucide React Native                 |
+| 役割             | ライブラリ                                 |
+| ---------------- | ------------------------------------------ |
+| フレームワーク   | Expo SDK 54                                |
+| ナビゲーション   | Expo Router v6（ファイルベース）           |
+| ローカル DB      | expo-sqlite + Drizzle ORM                  |
+| サーバー状態     | TanStack Query v5                          |
+| クライアント状態 | Zustand                                    |
+| フォーム         | React Hook Form + Zod                      |
+| カメラ / 画像    | expo-image-picker + expo-image-manipulator |
+| アニメーション   | Reanimated 3                               |
+| アイコン         | Lucide React Native                        |
 
 ### Server（apps/server）
 

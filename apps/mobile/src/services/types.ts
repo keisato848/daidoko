@@ -25,8 +25,15 @@ export interface RecipeListItem {
 export interface RecipeDetail {
   id: string;
   title: string;
+  /**
+   * 料理名の読みがな（かな検索に使う）。**編集画面がここを読まないと、
+   * 開いて更新しただけで消える**（#220）。
+   */
+  titleReading: string | null;
   servings: number | null;
   cookTimeMin: number | null;
+  /** 下ごしらえの時間（分）。`titleReading` と同じ理由で詳細も返す */
+  prepTimeMin: number | null;
   description: string | null;
   rating: number | null;
   tags: string[];
@@ -140,7 +147,32 @@ export interface SaveRecipeInput {
   placeName?: string | null;
 }
 
-export interface UpdateRecipeInput extends SaveRecipeInput {
+/**
+ * レシピの更新。**`undefined` は「触らない」、`null`・空文字は「消す」。**
+ *
+ * 以前は `SaveRecipeInput` をそのまま継承した全置換 API で、渡さなかった欄が
+ * 黙って `null` になっていた。呼び出し元は 2 つしか無いのに **2 つとも
+ * `titleReading` と `prepTimeMin` を落としていて**、レシピを開いて更新するだけで
+ * 読みがなが消えた（#220）。`refine` は `placeName` も落としていた —
+ * 主役機能の「お店の味に近づける」を通すたびに店名が消える形だった。
+ *
+ * 呼び出し元が増えるたび同じ穴が開くので、**画面ごとに塞ぐのではなく
+ * ここで「渡されなかった欄は現行値を引き継ぐ」**ことにした。
+ * `sourceId` は以前から同じ扱い（引き継がないと Web 共有の出所ゲートが外れる）。
+ *
+ * したがって呼び出し側の約束はこう:
+ * - **自分が持っている欄は必ず渡す**（消したいなら `null` か空文字）
+ * - 持っていない欄は渡さない
+ */
+export interface UpdateRecipeInput extends Omit<
+  SaveRecipeInput,
+  'titleReading' | 'description' | 'servings' | 'cookTimeMin' | 'prepTimeMin'
+> {
+  titleReading?: string | null;
+  description?: string | null;
+  servings?: number | null;
+  cookTimeMin?: number | null;
+  prepTimeMin?: number | null;
   isMajor?: boolean;
 }
 

@@ -11,6 +11,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 import { Colors } from '../constants/theme';
 import { expoImagePickerPhotoCaptureAdapter } from '../services/expo-photo-capture.adapter';
 import { capturePhoto, type PhotoCaptureSource } from '../services/photo-capture.service';
+import { resolvePhotoUri } from '../services/photo-path';
 import { persistRecipePhoto } from '../services/photo-storage.service';
 import { t } from '../i18n';
 
@@ -46,8 +47,16 @@ export function PhotoPickerField({ value, onChange, variant }: PhotoPickerFieldP
     <View style={isCover ? styles.coverContainer : styles.thumbContainer}>
       {value ? (
         <View style={isCover ? styles.coverPreviewWrap : styles.thumbPreviewWrap}>
+          {/*
+            **相対パスのまま <Image> に渡さない。** `persistRecipePhoto` が返すのは
+            `recipe-photos/xxx.jpg` という DB 保存用の相対パスで、これを渡すと
+            `<Image>` は**エラーも出さずに何も描かない**（`services/photo-path.ts` 冒頭）。
+            読み出し側（`recipe.service`）は `resolvePhotoUri` を通すので、
+            既存レシピを編集で開いたときは絶対パスが来て出る。壊れるのは
+            「いま選んだ写真」だけで、選んだ直後のプレビューが真っ黒になっていた（#221）。
+          */}
           <Image
-            source={{ uri: value }}
+            source={{ uri: resolvePhotoUri(value) }}
             style={isCover ? styles.coverPreview : styles.thumbPreview}
             resizeMode="cover"
           />
