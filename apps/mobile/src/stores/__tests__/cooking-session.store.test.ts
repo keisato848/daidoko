@@ -15,6 +15,11 @@ import {
 const mockGetAppMeta = jest.fn<Promise<string | null>, [string]>(async () => null);
 const mockSetAppMeta = jest.fn(async () => undefined);
 
+jest.mock('../../services/notification.service', () => ({
+  presentCookingNotification: jest.fn(async () => undefined),
+  dismissCookingNotification: jest.fn(async () => undefined),
+}));
+
 jest.mock('../../services/app-meta.service', () => ({
   getAppMeta: (...args: [string]) => mockGetAppMeta(...args),
   setAppMeta: (...args: [string, string]) => mockSetAppMeta(...(args as [string, string])),

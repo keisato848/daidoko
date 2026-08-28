@@ -15,6 +15,10 @@ import { t } from '../i18n';
 const TIMER_CHANNEL_ID = 'timer';
 const LOW_STOCK_CHANNEL_ID = 'low-stock';
 const LOW_STOCK_DATA_TYPE = 'low-stock';
+const COOKING_CHANNEL_ID = 'cooking-session';
+const COOKING_DATA_TYPE = 'cooking-resume';
+/** identifier 固定で「1 本だけ・上書き更新」にする（ステップ移動のたび積まれない） */
+const COOKING_NOTIFICATION_ID = 'cooking-session';
 
 let handlerSet = false;
 let permissionGranted: boolean | null = null;
@@ -129,6 +133,78 @@ export async function consumeLowStockLaunchTap(): Promise<boolean> {
   if (!isNativePlatform) return false;
   const response = await Notifications.getLastNotificationResponseAsync();
   return response?.notification.request.content.data?.type === LOW_STOCK_DATA_TYPE;
+}
+
+/**
+ * 調理中の常駐通知（Android のみ・2026-08-28）。Now Cooking バーの OS 側の相棒 —
+ * アプリの外にいても通知欄から調理へ戻れる。
+ *
+ * - **sticky（ongoing）はベストエフォート**: Android 14+ はユーザーがスワイプで
+ *   消せる仕様変更があった。消されても困らない補助導線と位置づける
+ *   （docs/reviews/cooking-resume-research-2026-08-28.md）
+ * - **音を鳴らさない**: ステップ移動のたびに更新するので、音が出ると調理どころではない。
+ *   channel は LOW（ステータスバー表示のみ）
+ * - iOS には出さない: sticky 概念が無く通知が積まれるだけ。iOS は将来の
+ *   Live Activities（expo-widgets SDK 57+）で扱う
+ */
+/**
+ * 権限を**要求せずに**現状だけ見る。常駐通知は補助導線なので、
+ * 調理開始の瞬間に権限ダイアログで割り込まない（実機検証で唐突さを確認）。
+ * タイマー等の「通知が本体の機能」が権限を取ったあとは、自然に出始める。
+ */
+async function hasNotificationPermission(): Promise<boolean> {
+  if (permissionGranted === true) return true;
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.granted) {
+      permissionGranted = true;
+      return true;
+    }
+  } catch {
+    // fall through
+  }
+  return false;
+}
+
+export async function presentCookingNotification(title: string, body: string): Promise<void> {
+  if (!isNativePlatform || Platform.OS !== 'android') return;
+  if (!(await hasNotificationPermission())) return;
+  ensureHandler();
+  try {
+    await Notifications.setNotificationChannelAsync(COOKING_CHANNEL_ID, {
+      name: t('notification.cookingChannel'),
+      importance: Notifications.AndroidImportance.LOW,
+    });
+    await Notifications.scheduleNotificationAsync({
+      identifier: COOKING_NOTIFICATION_ID,
+      content: {
+        title,
+        body,
+        sticky: true,
+        data: { type: COOKING_DATA_TYPE },
+      },
+      trigger: { channelId: COOKING_CHANNEL_ID },
+    });
+  } catch {
+    // 補助導線なので失敗しても調理は続く
+  }
+}
+
+/** 調理の常駐通知を消す（「完成」またはセッション破棄時）。 */
+export async function dismissCookingNotification(): Promise<void> {
+  if (!isNativePlatform || Platform.OS !== 'android') return;
+  try {
+    await Notifications.dismissNotificationAsync(COOKING_NOTIFICATION_ID);
+  } catch {
+    // no-op
+  }
+}
+
+/** 調理通知タップで発火（アプリ生存中）。cold-start は pill/ホームカードが受け持つ。 */
+export function addCookingResumeTapListener(onTap: () => void): { remove: () => void } {
+  return Notifications.addNotificationResponseReceivedListener((response) => {
+    if (response.notification.request.content.data?.type === COOKING_DATA_TYPE) onTap();
+  });
 }
 
 /** Cancel a scheduled timer notification (no-op if already fired/absent). */

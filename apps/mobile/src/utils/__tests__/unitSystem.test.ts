@@ -32,6 +32,10 @@ describe('convertAmountForDisplay', () => {
 
   it('質量を oz / lb にする', () => {
     expect(convertAmountForDisplay('200g', 'imperial')).toBe('7 oz');
+    // 1 未満は小数でなく分数（「0.38 oz」は機械の換算値にしか見えない —
+    // ペルソナレビュー 1.12.2 #16）
+    expect(convertAmountForDisplay('10.8g', 'imperial')).toBe('3/8 oz');
+    expect(convertAmountForDisplay('14g', 'imperial')).toBe('1/2 oz');
     // ポンドは 1/4 刻みでしか読まないので、2 ポンド未満はオンスのまま出す
     expect(convertAmountForDisplay('500g', 'imperial')).toBe('17.5 oz');
     expect(convertAmountForDisplay('1kg', 'imperial')).toBe('2.25 lb');

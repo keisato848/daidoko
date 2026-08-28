@@ -63,6 +63,9 @@ const REVISION_DESCRIPTIONS: Readonly<Record<string, string>> = {
  * 材料は名前・分量・グループ見出しの組。分量は換算せず、単位の言い回しだけ英語にする
  * （換算するとレシピが別物になり、日本語版と比べられなくなる）。
  * group は元データが groupLabel を持つ材料にだけ付ける。
+ * 日本語の「A 調味料」（調味料Ⓐ慣習）を「A · Seasonings」と直訳していたが、
+ * どのレシピもグループは 1 種類で裸の「A」は英語話者に意味を成さない
+ * （ペルソナレビュー 1.12.2 #13）。ラベル本体だけにする。
  */
 const INGREDIENTS: Readonly<Record<string, { name: string; amount: string; group?: string }>> = {
   // Nikujaga
@@ -70,22 +73,22 @@ const INGREDIENTS: Readonly<Record<string, { name: string; amount: string; group
   'ing-1-02': { name: 'Onion', amount: '1' },
   'ing-1-03': { name: 'Thinly sliced beef', amount: '200g' },
   'ing-1-04': { name: 'Carrot', amount: '1/2' },
-  'ing-1-05': { name: 'Soy sauce', amount: '3 tbsp', group: 'A · Seasonings' },
-  'ing-1-06': { name: 'Mirin', amount: '3 tbsp', group: 'A · Seasonings' },
-  'ing-1-07': { name: 'Sugar', amount: '2 tbsp', group: 'A · Seasonings' },
-  'ing-1-08': { name: 'Dashi stock', amount: '300ml', group: 'A · Seasonings' },
+  'ing-1-05': { name: 'Soy sauce', amount: '3 tbsp', group: 'Seasonings' },
+  'ing-1-06': { name: 'Mirin', amount: '3 tbsp', group: 'Seasonings' },
+  'ing-1-07': { name: 'Sugar', amount: '2 tbsp', group: 'Seasonings' },
+  'ing-1-08': { name: 'Dashi stock', amount: '300ml', group: 'Seasonings' },
   // Miso soup
   'ing-2-01': { name: 'Tofu', amount: '1/2 block' },
   'ing-2-02': { name: 'Wakame seaweed', amount: 'as needed' },
   'ing-2-03': { name: 'Onion', amount: '1/2' },
-  'ing-2-04': { name: 'Miso', amount: '2 tbsp', group: 'A · Seasonings' },
-  'ing-2-05': { name: 'Dashi stock', amount: '600ml', group: 'A · Seasonings' },
+  'ing-2-04': { name: 'Miso', amount: '2 tbsp', group: 'Seasonings' },
+  'ing-2-05': { name: 'Dashi stock', amount: '600ml', group: 'Seasonings' },
   // Karaage
   'ing-3-01': { name: 'Chicken thigh', amount: '500g' },
-  'ing-3-02': { name: 'Soy sauce', amount: '2 tbsp', group: 'A · Marinade' },
-  'ing-3-03': { name: 'Garlic', amount: '2 cloves', group: 'A · Marinade' },
-  'ing-3-04': { name: 'Ginger', amount: '1 knob', group: 'A · Marinade' },
-  'ing-3-05': { name: 'Sake', amount: '1 tbsp', group: 'A · Marinade' },
+  'ing-3-02': { name: 'Soy sauce', amount: '2 tbsp', group: 'Marinade' },
+  'ing-3-03': { name: 'Garlic', amount: '2 cloves', group: 'Marinade' },
+  'ing-3-04': { name: 'Ginger', amount: '1 knob', group: 'Marinade' },
+  'ing-3-05': { name: 'Sake', amount: '1 tbsp', group: 'Marinade' },
   'ing-3-06': { name: 'Potato starch', amount: 'as needed', group: 'B · Coating' },
   'ing-3-07': { name: 'Plain flour', amount: 'as needed', group: 'B · Coating' },
   // Takikomi gohan
@@ -94,9 +97,9 @@ const INGREDIENTS: Readonly<Record<string, { name: string; amount: string; group
   'ing-4-03': { name: 'Carrot', amount: '1/2' },
   'ing-4-04': { name: 'Burdock root', amount: '1/2' },
   'ing-4-05': { name: 'Fried tofu (aburaage)', amount: '1 sheet' },
-  'ing-4-06': { name: 'Soy sauce', amount: '2 tbsp', group: 'A · Seasonings' },
-  'ing-4-07': { name: 'Mirin', amount: '2 tbsp', group: 'A · Seasonings' },
-  'ing-4-08': { name: 'Sake', amount: '1 tbsp', group: 'A · Seasonings' },
+  'ing-4-06': { name: 'Soy sauce', amount: '2 tbsp', group: 'Seasonings' },
+  'ing-4-07': { name: 'Mirin', amount: '2 tbsp', group: 'Seasonings' },
+  'ing-4-08': { name: 'Sake', amount: '1 tbsp', group: 'Seasonings' },
   // Tonjiru
   'ing-5-01': { name: 'Pork belly', amount: '150g' },
   'ing-5-02': { name: 'Daikon radish', amount: '1/4' },
@@ -104,16 +107,16 @@ const INGREDIENTS: Readonly<Record<string, { name: string; amount: string; group
   'ing-5-04': { name: 'Potatoes', amount: '2' },
   'ing-5-05': { name: 'Onion', amount: '1' },
   'ing-5-06': { name: 'Burdock root', amount: '1/2' },
-  'ing-5-07': { name: 'Miso', amount: '3 tbsp', group: 'A · Seasonings' },
-  'ing-5-08': { name: 'Dashi stock', amount: '800ml', group: 'A · Seasonings' },
+  'ing-5-07': { name: 'Miso', amount: '3 tbsp', group: 'Seasonings' },
+  'ing-5-08': { name: 'Dashi stock', amount: '800ml', group: 'Seasonings' },
   // Hamburg steak
   'ing-6-01': { name: 'Minced beef and pork', amount: '300g' },
   'ing-6-02': { name: 'Onion', amount: '1/2' },
   'ing-6-03': { name: 'Egg', amount: '1' },
   'ing-6-04': { name: 'Breadcrumbs', amount: '3 tbsp' },
   'ing-6-05': { name: 'Milk', amount: '2 tbsp' },
-  'ing-6-06': { name: 'Worcestershire sauce', amount: '2 tbsp', group: 'A · Sauce' },
-  'ing-6-07': { name: 'Ketchup', amount: '2 tbsp', group: 'A · Sauce' },
+  'ing-6-06': { name: 'Worcestershire sauce', amount: '2 tbsp', group: 'Sauce' },
+  'ing-6-07': { name: 'Ketchup', amount: '2 tbsp', group: 'Sauce' },
   // Scrambled egg toast
   'ing-7-01': { name: 'Eggs', amount: '2' },
   'ing-7-02': { name: 'Milk', amount: '1 tbsp' },

@@ -374,7 +374,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   saveButtonDisabled: {
+    // 半透過の gold は「押せるのか分からない」（ペルソナレビュー 1.12.2 #8）。
+    // 無彩色に落として保存中＝押せない、を形で伝える
     opacity: 0.5,
+    backgroundColor: Colors.bgInput,
   },
   saveButtonText: {
     fontSize: 13, // sm: 保存ボタン（小さめ）

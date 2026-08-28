@@ -20,12 +20,13 @@ import {
   checkAndNotifyLowStock,
 } from '../src/services/low-stock.service';
 import {
+  addCookingResumeTapListener,
   addLowStockTapListener,
   addSyncPushListener,
   consumeLowStockLaunchTap,
 } from '../src/services/notification.service';
 import { initSync, runSync } from '../src/services/sync-runner.service';
-import { loadCookingSession } from '../src/stores/cooking-session.store';
+import { loadCookingSession, useCookingSessionStore } from '../src/stores/cooking-session.store';
 import { loadUnitSystem } from '../src/stores/unitSystem.store';
 import { decideLaunchDestination } from '../src/utils/launchDestination';
 
@@ -70,6 +71,17 @@ export default function RootLayout() {
     const sub = addLowStockTapListener(handleLowStockTap);
     return () => sub.remove();
   }, [isReady, handleLowStockTap]);
+
+  // 調理の常駐通知タップ → 料理中モードの続きへ（アプリ生存中のみ。
+  // cold-start は復元された pill / ホームカードが受け持つので deep link は張らない）
+  useEffect(() => {
+    if (!isReady) return;
+    const sub = addCookingResumeTapListener(() => {
+      const session = useCookingSessionStore.getState().session;
+      if (session) router.push(`/(tabs)/recipes/${session.recipeId}/cook`);
+    });
+    return () => sub.remove();
+  }, [isReady, router]);
 
   // 家族の端末が何か変えた合図（内容を持たない通知）で同期する。
   // 通知が届かなくても起動時とフォアグラウンド復帰の同期で追いつく

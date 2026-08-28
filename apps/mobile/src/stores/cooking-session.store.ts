@@ -17,7 +17,12 @@
  */
 import { create } from 'zustand';
 
+import { t } from '../i18n';
 import { getAppMeta, setAppMeta } from '../services/app-meta.service';
+import {
+  dismissCookingNotification,
+  presentCookingNotification,
+} from '../services/notification.service';
 
 const SESSION_KEY = 'cooking_session';
 
@@ -49,6 +54,21 @@ function persist(session: CookingSession | null): void {
   void setAppMeta(SESSION_KEY, session ? JSON.stringify(session) : '').catch(() => undefined);
 }
 
+/**
+ * OS 側の復帰導線（Android の常駐通知）を store が所有する — timer.store と同じ思想。
+ * pill・ホームカードはアプリ内、これはアプリの外から戻るための第 3 の導線。
+ */
+function syncNotification(session: CookingSession | null): void {
+  if (!session) {
+    void dismissCookingNotification();
+    return;
+  }
+  void presentCookingNotification(
+    session.recipeTitle,
+    t('notification.cookingBody', { step: session.stepIndex + 1, total: session.totalSteps }),
+  );
+}
+
 export const useCookingSessionStore = create<CookingSessionState>((set, get) => ({
   session: null,
 
@@ -66,6 +86,7 @@ export const useCookingSessionStore = create<CookingSessionState>((set, get) => 
     };
     set({ session: next });
     persist(next);
+    syncNotification(next);
   },
 
   setStep: (stepIndex) => {
@@ -74,11 +95,13 @@ export const useCookingSessionStore = create<CookingSessionState>((set, get) => 
     const next = { ...prev, stepIndex };
     set({ session: next });
     persist(next);
+    syncNotification(next);
   },
 
   end: () => {
     set({ session: null });
     persist(null);
+    syncNotification(null);
   },
 }));
 
@@ -93,6 +116,8 @@ export async function loadCookingSession(): Promise<void> {
     return;
   }
   useCookingSessionStore.setState({ session: parsed });
+  // 再起動後も通知から戻れるように張り直す（通知はプロセス死で消えている）
+  syncNotification(parsed);
 }
 
 export function parseSession(raw: string): CookingSession | null {

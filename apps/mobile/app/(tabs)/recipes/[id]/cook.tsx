@@ -6,7 +6,7 @@
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { NumberStepper } from '../../../../src/components/NumberStepper';
@@ -58,6 +58,11 @@ export default function CookingModeScreen() {
   const [ingredients, setIngredients] = useState<IngredientData[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
+  // スワイプでステップ移動（設計 S06「スワイプ or ボタン」— ボタンのみで長らく
+  // 未実装だった）。濡れた手でも画面のどこを払っても効く、が価値。
+  // GestureHandler を持ち込まず素朴に測る: タップ（材料表示）とは移動量で切り分け、
+  // 大きく動けば Pressable 側の onPress は press-cancel されるので競合しない
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
   const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
   const timer = useTimerStore();
@@ -213,7 +218,24 @@ export default function CookingModeScreen() {
       )}
 
       {/* Step content */}
-      <Pressable style={styles.stepArea} onPress={() => setShowIngredients(true)}>
+      <Pressable
+        style={styles.stepArea}
+        onPress={() => setShowIngredients(true)}
+        onTouchStart={(e) => {
+          touchStart.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+        }}
+        onTouchEnd={(e) => {
+          const start = touchStart.current;
+          touchStart.current = null;
+          if (!start) return;
+          const dx = e.nativeEvent.pageX - start.x;
+          const dy = e.nativeEvent.pageY - start.y;
+          // 横に 60px 以上・かつ横が縦の 1.5 倍以上（斜めの誤爆を弾く）
+          if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+          if (dx < 0 && !isLastStep) goToStep(currentStep + 1);
+          if (dx > 0 && currentStep > 0) goToStep(currentStep - 1);
+        }}
+      >
         <View style={styles.stepNumberCircle}>
           <Text style={styles.stepNumberText}>{current.sortOrder}</Text>
         </View>
