@@ -59,6 +59,13 @@ const settings = {
     launchCameraSubtitle: '店を出た直後に、起動から1アクションで撮れます',
   },
 
+  /** 献立（#215 §10.11）への入口 1 行。設定自体は menu.settings（S21）で行う */
+  menu: {
+    sectionTitle: '献立',
+    label: '毎日の献立の設定',
+    subtitle: '自動で組む・通知する時刻・不足材料の自動追加',
+  },
+
   account: {
     sectionTitle: 'アカウント',
     profile: 'プロフィール編集',

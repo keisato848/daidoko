@@ -90,6 +90,7 @@ import {
   onSyncGroupLeft,
   resetSyncRunnerForTesting,
   runSync,
+  runSyncAndAwaitPull,
 } from '../sync-runner.service';
 import { useSyncStore } from '../../stores/sync.store';
 
@@ -562,6 +563,41 @@ describe('runSync — push トークン', () => {
 
     expect(mockRegisterSyncPushToken).not.toHaveBeenCalled();
     expect(mockPullSyncChanges).toHaveBeenCalled();
+  });
+});
+
+describe('runSyncAndAwaitPull — 献立の自動追加（#215 §10.11.1）専用の pull 完了待ち', () => {
+  it('未参加なら true を返す（同期そのものが無いので古い在庫観という概念が無い）', async () => {
+    mockGetStoredCredentials.mockResolvedValue(null);
+
+    await expect(runSyncAndAwaitPull()).resolves.toBe(true);
+    expect(mockPullSyncChanges).not.toHaveBeenCalled();
+  });
+
+  it('pull が失敗したら false を返す（呼び出し側はその朝の自動追加をスキップする）', async () => {
+    mockPullSyncChanges.mockRejectedValue(new SyncError('NETWORK'));
+
+    await expect(runSyncAndAwaitPull()).resolves.toBe(false);
+  });
+
+  it('既に走っている回があれば相乗りし、その回の結果を返す（新しく 2 回走らせない）', async () => {
+    // pullSyncChanges が実際に呼ばれるのは execute() 内の複数の await の後
+    // （getStoredCredentials → pushPending → pullAndApply）。呼ばれる前に解決関数を
+    // 差し替えると間に合わないので、Promise 自体を先に作って毎回同じものを返す
+    let resolvePull: (value: unknown) => void = () => undefined;
+    const pending = new Promise((resolve) => {
+      resolvePull = resolve;
+    });
+    mockPullSyncChanges.mockImplementation(() => pending);
+
+    // running が立った直後に 2 回目を呼ぶ → 新しい execute() は走らせず、同じ回に相乗りする
+    const first = runSyncAndAwaitPull();
+    const second = runSyncAndAwaitPull();
+    resolvePull(emptyPull());
+
+    await expect(first).resolves.toBe(true);
+    await expect(second).resolves.toBe(true);
+    expect(mockPullSyncChanges).toHaveBeenCalledTimes(1);
   });
 });
 

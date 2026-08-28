@@ -246,7 +246,7 @@ export interface CookingLogEntry {
   placeName: string | null;
 }
 
-export type ShoppingItemSource = 'manual' | 'recipe' | 'low_stock' | 'receipt';
+export type ShoppingItemSource = 'manual' | 'recipe' | 'low_stock' | 'receipt' | 'menu_auto';
 
 export interface ShoppingItem {
   id: string;

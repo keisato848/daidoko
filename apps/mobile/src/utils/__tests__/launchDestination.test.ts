@@ -24,4 +24,24 @@ describe('decideLaunchDestination', () => {
       decideLaunchDestination({ tappedLowStockNotification: true, launchCameraEnabled: false }),
     ).toBe('low-stock');
   });
+
+  it('献立通知のタップは撮影より優先する', () => {
+    expect(
+      decideLaunchDestination({
+        tappedLowStockNotification: false,
+        tappedMenuNotification: true,
+        launchCameraEnabled: true,
+      }),
+    ).toBe('menu');
+  });
+
+  it('献立通知のタップより残量通知のタップを優先する（決定性のためだけの順序）', () => {
+    expect(
+      decideLaunchDestination({
+        tappedLowStockNotification: true,
+        tappedMenuNotification: true,
+        launchCameraEnabled: false,
+      }),
+    ).toBe('low-stock');
+  });
 });

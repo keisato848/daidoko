@@ -189,6 +189,19 @@ export default function SettingsScreen() {
       ],
     },
     {
+      // #215 A1。設定自体は menu-settings（S21）で行う——ここは入口の 1 行だけ
+      title: t('settings.menu.sectionTitle'),
+      items: [
+        {
+          id: 'menu-auto',
+          label: t('settings.menu.label'),
+          subtitle: t('settings.menu.subtitle'),
+          enabled: true,
+          onPress: () => router.push('/(tabs)/menu-settings'),
+        },
+      ],
+    },
+    {
       title: t('settings.plan.sectionTitle'),
       items: [
         {

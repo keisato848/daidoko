@@ -19,10 +19,13 @@ import {
   addAllLowStockToShoppingList,
   checkAndNotifyLowStock,
 } from '../src/services/low-stock.service';
+import { runDailyMenuMaintenance } from '../src/services/menu-plan.service';
 import {
   addLowStockTapListener,
+  addMenuTapListener,
   addSyncPushListener,
   consumeLowStockLaunchTap,
+  consumeMenuLaunchTap,
 } from '../src/services/notification.service';
 import { initSync, runSync } from '../src/services/sync-runner.service';
 import { loadUnitSystem } from '../src/stores/unitSystem.store';
@@ -45,9 +48,15 @@ export default function RootLayout() {
       .catch(() => undefined);
   }, [router]);
 
+  const handleMenuTap = useCallback(() => {
+    router.push('/(tabs)/menu');
+  }, [router]);
+
   // 起動時に在庫の残量しきい値をチェック（1日1回まとめて通知; P3）
   // + 週次の自動バックアップスナップショット（#79。失敗しても起動は止めない）
   // + アプリ起動広告の初期化（広告有効ビルドのみ・ガード多数 — app-open-ad.service）
+  // + 毎日の自動献立モード（#215 A1・既定オフ。内部で pull 完了を待ってから
+  //   自動追加するので、initSync() より後に呼んでも fire-and-forget で構わない）
   useEffect(() => {
     if (isReady) {
       // 単位系は保存値 → 無ければ端末の地域。表示のたびに読むのでストアが持つ
@@ -57,6 +66,7 @@ export default function RootLayout() {
       initAppOpenAds().catch(() => undefined);
       // クラウド同期（家族と共有中の端末だけ動く。未参加なら何もしない）
       initSync();
+      runDailyMenuMaintenance().catch(() => undefined);
     }
   }, [isReady]);
 
@@ -66,6 +76,13 @@ export default function RootLayout() {
     const sub = addLowStockTapListener(handleLowStockTap);
     return () => sub.remove();
   }, [isReady, handleLowStockTap]);
+
+  // 献立通知タップ（#215 §10.11.4）→ 献立画面へ。
+  useEffect(() => {
+    if (!isReady) return;
+    const sub = addMenuTapListener(handleMenuTap);
+    return () => sub.remove();
+  }, [isReady, handleMenuTap]);
 
   // 家族の端末が何か変えた合図（内容を持たない通知）で同期する。
   // 通知が届かなくても起動時とフォアグラウンド復帰の同期で追いつく
@@ -85,21 +102,26 @@ export default function RootLayout() {
     if (!isReady || launchRoutedRef.current) return;
     launchRoutedRef.current = true;
     void (async () => {
-      const [tappedLowStockNotification, launchCameraEnabled] = await Promise.all([
-        consumeLowStockLaunchTap().catch(() => false),
-        isLaunchCameraEnabled().catch(() => false),
-      ]);
+      const [tappedLowStockNotification, tappedMenuNotification, launchCameraEnabled] =
+        await Promise.all([
+          consumeLowStockLaunchTap().catch(() => false),
+          consumeMenuLaunchTap().catch(() => false),
+          isLaunchCameraEnabled().catch(() => false),
+        ]);
       const destination = decideLaunchDestination({
         tappedLowStockNotification,
+        tappedMenuNotification,
         launchCameraEnabled,
       });
       if (destination === 'low-stock') handleLowStockTap();
+      if (destination === 'menu') handleMenuTap();
       // push（replace ではない）ので、戻るでホームに帰れる
       if (destination === 'capture') router.push('/(tabs)/recipes/import-photo');
     })();
-  }, [isReady, router, handleLowStockTap]);
+  }, [isReady, router, handleLowStockTap, handleMenuTap]);
 
   // フォアグラウンド復帰でアプリ起動広告（表示条件は service 側で全て判定）
+  // + 毎日の自動献立モード（#215 A1・起動時と同じきっかけ・§10.11.1）
   useEffect(() => {
     if (!isReady) return;
     const sub = AppState.addEventListener('change', (state) => {
@@ -107,6 +129,7 @@ export default function RootLayout() {
       if (state === 'active') {
         maybeShowAppOpenAdOnForeground(pathnameRef.current).catch(() => undefined);
         void runSync();
+        runDailyMenuMaintenance().catch(() => undefined);
       }
     });
     return () => sub.remove();

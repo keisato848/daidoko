@@ -12,6 +12,7 @@
  * 「並べ替え」1 操作だけで、失敗しても本関数の並びがそのまま生きる（§10.5）。
  */
 import { itemNamesMatch } from './itemMatch';
+import { normalizeItemName } from './itemName';
 
 /** 献立の候補になるレシピ（採点に要る分だけ） */
 export interface MenuRecipe {
@@ -231,6 +232,47 @@ export interface MenuBuildResult {
 }
 
 /**
+ * 未選択（`excludeIds` に無い）候補から argmax で 1 件選ぶ。
+ * `buildMenu`（M1 全体を組む）と `rollMenuPlan`（ローリングの補充分だけ組む・§10.11.1）の
+ * 両方が使う——**選び方を 2 箇所に書くと、いつか片方だけ直して食い違う**。
+ */
+function pickBestRecipe(
+  pool: readonly MenuRecipe[],
+  excludeIds: ReadonlySet<string>,
+  available: readonly MenuPantryItem[],
+  aliases: Record<string, string>,
+  today: Date,
+): ScoredRecipe | null {
+  let best: ScoredRecipe | null = null;
+  for (const recipe of pool) {
+    if (excludeIds.has(recipe.id)) continue;
+    const scored = scoreRecipe(recipe, available, aliases, today);
+    if (!best || scored.score > best.score) best = scored;
+  }
+  return best;
+}
+
+/** 理由の一言に埋める語を決め手から機械的に作る（§10.3・AI 不要）。 */
+function reasonSubjectFor(
+  best: ScoredRecipe,
+  pantry: readonly MenuPantryItem[],
+  today: Date,
+): string | null {
+  if (best.topReason === 'expiry') {
+    // 期限の決め手になった在庫の実名（偽の食い合いに気づけるように）
+    const byId = new Map(pantry.map((p) => [p.id, p]));
+    const soonest = best.usesPantryItemIds
+      .map((id) => byId.get(id))
+      .filter((p): p is MenuPantryItem => Boolean(p))
+      .sort((a, b) => expiryUrgency(b.expiresOn, today) - expiryUrgency(a.expiresOn, today))[0];
+    return soonest ? soonest.name : null;
+  }
+  if (best.topReason === 'coverage') return String(best.usesPantryItemIds.length);
+  if (best.topReason === 'few-missing') return String(best.missingNames.length);
+  return null;
+}
+
+/**
  * X 日分を組む。候補が X 件未満なら**埋めずに少なく出す**（§10.3）。
  * 材料 0 件のレシピは除外する。
  */
@@ -248,38 +290,18 @@ export function buildMenu(
 
   for (let day = 1; day <= days; day += 1) {
     const available = pantry.filter((p) => !claimedIds.has(p.id));
-    let best: ScoredRecipe | null = null;
-    for (const recipe of pool) {
-      if (used.has(recipe.id)) continue;
-      const scored = scoreRecipe(recipe, available, aliases, today);
-      if (!best || scored.score > best.score) best = scored;
-    }
+    const best = pickBestRecipe(pool, used, available, aliases, today);
     if (!best) break; // 候補が尽きた。埋めない
 
     used.add(best.recipe.id);
     best.usesPantryItemIds.forEach((id) => claimedIds.add(id));
-
-    const byId = new Map(pantry.map((p) => [p.id, p]));
-    let subject: string | null = null;
-    if (best.topReason === 'expiry') {
-      // 期限の決め手になった在庫の実名（偽の食い合いに気づけるように）
-      const soonest = best.usesPantryItemIds
-        .map((id) => byId.get(id))
-        .filter((p): p is MenuPantryItem => Boolean(p))
-        .sort((a, b) => expiryUrgency(b.expiresOn, today) - expiryUrgency(a.expiresOn, today))[0];
-      subject = soonest ? soonest.name : null;
-    } else if (best.topReason === 'coverage') {
-      subject = String(best.usesPantryItemIds.length);
-    } else if (best.topReason === 'few-missing') {
-      subject = String(best.missingNames.length);
-    }
 
     out.push({
       day,
       recipeId: best.recipe.id,
       title: best.recipe.title,
       reason: best.topReason,
-      reasonSubject: subject,
+      reasonSubject: reasonSubjectFor(best, pantry, today),
       usesPantryItemIds: best.usesPantryItemIds,
       missingNames: best.missingNames,
     });
@@ -340,6 +362,219 @@ export function decodeReason(reason: string): { kind: MenuReasonKind | null; sub
     kind: (known as string[]).includes(kind) ? (kind as MenuReasonKind) : null,
     subject,
   };
+}
+
+// ─── A1: 毎日の自動献立モード（#215・設計 §10.11）──────────────────────────
+// 起動時の鮮度判定＋ローリング。AI は 1 回も呼ばない（A2 は menu-arrange.provider 側）。
+
+/** 暦日キー（`YYYY-MM-DD`・端末のローカル時刻）。`anchorDate` の保存形式。 */
+export function menuDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** `anchorDate`（暦日）から `today` まで何日経ったか。壊れた保存値は 0 扱い（触らない）。 */
+function daysElapsedSince(anchorDate: string, today: Date): number {
+  const anchor = new Date(`${anchorDate}T00:00:00`);
+  if (Number.isNaN(anchor.getTime())) return 0;
+  const anchorMidnight = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((todayMidnight.getTime() - anchorMidnight.getTime()) / 86_400_000);
+}
+
+/** ローリングが読み書きする 1 日分の形（`StoredMenuDay` と構造的に同じ）。 */
+export interface RollableMenuDay {
+  day: number;
+  recipeId: string;
+  title: string;
+  reason: string;
+  doneAt: string | null;
+}
+
+export interface MenuRollResult {
+  /** 新しい起点日（`today` の暦日）。 */
+  anchorDate: string;
+  /** 生存日（先頭を落として詰め直し・日番号を振り直したもの）＋補充日。保存にそのまま使える */
+  days: RollableMenuDay[];
+  /** 今回**新しく末尾に入った日だけ**（自動追加の対象・§10.11.2）。生存日は含まない */
+  addedDays: MenuDay[];
+}
+
+/**
+ * 起動時のローリング（§10.11.1 手順 2）。
+ *
+ * - `anchorDate` が無ければ**何もしない**（`null` を返す）——自動モードでない
+ *   手動プランには一切触らない
+ * - 経過日が 0 以下（今日すでに鮮度を合わせてある）で、かつ日数設定（`targetDays`）も
+ *   変わっていなければ**何もしない**。**日数設定が変わっていれば経過日が 0 でも
+ *   この回で反映する**——次の変更まで待たせると「設定を変えても効かない」に見える
+ *   （修正: `targetDays` を `plan.days.length` に固定していたため、初回生成後は
+ *   日数設定を変えても常に元の日数へ戻っていた）
+ * - 経過日ぶん先頭を落とし、**生き残った日の中身は一切変えない**（「昨日見た明日」が
+ *   今日も同じ）。日番号だけ 1 から振り直す（Day2 だった日が Day1=「今日」になる）
+ * - **日数設定が増えた分**は、落ちた分の補充と合わせて末尾に M1 argmax で追加する
+ *   （= `addedDays`）。**日数設定が減った分**は末尾から間引くだけ——買い物リストの
+ *   行には一切触らない（「自動で消すことは一切しない」の原則。§10.11.2）。
+ *   間引かれた日は `addedDays` に入らない（そもそも追加していない）
+ * - 落ちた分（＝離れていた日数。`targetDays` を超えて空けていたら `targetDays` でクリップ）を
+ *   末尾に M1 argmax で補充する。**同じレシピの再登場は避ける**（生存日・落ちた日
+ *   問わず、このプランで一度使ったレシピは除外）。生存日が使っている在庫も
+ *   「取られている」側に入れ、補充が奪い合わない
+ */
+export function rollMenuPlan(
+  plan: { anchorDate: string | null; days: readonly RollableMenuDay[] },
+  today: Date,
+  candidates: readonly MenuRecipe[],
+  pantry: readonly MenuPantryItem[],
+  aliases: Record<string, string> = {},
+  // 省略時は元の日数を保つ（既存呼び出しの挙動を変えない）。現在の設定値を渡すのは
+  // 呼び出し側（menu-plan.service.ts の runDailyMenuMaintenance）の責務
+  targetDays: number = plan.days.length,
+): MenuRollResult | null {
+  if (!plan.anchorDate) return null;
+  const elapsed = daysElapsedSince(plan.anchorDate, today);
+  if (elapsed <= 0 && targetDays === plan.days.length) return null;
+
+  const drop = Math.max(0, Math.min(elapsed, plan.days.length));
+  const rawSurvivors = plan.days.slice(drop);
+  // 日数設定が減った場合はここで末尾から間引く。中身は変えない・買い物リストは触らない
+  const survivors =
+    rawSurvivors.length > targetDays ? rawSurvivors.slice(0, targetDays) : rawSurvivors;
+  const toAppend = Math.max(0, targetDays - survivors.length);
+
+  // 生存日が使っている在庫を「取られている」側に先に入れる（補充がこれを奪い合わない）
+  const survivorClaims = buildClaims(
+    survivors.map((d) => ({ day: d.day, recipeId: d.recipeId })),
+    candidates,
+    pantry,
+    aliases,
+  );
+  const claimedIds = new Set(Object.keys(survivorClaims));
+  // このプランで一度でも使ったレシピは、生存日・落ちた日を問わず再登場させない
+  const usedRecipeIds = new Set(plan.days.map((d) => d.recipeId));
+  const pool = candidates.filter((r) => r.ingredients.length > 0 && !usedRecipeIds.has(r.id));
+
+  const appended: MenuDay[] = [];
+  const appendedIds = new Set<string>();
+  for (let i = 0; i < toAppend; i += 1) {
+    const available = pantry.filter((p) => !claimedIds.has(p.id));
+    const best = pickBestRecipe(pool, appendedIds, available, aliases, today);
+    if (!best) break; // 候補が尽きた。埋めない（§10.3 の退化と同じ扱い）
+
+    appendedIds.add(best.recipe.id);
+    best.usesPantryItemIds.forEach((id) => claimedIds.add(id));
+    appended.push({
+      day: survivors.length + appended.length + 1,
+      recipeId: best.recipe.id,
+      title: best.recipe.title,
+      reason: best.topReason,
+      reasonSubject: reasonSubjectFor(best, pantry, today),
+      usesPantryItemIds: best.usesPantryItemIds,
+      missingNames: best.missingNames,
+    });
+  }
+
+  const renumberedSurvivors: RollableMenuDay[] = survivors.map((d, index) => ({
+    ...d,
+    day: index + 1,
+  }));
+  const appendedRollable: RollableMenuDay[] = appended.map((d) => ({
+    day: d.day,
+    recipeId: d.recipeId,
+    title: d.title,
+    reason: encodeReason(d.reason, d.reasonSubject),
+    doneAt: null,
+  }));
+
+  return {
+    anchorDate: menuDateKey(today),
+    days: [...renumberedSurvivors, ...appendedRollable],
+    addedDays: appended,
+  };
+}
+
+/** `MenuDay`（純関数の戻り値）を `RollableMenuDay`（保存形式）へ写す。日番号・reason のエンコードだけ */
+export function toRollableDays(days: readonly MenuDay[]): RollableMenuDay[] {
+  return days.map((day) => ({
+    day: day.day,
+    recipeId: day.recipeId,
+    title: day.title,
+    reason: encodeReason(day.reason, day.reasonSubject),
+    doneAt: null,
+  }));
+}
+
+/**
+ * 自動モードを有効化した瞬間・または `anchorDate` の無い既存プランを見つけた瞬間の
+ * 決定（設計 §10.11.1・修正版）。**サービス層に判断を置くとテストできない**
+ * （`menu-plan.service.ts` 冒頭コメントの原則）ので、ここに純関数として置く。
+ *
+ * - 既存プラン（手動/AI とも）は**破棄しない**。`stored` があれば `anchorDate` を
+ *   今日で立てて引き継ぐだけで、`days` の中身は一切変えない
+ * - プランが 1 つも無い（`stored === null`）ときだけ M1 で新規に組む
+ * - **どちらでも `addedDays` は空**——この回の自動追加は必ずスキップする。
+ *   「毎日高々数品」（§10.11.2）を有効化初回にも厳密に守り、子トグルが先に ON でも
+ *   有効化の瞬間に最大 `targetDays` 日分が家族の共有買い物リストへ一括で入る事故を
+ *   防ぐ。自動追加は翌日以降のロール（`rollMenuPlan`）で新しく末尾に入った日からだけ
+ */
+export function adoptOrBuildMenuPlan(
+  stored: { days: readonly RollableMenuDay[] } | null,
+  recipes: readonly MenuRecipe[],
+  pantry: readonly MenuPantryItem[],
+  targetDays: number,
+  today: Date,
+  aliases: Record<string, string> = {},
+): { anchorDate: string; days: RollableMenuDay[]; addedDays: MenuDay[] } {
+  const anchorDate = menuDateKey(today);
+  if (stored) {
+    return { anchorDate, days: [...stored.days], addedDays: [] };
+  }
+  const built = buildMenu(recipes, pantry, targetDays, today, aliases);
+  return { anchorDate, days: toRollableDays(built.days), addedDays: [] };
+}
+
+/** 買い物リストへ橋渡しする「不足材料」1 件（§10.4・§10.11.2）。 */
+export interface MenuShortage {
+  /** 素の材料名（まとめる鍵は正規化名だが、表示・追加には素の名前を使う・§10.4） */
+  name: string;
+  /** 日ごとの分量（合算しない。表示側で `/` 区切りに使える） */
+  amounts: string[];
+  /** 由来レシピ（バッジのタップ先）。複数の日が同じ材料を要求するときは最初の日のもの */
+  recipeId: string;
+}
+
+/**
+ * 複数日ぶんの不足材料を**先に 1 行へまとめる**（§10.4 — まとめずに 1 件ずつ足すと、
+ * `addShoppingItem` が同名の未購入行を黙って捨てるため 2 日目以降が消える）。
+ *
+ * まとめる鍵は**素の名前の正規化**であって名寄せ辞書ではない——辞書でまとめると
+ * 「強力粉」と「薄力粉」が 1 行に潰れて片方が消える。在庫の突合（何が既に足りているか）
+ * だけ名寄せ辞書を使う。
+ */
+export function mergeMissingIngredients(
+  days: readonly { recipeId: string }[],
+  recipes: readonly MenuRecipe[],
+  pantry: readonly MenuPantryItem[],
+  aliases: Record<string, string> = {},
+): MenuShortage[] {
+  const byId = new Map(recipes.map((r) => [r.id, r]));
+  const merged = new Map<string, MenuShortage>();
+  for (const day of days) {
+    const recipe = byId.get(day.recipeId);
+    if (!recipe) continue;
+    for (const ing of recipe.ingredients) {
+      const inStock = pantry.some((p) => itemNamesMatch(ing.name, p.name, aliases));
+      if (inStock) continue;
+      const key = normalizeItemName(ing.name);
+      if (!key) continue;
+      const entry = merged.get(key) ?? { name: ing.name, amounts: [], recipeId: recipe.id };
+      if (ing.amount) entry.amounts.push(ing.amount);
+      merged.set(key, entry);
+    }
+  }
+  return [...merged.values()];
 }
 
 // ─── M2: AI 並べ替え（#215・設計 §10.10）────────────────────────────────────

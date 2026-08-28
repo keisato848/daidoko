@@ -87,6 +87,8 @@ const pantry: typeof ja = {
     },
     buyLabel: 'Bought {{name}} (move to pantry)',
     uncheckLabel: 'Uncheck {{name}}',
+    menuBadge: 'From meal plan',
+    menuBadgeLabel: 'Added from your meal plan. Tap to open the recipe',
     coach: {
       linkTitle: 'Connected to your pantry',
       linkText:

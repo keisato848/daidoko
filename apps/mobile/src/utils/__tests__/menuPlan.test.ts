@@ -6,6 +6,7 @@
  * 埋めないこと・引き当てグラフに順序を付けないこと。
  */
 import {
+  adoptOrBuildMenuPlan,
   applyArrangement,
   buildArrangeCandidates,
   buildClaims,
@@ -15,7 +16,10 @@ import {
   expiryUrgency,
   isContested,
   isServingAmount,
+  menuDateKey,
+  mergeMissingIngredients,
   recencyPenalty,
+  rollMenuPlan,
   scoreRecipe,
   type ArrangeableDay,
   type MenuPantryItem,
@@ -424,5 +428,290 @@ describe('applyArrangement — AI の並びを現在の献立へ適用（§10.10
 
   it('pick が 1 件も無ければ現在の並びをそのまま返す', () => {
     expect(applyArrangement(current, [], candidates)).toEqual(current);
+  });
+});
+
+describe('menuDateKey', () => {
+  it('YYYY-MM-DD（ローカル日付）を返す', () => {
+    expect(menuDateKey(TODAY)).toBe('2026-08-28');
+    expect(menuDateKey(new Date(2026, 0, 5))).toBe('2026-01-05');
+  });
+});
+
+describe('rollMenuPlan — 起動時の鮮度判定＋ローリング（§10.11.1）', () => {
+  const recipes = [
+    recipe({ id: 'r1', ingredients: [{ name: '卵', amount: '2個' }] }),
+    recipe({ id: 'r2', ingredients: [{ name: 'なす', amount: '1本' }] }),
+    recipe({ id: 'r3', ingredients: [{ name: '鶏肉', amount: '200g' }] }),
+    recipe({ id: 'r4', ingredients: [{ name: '豚肉', amount: '200g' }] }),
+  ];
+  const stocks = [
+    pantry('egg', '卵'),
+    pantry('nasu', 'なす'),
+    pantry('tori', '鶏肉'),
+    pantry('buta', '豚肉'),
+  ];
+
+  it('anchorDate が無い（手動プラン）なら何もしない', () => {
+    expect(rollMenuPlan({ anchorDate: null, days: [] }, TODAY, recipes, stocks)).toBeNull();
+  });
+
+  it('経過日が 0 以下（今日すでに鮮度が合っている）なら何もしない', () => {
+    const plan = {
+      anchorDate: '2026-08-28',
+      days: [{ day: 1, recipeId: 'r1', title: 'r1', reason: 'coverage:1', doneAt: null }],
+    };
+    expect(rollMenuPlan(plan, TODAY, recipes, stocks)).toBeNull();
+  });
+
+  it('経過日ぶん先頭を落とし、生き残った日の中身は一切変えない（日番号だけ振り直す）', () => {
+    const plan = {
+      anchorDate: '2026-08-27', // 1 日経過
+      days: [
+        {
+          day: 1,
+          recipeId: 'r1',
+          title: 'r1',
+          reason: encodeReason('coverage', '1'),
+          doneAt: null,
+        },
+        {
+          day: 2,
+          recipeId: 'r2',
+          title: 'r2',
+          reason: encodeReason('pinned', null),
+          doneAt: '2026-08-20T00:00:00.000Z',
+        },
+        {
+          day: 3,
+          recipeId: 'r3',
+          title: 'r3',
+          reason: encodeReason('few-missing', '2'),
+          doneAt: null,
+        },
+      ],
+    };
+    const result = rollMenuPlan(plan, TODAY, recipes, stocks);
+    expect(result).not.toBeNull();
+    // 昨日の Day2（r2）が今日の Day1 になる。reason・doneAt はそのまま
+    expect(result?.days[0]).toEqual({
+      day: 1,
+      recipeId: 'r2',
+      title: 'r2',
+      reason: encodeReason('pinned', null),
+      doneAt: '2026-08-20T00:00:00.000Z',
+    });
+    expect(result?.days[1]).toEqual({
+      day: 2,
+      recipeId: 'r3',
+      title: 'r3',
+      reason: encodeReason('few-missing', '2'),
+      doneAt: null,
+    });
+    // 末尾に 1 日だけ補充。使用済み（r1/r2/r3）は再登場しない → 残る候補は r4 だけ
+    expect(result?.days).toHaveLength(3);
+    expect(result?.days[2]?.recipeId).toBe('r4');
+    expect(result?.days[2]?.day).toBe(3);
+    expect(result?.days[2]?.doneAt).toBeNull();
+    expect(result?.anchorDate).toBe('2026-08-28');
+  });
+
+  it('補充した日だけを addedDays として返す（自動追加の対象は末尾だけ・毎日高々数品）', () => {
+    const plan = {
+      anchorDate: '2026-08-27',
+      days: [
+        { day: 1, recipeId: 'r1', title: 'r1', reason: 'coverage:1', doneAt: null },
+        { day: 2, recipeId: 'r2', title: 'r2', reason: 'coverage:1', doneAt: null },
+        { day: 3, recipeId: 'r3', title: 'r3', reason: 'coverage:1', doneAt: null },
+      ],
+    };
+    const result = rollMenuPlan(plan, TODAY, recipes, stocks);
+    expect(result?.addedDays).toHaveLength(1);
+    expect(result?.addedDays[0]?.recipeId).toBe('r4');
+    // 生存日は addedDays に含まれない
+    expect(result?.addedDays.some((d) => d.recipeId === 'r2' || d.recipeId === 'r3')).toBe(false);
+  });
+
+  it('長く空けていても X 日を超えて足さない（候補が尽きたら埋めない）', () => {
+    const plan = {
+      anchorDate: '2026-08-01', // 27 日経過 — X=3 をはるかに超える
+      days: [
+        { day: 1, recipeId: 'r1', title: 'r1', reason: 'coverage:1', doneAt: null },
+        { day: 2, recipeId: 'r2', title: 'r2', reason: 'coverage:1', doneAt: null },
+        { day: 3, recipeId: 'r3', title: 'r3', reason: 'coverage:1', doneAt: null },
+      ],
+    };
+    const result = rollMenuPlan(plan, TODAY, recipes, stocks);
+    // 生存日ゼロ。使用済み r1/r2/r3 を除くと候補は r4 の 1 件だけなので、
+    // 3 日ぶん補充しようとしても 1 日で候補が尽きて止まる（埋めない・§10.3 と同じ退化）
+    expect(result?.days).toHaveLength(1);
+    expect(result?.days[0]?.recipeId).toBe('r4');
+    expect(result?.addedDays).toHaveLength(1);
+  });
+
+  // 修正1: targetDays を plan.days.length に固定していたため、初回生成後は
+  // 日数設定を変えても常に元の日数に戻ってしまっていた（#215 レビュー指摘）。
+  it('日数設定を増やすと、経過日が無くてもこの回で末尾に追加し、増えた分だけ addedDays に入る（3→5）', () => {
+    // 「長く空けていても…」テストの候補枯渇を壊さないよう、独立した候補一式を使う
+    const growRecipes = [
+      recipe({ id: 'g1', ingredients: [{ name: '卵', amount: '2個' }] }),
+      recipe({ id: 'g2', ingredients: [{ name: 'なす', amount: '1本' }] }),
+      recipe({ id: 'g3', ingredients: [{ name: '鶏肉', amount: '200g' }] }),
+      recipe({ id: 'g4', ingredients: [{ name: '豚肉', amount: '200g' }] }),
+      recipe({ id: 'g5', ingredients: [{ name: '大根', amount: '半分' }] }),
+    ];
+    const growStocks = [
+      pantry('egg', '卵'),
+      pantry('nasu', 'なす'),
+      pantry('tori', '鶏肉'),
+      pantry('buta', '豚肉'),
+      pantry('daikon', '大根'),
+    ];
+    const plan = {
+      anchorDate: '2026-08-28', // 経過日 0（今日のうちに日数設定を変えた想定）
+      days: [
+        { day: 1, recipeId: 'g1', title: 'g1', reason: 'coverage:1', doneAt: null },
+        { day: 2, recipeId: 'g2', title: 'g2', reason: 'coverage:1', doneAt: null },
+        { day: 3, recipeId: 'g3', title: 'g3', reason: 'coverage:1', doneAt: null },
+      ],
+    };
+    const result = rollMenuPlan(plan, TODAY, growRecipes, growStocks, {}, 5);
+    expect(result).not.toBeNull();
+    // 生存する 3 日は中身も番号も一切変わらない
+    expect(result?.days.slice(0, 3)).toEqual(plan.days);
+    expect(result?.days).toHaveLength(5);
+    // 増えた 2 日だけが addedDays に入る（自動追加の対象もここだけ）
+    expect(result?.addedDays).toHaveLength(2);
+    expect(result?.addedDays.map((d) => d.recipeId)).toEqual(['g4', 'g5']);
+  });
+
+  it('日数設定を減らすと、経過日が無くてもこの回で末尾から間引き、addedDays は空になる（5→3）', () => {
+    const plan = {
+      anchorDate: '2026-08-28', // 経過日 0
+      days: [
+        { day: 1, recipeId: 'r1', title: 'r1', reason: 'coverage:1', doneAt: null },
+        { day: 2, recipeId: 'r2', title: 'r2', reason: 'coverage:1', doneAt: null },
+        { day: 3, recipeId: 'r3', title: 'r3', reason: 'coverage:1', doneAt: null },
+        { day: 4, recipeId: 'r4', title: 'r4', reason: 'coverage:1', doneAt: null },
+        { day: 5, recipeId: 'r5', title: 'r5', reason: 'coverage:1', doneAt: null },
+      ],
+    };
+    const result = rollMenuPlan(plan, TODAY, recipes, stocks, {}, 3);
+    expect(result).not.toBeNull();
+    // 末尾の 2 日（Day4・Day5）が消える。残った 3 日の中身は一切変わらない
+    expect(result?.days).toEqual(plan.days.slice(0, 3));
+    // 間引いただけ——買い物リストの行には一切触らない（自動で消すことは一切しない）
+    expect(result?.addedDays).toEqual([]);
+  });
+});
+
+describe('adoptOrBuildMenuPlan — 自動モード有効化の瞬間の決定（§10.11.1・修正2）', () => {
+  const recipes = [
+    recipe({ id: 'r1', ingredients: [{ name: '卵', amount: '2個' }] }),
+    recipe({ id: 'r2', ingredients: [{ name: 'なす', amount: '1本' }] }),
+  ];
+  const stocks = [pantry('egg', '卵'), pantry('nasu', 'なす')];
+
+  it('プランが 1 つも無いときだけ M1 で新規に組む', () => {
+    const result = adoptOrBuildMenuPlan(null, recipes, stocks, 2, TODAY);
+    expect(result.anchorDate).toBe('2026-08-28');
+    expect(result.days).toHaveLength(2);
+    expect(result.addedDays).toEqual([]);
+  });
+
+  it('anchorDate 無しの既存プランには anchorDate が立つだけで、days は変わらない', () => {
+    const existingDays = [
+      { day: 1, recipeId: 'r9', title: '手動で選んだ一品', reason: 'ai:', doneAt: null },
+      {
+        day: 2,
+        recipeId: 'r8',
+        title: '作った日もある一品',
+        reason: 'coverage:1',
+        doneAt: '2026-08-20T00:00:00.000Z',
+      },
+    ];
+    const result = adoptOrBuildMenuPlan({ days: existingDays }, recipes, stocks, 2, TODAY);
+    expect(result.anchorDate).toBe('2026-08-28');
+    // 既存プラン（手動/AI とも）は破棄しない。中身は一切変えない
+    expect(result.days).toEqual(existingDays);
+  });
+
+  it('有効化初回の addedDays は常に空（プランの有無どちらでもこの回の自動追加はしない）', () => {
+    const fromScratch = adoptOrBuildMenuPlan(null, recipes, stocks, 2, TODAY);
+    const fromExisting = adoptOrBuildMenuPlan(
+      { days: [{ day: 1, recipeId: 'r1', title: 'r1', reason: 'coverage:1', doneAt: null }] },
+      recipes,
+      stocks,
+      2,
+      TODAY,
+    );
+    expect(fromScratch.addedDays).toEqual([]);
+    expect(fromExisting.addedDays).toEqual([]);
+  });
+});
+
+describe('mergeMissingIngredients — 複数日の不足材料を 1 行へまとめる（§10.4・§10.11.2）', () => {
+  const recipes = [
+    recipe({
+      id: 'd1',
+      ingredients: [
+        { name: '玉ねぎ', amount: '1個' },
+        { name: '卵', amount: '2個' },
+      ],
+    }),
+    recipe({
+      id: 'd2',
+      ingredients: [
+        { name: '玉ねぎ', amount: '半分' },
+        { name: '醤油', amount: '大さじ1' },
+      ],
+    }),
+  ];
+  const stocks = [pantry('egg', '卵')]; // 卵だけ在庫にある
+
+  it('在庫にある材料は除外し、同名は日ごとの分量を配列でまとめる', () => {
+    const result = mergeMissingIngredients(
+      [{ recipeId: 'd1' }, { recipeId: 'd2' }],
+      recipes,
+      stocks,
+    );
+    const byName = new Map(result.map((r) => [r.name, r]));
+    expect(byName.has('卵')).toBe(false); // 在庫にある
+    expect(byName.get('玉ねぎ')).toEqual({
+      name: '玉ねぎ',
+      amounts: ['1個', '半分'],
+      recipeId: 'd1',
+    });
+    expect(byName.get('醤油')).toEqual({ name: '醤油', amounts: ['大さじ1'], recipeId: 'd2' });
+  });
+
+  it('由来レシピは最初にその材料を要求した日のもの（バッジのタップ先）', () => {
+    const result = mergeMissingIngredients(
+      [{ recipeId: 'd2' }, { recipeId: 'd1' }],
+      recipes,
+      stocks,
+    );
+    const onion = result.find((r) => r.name === '玉ねぎ');
+    expect(onion?.recipeId).toBe('d2'); // d2 を先に渡したので d2 が由来
+  });
+
+  it('知らない recipeId は黙って飛ばす（削除されたレシピの日）', () => {
+    expect(mergeMissingIngredients([{ recipeId: 'gone' }], recipes, stocks)).toEqual([]);
+  });
+
+  it('名寄せ辞書は在庫の突合だけに使う（まとめる鍵は素の名前）', () => {
+    const withAlias = [
+      recipe({ id: 'e1', ingredients: [{ name: '強力粉', amount: '100g' }] }),
+      recipe({ id: 'e2', ingredients: [{ name: '薄力粉', amount: '50g' }] }),
+    ];
+    // 「強力粉」が辞書で「小麦粉」の在庫と一致 → 在庫あり扱いで除外される
+    const result = mergeMissingIngredients(
+      [{ recipeId: 'e1' }, { recipeId: 'e2' }],
+      withAlias,
+      [pantry('flour', '小麦粉')],
+      { 強力粉: '小麦粉' },
+    );
+    // 強力粉は在庫扱いで消え、薄力粉（辞書に無い）は別行のまま残る
+    expect(result).toEqual([{ name: '薄力粉', amounts: ['50g'], recipeId: 'e2' }]);
   });
 });

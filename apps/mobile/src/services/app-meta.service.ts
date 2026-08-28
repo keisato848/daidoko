@@ -8,10 +8,22 @@ import { eq } from 'drizzle-orm';
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import { generateId } from '../utils/id';
+import {
+  MENU_AUTO_DEFAULT_DAYS,
+  MENU_AUTO_DEFAULT_NOTIFY_TIME,
+  formatMenuAutoNotifyTime,
+  isValidMenuAutoDays,
+  parseMenuAutoNotifyTime,
+  type MenuAutoNotifyTime,
+} from '../utils/menuAuto';
 
 const CLOUD_INFERENCE_CONSENT_KEY = 'cloud_inference_consent';
 const LAUNCH_CAMERA_KEY = 'launch_camera';
 const INSTALLATION_ID_KEY = 'installation_id';
+const MENU_AUTO_KEY = 'menu_auto_enabled';
+const MENU_AUTO_ADD_KEY = 'menu_auto_add_enabled';
+const MENU_AUTO_DAYS_KEY = 'menu_auto_days';
+const MENU_AUTO_NOTIFY_TIME_KEY = 'menu_auto_notify_time';
 
 export async function getAppMeta(key: string): Promise<string | null> {
   if (!isNativePlatform) return null;
@@ -70,4 +82,51 @@ export async function getInstallationId(): Promise<string> {
   const next = generateId();
   await setAppMeta(INSTALLATION_ID_KEY, next);
   return next;
+}
+
+// ── 毎日の自動献立モード（#215 A1・設計 §10.11）──────────────────────────────
+// 親トグル「毎日の献立」（既定オフ）→ 子トグル「足りない材料を自動で追加」（既定オフ）の
+// 二段オプトイン。既定値・妥当性判定は utils/menuAuto.ts（純関数・jest 対象）に置く。
+
+/** 親トグル。既定オフ（設計 §10.11 冒頭・「決めるのは常に利用者」）。 */
+export async function isMenuAutoEnabled(): Promise<boolean> {
+  return (await getAppMeta(MENU_AUTO_KEY)) === 'on';
+}
+
+export async function setMenuAutoEnabled(enabled: boolean): Promise<void> {
+  await setAppMeta(MENU_AUTO_KEY, enabled ? 'on' : 'off');
+}
+
+/**
+ * 子トグル。既定オフ。**親がオフでも値は保持する**（親を切ってもまた入れたときに
+ * 前回の選択を覚えている方が自然——親のオフは「オフにする」であって「忘れる」ではない）。
+ */
+export async function isMenuAutoAddEnabled(): Promise<boolean> {
+  return (await getAppMeta(MENU_AUTO_ADD_KEY)) === 'on';
+}
+
+export async function setMenuAutoAddEnabled(enabled: boolean): Promise<void> {
+  await setAppMeta(MENU_AUTO_ADD_KEY, enabled ? 'on' : 'off');
+}
+
+/** ローリングの窓幅 X（何日分を保つか）。既定 3。壊れた/範囲外の保存値は既定へ倒す。 */
+export async function getMenuAutoDays(): Promise<number> {
+  const raw = await getAppMeta(MENU_AUTO_DAYS_KEY);
+  const value = raw ? Number(raw) : NaN;
+  return isValidMenuAutoDays(value) ? value : MENU_AUTO_DEFAULT_DAYS;
+}
+
+export async function setMenuAutoDays(days: number): Promise<void> {
+  await setAppMeta(MENU_AUTO_DAYS_KEY, String(days));
+}
+
+/** 通知時刻。既定 7:00。 */
+export async function getMenuAutoNotifyTime(): Promise<MenuAutoNotifyTime> {
+  const raw = await getAppMeta(MENU_AUTO_NOTIFY_TIME_KEY);
+  const parsed = raw ? parseMenuAutoNotifyTime(raw) : null;
+  return parsed ?? MENU_AUTO_DEFAULT_NOTIFY_TIME;
+}
+
+export async function setMenuAutoNotifyTime(time: MenuAutoNotifyTime): Promise<void> {
+  await setAppMeta(MENU_AUTO_NOTIFY_TIME_KEY, formatMenuAutoNotifyTime(time));
 }

@@ -82,6 +82,7 @@ export default function TabLayout() {
       {/* S20 献立（#215）。タブは 5 本のまま — 組む操作は週 1〜2 回で、
           毎日見る「今日の 1 枚」はホームのカードが担う（画面設計「献立導入後の全体導線」） */}
       <Tabs.Screen name="menu" options={{ href: null }} />
+      <Tabs.Screen name="menu-settings" options={{ href: null }} />
       <Tabs.Screen name="family" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="licenses" options={{ href: null }} />

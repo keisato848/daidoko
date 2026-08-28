@@ -12,6 +12,10 @@ const notification: typeof ja = {
     one: ' and {{count}} more',
     other: ' and {{count}} more',
   },
+
+  menuChannel: 'Menu notifications',
+  menuReadyTitle: "Today's menu is ready",
+  menuReadyBody: 'Open the app to take a look.',
 };
 
 export default notification;

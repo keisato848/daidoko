@@ -346,11 +346,22 @@ let running: Promise<void> | null = null;
 let rerunRequested = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * 直近の `execute()` が pull まで成功したか。**献立の自動追加（#215 §10.11.1）専用の状態。**
+ * `runSync()` は失敗しても例外を投げない契約なので、これが無いと「pull が終わったか」を
+ * 呼び出し側が知りようが無い。未参加（家族と同期していない）は「古い在庫観」という
+ * 概念自体が無いので成功扱いにする。
+ */
+let lastPullOutcome: 'ok' | 'failed' | 'not-participating' = 'not-participating';
+
 async function execute(): Promise<void> {
   const credentials = await getStoredCredentials();
   // 画面が「個人/家族」の切り替えを出すかの判断に使う（設計 §5-2）
   setSyncJoined(credentials !== null);
-  if (!credentials) return; // 未参加。同期そのものが無い
+  if (!credentials) {
+    lastPullOutcome = 'not-participating';
+    return; // 未参加。同期そのものが無い
+  }
   setSyncing(true);
   try {
     // **送れないことと受け取れないことは独立させる。** push が投げたら pull を飛ばす、
@@ -362,7 +373,13 @@ async function execute(): Promise<void> {
     } catch (err) {
       pushError = err;
     }
-    await pullAndApply(credentials); // 適用の合図はページごとに出る（下の pullAndApply）
+    try {
+      await pullAndApply(credentials); // 適用の合図はページごとに出る（下の pullAndApply）
+      lastPullOutcome = 'ok';
+    } catch (err) {
+      lastPullOutcome = 'failed';
+      throw err;
+    }
     await ensurePushTokenRegistered();
     if (pushError !== null) throw pushError;
   } finally {
@@ -391,6 +408,30 @@ export async function runSync(): Promise<void> {
     rerunRequested = false;
     await runSync();
   }
+}
+
+/**
+ * 献立の自動追加（#215 §10.11.1）専用。`runSync()` は「積んだら後でもう一度」の
+ * fire-and-forget 契約（既に走っている回があると即座に返る）で、**pull の完了を
+ * 待つ口が無い**。ここでは既に走っている回があればそれに相乗りして待ち、
+ * 無ければ新しく 1 回走らせて、pull まで成功したかを返す。
+ *
+ * オフラインで pull が失敗した朝は false — 呼び出し側はその朝の自動追加を
+ * スキップする（古い在庫観で家族の買い物リストへ書き込まないため）。
+ */
+export async function runSyncAndAwaitPull(): Promise<boolean> {
+  if (!isNativePlatform) return true;
+  if (running) {
+    await running.catch(() => undefined);
+    return lastPullOutcome !== 'failed';
+  }
+  running = execute()
+    .catch(() => undefined)
+    .finally(() => {
+      running = null;
+    });
+  await running;
+  return lastPullOutcome !== 'failed';
 }
 
 /** ローカル書き込みの後に呼ぶ。数秒待ってから 1 回だけ走らせる */

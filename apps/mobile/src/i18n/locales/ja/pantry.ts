@@ -106,6 +106,9 @@ const pantry = {
     },
     buyLabel: '{{name}}を買った（在庫に入れる）',
     uncheckLabel: '{{name}}のチェックを外す',
+    /** 自動献立モードが足した行（§10.11.2）。タップで由来レシピを開く */
+    menuBadge: '献立から',
+    menuBadgeLabel: '献立から追加。タップでレシピを開く',
     coach: {
       linkTitle: '在庫とつながっています',
       linkText:

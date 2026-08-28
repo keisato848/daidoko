@@ -18,6 +18,11 @@ const notification = {
     one: ' ほか{{count}}件',
     other: ' ほか{{count}}件',
   } satisfies PluralMessage,
+
+  /** 毎日の自動献立モード（#215 §10.11.4）。料理名は載せない — 予約後の変化で嘘になる */
+  menuChannel: '献立の通知',
+  menuReadyTitle: '今日の献立ができています',
+  menuReadyBody: 'アプリを開いて確認しましょう。',
 };
 
 export default notification;

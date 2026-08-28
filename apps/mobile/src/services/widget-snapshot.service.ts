@@ -42,8 +42,9 @@ async function collect(): Promise<WidgetSnapshot | null> {
   return buildWidgetSnapshot({
     shoppingItems,
     menuDays: menu?.days ?? [],
-    // 自動モード（§10.11）が入るまで献立は日付を持たない = 常に「次の一品」
-    anchorDate: null,
+    // 自動モード（§10.11）で組まれたプランだけが anchorDate を持つ。
+    // 手動プランは null のまま = 「次の一品」（ホームカードと同じ規約・§2）
+    anchorDate: menu?.plan.anchorDate ?? null,
     locale: getLocale(),
     now: new Date(),
   });

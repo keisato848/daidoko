@@ -54,6 +54,12 @@ const settings: typeof ja = {
     launchCameraSubtitle: 'Right after you leave — one action from launch to a photo',
   },
 
+  menu: {
+    sectionTitle: 'Meal plan',
+    label: 'Daily meal plan settings',
+    subtitle: 'Auto-planning, notification time, and auto-adding missing ingredients',
+  },
+
   account: {
     sectionTitle: 'Account',
     profile: 'Edit profile',
