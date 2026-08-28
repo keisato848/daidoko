@@ -138,6 +138,28 @@ export const IDENTIFY_POOL: RateLimitPool = {
   clientDefault: 30,
 };
 
+/**
+ * だいどこのレシピ表紙 AI 生成（`/infer/cover-image`）。
+ * `docs/レシピ表紙AI生成設計.md` §1・§5。
+ *
+ * **RECIPE_POOL とは共有しない。** 1 枚 ≒¥5.0 はテキスト推論（¥0.35〜0.85）の
+ * 11〜17 倍で、共有すると**安い呼び出しが高い呼び出しの枠に締め出される**
+ * （§10.10.6-a の逆条件 — 単価が違う用途を 1 本のカウンタで分け合わせては
+ * いけない、という他プールと同じ理由）。
+ *
+ * 既定 10/日（月最大 ¥1,550・MAU 3 に十分・0 で機能オフ）。
+ * クライアント別は 5（実装既定。設計 §3 が定めるのはサーバー天井 10/日だけで、
+ * クライアント別上限は「1 端末が天井の半分を独占しない」ための実装判断）。
+ */
+export const COVER_POOL: RateLimitPool = {
+  key: '__global_cover_image__',
+  label: 'だいどこ 表紙イメージ生成',
+  globalEnv: 'COVER_IMAGE_GLOBAL_DAILY_LIMIT',
+  globalDefault: 10,
+  clientEnv: 'COVER_IMAGE_DAILY_LIMIT',
+  clientDefault: 5,
+};
+
 interface Bucket {
   count: number;
   resetAt: number;

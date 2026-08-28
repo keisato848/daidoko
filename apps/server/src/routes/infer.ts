@@ -31,7 +31,7 @@ import {
   type RefineRecipeSnapshot,
 } from '../lib/recipe-refine.js';
 import { runRecipeRefineAgent } from '../agents/recipe-refine.agent.js';
-import { checkRateLimit } from '../lib/rate-limit.js';
+import { checkRateLimit, COVER_POOL } from '../lib/rate-limit.js';
 import { parseOutputLocale, parseUnitSystem } from '../lib/output-locale.js';
 import {
   ConsultConfigError,
@@ -58,6 +58,14 @@ import {
 } from '../lib/menu-arrange.js';
 import { runMenuArrangeAgent } from '../agents/menu-arrange.agent.js';
 import { peekMonthlyQuota, recordMonthlyUse } from '../lib/quota-store.js';
+import {
+  CoverImageConfigError,
+  GeminiCoverImageProvider,
+  MAX_COVER_INGREDIENTS,
+  MAX_COVER_TAGS,
+  type CoverImageProvider,
+} from '../lib/cover-image.js';
+import { runCoverImageAgent } from '../agents/cover-image.agent.js';
 
 const inferRouter = new Hono();
 
@@ -784,6 +792,89 @@ inferRouter.post('/menu', zValidator('json', inferMenuSchema), async (c) => {
   if (result.ok && !bypassMonthlyQuota) {
     recordMonthlyUse(deviceId, QUOTA_CATEGORY);
   }
+
+  // Always 200 — errors are in the response body (AgentResult pattern).
+  return c.json(result);
+});
+
+// ─── レシピ表紙の AI 生成（イメージ）（docs/レシピ表紙AI生成設計.md） ──────────
+
+const inferCoverImageSchema = z.object({
+  title: z.string().min(1, 'タイトルが空です').max(100, 'タイトルが長すぎます'),
+  ingredientNames: z.array(z.string().min(1).max(50)).max(MAX_COVER_INGREDIENTS),
+  tags: z.array(z.string().min(1).max(30)).max(MAX_COVER_TAGS),
+  locale: z.enum(['ja', 'en']).optional(),
+});
+
+let coverImageProviderOverride: CoverImageProvider | null = null;
+
+export function setCoverImageProviderForTesting(provider: CoverImageProvider | null): void {
+  coverImageProviderOverride = provider;
+}
+
+function resolveCoverImageProvider(): CoverImageProvider {
+  return coverImageProviderOverride ?? new GeminiCoverImageProvider();
+}
+
+inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), async (c) => {
+  // /infer/menu と同じ書式チェックだけ行う（乱数のインストール UUID・個人情報ではない）。
+  // 月次枠はここでは使わない — 画像は別勘定で、無料枠（月 3 枚）は
+  // **端末ローカルで**数える（docs/フリーミアム設計.md §11）。サーバーは
+  // 下の COVER_POOL（日次プール）だけでコストを守る。
+  const deviceId = c.req.header('x-device-id');
+  if (!deviceId || !DEVICE_ID_PATTERN.test(deviceId)) {
+    return c.json({
+      ok: false,
+      error: { code: 'UNKNOWN', message: '端末IDが不正です', retryable: false },
+    });
+  }
+
+  const clientId =
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous';
+  // 専用プール（COVER_POOL）。RECIPE_POOL とは共有しない
+  // — 1 枚 ≒¥5.0 はテキスト推論の 11〜17 倍で、共有すると安い呼び出しが
+  // 高い呼び出しの枠に締め出される（rate-limit.ts の COVER_POOL コメント参照）。
+  const rate = checkRateLimit(clientId, COVER_POOL);
+  if (!rate.allowed) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'RATE_LIMITED',
+        message:
+          rate.scope === 'global'
+            ? '本日の利用上限に達しました。時間をおいてお試しください。'
+            : '本日の利用上限に達しました。',
+        retryable: false,
+      },
+    });
+  }
+
+  let provider: CoverImageProvider;
+  try {
+    provider = resolveCoverImageProvider();
+  } catch (err) {
+    if (err instanceof CoverImageConfigError) {
+      return c.json({
+        ok: false,
+        error: { code: 'AI_API_UNAVAILABLE', message: 'AI 推論が利用できません', retryable: false },
+      });
+    }
+    throw err;
+  }
+
+  const { title, ingredientNames, tags, locale } = c.req.valid('json');
+
+  const result = await runCoverImageAgent(
+    {
+      title,
+      ingredientNames,
+      tags,
+      outputLocale: parseOutputLocale(locale),
+    },
+    provider,
+  );
 
   // Always 200 — errors are in the response body (AgentResult pattern).
   return c.json(result);

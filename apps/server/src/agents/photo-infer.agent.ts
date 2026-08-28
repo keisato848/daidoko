@@ -30,6 +30,8 @@ export type AgentErrorCode =
   | 'FREE_QUOTA_EXCEEDED'
   /** 献立の並べ替えに失敗（AI 呼び出し自体は成功したが、検証で全滅した等） */
   | 'MENU_ARRANGE_FAILED'
+  /** レシピ表紙の AI イメージ生成に失敗（docs/レシピ表紙AI生成設計.md） */
+  | 'COVER_IMAGE_FAILED'
   | 'UNKNOWN';
 
 export interface AgentResult<T> {

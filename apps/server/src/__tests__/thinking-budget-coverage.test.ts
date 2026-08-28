@@ -28,6 +28,13 @@ const EXEMPT: Record<string, string> = {
   'recipe-refine.ts':
     '用途都合で thinkingBudget を 0 にハードコードしている。「言われた点だけ直す」処理で ' +
     '創作性が要らず、maxOutputTokens も絞っているため、環境変数で戻せる必要が無い。',
+  'cover-image.ts':
+    'テキスト推論ではなく画像生成（Interactions API・`generateContent` を使わない）。' +
+    'コメント中に "generationConfig" の語が出るのはこの走査への言及であり、' +
+    '実際のリクエスト body には存在しない（`response_format` のみ）。原価は思考トークンでは' +
+    'なく 1K 出力の固定単価が支配的（設計 §1）で、`thinking-budget.ts` の数値予算という枠組み' +
+    '自体が対象外。画像側の思考レベル制御（ドキュメント上は generation_config.thinking_level・' +
+    '数値ではなく high/low）を使うかは別途の検討事項。',
   'thinking-budget.ts': '仕組みそのもの。呼ぶ側ではない。',
 };
 
