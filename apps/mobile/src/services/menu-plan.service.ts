@@ -11,6 +11,7 @@
  * 保存すると古い警告が残り、古いことが利用者に見えない。
  */
 import { getAppMeta, setAppMeta } from './app-meta.service';
+import { refreshWidgetSnapshot } from './widget-snapshot.service';
 import { isNativePlatform } from '../db/client';
 import {
   buildClaims,
@@ -182,6 +183,7 @@ export async function generateMenuPlan(days: number): Promise<MenuPlanView | nul
     })),
   };
   await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  refreshWidgetSnapshot();
   return hydrate(plan, recipes, pantry, aliases);
 }
 
@@ -248,6 +250,7 @@ async function markDone(plan: StoredMenuPlan): Promise<StoredMenuPlan> {
     ),
   };
   await setAppMeta(MENU_PLAN_KEY, JSON.stringify(next));
+  refreshWidgetSnapshot();
   return next;
 }
 
@@ -309,6 +312,7 @@ export async function replaceMenuDay(day: number): Promise<MenuPlanView | null> 
     ),
   };
   await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  refreshWidgetSnapshot();
   return hydrate(plan, recipes, pantry, aliases);
 }
 
