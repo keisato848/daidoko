@@ -7,9 +7,11 @@ import { eq } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
+import { generateId } from '../utils/id';
 
 const CLOUD_INFERENCE_CONSENT_KEY = 'cloud_inference_consent';
 const LAUNCH_CAMERA_KEY = 'launch_camera';
+const INSTALLATION_ID_KEY = 'installation_id';
 
 export async function getAppMeta(key: string): Promise<string | null> {
   if (!isNativePlatform) return null;
@@ -51,4 +53,21 @@ export async function isLaunchCameraEnabled(): Promise<boolean> {
 
 export async function setLaunchCameraEnabled(enabled: boolean): Promise<void> {
   await setAppMeta(LAUNCH_CAMERA_KEY, enabled ? 'on' : 'off');
+}
+
+/**
+ * インストールごとの乱数 ID（個人情報ではない・同期 §0-2 と同じ線）。
+ * AI 献立並べ替え（M2）の `x-device-id` ヘッダに使う（設計 §10.10.1/§10.10.7-3）。
+ *
+ * **同期の `deviceId`（sync-client.service.ts）とは別物で、流用しない** —
+ * 同期未設定の端末には同期 deviceId が存在しないため。初回アクセス時に生成して
+ * `app_meta` へ永続化し、以後は同じ値を返す（`generateId()` の UUID v4 は
+ * 36 字・`[0-9a-f-]` で、サーバー側の書式チェック 8..64 字 `[A-Za-z0-9_-]` に収まる）。
+ */
+export async function getInstallationId(): Promise<string> {
+  const existing = await getAppMeta(INSTALLATION_ID_KEY);
+  if (existing) return existing;
+  const next = generateId();
+  await setAppMeta(INSTALLATION_ID_KEY, next);
+  return next;
 }

@@ -344,8 +344,9 @@ const recipe = {
 
     offlineNotice: 'インターネットにつながっていると、写真からレシピをつくれます',
 
-    // 無料枠は「生涯 N 回・リセットなし」（usage.service.ts の FREE_LIFETIME_LIMIT）。
-    // 「今日の」と書くと明日また使えると誤解させるので、期間を示す語は入れない。
+    // 無料枠は「月 N 回」（usage.service.ts の FREE_MONTHLY_LIMIT）。
+    // 「今日の」と書くと明日また使えると誤解させるので、期間を示す語は入れない
+    // （「月」も書かない——リセットが来月なことをここで説明する余地が無いため）。
     quotaRemaining: {
       one: '無料作成：あと {{count}} 回 ・ 使い放題にする',
       other: '無料作成：あと {{count}} 回 ・ 使い放題にする',

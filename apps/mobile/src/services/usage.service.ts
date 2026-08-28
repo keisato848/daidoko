@@ -1,9 +1,13 @@
 /**
- * Freemium usage service — device-local quota for AI photo-recipes.
+ * Freemium usage service — device-local quota for AI features.
  *
- * 無料枠は**初回の FREE_LIFETIME_LIMIT 回だけ**（既定 1・日次リセットなし。
- * 2026-08-12 に「毎日1回」から変更 — ユーザー判断）。使い切ったら、
- * リワード広告を見るたびに 1 回ぶんのトークンが貯まる。トークンは無期限。
+ * **AI 写真レシピと AI 献立並べ替え（M2・設計 §10.10）で共通の「全体枠」**
+ * （§10.8「枠を機能ごとに分けると利用者が数え分けられない」・§10.10.7-1 決定）。
+ * どちらの機能を使っても同じカウンタを 1 消費する。
+ *
+ * 無料枠は**月あたり FREE_MONTHLY_LIMIT 回**（既定 5・端末ローカル時刻の暦月でリセット。
+ * 2026-08-28 に「生涯 1 回」から変更 — ユーザー決定。設計 §10.10.0/§10.10.7-1）。
+ * 使い切ったら、リワード広告を見るたびに 1 回ぶんのトークンが貯まる。トークンは無期限。
  *
  * **広告視聴の回数に上限は無い**（2026-08-14 に AD_BONUS_DAILY_LIMIT=3 を撤廃 —
  * ユーザー判断「無料でも使い続けられるように」）。1 日 3 本の上限があった頃は、
@@ -12,8 +16,9 @@
  * (`apps/server/src/lib/rate-limit.ts`) が担保するので、端末側で速度制限をかける
  * 必要はない。Premium (RevenueCat) bypasses the quota. See docs/フリーミアム設計.md.
  *
- * 既存ユーザーへの移行: 日次キーの履歴は数え直さない（生涯カウンタは 0 から）。
- * 更新後に 1 回だけ無料枠が復活するが、害はなく実装が単純。
+ * 既存ユーザーへの移行: 旧・生涯キー（`ai_photo_recipe_free_lifetime_used`）は
+ * 読まない。月次キーは月が変わるたびに 0 から始まるので、移行という概念自体が無い
+ * （旧キーを引き継いでも今月ぶんの消費数としては意味を持たない）。
  */
 import { FREE_DAILY_LIMIT_CONFIG } from '../config';
 import { isAdRewardAvailable } from './ad-reward.service';
@@ -21,12 +26,18 @@ import { getAppMeta, setAppMeta } from './app-meta.service';
 import { hasUserApiKey } from './byok.service';
 import { isPremium } from './entitlement.service';
 
-/** 無料の AI レシピ作成の**生涯**回数（build-time configurable, default 1）。 */
-export const FREE_LIFETIME_LIMIT = FREE_DAILY_LIMIT_CONFIG;
+/**
+ * 無料の AI 利用の**月あたり**回数（build-time configurable, default 5）。
+ * env は `EXPO_PUBLIC_FREE_DAILY_LIMIT`（歴史的な名前のまま — 「1 日あたり」だった
+ * 頃の名残で、2026-08-12 に生涯 1 回へ、2026-08-28 に月 N 回へ意味が変わっている。
+ * **0 のビルドは常時ペイウォール／広告フローの E2E 検証に使う**ので、env 名も
+ * 「0 = 常時広告」の挙動も変えない）。
+ */
+export const FREE_MONTHLY_LIMIT = FREE_DAILY_LIMIT_CONFIG;
 
 const USAGE_KEY_PREFIX = 'ai_photo_recipe_usage:';
-/** 生涯の無料枠消費数。日付キーを持たない = リセットされない。 */
-const LIFETIME_FREE_KEY = 'ai_photo_recipe_free_lifetime_used';
+/** 月次の無料枠消費数のキー接頭辞。`YYYY-MM`（端末ローカル時刻）を続けて使う。 */
+const MONTHLY_FREE_KEY_PREFIX = 'ai_photo_recipe_free_used:';
 const TOKEN_BALANCE_KEY = 'ai_photo_recipe_token_balance';
 
 export interface FreemiumStatus {
@@ -54,7 +65,14 @@ export function currentDayKey(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
-export function remainingFree(used: number, limit: number = FREE_LIFETIME_LIMIT): number {
+/** Calendar-month key, e.g. "2026-06" (local time — the free quota resets by device calendar). */
+export function currentMonthKey(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+export function remainingFree(used: number, limit: number = FREE_MONTHLY_LIMIT): number {
   return Math.max(0, limit - used);
 }
 
@@ -65,7 +83,7 @@ export function deriveFreemiumStatus(
   tokenBalance = 0,
   adAvailable = false,
   byok = false,
-  baseLimit: number = FREE_LIFETIME_LIMIT,
+  baseLimit: number = FREE_MONTHLY_LIMIT,
 ): FreemiumStatus {
   if (premium || byok) {
     return {
@@ -110,13 +128,14 @@ export async function incrementDailyUsage(date: Date = new Date()): Promise<numb
   return next;
 }
 
-/** 生涯の無料枠をいくつ使ったか（リセットされない）。 */
-export async function getLifetimeFreeUsed(): Promise<number> {
-  return readCount(LIFETIME_FREE_KEY);
+/** 今月、無料枠をいくつ使ったか（端末ローカル時刻の暦月で区切る）。 */
+export async function getMonthlyFreeUsed(date: Date = new Date()): Promise<number> {
+  return readCount(MONTHLY_FREE_KEY_PREFIX + currentMonthKey(date));
 }
 
-async function incrementLifetimeFreeUsed(): Promise<void> {
-  await setAppMeta(LIFETIME_FREE_KEY, String((await getLifetimeFreeUsed()) + 1));
+async function incrementMonthlyFreeUsed(date: Date = new Date()): Promise<void> {
+  const next = (await getMonthlyFreeUsed(date)) + 1;
+  await setAppMeta(MONTHLY_FREE_KEY_PREFIX + currentMonthKey(date), String(next));
 }
 
 /** Ad-earned tokens banked and not yet spent. Persists indefinitely (no date key). */
@@ -149,10 +168,10 @@ export async function spendToken(): Promise<number> {
 }
 
 /** Combined premium + quota + token status for the gate / UI. */
-export async function getFreemiumStatus(): Promise<FreemiumStatus> {
+export async function getFreemiumStatus(date: Date = new Date()): Promise<FreemiumStatus> {
   const [premium, used, tokenBalance, byok] = await Promise.all([
     isPremium(),
-    getLifetimeFreeUsed(),
+    getMonthlyFreeUsed(date),
     getTokenBalance(),
     hasUserApiKey(),
   ]);
@@ -160,18 +179,39 @@ export async function getFreemiumStatus(): Promise<FreemiumStatus> {
 }
 
 /**
- * Count one successful cloud inference against the quota: spends today's free
- * allowance first, then a banked token if the free allowance is used up.
+ * Count one successful cloud inference against the quota: spends this month's
+ * free allowance first, then a banked token if the free allowance is used up.
  * No-op for premium and BYOK users (BYOK uses the user's own key/quota).
- * Call only when the AI (our managed server) actually returned a draft.
+ * Call only when the AI (our managed server) actually returned a draft —
+ * for photo recipes **and** for AI menu-arrange (M2), which share this counter
+ * (設計 §10.8「枠を機能ごとに分けると利用者が数え分けられない」)。
  */
-export async function recordCloudInference(): Promise<void> {
+export async function recordCloudInference(date: Date = new Date()): Promise<void> {
   if (await isPremium()) return;
   if (await hasUserApiKey()) return;
-  const used = await getLifetimeFreeUsed();
-  if (used < FREE_LIFETIME_LIMIT) {
-    await incrementLifetimeFreeUsed();
+  const used = await getMonthlyFreeUsed(date);
+  if (used < FREE_MONTHLY_LIMIT) {
+    await incrementMonthlyFreeUsed(date);
   } else {
     await spendToken();
   }
+}
+
+/**
+ * 今この端末で AI を実行するとき、無料の月次枠から出るのか（トークン残高から）
+ * 出るのかを**実行前に**判定する。サーバー `POST /infer/menu` の
+ * `x-quota-source` ヘッダに使う（設計 §10.10.1・§10.10.7-2）。
+ *
+ * - premium → `'premium'`（サーバーは月次枠チェックを飛ばす）
+ * - 月次無料枠を使い切っている（＝この呼び出しはトークン由来） → `'token'`
+ * - それ以外（月次無料枠がまだ残っている・BYOK） → `undefined`
+ *   （BYOK はサーバーを叩かないので呼び出し側でヘッダ自体を付けない。
+ *   月次枠が残っているときも付けない —— サーバー側の月次枠チェックに乗せる）
+ */
+export async function resolveQuotaSource(
+  date: Date = new Date(),
+): Promise<'token' | 'premium' | undefined> {
+  if (await isPremium()) return 'premium';
+  const used = await getMonthlyFreeUsed(date);
+  return used >= FREE_MONTHLY_LIMIT ? 'token' : undefined;
 }

@@ -47,6 +47,17 @@ const menu = {
     none: 'Nothing missing',
   },
   warnEmptyPantry: 'Your pantry is empty, so this plan assumes shopping',
+  ai: {
+    button: 'Let AI rearrange it',
+    running: 'Rearranging…',
+    failed: "We couldn't rearrange it with AI. Keeping the current plan.",
+    emptyResult: "We couldn't use the AI suggestion. Keeping the current plan.",
+    arrangedBadge: 'Arranged by AI',
+    limitNote: {
+      one: 'Free, {{count}} time a month',
+      other: 'Free, {{count}} times a month',
+    },
+  },
 };
 
 export default menu;

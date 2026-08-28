@@ -22,13 +22,14 @@ export const API_V1 = `${SERVER_BASE_URL}/api/v1`;
 // 動作確認は EXPO_PUBLIC_ADMOB_ENABLED=true でビルド（app.json のテスト ID で Google テスト広告が出る）。
 export const ADMOB_ENABLED = process.env['EXPO_PUBLIC_ADMOB_ENABLED'] === 'true';
 
-// AI 写真レシピの無料枠（1 日あたり）。既定 1。ビルド時に調整可能
-// （0 にすると常にペイウォール — 広告フローの E2E 検証にも使う）。
+// AI 利用（写真レシピ・AI 献立並べ替え共通の全体枠）の無料枠（月あたり）。既定 5。
+// env 名は歴史的に EXPO_PUBLIC_FREE_DAILY_LIMIT のまま（詳細は usage.service.ts 冒頭）。
+// ビルド時に調整可能（0 にすると常にペイウォール — 広告フローの E2E 検証にも使う）。
 // 注意: Number('') は 0 になるため、未設定・空文字は先に弾く。
 const rawFreeLimit = process.env['EXPO_PUBLIC_FREE_DAILY_LIMIT'];
 const parsedFreeLimit = rawFreeLimit ? Number(rawFreeLimit) : NaN;
 export const FREE_DAILY_LIMIT_CONFIG =
-  Number.isInteger(parsedFreeLimit) && parsedFreeLimit >= 0 ? parsedFreeLimit : 1;
+  Number.isInteger(parsedFreeLimit) && parsedFreeLimit >= 0 ? parsedFreeLimit : 5;
 // ── 広告ユニット ID ─────────────────────────────────────────────────────────
 // AdMob のユニットは**アプリ（=プラットフォーム）ごと**に別物。iOS でも広告を出す方針に
 // なった（2026-08-12）ので、無印 = Android・`_IOS` 付き = iOS として持ち、

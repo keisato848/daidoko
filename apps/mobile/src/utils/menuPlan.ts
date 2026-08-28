@@ -145,7 +145,12 @@ export interface ScoredRecipe {
   topReason: MenuReasonKind;
 }
 
-export type MenuReasonKind = 'expiry' | 'coverage' | 'pinned' | 'few-missing';
+/**
+ * `'ai'` は M2（AI 並べ替え）専用 — M1 の採点（`scoreRecipe`）が返すことはない。
+ * AI の why をそのまま `subject` として保存するための入れ物（§10.10.4 の
+ * 「reason に AI の why をそのまま」を、既存の `kind:subject` 保存形式に乗せる）。
+ */
+export type MenuReasonKind = 'expiry' | 'coverage' | 'pinned' | 'few-missing' | 'ai';
 
 /**
  * 1 レシピを採点する。`availablePantry` は「まだ他の日に取られていない在庫」で、
@@ -330,9 +335,109 @@ export function decodeReason(reason: string): { kind: MenuReasonKind | null; sub
   if (index < 0) return { kind: null, subject: '' };
   const kind = reason.slice(0, index);
   const subject = reason.slice(index + 1);
-  const known: MenuReasonKind[] = ['expiry', 'coverage', 'pinned', 'few-missing'];
+  const known: MenuReasonKind[] = ['expiry', 'coverage', 'pinned', 'few-missing', 'ai'];
   return {
     kind: (known as string[]).includes(kind) ? (kind as MenuReasonKind) : null,
     subject,
   };
+}
+
+// ─── M2: AI 並べ替え（#215・設計 §10.10）────────────────────────────────────
+// ここから先は M1 の上に AI 1 操作を載せる分だけ。M1 の関数（buildMenu 等）は
+// 一切変更しない — 失敗しても M1 の並びがそのまま生きる契約（§10.5）を型で保つ。
+
+/** AI に渡す候補 1 件（`menu-arrange.provider.ts` の `MenuCandidate` と同じ形）。 */
+export interface MenuArrangeCandidate {
+  id: string;
+  title: string;
+  cookTimeMin: number | null;
+  /** カバー率（%）。整数 0..100 */
+  coveragePct: number;
+  missing: string[];
+}
+
+/**
+ * AI 並べ替えに渡す候補一覧（≤`cap` 件・おすすめ順）。
+ *
+ * **在庫の「まだ他の日に取られていない」制約は掛けない** — 候補は AI が選び直す前の
+ * 材料であって、M1 の日別引き当て（`buildMenu` が日を進めるたびに在庫を削る仕組み）
+ * とは独立。§10.5 の契約が渡すのは「候補 30 件・在庫の品名・日数」だけで、
+ * 「この在庫は何日目まで残っているか」という M1 内部の状態は渡さない。
+ */
+export function buildArrangeCandidates(
+  recipes: readonly MenuRecipe[],
+  pantry: readonly MenuPantryItem[],
+  aliases: Record<string, string>,
+  today: Date,
+  cap = 30,
+): MenuArrangeCandidate[] {
+  return recipes
+    .filter((r) => r.ingredients.length > 0)
+    .map((recipe) => scoreRecipe(recipe, pantry, aliases, today))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, cap)
+    .map((scored) => ({
+      id: scored.recipe.id,
+      title: scored.recipe.title,
+      cookTimeMin: scored.recipe.cookTimeMin,
+      coveragePct: Math.round(scored.parts.coverage * 100),
+      missing: scored.missingNames,
+    }));
+}
+
+/** AI が返した 1 日ぶんの並び（`menu-arrange.provider.ts` の `MenuDayPick` と同じ形）。 */
+export interface ArrangeDayPick {
+  day: number;
+  recipeId: string;
+  why?: string;
+}
+
+/** 差し替え先を引くのに要るだけの候補情報。 */
+export interface ArrangeCandidateLookup {
+  id: string;
+  title: string;
+}
+
+/** AI 適用後・適用前どちらの日にも共通する形（`StoredMenuDay` の写し）。 */
+export interface ArrangeableDay {
+  day: number;
+  recipeId: string;
+  title: string;
+  reason: string;
+  doneAt: string | null;
+}
+
+/**
+ * AI の並びを現在の献立へ適用する純関数（§10.10.4）。
+ *
+ * - AI が置いた日（`picks` に対応する `day` がある）だけを差し替える。
+ *   **X 未満の結果を M1 で埋め直すことはしない**（§10.10.6-g）——
+ *   `picks` に無い日は `currentDays` の値をそのまま返す（M1 の空カードも含めて）。
+ * - 差し替えた日は `doneAt` を `null` に戻す。「新しい献立になった」ので
+ *   作った印は持ち越さない（§10.10.4・呼び出し側が `generatedAt` も更新する）。
+ * - `reason` は `encodeReason('ai', why)` で保存する。元の M1 理由（機械的な文）は
+ *   AI の理由に完全に置き換わる——残すと前のレシピについての嘘になる（§10.10.4）。
+ * - 候補に無い `recipeId`（＝ `validateArrangement` を通していない生の pick）が来ても
+ *   保険として無視する。基本は起きない（呼び出し側が必ず検証を経由させる）。
+ */
+export function applyArrangement(
+  currentDays: readonly ArrangeableDay[],
+  picks: readonly ArrangeDayPick[],
+  candidates: readonly ArrangeCandidateLookup[],
+): ArrangeableDay[] {
+  const candidateById = new Map(candidates.map((c) => [c.id, c]));
+  const pickByDay = new Map(picks.map((p) => [p.day, p]));
+  return currentDays.map((current) => {
+    const pick = pickByDay.get(current.day);
+    if (!pick) return current;
+    const candidate = candidateById.get(pick.recipeId);
+    if (!candidate) return current;
+    return {
+      day: current.day,
+      recipeId: pick.recipeId,
+      title: candidate.title,
+      reason: encodeReason('ai', pick.why ?? ''),
+      doneAt: null,
+    };
+  });
 }

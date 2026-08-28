@@ -9,19 +9,31 @@
  * 在庫が変わったら「作り直す」を静かに出すだけで、**勝手に組み直さない**。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { CalendarDays, ChefHat, RefreshCw, ShoppingCart, Sparkles } from 'lucide-react-native';
+import {
+  CalendarDays,
+  ChefHat,
+  RefreshCw,
+  ShoppingCart,
+  Sparkles,
+  Wand2,
+} from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
-import { t } from '../../src/i18n';
+import { t, tCount } from '../../src/i18n';
+import { arrangeMenu, MenuArrangeError } from '../../src/services/menu-arrange.provider';
 import {
+  applyMenuArrangement,
+  buildMenuArrangeContext,
   generateMenuPlan,
   getMenuPlan,
   replaceMenuDay,
   type MenuDayView,
   type MenuPlanView,
 } from '../../src/services/menu-plan.service';
+import { ensureInferenceCredit } from '../../src/services/inference-gate.service';
+import { FREE_MONTHLY_LIMIT, recordCloudInference } from '../../src/services/usage.service';
 import { decodeReason } from '../../src/utils/menuPlan';
 
 /** 日数の選択肢（設計 §10.7） */
@@ -34,6 +46,8 @@ function reasonText(reason: string): string {
   if (kind === 'coverage') return t('menu.reason.coverage', { count: subject });
   if (kind === 'pinned') return t('menu.reason.pinned');
   if (kind === 'few-missing') return t('menu.reason.fewMissing', { count: subject });
+  // AI（M2）の理由はここでは翻訳しない — subject が AI 出力そのもの（ai-output-locale の世界）
+  if (kind === 'ai') return subject;
   return '';
 }
 
@@ -43,6 +57,10 @@ export default function MenuScreen() {
   const [days, setDays] = useState<number>(3);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // M2（AI 並べ替え）の状態。plan は常に M1/M2 どちらの並びも表示し続け、
+  // AI 実行中も画面を塞がない（§10.7）。失敗しても plan には一切触らない
+  const [aiRunning, setAiRunning] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const next = await getMenuPlan();
@@ -58,6 +76,7 @@ export default function MenuScreen() {
 
   const build = useCallback(async () => {
     setBusy(true);
+    setAiError(null);
     try {
       setView(await generateMenuPlan(days));
     } finally {
@@ -75,6 +94,44 @@ export default function MenuScreen() {
     }
   }, []);
 
+  // 「AIに並べ替えてもらう」。呼ぶのは「組む」1 操作につき 1 回 — 差し替えでは絶対に
+  // 呼ばない（§10.5）。失敗・枠切れ・空の結果はすべて M1 の並びへそのまま落とす（§10.7）。
+  const runAi = useCallback(async () => {
+    setAiError(null);
+    const gate = await ensureInferenceCredit();
+    if (gate === 'paywall') {
+      router.push('/recipes/paywall');
+      return;
+    }
+    if (gate !== 'ready') return; // cancelled — 何も変えない
+
+    setAiRunning(true);
+    try {
+      const context = await buildMenuArrangeContext();
+      if (!context || context.candidates.length === 0) {
+        throw new MenuArrangeError(t('menu.ai.emptyResult'), true);
+      }
+      const result = await arrangeMenu({
+        candidates: context.candidates,
+        pantry: context.pantryNames,
+        recentTitles: context.recentTitles,
+        days,
+      });
+      if (result.days.length === 0) {
+        throw new MenuArrangeError(t('menu.ai.emptyResult'), true);
+      }
+      const next = await applyMenuArrangement(result);
+      if (next) setView(next);
+      // 成功時だけ枠を消費（BYOK・プレミアムは内部で no-op・consult と同じ倒し方）
+      void recordCloudInference().catch(() => undefined);
+    } catch (err) {
+      setAiError(err instanceof MenuArrangeError ? err.message : t('menu.ai.failed'));
+      // plan には触らない — M1（または前回）の並びがそのまま生きている
+    } finally {
+      setAiRunning(false);
+    }
+  }, [days, router]);
+
   if (!loaded) {
     return (
       <View style={[styles.screen, styles.center]}>
@@ -90,6 +147,12 @@ export default function MenuScreen() {
       <View style={styles.header}>
         <CalendarDays size={20} color={Colors.gold} />
         <Text style={styles.title}>{t('menu.title')}</Text>
+        {/* AI が並べ替えた献立だと分かるように（M1/M2 どちらの結果かは source に残す・§10.6） */}
+        {view?.plan.source === 'ai' ? (
+          <View style={styles.arrangedBadge}>
+            <Text style={styles.arrangedBadgeText}>{t('menu.ai.arrangedBadge')}</Text>
+          </View>
+        ) : null}
       </View>
 
       {/* 日数の選択と「組む」。組み直しはいつでもできる */}
@@ -119,6 +182,39 @@ export default function MenuScreen() {
         <Sparkles size={16} color={Colors.bg} />
         <Text style={styles.primaryText}>{t('menu.card.build')}</Text>
       </Pressable>
+
+      {/* M2: AI に並べ替えてもらう。M1 の献立がある前提の 1 操作（§10.7） */}
+      {hasPlan ? (
+        <View style={styles.aiSection}>
+          <Pressable
+            style={[styles.aiButton, (aiRunning || busy) && styles.disabled]}
+            onPress={() => void runAi()}
+            disabled={aiRunning || busy}
+            accessibilityRole="button"
+          >
+            {aiRunning ? (
+              <ActivityIndicator size="small" color={Colors.gold} />
+            ) : (
+              <Wand2 size={16} color={Colors.gold} />
+            )}
+            <Text style={styles.aiButtonText}>
+              {aiRunning ? t('menu.ai.running') : t('menu.ai.button')}
+            </Text>
+          </Pressable>
+          {/* 残数は出さない。上限の静的表示だけ（§10.10.4 — 献立コードに数字を持たせない） */}
+          <Text style={styles.aiLimitNote}>{tCount('menu.ai.limitNote', FREE_MONTHLY_LIMIT)}</Text>
+        </View>
+      ) : null}
+
+      {/* AI が失敗しても画面は塞がない。M1（または前回）の並びがそのまま生きている（§10.7） */}
+      {aiError ? (
+        <View style={styles.staleBar}>
+          <Text style={styles.staleText}>{aiError}</Text>
+          <Pressable onPress={() => void runAi()} disabled={aiRunning} accessibilityRole="button">
+            <Text style={styles.staleAction}>{t('common.retry')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* 在庫が変わった。勝手に組み直さず、伝えるだけ（§10.6） */}
       {view?.stale ? (
@@ -238,6 +334,27 @@ const styles = StyleSheet.create({
   },
   primaryText: { fontSize: 15, color: Colors.bg, fontWeight: '600' },
   disabled: { opacity: 0.5 },
+  arrangedBadge: {
+    borderWidth: 1,
+    borderColor: Colors.gold,
+    borderRadius: 999,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+  },
+  arrangedBadgeText: { fontSize: 11, color: Colors.gold },
+  aiSection: { marginBottom: 16, gap: 6 },
+  aiButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.gold,
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  aiButtonText: { fontSize: 14, color: Colors.gold, fontWeight: '600' },
+  aiLimitNote: { fontSize: 12, color: Colors.muted, textAlign: 'center' },
   staleBar: {
     flexDirection: 'row',
     alignItems: 'center',

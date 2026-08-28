@@ -11,12 +11,16 @@
  * 保存すると古い警告が残り、古いことが利用者に見えない。
  */
 import { getAppMeta, setAppMeta } from './app-meta.service';
+import type { MenuCandidate } from './menu-arrange.provider';
 import { refreshWidgetSnapshot } from './widget-snapshot.service';
 import { isNativePlatform } from '../db/client';
 import {
+  applyArrangement,
+  buildArrangeCandidates,
   buildClaims,
   buildMenu,
   encodeReason,
+  type ArrangeDayPick,
   type MenuPantryItem,
   type MenuRecipe,
 } from '../utils/menuPlan';
@@ -32,6 +36,11 @@ export interface StoredMenuPlan {
   days: StoredMenuDay[];
   /** 在庫の件数 + 最終更新時刻。変わっていたら「作り直す」を静かに出す */
   pantrySignature: string;
+  /**
+   * M2 の AI が返した献立全体への一言（無ければ省略）。省略可フィールドで
+   * 足すだけなので `version` は上げない（バックアップ manifest の recipePhotos と同じ互換手法・§10.10.4）。
+   */
+  aiNote?: string;
 }
 
 export interface StoredMenuDay {
@@ -310,6 +319,96 @@ export async function replaceMenuDay(day: number): Promise<MenuPlanView | null> 
           }
         : d,
     ),
+  };
+  await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  refreshWidgetSnapshot();
+  return hydrate(plan, recipes, pantry, aliases);
+}
+
+/** AI 並べ替え（M2）に渡す入力。読むだけで保存はしない（`menu-arrange.provider.ts` へそのまま渡せる形）。 */
+export interface MenuArrangeContext {
+  candidates: MenuCandidate[];
+  pantryNames: string[];
+  /** 直近に作った料理名（重複除去・直近 10 件・§10.10.7-5 の仮値）。日付は渡さない */
+  recentTitles: string[];
+}
+
+/**
+ * AI 並べ替え（M2）に渡す候補・在庫・直近作った料理を組み立てる。
+ * **DB を読むだけ**（保存・AI 呼び出しはしない）。判断は全部 `utils/menuPlan.ts` 側にある。
+ */
+export async function buildMenuArrangeContext(): Promise<MenuArrangeContext | null> {
+  if (!isNativePlatform) return null;
+  const { getAliasMap } = await import('./name-alias.service');
+  const [recipes, pantry, aliases] = await Promise.all([
+    loadMenuRecipes(),
+    loadPantry(),
+    getAliasMap(),
+  ]);
+
+  // cookTimeMin: MenuRecipe は number|null（DB の欠損値）、provider の MenuCandidate は
+  // number|undefined（省略可）— null をそのまま渡すと exactOptionalPropertyTypes に落ちるので変換する
+  const candidates: MenuCandidate[] = buildArrangeCandidates(
+    recipes,
+    pantry.items,
+    aliases,
+    new Date(),
+  ).map((c) => ({
+    id: c.id,
+    title: c.title,
+    ...(c.cookTimeMin !== null ? { cookTimeMin: c.cookTimeMin } : {}),
+    coveragePct: c.coveragePct,
+    missing: c.missing,
+  }));
+
+  // 直近作った順・重複除去（同じレシピを 2 回言っても AI には無意味）
+  const recentTitles = [
+    ...new Set(
+      recipes
+        .filter((r): r is MenuRecipe & { lastCookedAt: string } => r.lastCookedAt !== null)
+        .sort((a, b) => b.lastCookedAt.localeCompare(a.lastCookedAt))
+        .map((r) => r.title),
+    ),
+  ].slice(0, 10);
+
+  return { candidates, pantryNames: pantry.items.map((p) => p.name), recentTitles };
+}
+
+/**
+ * AI の並び（M2）を現在の献立へ適用して保存する。**AI はここでは呼ばない**
+ * （結果を受け取って保存するだけ・§10.7 の「AI はボタン 1 本に閉じ込める」）。
+ * 保存済みの献立が無ければ何もしない（AI ボタンは M1 の献立がある前提で押される・§10.7）。
+ */
+export async function applyMenuArrangement(arrangement: {
+  days: ArrangeDayPick[];
+  note?: string;
+}): Promise<MenuPlanView | null> {
+  if (!isNativePlatform) return null;
+  const current = await getMenuPlan();
+  if (!current) return null;
+
+  const { getAliasMap } = await import('./name-alias.service');
+  const [recipes, pantry, aliases] = await Promise.all([
+    loadMenuRecipes(),
+    loadPantry(),
+    getAliasMap(),
+  ]);
+
+  const nextDays = applyArrangement(
+    current.plan.days,
+    arrangement.days,
+    recipes.map((r) => ({ id: r.id, title: r.title })),
+  );
+  const plan: StoredMenuPlan = {
+    version: current.plan.version,
+    // 新しい献立になった扱い（§10.10.4）。doneAt の突合起点（markDone）もここから動く
+    generatedAt: new Date().toISOString(),
+    source: 'ai',
+    days: nextDays,
+    pantrySignature: current.plan.pantrySignature,
+    // 前回の aiNote は引き継がない（スプレッドしない）——今回の結果に無ければ古い一言が
+    // 残り続けてしまう（exactOptionalPropertyTypes のため undefined を明示代入できない）
+    ...(arrangement.note ? { aiNote: arrangement.note } : {}),
   };
   await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
   refreshWidgetSnapshot();
