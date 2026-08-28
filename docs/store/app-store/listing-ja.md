@@ -1,7 +1,7 @@
 # App Store 掲載情報（JA）
 
 作成日: 2026-08-13
-対象ビルド: iOS 1.12.2 / build 10032（App ID `6800964382`・公開中は 1.12.0 / 10029）
+対象ビルド: iOS 1.12.3 / build 10033（App ID `6800964382`・公開中は 1.12.0 / 10029）
 反映方法: App Store Connect API（`appStoreVersionLocalizations` / `appInfoLocalizations`）
 
 Google Play 版（`../google-play/listing-ja.md`）と**同じ訴求**で書く。ただし App Store は
@@ -107,6 +107,8 @@ Google Play 版（`../google-play/listing-ja.md`）と**同じ訴求**で書く�
 材料名や料理名が長いとき、文字が重なって読めなくなるのを直しました。
 
 画面下のタブの文字が、端末によって下端で切れてしまう不具合を直しました。
+
+「写真からレシピ」の無料枠の説明を読みやすくし、使い切ったあとの選択肢（広告を見て続行・自分のAIキーで使い放題）を画面にそのまま書きました。
 
 ## URL・その他
 

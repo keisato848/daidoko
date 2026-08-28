@@ -1,7 +1,7 @@
 # App Store 掲載情報（EN）
 
 作成日: 2026-08-27
-対象ビルド: iOS 1.12.2 / build 10032（App ID `6800964382`・公開中は 1.12.0 / 10029）
+対象ビルド: iOS 1.12.3 / build 10033（App ID `6800964382`・公開中は 1.12.0 / 10029）
 反映方法: App Store Connect API（`appStoreVersionLocalizations` / `appInfoLocalizations`）
 
 **App Store に英語ロケールを新設するための原稿**（それまで ASC は `ja` のみ）。
@@ -113,6 +113,8 @@ Fixed a black preview right after choosing a cover photo. The photo itself was a
 Fixed overlapping text when an ingredient or recipe name is long.
 
 Fixed the labels on the bottom tab bar being cut off at the edge of the screen on some devices.
+
+Made the free-usage note on "Photo to recipe" easier to read, and spelled out what happens when you run out: watch an ad to continue, or use your own AI key for unlimited use. Also removed a field that only made sense in Japanese from the English recipe form.
 
 ## URL・その他
 
