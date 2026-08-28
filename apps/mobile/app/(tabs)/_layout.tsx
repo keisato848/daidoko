@@ -2,6 +2,7 @@ import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Tabs } from 'expo-router';
 import { Home, BookOpen, Plus, Refrigerator, ShoppingCart } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
@@ -9,12 +10,34 @@ import { t } from '../../src/i18n';
 /** レシピスタックのうち、タブバーを隠す画面（全画面で集中させたいもの）。 */
 const FULLSCREEN_CHILD_ROUTES = ['import-photo', 'consult'];
 
+/** タブバーの中身の高さ（アイコン＋ラベル）。下の safe-area はこれに足す。 */
+const TAB_BAR_CONTENT_HEIGHT = 58;
+
 export default function TabLayout() {
+  /**
+   * **下の safe-area を足さないとラベルが画面端で切れる。**
+   *
+   * `tabBarStyle` で `height` を指定すると、React Navigation が本来加える
+   * 下インセットぶんが上書きされて消える。結果、ホームインジケータ／
+   * ジェスチャーバーの領域までタブバーが食い込む。
+   *
+   * 日本語のラベル（ホーム・レシピ・追加・在庫・買物）は**ディセンダが無いので
+   * 見た目には気づけない**が、英語（Recipes / Pantry / Shopping の p・y・g）は
+   * はっきり切れる。Android ではジェスチャーバーの白い横棒が「追加」を貫く。
+   * 2026-08-27、App Store 用スクショを英語で撮って初めて露見した。
+   */
+  const insets = useSafeAreaInsets();
+  const tabBarStyle = {
+    ...styles.tabBar,
+    height: TAB_BAR_CONTENT_HEIGHT + insets.bottom,
+    paddingBottom: insets.bottom,
+  };
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle,
         tabBarActiveTintColor: Colors.gold,
         tabBarInactiveTintColor: Colors.muted,
         tabBarLabelStyle: styles.tabLabel,
@@ -38,7 +61,7 @@ export default function TabLayout() {
           // 親タブ側で「いま開いている子ルート」を見て切り替える（React Navigation の定石）
           tabBarStyle: FULLSCREEN_CHILD_ROUTES.includes(getFocusedRouteNameFromRoute(route) ?? '')
             ? { display: 'none' as const }
-            : styles.tabBar,
+            : tabBarStyle,
         })}
       />
       <Tabs.Screen
@@ -104,7 +127,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
     borderTopColor: Colors.border,
     borderTopWidth: 1,
-    height: 58,
     paddingTop: 4,
   },
   tabLabel: {
