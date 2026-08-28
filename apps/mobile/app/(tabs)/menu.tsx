@@ -11,7 +11,15 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { CalendarDays, ChefHat, RefreshCw, ShoppingCart, Sparkles } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
@@ -22,7 +30,9 @@ import {
   type MenuDayView,
   type MenuPlanView,
 } from '../../src/services/menu-plan.service';
+import { getRecipeList } from '../../src/services/recipe.service';
 import { decodeReason } from '../../src/utils/menuPlan';
+import { getRecipeEmoji } from '../../src/utils/recipeEmoji';
 
 /** 日数の選択肢（設計 §10.7） */
 const DAY_OPTIONS = [2, 3, 5, 7] as const;
@@ -43,10 +53,15 @@ export default function MenuScreen() {
   const [days, setDays] = useState<number>(3);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // 日カードの写真（設計 §10.7）。hydrate は heroPhotoUri を入れない —
+  // 「画面側で recipe.service から引く」というサービス層のコメントどおり、
+  // 一覧と同じ解決（表紙 ?? 最新の調理写真）をここでまとめて引く
+  const [heroByRecipe, setHeroByRecipe] = useState<Map<string, string | null>>(new Map());
 
   const load = useCallback(async () => {
-    const next = await getMenuPlan();
+    const [next, list] = await Promise.all([getMenuPlan(), getRecipeList()]);
     setView(next);
+    setHeroByRecipe(new Map(list.map((r) => [r.id, r.heroPhotoUri])));
     setLoaded(true);
   }, []);
 
@@ -136,6 +151,7 @@ export default function MenuScreen() {
             <DayCard
               key={day.day}
               day={day}
+              heroUri={heroByRecipe.get(day.recipeId) ?? null}
               busy={busy}
               onOpen={() => router.push(`/recipes/${day.recipeId}`)}
               onSwap={() => void swap(day.day)}
@@ -171,11 +187,13 @@ export default function MenuScreen() {
 
 function DayCard({
   day,
+  heroUri,
   busy,
   onOpen,
   onSwap,
 }: {
   day: MenuDayView;
+  heroUri: string | null;
   busy: boolean;
   onOpen: () => void;
   onSwap: () => void;
@@ -184,11 +202,26 @@ function DayCard({
   return (
     <View style={[styles.card, day.doneAt !== null && styles.cardDone]}>
       <Text style={styles.dayLabel}>{t('menu.day.label', { day: day.day })}</Text>
-      <Text style={styles.dayTitle}>{day.missing ? t('menu.day.missing') : day.title}</Text>
-      {day.cookTimeMin !== null ? (
-        <Text style={styles.dayMeta}>{t('menu.day.minutes', { count: day.cookTimeMin })}</Text>
-      ) : null}
-      {reason ? <Text style={styles.dayReason}>{reason}</Text> : null}
+      <View style={styles.dayBody}>
+        {/* 写真（設計 §10.7）。無いレシピは一覧（S04）と同じ絵文字の 2 段構え —
+            URL 取り込み・手入力のレシピが並んでも歯抜けにならない */}
+        {!day.missing && (
+          <View style={styles.dayImage}>
+            {heroUri ? (
+              <Image source={{ uri: heroUri }} style={styles.dayImagePhoto} resizeMode="cover" />
+            ) : (
+              <Text style={styles.dayEmoji}>{getRecipeEmoji(day.title)}</Text>
+            )}
+          </View>
+        )}
+        <View style={styles.dayText}>
+          <Text style={styles.dayTitle}>{day.missing ? t('menu.day.missing') : day.title}</Text>
+          {day.cookTimeMin !== null ? (
+            <Text style={styles.dayMeta}>{t('menu.day.minutes', { count: day.cookTimeMin })}</Text>
+          ) : null}
+          {reason ? <Text style={styles.dayReason}>{reason}</Text> : null}
+        </View>
+      </View>
       {day.doneAt !== null ? <Text style={styles.doneBadge}>{t('menu.day.done')}</Text> : null}
 
       {!day.missing ? (
@@ -258,6 +291,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardDone: { opacity: 0.5 },
+  dayBody: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dayImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    backgroundColor: Colors.bgInput,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  dayImagePhoto: { width: '100%', height: '100%' },
+  dayEmoji: { fontSize: 26 },
+  dayText: { flex: 1 },
   dayLabel: { fontSize: 12, color: Colors.gold, marginBottom: 4 },
   dayTitle: { fontSize: 15, color: Colors.paper },
   dayMeta: { fontSize: 12, color: Colors.muted, marginTop: 2 },
