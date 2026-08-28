@@ -9,7 +9,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { KeyboardAwareScroll } from './KeyboardAwareScroll';
 import { Colors, Typography } from '../constants/theme';
-import { t, tCount, tDynamic } from '../i18n';
+import { getLocale, t, tCount, tDynamic } from '../i18n';
 import { getTagsForFamily } from '../services/tag.service';
 import { recipeFormSchema, type RecipeFormData } from '../validation/recipe.schema';
 import { FormField } from './FormField';
@@ -154,12 +154,19 @@ export function RecipeForm({
             placeholder={t('recipe.form.titlePlaceholder')}
             error={tDynamic(errors.title?.message)}
           />
-          <FormField
-            label={t('recipe.form.readingLabel')}
-            value={watchedValues.titleReading}
-            onChangeText={(v) => setValue('titleReading', v)}
-            placeholder={t('recipe.form.readingPlaceholder')}
-          />
+          {/* 読みがなは**かな検索のための欄**で、日本語ロケールでしか意味を成さない。
+              英語 UI に出すと「Reading」という直訳ラベルだけが残り、フォーム全体の
+              信頼を下げる（1.12.2 のペルソナレビューで英語話者が指摘 —
+              docs/reviews/persona/1.12.2.md #9）。値は保持されるので、
+              ja に切り替えれば編集できる */}
+          {getLocale() === 'ja' && (
+            <FormField
+              label={t('recipe.form.readingLabel')}
+              value={watchedValues.titleReading}
+              onChangeText={(v) => setValue('titleReading', v)}
+              placeholder={t('recipe.form.readingPlaceholder')}
+            />
+          )}
           <FormField
             label={t('recipe.form.descriptionLabel')}
             value={watchedValues.description}

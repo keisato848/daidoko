@@ -1,0 +1,1 @@
+Made the free-usage note on "Photo to recipe" easier to read, and spelled out what happens when you run out: watch an ad to continue, or use your own AI key for unlimited use. Also removed a field that only made sense in Japanese from the English recipe form.
