@@ -310,9 +310,10 @@ const recipe: typeof ja = {
     offlineNotice: 'Connect to the internet to create recipes from photos',
 
     quotaRemaining: {
-      one: '{{count}} free creation left · go unlimited',
-      other: '{{count}} free creations left · go unlimited',
+      one: '{{count}} free creation left',
+      other: '{{count}} free creations left',
     },
+    quotaHint: 'Watch an ad for more · unlimited with your own AI key',
     unlimitedByok: 'Your own AI key — unlimited',
     unlimitedPremium: 'Premium — unlimited',
 
