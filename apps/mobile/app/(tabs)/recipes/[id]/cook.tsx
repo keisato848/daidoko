@@ -16,6 +16,7 @@ import { t, tCount } from '../../../../src/i18n';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { dialog } from '../../../../src/services/dialog.service';
 import { getRecipeDetail } from '../../../../src/services/recipe.service';
+import { useCookingSessionStore } from '../../../../src/stores/cooking-session.store';
 import { useTimerStore } from '../../../../src/stores/timer.store';
 import { useUnitSystemStore } from '../../../../src/stores/unitSystem.store';
 import { scaleAmount, servingRatio } from '../../../../src/utils/shoppingScale';
@@ -77,7 +78,26 @@ export default function CookingModeScreen() {
     setServings(detail.servings);
     setSteps(detail.steps);
     setIngredients(detail.ingredients);
+
+    // 調理セッションを開始（同じレシピの再開なら保存済みの手順位置が返る —
+    // ✕ で閉じても・アプリを再起動しても続きから。docs/画面設計.md S06 349行）
+    const store = useCookingSessionStore.getState();
+    store.begin({
+      recipeId: id,
+      recipeTitle: detail.title,
+      totalSteps: detail.steps.length,
+    });
+    const resumed = useCookingSessionStore.getState().session;
+    if (resumed && resumed.stepIndex > 0 && resumed.stepIndex < detail.steps.length) {
+      setCurrentStep(resumed.stepIndex);
+    }
   }, [id]);
+
+  /** 手順移動はここを通す — セッションに位置を刻み、復帰導線が追従する */
+  const goToStep = useCallback((index: number) => {
+    setCurrentStep(index);
+    useCookingSessionStore.getState().setStep(index);
+  }, []);
 
   useEffect(() => {
     void loadData();
@@ -139,11 +159,14 @@ export default function CookingModeScreen() {
     const stepId = useTimerStore.getState().context?.stepId;
     if (!stepId) return;
     const index = steps.findIndex((s) => s.id === stepId);
-    if (index >= 0) setCurrentStep(index);
+    if (index >= 0) goToStep(index);
   };
 
   const handleComplete = () => {
     useTimerStore.getState().clear();
+    // 完成 = セッション終了。復帰カード・pill も消える。
+    // ✕（router.back）では**終了しない** — それが「あとで続きから」の意味
+    useCookingSessionStore.getState().end();
     router.push(`/(tabs)/recipes/${id}/log`);
   };
 
@@ -222,7 +245,7 @@ export default function CookingModeScreen() {
       <View style={styles.navBar}>
         <Pressable
           style={[styles.navPrev, currentStep === 0 && styles.navDisabled]}
-          onPress={() => setCurrentStep(Math.max(0, currentStep - 1))}
+          onPress={() => goToStep(Math.max(0, currentStep - 1))}
           disabled={currentStep === 0}
         >
           <Text style={[styles.navPrevText, currentStep === 0 && styles.navDisabledText]}>
@@ -235,7 +258,7 @@ export default function CookingModeScreen() {
             <Text style={styles.navFinishText}>{t('recipe.cook.finish')}</Text>
           </Pressable>
         ) : (
-          <Pressable style={styles.navNext} onPress={() => setCurrentStep(currentStep + 1)}>
+          <Pressable style={styles.navNext} onPress={() => goToStep(currentStep + 1)}>
             <Text style={styles.navNextText}>{t('recipe.cook.next')}</Text>
           </Pressable>
         )}
@@ -411,7 +434,9 @@ const styles = StyleSheet.create({
   tapHint: {
     fontSize: 12, // xs: ヒントテキスト
     fontWeight: '400',
-    color: Colors.muted,
+    // muted だと背景と同化して気づかれない（ペルソナレビュー 1.12.2 #5 —
+    // 老眼では「見過ごし確実」）。ここに気づけないと材料を見る手段が無い
+    color: Colors.paperDim,
     marginTop: 20,
   },
   navBar: {

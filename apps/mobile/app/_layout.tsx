@@ -25,6 +25,7 @@ import {
   consumeLowStockLaunchTap,
 } from '../src/services/notification.service';
 import { initSync, runSync } from '../src/services/sync-runner.service';
+import { loadCookingSession } from '../src/stores/cooking-session.store';
 import { loadUnitSystem } from '../src/stores/unitSystem.store';
 import { decideLaunchDestination } from '../src/utils/launchDestination';
 
@@ -52,6 +53,9 @@ export default function RootLayout() {
     if (isReady) {
       // 単位系は保存値 → 無ければ端末の地域。表示のたびに読むのでストアが持つ
       loadUnitSystem(getLocales()[0]?.regionCode).catch(() => undefined);
+      // 調理セッションの復元（12 時間以内のものだけ）。再起動しても
+      // Now Cooking バーとホームの復帰カードが続きを指す
+      loadCookingSession().catch(() => undefined);
       checkAndNotifyLowStock().catch(() => undefined);
       maybeCreateAutoSnapshot().catch(() => undefined);
       initAppOpenAds().catch(() => undefined);

@@ -38,6 +38,7 @@ import { getInStockNormalizedNames } from '../../src/services/pantry.service';
 import { getWantToCookRecipes } from '../../src/services/recipe.service';
 import { getTimeline } from '../../src/services/timeline.service';
 import type { RecipeListItem, TimelineEntry } from '../../src/services/types';
+import { useCookingSessionStore } from '../../src/stores/cooking-session.store';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 import { computeMonthlyStats } from '../../src/utils/timelineStats';
 
@@ -84,6 +85,7 @@ function getFilterDate(filter: FilterTab): Date | null {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const cookingSession = useCookingSessionStore((state) => state.session);
   const [allEntries, setAllEntries] = useState<TimelineEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>('all');
@@ -339,6 +341,33 @@ export default function HomeScreen() {
           ListHeaderComponent={
             !selectMode ? (
               <View>
+                {/* 調理中の復帰カード。✕ で閉じてもここから続きへ戻れる
+                    （Now Cooking バーと同じセッションを見る二重の入口 —
+                    ホームに戻ってきた人が最初に目にする場所なので独立に置く） */}
+                {cookingSession && (
+                  <PressableScale
+                    style={styles.resumeCard}
+                    scaleTo={0.98}
+                    onPress={() => router.push(`/(tabs)/recipes/${cookingSession.recipeId}/cook`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('recipe.cook.resumeLabel')}: ${cookingSession.recipeTitle}`}
+                  >
+                    <ChefHat size={18} color={Colors.bg} />
+                    <View style={styles.resumeTextBlock}>
+                      <Text style={styles.resumeTitle} numberOfLines={1}>
+                        {cookingSession.recipeTitle}
+                      </Text>
+                      <Text style={styles.resumeStep}>
+                        {t('recipe.cook.resumeStep', {
+                          step: cookingSession.stepIndex + 1,
+                          total: cookingSession.totalSteps,
+                        })}
+                      </Text>
+                    </View>
+                    <Text style={styles.resumeAction}>{t('recipe.cook.resumeAction')} →</Text>
+                  </PressableScale>
+                )}
+
                 {/* 主役への直行。FAB（＋ → 追加方法選択）は残すが、写真からレシピだけは
                     1タップで届かせる（`docs/お店の味を再現設計.md` §4.3 問題2） */}
                 <PressableScale
@@ -568,6 +597,20 @@ const styles = StyleSheet.create({
     color: Colors.paperDim,
     letterSpacing: 2,
   },
+  resumeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.gold,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: 14,
+  },
+  resumeTextBlock: { flex: 1 },
+  resumeTitle: { color: Colors.bg, fontSize: 14, fontWeight: '700' },
+  resumeStep: { color: Colors.bg, fontSize: 11, opacity: 0.75 },
+  resumeAction: { color: Colors.bg, fontSize: 12, fontWeight: '600', flexShrink: 0 },
   captureButton: {
     flexDirection: 'row',
     alignItems: 'center',

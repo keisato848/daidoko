@@ -399,6 +399,11 @@ const recipe = {
     prev: '← 前へ',
     finish: '✓ 完成！記録する',
     next: '次へ →',
+    // 復帰導線（Now Cooking バーとホームのカード）。「調理中のまま閉じても
+    // 続きから戻れる」ことが一目で伝わる言い方にする
+    resumeLabel: '調理中',
+    resumeStep: '手順 {{step}} / {{total}}',
+    resumeAction: 'もどる',
   },
 
   /** S13 版履歴。 */
