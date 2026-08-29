@@ -92,6 +92,26 @@
           "iosAppId": "ca-app-pub-2633806931583277~1080328085",
           "delayAppMeasurementInit": true
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "ShoppingList",
+              "label": "買い物リスト",
+              "description": "買い物リストの未購入品を表示します",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "320dp",
+              "maxResizeHeight": "180dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
       ]
     ],
     "experiments": {

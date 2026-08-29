@@ -15,7 +15,15 @@ pod --version               # CocoaPods 1.16.2 以上か
 node -v && pnpm -v          # Node 20+ / pnpm
 ```
 
-結果（バージョン番号そのまま）を本ファイル末尾の「## 結果」に書く。
+結果（バージョン番号そのまま）を本ファイル末尾の「## 合図（2026-08-29・Windows 側から）
+
+**依存追加を push した。フェーズ 2 を開始してよい。**
+`@bacons/apple-targets@5.0.0` は apps/mobile/package.json に入っている
+（app.json への iOS plugin 配線はまだ — フェーズ 2 は prebuild が通るかの検証が目的なので、
+targets/ の雛形が必要なら `npx create-target widget` 相当の最小構成で試してよい。
+ただしコミットはスパイク結果の追記だけ）。
+
+## 結果」に書く。
 
 ## フェーズ 2: prebuild スパイク（**Windows 側から「依存追加を push した」と連絡が来てから**）
 

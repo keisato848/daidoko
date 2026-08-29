@@ -12,7 +12,17 @@
  * ウィジェットが未導入のあいだ、この書き出しは**誰も読まないファイルを作るだけ**で
  * 害が無い（`documentDirectory` はクラウドバックアップの include 対象外なので
  * 除外作業も要らない — 設計 §1 の検証反映）。
+ *
+ * **Android は書いた直後に画面上のウィジェットも押し更新する**（設計 §1:
+ * 「Android は documentDirectory/widget/snapshot.json＋requestWidgetUpdate()」）。
+ * `react-native-android-widget` は R5 で依存追加したので、書く関数からここで
+ * 初めて呼べる。無ければ `updatePeriodMillis` の下限（30分）まで古い表示のまま
+ * になってしまう。ホーム画面に未追加でも `requestWidgetUpdate` は無害（対象 0 件で
+ * 何もしない）。
  */
+import { Platform } from 'react-native';
+import React from 'react';
+
 import { buildWidgetSnapshot, type WidgetSnapshot } from '../utils/widgetSnapshot';
 import { isNativePlatform } from '../db/client';
 
@@ -56,6 +66,31 @@ async function write(snapshot: WidgetSnapshot): Promise<void> {
   const info = await FileSystem.getInfoAsync(dir);
   if (!info.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   await FileSystem.writeAsStringAsync(`${dir}/${SNAPSHOT_FILE}`, JSON.stringify(snapshot));
+  await pushToAndroidWidget(snapshot);
+}
+
+/**
+ * 書いた直後に、ホーム画面に追加済みのウィジェットへ即時反映する（Android のみ）。
+ * 失敗しても書き出し自体は成功しているので、ここは黙って諦める（Headless の
+ * `WIDGET_UPDATE`/`updatePeriodMillis` がフォールバックとして残る）。
+ */
+async function pushToAndroidWidget(snapshot: WidgetSnapshot): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    const { requestWidgetUpdate } = await import('react-native-android-widget');
+    const { ShoppingListWidget } = await import('../widgets/ShoppingListWidget');
+    const { widgetSizeFromWidth } = await import('../widgets/shoppingWidgetContent');
+    await requestWidgetUpdate({
+      widgetName: 'ShoppingList',
+      renderWidget: (info) =>
+        React.createElement(ShoppingListWidget, {
+          snapshot,
+          size: widgetSizeFromWidth(info.width),
+        }),
+    });
+  } catch {
+    // ホーム画面に未追加・ライブラリ未初期化でも本体機能は継続させる
+  }
 }
 
 /**

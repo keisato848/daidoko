@@ -55,6 +55,10 @@ module.exports = [
     ignores: [
       // 辞書そのもの
       'apps/mobile/src/i18n/**',
+      // ウィジェット（W1）。Android の Headless プロセスから描かれ、アプリの
+      // i18n（src/i18n）を読めないため、snapshot.locale で描き分ける専用の
+      // 小さな辞書を持つ（docs/ウィジェット設計.md 実装タスク指示）
+      'apps/mobile/src/widgets/**',
       // 日本語そのものを処理するロジック・サンプルデータ（設計 §7・P5）
       'apps/mobile/src/db/seed.ts',
       'apps/mobile/src/e2e/**',
