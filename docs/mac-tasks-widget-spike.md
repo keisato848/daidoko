@@ -48,4 +48,64 @@ targets/ の雛形が必要なら `npx create-target widget` 相当の最小構�
 
 ## 結果
 
-（ここに追記）
+### フェーズ 1: 環境チェック（2026-08-29 実測）
+
+**要件はすべて満たしています。** ローカル反復は可能です。
+
+| 項目 | 要件 | 実測 | 判定 |
+| --- | --- | --- | --- |
+| macOS | 15 (Sequoia) 以上 | 15.7.9 (24G830) | ✅ |
+| Xcode | 16 以上 | 16.4 (16F6) | ✅ |
+| CocoaPods | 1.16.2 以上 | 1.17.0 | ✅ |
+| Node | 20+ | v22.23.2 | ✅ |
+| pnpm | — | 9.0.0 | ✅ |
+
+出力そのまま:
+
+```
+$ sw_vers
+ProductName:		macOS
+ProductVersion:		15.7.9
+BuildVersion:		24G830
+
+$ xcodebuild -version
+Xcode 16.4
+Build version 16F6
+
+$ pod --version
+1.17.0
+
+$ node -v && pnpm -v
+v22.23.2
+9.0.0
+```
+
+#### ⚠️ この Mac で作業するときの前提（フェーズ 2 で必要）
+
+**1. PATH の先頭にある `node` は壊れています。** 素の状態では node@14 が先に来て、
+icu4c が 78 に上がったため `Library not loaded: libicui18n.70.dylib` で起動しません。
+`pnpm` も素の PATH には居ません。**コマンドの前に必ずこれを通すこと**:
+
+```bash
+export PATH="/usr/local/opt/node@22/bin:$PATH"
+```
+
+`brew link` での切り替えはしていません（環境全体が変わるため）。上の実測値はこの
+export を通した状態のものです。
+
+**2. リポジトリは iCloud 同期の外に置くこと。** `~/Documents` は「デスクトップと書類」の
+iCloud 同期対象で、`~/Documents/GitHub/daidoko` では `node_modules` と `ios/` に
+競合コピー（`app 2.xcodeproj` / `Pods 2` / `drizzle-orm 2` など）ができ、
+`pod install` が 3 回連続で別々の理由（`.xcodeproj` が 2 つ / `Errno::ECANCELED` /
+直接読むと正常な plist に対する `invalid byte sequence in UTF-8`）で失敗しました。
+**`~/Projects/daidoko-shots` に clone し直して解決**しています（`pnpm install` が
+7分36秒 → 15.2秒）。フェーズ 2 もこの clone で実施します。
+
+**3. iOS ビルドの提出は EAS クラウド一択です**（`docs/リリース手順.md` §7-4 参照）。
+この Mac は Xcode 16.4 / iOS 18.5 SDK 止まりで、Apple の要件（Xcode 26 + iOS 26 SDK）を
+満たせません。**Xcode 26 は arm64 単独ビルドしか存在せず**、Intel 機には入りません
+（`lipo -archs` で確認・`bad CPU type in executable`）。
+**スパイクの目的（prebuild が通るか・ターゲットが生えるか）はローカルで確認できますが、
+提出用バイナリはこの Mac では作れません。**
+
+フェーズ 2 は「依存追加を push した」の連絡待ちです。
