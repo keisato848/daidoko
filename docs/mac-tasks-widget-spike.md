@@ -109,3 +109,78 @@ iCloud 同期対象で、`~/Documents/GitHub/daidoko` では `node_modules` と 
 提出用バイナリはこの Mac では作れません。**
 
 フェーズ 2 は「依存追加を push した」の連絡待ちです。
+
+### フェーズ 2: prebuild スパイク（2026-08-29 実測）
+
+**結論: 通ります。SDK 54 の prebuild は apple-targets 5.0.0 を入れても素直に成功しました。**
+
+```
+$ pnpm install                      # リポジトリのルートで
+Done in 3.6s                        # 54 パッケージ追加・エラーなし
+
+$ cd apps/mobile && npx expo prebuild -p ios --clean
+- Clearing ios
+✔ Cleared ios code
+- Creating native directory (./ios)
+✔ Created native directory
+- Updating package.json
+✔ Updated package.json | no changes
+- Running prebuild
+✔ Finished prebuild
+- Installing CocoaPods...
+✔ Installed CocoaPods
+                                    # exit 0・警告なし
+```
+
+`npx pod-install` は不要でした（prebuild が CocoaPods まで面倒を見ています）。
+
+#### 本題だった SDK 55 世代の依存は、衝突しませんでした
+
+apple-targets 5.0.0 は `@expo/prebuild-config ~55.0.6` を要求し、SDK 54 の
+`@expo/cli` は `^54.0.8` を要求します。`.npmrc` が `node-linker=hoisted` なので
+「フラット配置では 1 バージョンしか置けず衝突するのでは」と疑いましたが、
+**pnpm は競合するものだけネストして共存させていました**:
+
+```
+node_modules/@expo/prebuild-config                          55.0.22  ← apple-targets 用
+node_modules/@expo/cli/node_modules/@expo/prebuild-config   54.0.8   ← SDK 54 用（CLI はこちらを解決）
+```
+
+`require.resolve('@expo/prebuild-config', {paths:['./node_modules/@expo/cli']})` で
+**54.0.8 に解決されることを実測**しました。lockfile も両方を別エントリで持っています
+（`@expo/prebuild-config@54.0.8` と `@expo/prebuild-config@55.0.22`）。
+**overrides も patch も要りません。**
+
+#### ⚠️ ただし、iOS ウィジェットのターゲットはまだ生えていません
+
+これは想定内のはずですが、明示しておきます。**`ec089ad` は Android 側だけを配線しており、
+`@bacons/apple-targets` は依存に入っただけで app.json の `plugins` に載っていません。**
+
+```
+app.json の plugins（10 件）:
+  expo-router / expo-build-properties / withKotlinMetadataSkip /
+  withDaidokoBackupRules / withDaidokoShortcuts / expo-image-picker /
+  expo-camera / withDaidokoOcr / react-native-google-mobile-ads /
+  react-native-android-widget          ← Android のみ
+```
+
+`apps/mobile/targets/`（apple-targets の規約ディレクトリ）も存在せず、
+生成された `ios/app.xcodeproj` にウィジェット関連のターゲットはありません。
+
+**つまり今回の「通った」は、apple-targets のコードパスを実際に走らせた結果ではありません。**
+55 系の prebuild-config が読み込まれる経路をまだ通っていないので、
+**プラグイン配線と `targets/` を足したあとに、もう一度このスパイクを回す必要があります。**
+そのときに初めて「SDK 54 で 55 世代の prebuild-config が動くか」が試されます。
+
+#### 環境（フェーズ 1 の前提を再掲）
+
+- `export PATH="/usr/local/opt/node@22/bin:$PATH"` を通した状態で実行
+- 作業ディレクトリは `~/Projects/daidoko-shots`（iCloud 同期の外）
+- `pnpm install` は**リポジトリのルートで**実行（罠を回避）
+
+#### やっていないこと
+
+- app.json への apple-targets の配線（実装コミットになるため）
+- `targets/` の作成
+- Xcode でのビルド（ターゲットが無いので確認対象が存在しない）
+- overrides / patch-package の追加
