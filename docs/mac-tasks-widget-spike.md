@@ -40,6 +40,43 @@ targets/ の雛形が必要なら `npx create-target widget` 相当の最小構�
 4. 失敗した場合: **エラー全文**を本ファイルに貼る（対処は Windows 側で検討する。
    無理に直さない — バージョン固定やパッチは相談してから）
 
+## フェーズ 3: iOS W1 の実装（フェーズ 2 完了済みなので開始してよい・2026-08-29 解禁）
+
+> フェーズ 2 の指摘（「配線が無いので apple-targets のコードパスは未走行」）はそのとおり。
+> **配線と targets/ を足すのはフェーズ 3 の仕事**として、実装ごと任せる。
+> 設計は `docs/ウィジェット設計.md`（§1 スナップショット契約・§2 出すもの・§4 リスク）。
+
+### 担当範囲（この 4 点だけ。Windows 側はここに触らない）
+
+1. **app.json** の `plugins` に `@bacons/apple-targets` を配線（`appleTeamId: "VY7SNHS2BY"`）。
+   **それ以外の app.json（version・既存 plugin）は変えない**
+2. **apps/mobile/targets/**（新設）: ShoppingList ウィジェット（SwiftUI・小/中）。
+   - App Group: `group.com.daidoko.app`
+   - データ: App Group の UserDefaults キー **`widget_snapshot`** に JSON **文字列**。
+     契約は `apps/mobile/src/utils/widgetSnapshot.ts` の `WidgetSnapshot`（version 1）。
+     **Swift 側でも version > 1 は「アプリを開くと表示されます」の案内表示に落とす**
+   - 表示規約は Android 版（`src/widgets/ShoppingListWidget.tsx` / `shoppingWidgetContent.ts`）と同じ:
+     小 = 未購入 N 品＋上位 3 品名 / 中 = 6 行＋「ほか n 品」・**「HH:mm 時点」を必ず表示**・
+     locale (ja/en) で文言切替・`widgetURL` = `daidoko://shopping`
+3. **apps/mobile/src/services/widget-snapshot.service.ts** に **iOS 書き出し分岐**を追加:
+   `@bacons/apple-targets` の ExtensionStorage（App Group UserDefaults）へ同じ JSON を書き、
+   `reloadWidget()`（相当）を呼ぶ。Android 分岐・既存の write() は壊さない。
+   **Platform ガード＋try/catch で、ウィジェット不在でも本体が無事**なこと（Android 版と同じ流儀）
+4. テスト: 追加した純関数があれば jest。apps/mobile の typecheck / lint / jest を緑に
+
+### 検証
+
+prebuild -p ios --clean（**今度こそ apple-targets のコードパスが走る** — これがスパイクの本題）
+→ シミュレータでビルド → ホーム画面にウィジェット追加 → 買い物リストに品を入れて
+表示・タップ遷移を確認。スクショを撮って結果をこのファイルに追記。
+
+### コミット規約（フェーズ 1・2 と違い、実装コミットを解禁）
+
+- `release/1.13.0` に直接 commit・push してよい（Conventional Commits・
+  実装は feat(widget): 〜 (W1-iOS・#238)）
+- **pnpm-lock.yaml と package.json は変えない**（依存は追加済み。増やしたくなったら相談）
+- 証明書・プロビジョニングは触らない（EAS 検証は Windows 側と調整して後で）
+
 ## やらないこと
 
 - main / release ブランチへの実装コミット（スパイク結果の追記だけ）
@@ -52,13 +89,13 @@ targets/ の雛形が必要なら `npx create-target widget` 相当の最小構�
 
 **要件はすべて満たしています。** ローカル反復は可能です。
 
-| 項目 | 要件 | 実測 | 判定 |
-| --- | --- | --- | --- |
-| macOS | 15 (Sequoia) 以上 | 15.7.9 (24G830) | ✅ |
-| Xcode | 16 以上 | 16.4 (16F6) | ✅ |
-| CocoaPods | 1.16.2 以上 | 1.17.0 | ✅ |
-| Node | 20+ | v22.23.2 | ✅ |
-| pnpm | — | 9.0.0 | ✅ |
+| 項目      | 要件              | 実測            | 判定 |
+| --------- | ----------------- | --------------- | ---- |
+| macOS     | 15 (Sequoia) 以上 | 15.7.9 (24G830) | ✅   |
+| Xcode     | 16 以上           | 16.4 (16F6)     | ✅   |
+| CocoaPods | 1.16.2 以上       | 1.17.0          | ✅   |
+| Node      | 20+               | v22.23.2        | ✅   |
+| pnpm      | —                 | 9.0.0           | ✅   |
 
 出力そのまま:
 

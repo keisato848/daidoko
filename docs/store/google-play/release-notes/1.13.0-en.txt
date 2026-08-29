@@ -1,0 +1,19 @@
+# Operator note (delete this line through the next blank line before submitting.
+# update-play-release-notes.mjs sends the file body as-is, so leaving this in
+# would show it to users). 1.12.1 (5 bug fixes: reading/kana search reset on
+# edit, restaurant name lost from "get closer to the taste", restaurant name
+# not saved on hand-typed recipes, black cover-photo preview, overlapping long
+# names) was left unsubmitted. It was never shipped on its own and is folded
+# into 1.13.0 here. The old draft stays at release-notes/1.12.1-en.txt.
+
+Meal plan: build a 2-7 day plan from your pantry, with a reason per day. Swap out anything.
+
+New opt-in auto-plan: today's plan is ready each morning with a notification, and can auto-add missing ingredients. Off by default.
+
+Recipes with no photo can get an AI image now.
+
+Added a shopping list widget (Android).
+
+Free AI allowance raised from 1 to 5 a month.
+
+Also fixed: kana search reset on edit, restaurant name lost in two flows, black cover-photo preview, overlapping long names.
