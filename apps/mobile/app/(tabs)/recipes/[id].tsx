@@ -397,6 +397,11 @@ export default function RecipeDetailScreen() {
         ) : (
           <Text style={styles.heroEmoji}>{getRecipeEmoji(recipe.title)}</Text>
         )}
+        {recipe.isCoverAiGenerated && (
+          <View style={styles.heroAiBadge}>
+            <Text style={styles.heroAiBadgeText}>{t('coverImage.badge')}</Text>
+          </View>
+        )}
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={20} color={Colors.paper} />
           <Text style={styles.backText}>{t('common.back')}</Text>
@@ -512,6 +517,9 @@ export default function RecipeDetailScreen() {
 
       <View style={styles.meta}>
         <Text style={styles.title}>{recipe.title}</Text>
+        {recipe.isCoverAiGenerated && (
+          <Text style={styles.aiDetailNote}>{t('coverImage.detailNote')}</Text>
+        )}
         {/* お店の名前（v12）。編集画面で後から足せるので、足した結果がここに出る */}
         {recipe.placeName ? (
           <View style={styles.placeRow}>
@@ -777,6 +785,18 @@ const styles = StyleSheet.create({
   },
   heroEmoji: { fontSize: 56 },
   heroPhoto: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  heroAiBadge: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(10, 8, 5, 0.75)',
+    borderWidth: 1,
+    borderColor: Colors.gold,
+  },
+  heroAiBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.gold, letterSpacing: 0.5 },
   // ヘッダーのボタンは表紙写真の上に重なる。**写真が明るいと見えなくなる**ため
   // （実機で、明るいガレットの写真でメニュー ⋮ が事実上不可視になった）、
   // 半透明の暗い下地を敷く。編集・お店の味に近づける・版履歴はメニューの中にしか
@@ -862,6 +882,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     letterSpacing: 0.5,
   },
+  aiDetailNote: { fontSize: 11, color: Colors.muted, marginBottom: 6 },
   placeRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -95,6 +95,7 @@ export default function AiKeyScreen() {
 
         <Text style={styles.lead}>{t('byok.lead')}</Text>
         <Text style={styles.note}>{t('byok.billingNote')}</Text>
+        <Text style={styles.note}>{t('byok.imageBillingNote')}</Text>
 
         {hasKey && <Text style={styles.statusOn}>● {t('settings.byok.configured')}</Text>}
 

@@ -85,6 +85,17 @@ export function notifyGlobalUsage(
   void sendAlert(subject, text);
 }
 
+/**
+ * 汎用の運用者通知（fire-and-forget）。`notifyGlobalUsage` と同じ 2 経路
+ * （GAS webhook 優先・無ければ Resend）を、利用上限の通知以外にも使い回すための
+ * 薄い公開口。アプリ内報告（`routes/report.ts`）が使う——専用の転送経路を
+ * 新設しない、という設計 §6 の「過剰に作らない」方針どおり。
+ */
+export function sendOperatorAlert(subject: string, text: string): void {
+  if (!isConfigured()) return;
+  void sendAlert(subject, text);
+}
+
 async function sendAlert(subject: string, text: string): Promise<void> {
   try {
     const webhookUrl = process.env['USAGE_ALERT_WEBHOOK_URL']?.trim();

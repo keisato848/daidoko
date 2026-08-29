@@ -15,6 +15,7 @@ import {
   deleteMockRecipe,
   setMockRecipePinned,
 } from '../db/mock';
+import { isAiGeneratedPhoto } from '../utils/aiGeneratedPhoto';
 import { generateId } from '../utils/id';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
 import { getAliasMap } from './name-alias.service';
@@ -117,6 +118,7 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       createdAt: recipe.createdAt,
       cookCount: ratingRows.length,
       heroPhotoUri,
+      isCoverAiGenerated: isAiGeneratedPhoto(recipe.coverPhotoPath),
       pinnedAt: recipe.pinnedAt,
     });
   }
@@ -240,6 +242,9 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
     steps: stepsList,
     heroPhotoUri,
     coverPhotoPath: resolvePhotoUri(r.coverPhotoPath),
+    // 判定は resolve 前の生パス（相対パス）で行う — ファイル名の接頭辞さえ
+    // 見られればよく、resolve 後でも basename は同じなのでどちらでも結果は同じ
+    isCoverAiGenerated: isAiGeneratedPhoto(r.coverPhotoPath),
     pinnedAt: r.pinnedAt,
     placeName: r.placeName,
   };

@@ -318,6 +318,17 @@ export default function ImportPhotoScreen() {
           title={t('recipe.photo.formTitle')}
           submitLabel={t('common.save')}
         />
+        {/* AI 生成コンテンツの報告導線（docs/レシピ表紙AI生成設計.md §6）。
+            RecipeForm 自身のヘッダーの邪魔をしないよう画面右下に小さく置く */}
+        <Pressable
+          style={styles.reportFloating}
+          onPress={() =>
+            router.push({ pathname: '/recipes/report', params: { source: 'photo-recipe' } })
+          }
+          hitSlop={8}
+        >
+          <Text style={styles.reportFloatingText}>{t('coverImage.report')}</Text>
+        </Pressable>
         <Toast
           message={toastMessage ?? ''}
           visible={toastMessage != null}
@@ -505,6 +516,16 @@ export default function ImportPhotoScreen() {
 }
 
 const styles = StyleSheet.create({
+  reportFloating: {
+    position: 'absolute',
+    right: 12,
+    bottom: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(10, 8, 5, 0.75)',
+  },
+  reportFloatingText: { fontSize: 11, color: Colors.muted, textDecorationLine: 'underline' },
   placeToggle: {
     flexDirection: 'row',
     gap: 8,

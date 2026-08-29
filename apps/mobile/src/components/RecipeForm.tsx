@@ -240,6 +240,11 @@ export function RecipeForm({
             variant="cover"
             value={watchedValues.coverPhotoPath || undefined}
             onChange={(path) => setValue('coverPhotoPath', path)}
+            title={watchedValues.title}
+            ingredientNames={(watchedValues.ingredients ?? [])
+              .map((ing) => ing?.name?.trim())
+              .filter((name): name is string => Boolean(name))}
+            tags={watchedValues.tags ?? []}
           />
         </View>
 

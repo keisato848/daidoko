@@ -43,9 +43,19 @@ describe('buildSharePayload', () => {
     steps: [{ id: 's1', body: '切る', timerSec: null }] as RecipeDetail['steps'],
     heroPhotoUri: null,
     coverPhotoPath: null,
+    isCoverAiGenerated: false,
     pinnedAt: null,
     placeName: null,
   };
+
+  it('coverIsAiGenerated は省略される（表紙が AI 生成でないとき）', () => {
+    expect(buildSharePayload(recipe, 'ja').coverIsAiGenerated).toBeUndefined();
+  });
+
+  it('coverIsAiGenerated: true が乗る（表紙が AI 生成イメージのとき）', () => {
+    const payload = buildSharePayload({ ...recipe, isCoverAiGenerated: true }, 'ja');
+    expect(payload.coverIsAiGenerated).toBe(true);
+  });
 
   it('attested: true が必ず載る（確認ダイアログ通過後にのみ呼ばれる前提）', () => {
     expect(buildSharePayload(recipe, 'ja').attested).toBe(true);

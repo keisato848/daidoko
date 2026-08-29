@@ -12,6 +12,7 @@ import { logger } from 'hono/logger';
 import gardenRouter from './routes/garden.js';
 import importRouter from './routes/import.js';
 import inferRouter from './routes/infer.js';
+import reportRouter from './routes/report.js';
 import resolveRouter from './routes/resolve.js';
 import syncRouter from './routes/sync.js';
 import { bookPageRouter, shareApiRouter, sharePageRouter } from './routes/share.js';
@@ -46,6 +47,8 @@ app.route('/api/v1/sync', syncRouter);
 app.route('/api/v1/share', shareApiRouter);
 app.route('/r', sharePageRouter);
 app.route('/b', bookPageRouter);
+// アプリ内報告（docs/レシピ表紙AI生成設計.md §6）
+app.route('/api/v1/report', reportRouter);
 
 // ── App Links / Universal Links（#198） ───────────────────────────────────────
 // 共有リンク（/r/:slug・/b/:slug）をインストール済みのアプリで開くための検証ファイル。

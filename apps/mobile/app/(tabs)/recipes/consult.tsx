@@ -271,6 +271,18 @@ export default function ConsultScreen() {
         )}
 
         <Text style={styles.disclaimer}>{t('recipeImport.consult.disclaimer')}</Text>
+        {draft && (
+          // AI 生成コンテンツの報告導線（docs/レシピ表紙AI生成設計.md §6 —
+          // Play ポリシー「アプリを出ずに報告できること」を満たす）
+          <Pressable
+            onPress={() =>
+              router.push({ pathname: '/recipes/report', params: { source: 'consult' } })
+            }
+            hitSlop={8}
+          >
+            <Text style={styles.reportLink}>{t('coverImage.report')}</Text>
+          </Pressable>
+        )}
       </ScrollView>
 
       <View style={styles.pantryRow}>
@@ -409,6 +421,12 @@ const styles = StyleSheet.create({
   draftTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
   draftAction: { fontSize: 14, color: Colors.gold, marginTop: 4 },
   disclaimer: { fontSize: 12, lineHeight: 18, color: Colors.muted, marginTop: 8 },
+  reportLink: {
+    fontSize: 12,
+    color: Colors.muted,
+    textDecorationLine: 'underline',
+    marginTop: 6,
+  },
   pantryRow: {
     flexDirection: 'row',
     alignItems: 'center',

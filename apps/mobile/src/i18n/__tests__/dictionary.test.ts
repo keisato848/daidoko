@@ -76,6 +76,7 @@ describe('en 辞書に日本語が残っていない', () => {
    */
   const INTENTIONALLY_IDENTICAL = new Set([
     'common.ok', // 「OK」は日本語でもそのまま使う
+    'coverImage.badge', // 「AI」バッジは略語そのものなので日英で同じ表記でよい
   ]);
 
   it('en が ja の丸写しになっていない（訳し忘れの検出）', () => {

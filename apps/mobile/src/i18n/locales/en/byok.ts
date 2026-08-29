@@ -6,6 +6,8 @@ const byok: typeof ja = {
   lead: 'Add a key and photo recipes become unlimited — requests run directly with your key, without going through our server.',
   billingNote:
     'The key is stored encrypted on this device and is never sent anywhere but Google. Usage is billed to your own Google account.',
+  imageBillingNote:
+    '"Create an image with AI" uses an image model, which requires a key with billing enabled (text-only recipe features still work with a free-tier key).',
 
   inputPlaceholderNew: 'Paste a key starting with AIza…',
   inputPlaceholderReplace: 'Paste a new key to replace the saved one',

@@ -34,6 +34,11 @@ export const sharedRecipes = sqliteTable('shared_recipes', {
   tagsJson: text('tags_json').notNull(),
   photo: blob('photo', { mode: 'buffer' }),
   photoMime: text('photo_mime'),
+  /**
+   * 表紙が AI 生成イメージか（docs/レシピ表紙AI生成設計.md §4）。0/1 の INTEGER
+   * （SQLite に BOOLEAN 型は無い）。既存行は列追加時に NULL → falsy 扱い。
+   */
+  coverIsAiGenerated: integer('cover_is_ai_generated'),
   createdAt: text('created_at').notNull(),
   revokedAt: text('revoked_at'),
 });
@@ -69,6 +74,8 @@ export const sharedBookRecipes = sqliteTable('shared_book_recipes', {
   tagsJson: text('tags_json').notNull(),
   photo: blob('photo', { mode: 'buffer' }),
   photoMime: text('photo_mime'),
+  /** 表紙が AI 生成イメージか（設計 §4）。レシピ単品と同じく 0/1 の INTEGER。 */
+  coverIsAiGenerated: integer('cover_is_ai_generated'),
 });
 
 export type SharedBookRow = typeof sharedBooks.$inferSelect;
@@ -90,6 +97,7 @@ CREATE TABLE IF NOT EXISTS shared_recipes (
   tags_json         TEXT NOT NULL,
   photo             BLOB,
   photo_mime        TEXT,
+  cover_is_ai_generated INTEGER,
   created_at        TEXT NOT NULL,
   revoked_at        TEXT
 );
@@ -116,6 +124,7 @@ CREATE TABLE IF NOT EXISTS shared_book_recipes (
   tags_json         TEXT NOT NULL,
   photo             BLOB,
   photo_mime        TEXT,
+  cover_is_ai_generated INTEGER,
   PRIMARY KEY (book_slug, position)
 );
 `;
@@ -149,6 +158,19 @@ export function getShareDb(): BetterSQLite3Database {
   if (!bookCols.includes('passcode_hash')) {
     sqlite.exec('ALTER TABLE shared_books ADD COLUMN passcode_hash TEXT');
   }
+  // レシピ表紙 AI 生成のラベル（docs/レシピ表紙AI生成設計.md §4）。既存 DB へ追い付き
+  const recipeCols = (sqlite.pragma('table_info(shared_recipes)') as { name: string }[]).map(
+    (c) => c.name,
+  );
+  if (!recipeCols.includes('cover_is_ai_generated')) {
+    sqlite.exec('ALTER TABLE shared_recipes ADD COLUMN cover_is_ai_generated INTEGER');
+  }
+  const bookRecipeCols = (
+    sqlite.pragma('table_info(shared_book_recipes)') as { name: string }[]
+  ).map((c) => c.name);
+  if (!bookRecipeCols.includes('cover_is_ai_generated')) {
+    sqlite.exec('ALTER TABLE shared_book_recipes ADD COLUMN cover_is_ai_generated INTEGER');
+  }
   dbSingleton = drizzle(sqlite);
   return dbSingleton;
 }
@@ -177,6 +199,8 @@ export interface CreateShareInput {
   steps: { body: string }[];
   tags: string[];
   photo?: { data: Buffer; mime: string } | undefined;
+  /** 表紙が AI 生成イメージか（設計 §4）。省略可 — 省略/false は保存しない（NULL のまま）。 */
+  coverIsAiGenerated?: boolean | undefined;
 }
 
 export interface CreateShareResult {
@@ -202,6 +226,7 @@ export function createShare(input: CreateShareInput): CreateShareResult {
       tagsJson: JSON.stringify(input.tags),
       photo: input.photo?.data ?? null,
       photoMime: input.photo?.mime ?? null,
+      coverIsAiGenerated: input.coverIsAiGenerated ? 1 : null,
       createdAt: new Date().toISOString(),
     })
     .run();
@@ -256,6 +281,8 @@ export interface CreateBookShareInput {
     steps: { body: string }[];
     tags: string[];
     photo?: { data: Buffer; mime: string } | undefined;
+    /** 表紙が AI 生成イメージか（設計 §4）。省略可。 */
+    coverIsAiGenerated?: boolean | undefined;
   }[];
 }
 
@@ -312,6 +339,7 @@ function insertBookRecipes(
         tagsJson: JSON.stringify(recipe.tags),
         photo: recipe.photo?.data ?? null,
         photoMime: recipe.photo?.mime ?? null,
+        coverIsAiGenerated: recipe.coverIsAiGenerated ? 1 : null,
       })
       .run();
   });

@@ -18,6 +18,12 @@ export interface RecipeListItem {
   cookCount: number;
   /** Card image: the cover photo, else the latest cooking photo, if any */
   heroPhotoUri: string | null;
+  /**
+   * 表紙が AI 生成イメージか（docs/レシピ表紙AI生成設計.md §4）。
+   * `heroPhotoUri` がクッキングログ写真にフォールバックしているときは false
+   * （表紙そのものが無いので該当しない）。
+   */
+  isCoverAiGenerated: boolean;
   /** 作りたいリスト: ピン留め日時（ISO） — null = 未ピン */
   pinnedAt: string | null;
 }
@@ -43,6 +49,8 @@ export interface RecipeDetail {
   heroPhotoUri: string | null;
   /** The recipe's own cover photo (端末内パス) — null if none set */
   coverPhotoPath: string | null;
+  /** 表紙が AI 生成イメージか（docs/レシピ表紙AI生成設計.md §4）。 */
+  isCoverAiGenerated: boolean;
   /** 作りたいリスト: ピン留め日時（ISO） — null = 未ピン */
   pinnedAt: string | null;
   /** お店の名前（任意）。レシピが持つ（記録側は履歴なので表示に使わない） */

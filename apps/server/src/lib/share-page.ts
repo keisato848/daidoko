@@ -32,6 +32,7 @@ const STRINGS = {
     ctaSub: 'だいどこ — 家族で育てる、台所のレシピ手帳',
     footer:
       'このページは投稿者が共有したレシピです。投稿者が共有を停止すると表示されなくなります。',
+    aiCoverNotice: 'AIが作ったイメージです',
     notFound: 'このレシピは見つかりませんでした',
     notFoundBody: 'リンクが間違っているか、投稿者が共有を停止しました。',
     toc: '収録レシピ',
@@ -55,6 +56,7 @@ const STRINGS = {
     cta: 'Save this recipe in the app',
     ctaSub: 'DAIDOKO — a family recipe notebook',
     footer: 'This recipe was shared by its author. It disappears when the author stops sharing.',
+    aiCoverNotice: 'This image was created by AI',
     notFound: 'Recipe not found',
     notFoundBody: 'The link may be wrong, or the author stopped sharing it.',
     toc: 'Recipes in this book',
@@ -90,6 +92,7 @@ const PAGE_CSS = `
            color: #C9A16A; font-size: 13px; text-align: center; padding: 8px 0 20px;
            border-bottom: 1px solid #2E2418; }
   .photo { width: 100%; border-radius: 12px; margin: 20px 0 4px; display: block; }
+  .ai-cover-notice { color: #8A7A5E; font-size: 11px; letter-spacing: 0.05em; margin: 0 0 4px; }
   h1 { color: #F0E2C8; font-size: 26px; font-weight: 600; margin: 20px 0 6px; }
   .meta { color: #8A7A5E; font-size: 13px; margin-bottom: 4px; }
   .tags { color: #8A7A5E; font-size: 12px; }
@@ -174,6 +177,7 @@ export function renderSharePage(
     ).slice(0, 120),
   );
   const photoUrl = row.photo ? `${baseUrl}/r/${row.slug}/photo` : null;
+  const aiCover = photoUrl != null && row.coverIsAiGenerated === 1;
 
   return `<!doctype html>
 <html lang="${locale}">
@@ -193,6 +197,7 @@ ${photoUrl ? `<meta property="og:image" content="${escapeHtml(photoUrl)}">\n<met
 <div class="wrap">
   <div class="brand">DAIDOKO</div>
   ${photoUrl ? `<img class="photo" src="${escapeHtml(photoUrl)}" alt="${title}">` : ''}
+  ${aiCover ? `<p class="ai-cover-notice">${s.aiCoverNotice}</p>` : ''}
   <h1>${title}</h1>
   ${metaParts.length > 0 ? `<div class="meta">${escapeHtml(metaParts.join(' ・ '))}</div>` : ''}
   ${tags.length > 0 ? `<div class="tags">${escapeHtml(tags.map((t) => `#${t}`).join(' '))}</div>` : ''}
@@ -266,8 +271,10 @@ export function renderBookPage(
         recipe.cookTimeMin != null ? s.cookTime(recipe.cookTimeMin) : null,
       ].filter(Boolean);
       const photoUrl = recipe.photo ? `${baseUrl}/b/${book.slug}/photo/${i}` : null;
+      const aiCover = photoUrl != null && recipe.coverIsAiGenerated === 1;
       return `<section class="recipe" id="r${i}">
   ${photoUrl ? `<img class="photo" src="${escapeHtml(photoUrl)}" alt="${escapeHtml(recipe.title)}">` : ''}
+  ${aiCover ? `<p class="ai-cover-notice">${s.aiCoverNotice}</p>` : ''}
   <h2 class="rtitle">${escapeHtml(recipe.title)}</h2>
   ${metaParts.length > 0 ? `<div class="meta">${escapeHtml(metaParts.join(' ・ '))}</div>` : ''}
   ${

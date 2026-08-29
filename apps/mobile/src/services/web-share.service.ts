@@ -120,6 +120,12 @@ export interface SharePayload {
   tags: string[];
   photoBase64?: string;
   photoMime?: 'image/jpeg';
+  /**
+   * 表紙が AI 生成イメージか（docs/レシピ表紙AI生成設計.md §4）。
+   * **省略可** — 旧サーバー（フィールドを知らない zod）が未知キーで 400 を
+   * 返さないことが前提（`aiNote` と同じ手法）。false は送らない（省略で表す）。
+   */
+  coverIsAiGenerated?: boolean;
 }
 
 /** レシピ 1 件ぶんの本文（単品共有と帖で共通）。純粋（テスト対象） */
@@ -139,6 +145,7 @@ export function buildShareRecipeBody(
     })),
     steps: recipe.steps.map((step) => ({ body: step.body })),
     tags: recipe.tags,
+    ...(recipe.isCoverAiGenerated ? { coverIsAiGenerated: true } : {}),
   };
 }
 

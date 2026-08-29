@@ -109,6 +109,25 @@ describe('Web 共有', () => {
     expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(100);
   });
 
+  it('AI 生成イメージ: coverIsAiGenerated を送るとページに表記が出る（省略時は出ない）', async () => {
+    const withLabel = (await (
+      await publish({
+        ...basePayload(),
+        photoBase64: TINY_JPEG_BASE64,
+        photoMime: 'image/jpeg',
+        coverIsAiGenerated: true,
+      })
+    ).json()) as { slug: string };
+    const page = await (await app.request(`/r/${withLabel.slug}`)).text();
+    expect(page).toContain('AIが作ったイメージです');
+
+    const withoutLabel = (await (
+      await publish({ ...basePayload(), photoBase64: TINY_JPEG_BASE64, photoMime: 'image/jpeg' })
+    ).json()) as { slug: string };
+    const plainPage = await (await app.request(`/r/${withoutLabel.slug}`)).text();
+    expect(plainPage).not.toContain('AIが作ったイメージです');
+  });
+
   it('取り消し: 誤トークンは 403・正トークンで取り消し → ページも写真も 404', async () => {
     const { slug, deleteToken } = (await (
       await publish({ ...basePayload(), photoBase64: TINY_JPEG_BASE64, photoMime: 'image/jpeg' })
@@ -234,6 +253,31 @@ describe('Web 共有', () => {
         body: JSON.stringify(payload),
       });
     }
+
+    it('AI 生成イメージ: 帖の 1 レシピだけ coverIsAiGenerated でも、そのレシピだけ表記が出る', async () => {
+      const res = await publishBook({
+        attested: true,
+        locale: 'ja',
+        title: 'わが家の定番',
+        description: '家族のいつもの味',
+        recipes: [
+          { ...basePayload(), title: '肉じゃが', attested: undefined, locale: undefined },
+          {
+            title: '卵焼き',
+            ingredients: [{ name: '卵', amount: '3個' }],
+            steps: [{ body: '焼く' }],
+            tags: [],
+            photoBase64: TINY_JPEG_BASE64,
+            photoMime: 'image/jpeg',
+            coverIsAiGenerated: true,
+          },
+        ],
+      });
+      const json = (await res.json()) as { slug: string };
+      const page = await (await app.request(`/b/${json.slug}`)).text();
+      const occurrences = page.split('AIが作ったイメージです').length - 1;
+      expect(occurrences).toBe(1);
+    });
 
     it('公開 → /b の URL が返り、ページに目次と全レシピが載る', async () => {
       const res = await publishBook(bookPayload());

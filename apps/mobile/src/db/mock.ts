@@ -2,6 +2,7 @@
  * Web mock data provider — mutable mock state for web debugging
  * Supports read/write operations for CRUD testing without SQLite
  */
+import { isAiGeneratedPhoto } from '../utils/aiGeneratedPhoto';
 import { generateId } from '../utils/id';
 import { resolveRecipeUpdate } from '../services/recipe-update';
 import type {
@@ -210,6 +211,7 @@ export function getMockRecipeList(): RecipeListItem[] {
         createdAt: recipe.createdAt,
         cookCount: recipeLogs.length,
         heroPhotoUri: recipe.coverPhotoPath ?? null,
+        isCoverAiGenerated: isAiGeneratedPhoto(recipe.coverPhotoPath),
         pinnedAt: recipe.pinnedAt ?? null,
       };
     });
@@ -259,6 +261,7 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     steps,
     heroPhotoUri: recipe.coverPhotoPath ?? null,
     coverPhotoPath: recipe.coverPhotoPath ?? null,
+    isCoverAiGenerated: isAiGeneratedPhoto(recipe.coverPhotoPath),
     placeName: recipe.placeName ?? null,
     pinnedAt: recipe.pinnedAt ?? null,
   };
