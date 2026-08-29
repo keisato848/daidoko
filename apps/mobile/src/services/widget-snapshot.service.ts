@@ -3,13 +3,11 @@
  *
  * 組み立ては `utils/widgetSnapshot` の純関数側。ここは**集めて書くだけ**。
  *
- * **書き出し先はまだ Android 側だけ**（`documentDirectory/widget/snapshot.json`）。
- * iOS の App Group（`ExtensionStorage`）は `@bacons/apple-targets` を入れてからで、
- * それは prebuild を伴うので別リリース（R5）。**いま入れておく理由**は、
- * ウィジェット本体より先に「書く側」を安定させておくと、スパイクで確かめるのが
- * 「読めるか」だけになるため。
+ * **書き出し先は 2 つ**。同じ JSON を両方に置く:
+ * - Android: `documentDirectory/widget/snapshot.json`（Headless タスクが読む）
+ * - iOS: App Group の UserDefaults キー `widget_snapshot`（拡張から読めるのはここだけ）
  *
- * ウィジェットが未導入のあいだ、この書き出しは**誰も読まないファイルを作るだけ**で
+ * ウィジェットが未導入のあいだ、この書き出しは**誰も読まない値を置くだけ**で
  * 害が無い（`documentDirectory` はクラウドバックアップの include 対象外なので
  * 除外作業も要らない — 設計 §1 の検証反映）。
  *
@@ -29,6 +27,14 @@ import { isNativePlatform } from '../db/client';
 /** 書き出し先。Android の Headless タスクから読む想定 */
 const WIDGET_DIR = 'widget';
 const SNAPSHOT_FILE = 'snapshot.json';
+
+/**
+ * iOS の共有先。**Swift 側と app.json の 3 か所で同じ値**を使う:
+ * - `app.json` の `ios.entitlements['com.apple.security.application-groups']`
+ * - `targets/shopping-widget/ShoppingWidget.swift` の `appGroupIdentifier` / `snapshotKey`
+ */
+const IOS_APP_GROUP = 'group.com.daidoko.app';
+const IOS_SNAPSHOT_KEY = 'widget_snapshot';
 
 /**
  * 連打で書き潰さないためのデバウンス。買い物リストのチェックは連続で起きる
@@ -67,6 +73,33 @@ async function write(snapshot: WidgetSnapshot): Promise<void> {
   if (!info.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
   await FileSystem.writeAsStringAsync(`${dir}/${SNAPSHOT_FILE}`, JSON.stringify(snapshot));
   await pushToAndroidWidget(snapshot);
+  await pushToIosWidget(snapshot);
+}
+
+/**
+ * iOS は App Group の UserDefaults に同じ JSON を置く（W1-iOS・設計 §1）。
+ *
+ * **`documentDirectory` は拡張から読めない** — ウィジェットは別プロセス・別サンドボックスで
+ * 動くので、共有できるのは App Group だけ。Android と同じ JSON 文字列を 1 本置き、
+ * Swift 側（`targets/shopping-widget/ShoppingWidget.swift`）が
+ * `UserDefaults(suiteName:)` で読む。
+ *
+ * 書いたあと `reloadWidget()` を呼ばないと、WidgetKit のタイムライン（30 分間隔）まで
+ * 反映されない。Android の `requestWidgetUpdate` と同じ役割。
+ *
+ * ホーム画面に未追加でも無害（対象 0 件で何もしない）。失敗しても
+ * `documentDirectory` への書き出しは済んでいるので、ここは黙って諦める。
+ */
+async function pushToIosWidget(snapshot: WidgetSnapshot): Promise<void> {
+  if (Platform.OS !== 'ios') return;
+  try {
+    const { ExtensionStorage } = await import('@bacons/apple-targets');
+    const storage = new ExtensionStorage(IOS_APP_GROUP);
+    storage.set(IOS_SNAPSHOT_KEY, JSON.stringify(snapshot));
+    ExtensionStorage.reloadWidget();
+  } catch {
+    // ウィジェット未導入・App Group 未設定でも本体機能は継続させる
+  }
 }
 
 /**

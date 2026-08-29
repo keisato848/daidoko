@@ -21,7 +21,11 @@
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["ja", "en"]
       },
-      "associatedDomains": ["applinks:daidoko-production.up.railway.app"]
+      "associatedDomains": ["applinks:daidoko-production.up.railway.app"],
+      "appleTeamId": "VY7SNHS2BY",
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.daidoko.app"]
+      }
     },
     "android": {
       "package": "com.daidoko.app",
@@ -112,7 +116,8 @@
             }
           ]
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true

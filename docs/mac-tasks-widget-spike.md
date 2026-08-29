@@ -221,3 +221,115 @@ app.json の plugins（10 件）:
 - `targets/` の作成
 - Xcode でのビルド（ターゲットが無いので確認対象が存在しない）
 - overrides / patch-package の追加
+
+### フェーズ 3: iOS W1 の実装（2026-08-29 実測）
+
+**結論: prebuild は通り Xcode ターゲットも生えたが、ネイティブモジュール
+`ExtensionStorage` が Pod に入らず、アプリから App Group へ書けない。**
+原因は apple-targets 5.0.0 側の**旧いプラットフォーム表記**。**直していない**（指示どおり相談待ち）。
+
+#### 通ったもの
+
+```
+$ npx expo prebuild -p ios --clean       ✔ Finished prebuild / ✔ Installed CocoaPods（exit 0）
+$ xcodebuild ... -configuration Release  ** BUILD SUCCEEDED **（Swift のエラー 0）
+```
+
+| 確認 | 結果 |
+| --- | --- |
+| ウィジェットターゲットの生成 | ✅ `productName = ShoppingWidget` |
+| `WidgetKit.framework` のリンク | ✅ |
+| `.appex` の同梱 | ✅ `app.app/PlugIns/ShoppingWidget.appex` |
+| App Group（本体・拡張の両側） | ✅ `group.com.daidoko.app` |
+| typecheck / lint / jest | ✅ 123 suite・1113 件 |
+
+**SDK 54 の prebuild で SDK 55 世代の `@expo/prebuild-config` を持つ apple-targets は動く** —
+フェーズ 2 で保留にしていた本題は「問題なし」で決着。overrides も patch も要らなかった。
+
+#### ⛔ 残った不具合: `ExtensionStorage` が autolink されない
+
+アプリ側から App Group へ書けないので、**ウィジェットは常に「アプリを開くと表示されます」のまま**になる。
+
+`expo-modules-autolinking` は見つけているのに、`Podfile.lock` に入らない:
+
+```
+$ npx expo-modules-autolinking resolve -p ios --json
+  検出モジュール数: 23
+  ★ @bacons/apple-targets -> ['ExtensionStorage']
+
+$ pod install
+  Pod installation complete! There are 98 dependencies from the Podfile and 105 total pods installed.
+  （エラー・警告なし）
+
+$ 差分
+  autolinking: 23 件
+  Podfile.lock に無いもの: ['ExtensionStorage']    ← 他の 22 件は全て入っている
+```
+
+**原因は `expo-module.config.json` のプラットフォーム表記が旧いこと。**
+
+```
+@bacons/apple-targets   "platforms": ["ios"]     s.platform  = :ios, '16.4'   ← 単数
+expo-localization       "platforms": ["apple"]   s.platforms = { ... }
+expo-system-ui          "platforms": ["apple"]   s.platforms = { ... }
+```
+
+リポジトリ全体を走査したが、**`["ios"]` を使っているのは `@bacons/apple-targets` だけ**。
+SDK 54 の autolinking は `"apple"` を期待する。`resolve` は互換で拾うが、
+`use_expo_modules!` が Podfile へ流す段階で落ちている（**エラーを出さずに黙って消える**のが厄介）。
+
+**症状の出方が静かなので注記**: `ExtensionStorage.js` はネイティブが無いと例外ではなく
+**no-op のスタブに落ちる**実装:
+
+```js
+const nativeModule = ExtensionStorageModule ?? {
+    setString() { }, reloadWidget() { },   // ← 何もしないで成功したふりをする
+};
+```
+
+そのため `try/catch` にも引っかからず、`documentDirectory` への書き出しだけ成功して
+iOS 側は静かに何も書かれない。**ログにも何も出ない。**
+
+#### 対処案（**未実施** — 相談してから）
+
+1. **`ios.deploymentTarget` を 16.4 以上に上げる** — podspec が要求している。ただし今回の
+   直接原因ではない（platform 表記が先に効いている）ので、これだけでは解決しない見込み
+2. **apple-targets を新しい版へ上げる** — `platforms: ["apple"]` に直っていれば解決する。
+   ただし SDK 55 前提が強まる可能性があり、要調査
+3. **patch-package で `expo-module.config.json` の `"ios"` を `"apple"` に書き換える** —
+   1 行で直るが、「SDK 51 時代の残骸を復活させない」方針に反する
+4. **ExtensionStorage を使わず、自前の小さなネイティブモジュールで App Group に書く** —
+   依存を増やさないが実装が増える
+
+**上流の問題**なので、2 が本筋だと思う。判断は Windows 側にお願いする。
+
+#### 実測でしか分からなかった落とし穴 2 つ
+
+**1. `expo-target.config.js` に `entitlements: {}` を明示しないと拡張側の App Group が生成されない。**
+README は「App Group を使えるターゲットは app.json の配列を自動でミラーする」と書いているが、
+`entitlements` オブジェクト自体が無いと `generated.entitlements` が書き出されず、
+**本体側にだけ入って拡張側は空**になる。ビルドは通るので実機で見るまで気づけない。
+
+**2. `-derivedDataPath` を `ios/` の中に置いてはいけない。**
+`ios/build-widget` を指定したら、次の `pod install` が
+`invalid byte sequence in UTF-8`（`set_RCTNewArchEnabled_in_info_plist`）で落ちた。
+ビルド成果物の**バイナリ plist**（`bplist00`）を post-install フックがテキストとして
+読もうとするため。`ios/` の外に出せば直る。
+
+#### この変更で入れたもの
+
+- `app.json`: `ios.appleTeamId` / `ios.entitlements`（App Group）/ `plugins` に `@bacons/apple-targets`（差分 7 行・version と既存 plugin は無変更）
+- `apps/mobile/targets/shopping-widget/`: `expo-target.config.js` / `ShoppingWidget.swift`
+  （文言・表示規約は Android 版の `WIDGET_DICT` / `shoppingWidgetContent.ts` と 1 語ずつ同一。
+  小 = 3 品名 / 中 = 6 行＋「ほか n 品」/「HH:mm 時点」必須 / `widgetURL = daidoko://shopping` /
+  version > 1 は案内表示）
+- `src/services/widget-snapshot.service.ts`: `pushToIosWidget()` を追加
+  （Platform ガード＋try/catch。Android 分岐と既存 `write()` は無変更）
+
+**`pnpm-lock.yaml` と `package.json` は変えていない。証明書・プロビジョニングも触っていない。**
+
+#### 未検証
+
+**シミュレータでのウィジェット表示・タップ遷移は確認できていない。** 上の不具合で
+App Group にデータが入らないため、確認しても「アプリを開くと表示されます」しか出ない。
+`ExtensionStorage` が解決したら実施する。
