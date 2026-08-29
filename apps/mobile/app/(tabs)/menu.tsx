@@ -23,6 +23,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../../src/constants/theme';
+import { MENU_AI_ENABLED } from '../../src/config';
 import { t, tCount } from '../../src/i18n';
 import { arrangeMenu, MenuArrangeError } from '../../src/services/menu-arrange.provider';
 import {
@@ -166,8 +167,11 @@ export default function MenuScreen() {
       <View style={styles.header}>
         <CalendarDays size={20} color={Colors.gold} />
         <Text style={styles.title}>{t('menu.title')}</Text>
-        {/* AI が並べ替えた献立だと分かるように（M1/M2 どちらの結果かは source に残す・§10.6） */}
-        {view?.plan.source === 'ai' ? (
+        {/* AI が並べ替えた献立だと分かるように（M1/M2 どちらの結果かは source に残す・§10.6）。
+            M2 は評価 2 周で F 軸未達のため 1.13.0 では見送り（§10.10.5 の判断ルール・
+            docs/eval/menu-rank/2026-08-29-round2-*）。コードは A2/R6 の土台として残す。
+            再挑戦時はこの env を立てて評価をやり直す */}
+        {MENU_AI_ENABLED && view?.plan.source === 'ai' ? (
           <View style={styles.arrangedBadge}>
             <Text style={styles.arrangedBadgeText}>{t('menu.ai.arrangedBadge')}</Text>
           </View>
@@ -233,8 +237,11 @@ export default function MenuScreen() {
         <Text style={styles.primaryText}>{t('menu.card.build')}</Text>
       </Pressable>
 
-      {/* M2: AI に並べ替えてもらう。M1 の献立がある前提の 1 操作（§10.7） */}
-      {hasPlan ? (
+      {/* M2: AI に並べ替えてもらう。M1 の献立がある前提の 1 操作（§10.7）。
+          M2 は評価 2 周で F 軸未達のため 1.13.0 では見送り（§10.10.5 の判断ルール・
+          docs/eval/menu-rank/2026-08-29-round2-*）。コードは A2/R6（プレミアム自動モード・
+          献立ウィジェット）の土台として残す。再挑戦時はこの env を立てて評価をやり直す */}
+      {MENU_AI_ENABLED && hasPlan ? (
         <View style={styles.aiSection}>
           <Pressable
             style={[styles.aiButton, (aiRunning || busy) && styles.disabled]}

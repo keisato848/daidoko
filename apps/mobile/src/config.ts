@@ -74,3 +74,12 @@ export const REVENUECAT_API_KEY = platformValue(
 
 // BYOK（持ち込みキー）で端末から直接呼ぶ Gemini モデル。サーバー側の既定と揃える。
 export const GEMINI_MODEL = process.env['EXPO_PUBLIC_GEMINI_MODEL'] ?? 'gemini-2.5-flash';
+
+// 献立の AI 並べ替え（M2）ボタンの表示フラグ。既定 false ＝ ボタン非表示（挙動不変）。
+// M2 は評価 2 周（docs/eval/menu-rank/2026-08-29-round2-*）でも F 軸（ジャンルの散り）が
+// 未達のまま終わり、`docs/買い物リスト・在庫設計.md` §10.10.5 の判断ルール
+// 「2 周しても未達 → M2 を見送り M1 のまま」に該当した（2026-08-29 管理役裁定）。
+// コードは A2/R6（プレミアム自動モード・献立ウィジェット）の土台として残し、
+// UI だけこのフラグで隠す。再挑戦するときは EXPO_PUBLIC_MENU_AI_ENABLED=true で
+// ビルドして評価をやり直す。
+export const MENU_AI_ENABLED = process.env['EXPO_PUBLIC_MENU_AI_ENABLED'] === 'true';

@@ -20,6 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  BANNED_WHY_PATTERNS,
   GeminiMenuArrangeProvider,
   MAX_MENU_CANDIDATES,
   sanitizeMenuDays,
@@ -100,18 +101,11 @@ function stripLabel(candidate: CaseCandidate): MenuCandidate {
 }
 
 // ─── why 禁止パターン（§10.10.5・ja/en 両方） ────────────────────────────────
-// 数量単位・カロリー/栄養・期限/鮮度・曜日・節約。渡していない事実を言わせない。
-const BANNED_PATTERNS: { name: string; regex: RegExp }[] = [
-  {
-    name: '数量単位',
-    regex:
-      /\d+\s*(g|kg|ml|cc|個|本|枚|かけ|合|丁|袋|缶|パック|大さじ|小さじ|カップ|cups?|tbsp|tablespoons?|tsp|teaspoons?|oz|ounces?|pounds?|lbs?|grams?)/i,
-  },
-  { name: 'カロリー/栄養', regex: /カロリー|栄養|nutrition|calorie/i },
-  { name: '期限/鮮度', regex: /期限|賞味|消費期限|鮮度|旬|expir|fresh/i },
-  { name: '曜日', regex: /曜日|週末|平日|weekday|weekend/i },
-  { name: '節約', regex: /節約|安上がり|安く済|cheap|budget/i },
-];
+// 正典は `lib/menu-arrange.ts` の BANNED_WHY_PATTERNS（sanitizeMenuDays が実際に
+// これでストリップする）。ここでは import して二重定義しない。ラウンド 2 からは
+// 生成直後（ストリップ前・scanBannedPatternsRaw）と、sanitizeMenuDays を通した後
+// （表示値・scanBannedPatternsDisplayed）の両方を測る——ストリップが効くと表示値は
+// 常に 0 件になり、プロンプト改良の効果は生値でしか見えないため。
 
 const JAPANESE_CHAR_REGEX = /[぀-ヿ一-鿿]/;
 
@@ -164,17 +158,50 @@ interface BannedHit {
   text: string;
 }
 
-function scanBannedPatterns(picks: MenuDayPick[], note: string | undefined): BannedHit[] {
+/**
+ * 生成直後（`sanitizeMenuDays` を通す前）の why をスキャンする。§10.10.5 の
+ * 「why 禁止パターン」軸（合否判定）はこの生値で測る——モデルが実際に
+ * プロンプトを守ったかどうかを見るため。sanitize 前なので day/recipeId の
+ * 妥当性は問わず、文字列として存在する why は全部見る。
+ */
+function scanBannedPatternsRaw(
+  rawDays: MenuArrangeRaw['days'],
+  note: string | undefined,
+): BannedHit[] {
+  const hits: BannedHit[] = [];
+  for (const item of rawDays ?? []) {
+    const why = typeof item?.why === 'string' ? item.why : undefined;
+    if (!why) continue;
+    const day = typeof item?.day === 'number' ? item.day : -1;
+    for (const { name, regex } of BANNED_WHY_PATTERNS) {
+      if (regex.test(why)) hits.push({ day, field: 'why', pattern: name, text: why });
+    }
+  }
+  if (note) {
+    for (const { name, regex } of BANNED_WHY_PATTERNS) {
+      if (regex.test(note)) hits.push({ day: 0, field: 'note', pattern: name, text: note });
+    }
+  }
+  return hits;
+}
+
+/**
+ * `sanitizeMenuDays` を通した後（＝実際に画面へ出る値）をスキャンする。why は
+ * `BANNED_WHY_PATTERNS` に掛かれば sanitize 側で既に undefined に落ちているはずなので、
+ * ここで拾えるのは note（sanitize の対象外）だけになる想定——0 件でなければ
+ * 防御が効いていない証拠。
+ */
+function scanBannedPatternsDisplayed(picks: MenuDayPick[], note: string | undefined): BannedHit[] {
   const hits: BannedHit[] = [];
   for (const pick of picks) {
     if (!pick.why) continue;
-    for (const { name, regex } of BANNED_PATTERNS) {
+    for (const { name, regex } of BANNED_WHY_PATTERNS) {
       if (regex.test(pick.why))
         hits.push({ day: pick.day, field: 'why', pattern: name, text: pick.why });
     }
   }
   if (note) {
-    for (const { name, regex } of BANNED_PATTERNS) {
+    for (const { name, regex } of BANNED_WHY_PATTERNS) {
       if (regex.test(note)) hits.push({ day: 0, field: 'note', pattern: name, text: note });
     }
   }
@@ -209,7 +236,10 @@ interface RunOutcome {
   coverageBaselineAvg: number | null;
   coverageAiAvg: number | null;
   coverageDiff: number | null;
-  bannedHits: BannedHit[];
+  /** 生成直後（ストリップ前）のヒット。§10.10.5 の合否判定はこちらを使う。 */
+  bannedHitsRaw: BannedHit[];
+  /** sanitizeMenuDays を通した後（＝画面表示値）のヒット。参考値・常に 0 件が期待値。 */
+  bannedHitsDisplayed: BannedHit[];
   whyOverLengthCount: number;
   whyTotalCount: number;
   /** en ケースのみ意味を持つ。ja では常に 0（測っていない）。 */
@@ -268,7 +298,8 @@ function scoreExecution(
       coverageBaselineAvg: null,
       coverageAiAvg: null,
       coverageDiff: null,
-      bannedHits: [],
+      bannedHitsRaw: [],
+      bannedHitsDisplayed: [],
       whyOverLengthCount: 0,
       whyTotalCount: 0,
       jaCharsInEnCount: 0,
@@ -298,7 +329,8 @@ function scoreExecution(
       ? coverageAiAvg - coverageBaselineAvg
       : null;
 
-  const bannedHits = scanBannedPatterns(picks, raw.note);
+  const bannedHitsRaw = scanBannedPatternsRaw(raw.days, raw.note);
+  const bannedHitsDisplayed = scanBannedPatternsDisplayed(picks, raw.note);
 
   const whyLengthLimit = evalCase.outputLocale === 'en' ? 120 : 60;
   const whyValues = picks.map((p) => p.why).filter((w): w is string => typeof w === 'string');
@@ -332,7 +364,8 @@ function scoreExecution(
     coverageBaselineAvg,
     coverageAiAvg,
     coverageDiff,
-    bannedHits,
+    bannedHitsRaw,
+    bannedHitsDisplayed,
     whyOverLengthCount,
     whyTotalCount: whyValues.length,
     jaCharsInEnCount,
@@ -460,12 +493,20 @@ function renderMarkdown(model: string, outcomes: RunOutcome[], cases: EvalCase[]
   lines.push('## 機械採点（自動計算済み・数値表）');
   lines.push('');
   lines.push(
+    '禁止語(生) = sanitizeMenuDays を通す前（モデルの生成そのもの）のヒット数。' +
+      '§10.10.5「why 禁止パターン」の合否判定はこちらを使う。' +
+      '禁止語(表示) = sanitizeMenuDays を通した後（＝実際に画面へ出る値）のヒット数。' +
+      '**why はストリップされるので常に 0 件になるのが期待値**' +
+      '（0 件でなければ防御が効いていない証拠。note はストリップ対象外）。',
+  );
+  lines.push('');
+  lines.push(
     '| case | run | ok | 違反(捨てた行数) | 生行数 | 選択数 | 主菜dup(M1) | 主菜dup(AI) | ' +
       'ジャンルdup(M1) | ジャンルdup(AI) | カバー(M1) | カバー(AI) | カバー差 | ' +
-      '禁止語ヒット | why超過/全体 | ja混入(en) | ¥ |',
+      '禁止語(生) | 禁止語(表示) | why超過/全体 | ja混入(en) | ¥ |',
   );
   lines.push(
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
   );
   for (const o of outcomes) {
     lines.push(
@@ -473,22 +514,39 @@ function renderMarkdown(model: string, outcomes: RunOutcome[], cases: EvalCase[]
         `${o.contractViolationCount} | ${o.rawDaysCount ?? ''} | ${o.picks.length} | ` +
         `${o.dupMainBaseline} | ${o.dupMainAi} | ${o.dupGenreBaseline} | ${o.dupGenreAi} | ` +
         `${o.coverageBaselineAvg?.toFixed(1) ?? ''} | ${o.coverageAiAvg?.toFixed(1) ?? ''} | ` +
-        `${o.coverageDiff?.toFixed(1) ?? ''} | ${o.bannedHits.length} | ` +
+        `${o.coverageDiff?.toFixed(1) ?? ''} | ${o.bannedHitsRaw.length} | ` +
+        `${o.bannedHitsDisplayed.length} | ` +
         `${o.whyOverLengthCount}/${o.whyTotalCount} | ${o.jaCharsInEnCount} | ` +
         `${o.costJpy !== null ? o.costJpy.toFixed(2) : ''} |`,
     );
   }
   lines.push('');
 
-  const allHits = outcomes.flatMap((o) =>
-    o.bannedHits.map((h) => ({ caseId: o.caseId, run: o.run, ...h })),
+  const allRawHits = outcomes.flatMap((o) =>
+    o.bannedHitsRaw.map((h) => ({ caseId: o.caseId, run: o.run, ...h })),
   );
-  if (allHits.length > 0) {
-    lines.push('### 禁止パターンのヒット詳細');
+  if (allRawHits.length > 0) {
+    lines.push('### 禁止パターンのヒット詳細（生値・ストリップ前）');
     lines.push('');
     lines.push('| case | run | day | field | pattern | text |');
     lines.push('| --- | --- | --- | --- | --- | --- |');
-    for (const h of allHits) {
+    for (const h of allRawHits) {
+      lines.push(
+        `| ${h.caseId} | ${h.run} | ${h.day} | ${h.field} | ${h.pattern} | ${escapeCell(h.text)} |`,
+      );
+    }
+    lines.push('');
+  }
+
+  const allDisplayedHits = outcomes.flatMap((o) =>
+    o.bannedHitsDisplayed.map((h) => ({ caseId: o.caseId, run: o.run, ...h })),
+  );
+  if (allDisplayedHits.length > 0) {
+    lines.push('### 禁止パターンのヒット詳細（表示値・ストリップ後 — 0件が期待値）');
+    lines.push('');
+    lines.push('| case | run | day | field | pattern | text |');
+    lines.push('| --- | --- | --- | --- | --- | --- |');
+    for (const h of allDisplayedHits) {
       lines.push(
         `| ${h.caseId} | ${h.run} | ${h.day} | ${h.field} | ${h.pattern} | ${escapeCell(h.text)} |`,
       );
@@ -588,7 +646,10 @@ interface MachineRow {
   dupGenreBaseline: number;
   dupGenreAi: number;
   coverageDiff: number | null;
-  bannedHits: number;
+  /** 生成直後（ストリップ前）。§10.10.5 の合否判定に使う。 */
+  bannedHitsRaw: number;
+  /** sanitizeMenuDays を通した後（＝画面表示値）。参考値。 */
+  bannedHitsDisplayed: number;
   whyOverLength: number;
   whyTotal: number;
   jaInEn: number;
@@ -602,7 +663,7 @@ function parseMachineTable(markdown: string): MachineRow[] {
       .split('|')
       .slice(1, -1)
       .map((c) => c.trim());
-    if (cells.length !== 17) continue;
+    if (cells.length !== 18) continue;
     const [
       caseId,
       run,
@@ -617,7 +678,8 @@ function parseMachineTable(markdown: string): MachineRow[] {
       ,
       ,
       coverageDiff,
-      bannedHits,
+      bannedHitsRaw,
+      bannedHitsDisplayed,
       whyOverTotal,
       jaInEn,
     ] = cells;
@@ -633,7 +695,8 @@ function parseMachineTable(markdown: string): MachineRow[] {
       dupGenreBaseline: Number(dupGenreBaseline) || 0,
       dupGenreAi: Number(dupGenreAi) || 0,
       coverageDiff: coverageDiff !== '' && coverageDiff !== undefined ? Number(coverageDiff) : null,
-      bannedHits: Number(bannedHits) || 0,
+      bannedHitsRaw: Number(bannedHitsRaw) || 0,
+      bannedHitsDisplayed: Number(bannedHitsDisplayed) || 0,
       whyOverLength: whyOver || 0,
       whyTotal: whyTotal || 0,
       jaInEn: Number(jaInEn) || 0,
@@ -741,10 +804,18 @@ function summarize(args: Map<string, string>): void {
     );
   }
 
-  // why 禁止パターン: 検出 0 件
-  const totalBannedHits = rows.reduce((s, r) => s + r.bannedHits, 0);
+  // why 禁止パターン: 検出 0 件。§10.10.5 の合否判定は生値（ストリップ前）で測る
+  // ——sanitizeMenuDays の防御がある以上、表示値は防御が効いていれば常に 0 件になり
+  // プロンプト改良の効果が見えなくなるため。
+  const totalBannedHitsRaw = rows.reduce((s, r) => s + r.bannedHitsRaw, 0);
+  const totalBannedHitsDisplayed = rows.reduce((s, r) => s + r.bannedHitsDisplayed, 0);
   process.stdout.write(
-    `${verdict(totalBannedHits === 0)} why 禁止パターン: 検出 ${totalBannedHits} 件 (ライン 0件)\n`,
+    `${verdict(totalBannedHitsRaw === 0)} why 禁止パターン（生値・合否判定はこちら）: ` +
+      `検出 ${totalBannedHitsRaw} 件 (ライン 0件)\n`,
+  );
+  process.stdout.write(
+    `— why 禁止パターン（表示値・sanitizeMenuDays 通過後・参考値）: ` +
+      `検出 ${totalBannedHitsDisplayed} 件（0 件でなければ防御が効いていない）\n`,
   );
 
   // why 長さ: 超過 5% 以下

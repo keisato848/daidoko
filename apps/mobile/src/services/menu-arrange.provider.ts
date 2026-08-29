@@ -88,6 +88,8 @@ const SYSTEM_PROMPT = [
   '1. 主菜の食材が続かないようにする。鶏の日が 2 日続く・魚の日が無い、のような',
   '   偏りを散らす。食材の系統はタイトルから推し量ってよい。',
   '2. 和・洋・中の系統が続かないようにする。これもタイトルから推し量ってよい。',
+  '   同じ系統（例: カレー同士・洋食同士）を 2 日以上連続させない。似たタイトル',
+  '   （カレー 3 種など）は、間に別系統を挟む。',
   '3. 調理時間の長い料理を連続させない。cookTimeMin の大きい日は散らす。',
   'このために coveragePct が多少低い候補を選んでよい。ただし coveragePct がほぼ 0 の',
   '候補を高い候補より優先しない（買い物が増えるだけの並びは改悪）。',
@@ -113,7 +115,8 @@ const SYSTEM_PROMPT = [
   '- 分量・個数・グラム数を書く（渡されていない。書けば嘘になる）。',
   '- 賞味期限・鮮度・旬・季節・気温に触れる（渡されていない）。',
   '- 栄養・カロリー・健康効果・効能を書く（このアプリの扱う範囲ではない）。',
-  '- 曜日・平日・週末に触れる（何曜日に作るかは渡されていない）。',
+  '- 「週末」「平日」「何曜日」という語を why に書く（何曜日に作るかは渡されていない。',
+  '  最終日だからといって週末とは限らない）。',
   '- 家族構成・好み・アレルギーを推測する。値段・節約に触れる。',
   '- 候補に無い id・レシピ名を作る。在庫に無い品名を「ある」と書く。',
 ].join('\n');
@@ -156,6 +159,37 @@ export function buildMenuContext(input: MenuArrangeInput): string {
 
 // ─── 検証（`sanitizeMenuDays` の写し・§10.10.3） ───────────────────────────
 
+/**
+ * why の禁止パターン（正規表現・ja/en 両方）。サーバー `menu-arrange.ts` の
+ * `BANNED_WHY_PATTERNS` の写し——評価 2 周目（docs/eval/menu-rank/2026-08-29-round2-*）で
+ * 「週末」への言及がプロンプト遵守だけでは 0 件にならなかったため追加した、プロンプトを
+ * 信用しない側の決定的な防御。片方だけ直さないこと。
+ */
+export const BANNED_WHY_PATTERNS: { name: string; regex: RegExp }[] = [
+  {
+    name: '数量単位',
+    regex:
+      /\d+\s*(g|kg|ml|cc|個|本|枚|かけ|合|丁|袋|缶|パック|大さじ|小さじ|カップ|cups?|tbsp|tablespoons?|tsp|teaspoons?|oz|ounces?|pounds?|lbs?|grams?)/i,
+  },
+  { name: 'カロリー/栄養', regex: /カロリー|栄養|nutrition|calorie/i },
+  { name: '期限/鮮度', regex: /期限|賞味|消費期限|鮮度|旬|expir|fresh/i },
+  { name: '曜日', regex: /曜日|週末|平日|weekday|weekend/i },
+  { name: '節約', regex: /節約|安上がり|安く済|cheap|budget/i },
+];
+
+function isBannedWhy(value: string): boolean {
+  return BANNED_WHY_PATTERNS.some(({ regex }) => regex.test(value));
+}
+
+/** `cleanWhy`（サーバー側）の写し。禁止パターンに掛かる why は行ごと捨てず、why だけ undefined に落とす。 */
+function cleanWhy(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (isBannedWhy(trimmed)) return undefined; // 決定的な防御。行は生かし why だけ落とす
+  return trimmed.slice(0, 100);
+}
+
 interface RawDayPick {
   day?: unknown;
   recipeId?: unknown;
@@ -174,7 +208,9 @@ interface RawArrangement {
  * 2. day が 1..dayCount の整数でない → 捨てる
  * 3. 同じ day の 2 件目以降 → 捨てる（先勝ち）
  * 4. 同じ recipeId の 2 日目以降 → 捨てる（M1 の「1 レシピ 1 日」不変条件を AI 出力にも通す）
- * 5. why は 100 字で切る。無ければ省略（M1 の機械的理由への差し替えは呼び出し側の仕事）
+ * 5. why は文字列整形（上限 100 字で切る）。無ければ undefined。**`BANNED_WHY_PATTERNS` に
+ *    掛かる why は行ごと捨てず、why だけ undefined に落とす**（プロンプトが破られても表示は
+ *    必ず守る。M1 の機械的理由への差し替えは呼び出し側の仕事）
  * 6. day 昇順に整列。dayCount 未満でも埋めない
  */
 export function validateArrangement(
@@ -197,12 +233,8 @@ export function validateArrangement(
     seenDays.add(day as number);
     seenRecipeIds.add(recipeId);
 
-    const why = entry?.why;
-    picks.push({
-      day: day as number,
-      recipeId,
-      ...(typeof why === 'string' && why.trim() ? { why: why.trim().slice(0, 100) } : {}), // 5
-    });
+    const why = cleanWhy(entry?.why); // 5
+    picks.push({ day: day as number, recipeId, ...(why !== undefined && { why }) });
   }
 
   picks.sort((a, b) => a.day - b.day); // 6

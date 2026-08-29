@@ -155,6 +155,40 @@ describe('POST /api/v1/infer/menu — 検証（sanitizeMenuDays）', () => {
       expect(json.error.retryable).toBe(true);
     }
   });
+
+  // 評価 2 周目（docs/eval/menu-rank/2026-08-29-gemini-2.5-flash.md）で「週末」への
+  // 言及がプロンプト遵守だけでは 0 件にならなかったため追加した決定的な防御。
+  // プロンプトを信用しない側 —— why が禁止パターンに掛かっても行ごと捨てず、
+  // why だけ undefined に落とす（M1 の機械的理由への差し替えは表示側の仕事）。
+  it.each([
+    ['曜日', '調理時間が短めなので、週末に向けて準備しやすい一品です。'],
+    ['数量単位', '玉ねぎを100gほど使う、手軽な一品です。'],
+    ['カロリー/栄養', 'カロリーが低く、栄養バランスも良い一品です。'],
+    ['期限/鮮度', '賞味期限が近い食材を使う一品です。'],
+    ['節約', '節約になる、安上がりな一品です。'],
+  ])(
+    'why に禁止パターン（%s）が含まれると why だけ undefined に落ち、行は生き残る',
+    async (_label, bannedWhy) => {
+      setMenuProviderForTesting(
+        stub(() => ({
+          days: [
+            { day: 1, recipeId: 'a', why: bannedWhy },
+            { day: 2, recipeId: 'b', why: '在庫の材料で作れる定番の一品です。' },
+          ],
+        })),
+      );
+      const res = await post({ candidates: [candidate('a'), candidate('b')], pantry: [], days: 2 });
+      const json = (await res.json()) as MenuResult;
+
+      expect(json.ok).toBe(true);
+      if (json.ok) {
+        expect(json.data.days).toEqual([
+          { day: 1, recipeId: 'a' },
+          { day: 2, recipeId: 'b', why: '在庫の材料で作れる定番の一品です。' },
+        ]);
+      }
+    },
+  );
 });
 
 describe('POST /api/v1/infer/menu — エラー写像・枠', () => {
