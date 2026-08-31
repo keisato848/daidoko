@@ -25,6 +25,15 @@ node scripts/release/capture-ios-screenshots.mjs --shots 01,04   # 部分再取�
   実データ無しで再現できる。`--photo-recipe <id>` で別レシピに差し替え可。
   ※ Android 版 `capture-store-screenshots.mjs` はまだ `manual` のまま（Play は掲載済みのため未着手）。
 - `08`（AI 結果画面）は自動化対象外（manual）。deep link で到達できず、実際に AI 推論を走らせる必要がある。
+- **調理セッション汚染に注意**（PR #254 の調理セッション以降）: `04` で料理中モードを開くと
+  調理セッションが `app_meta` の `cooking_session` キーに永続化され、「完成」を押すまで
+  タブバー直上に Now Cooking pill が出続ける（アプリを terminate しても次回起動で復元される）。
+  `04` の後に撮るショットに pill が写り込むため、Android 版 `capture-store-screenshots.mjs` は
+  ショットごとに自動で消すが、**`capture-ios-screenshots.mjs` は未対応**。シミュレータでは
+  DB を sqlite3 で直接消せる（`04` を撮った後・影響ショットの撮り直し前に実行）:
+  `xcrun simctl terminate booted com.daidoko.app` →
+  `sqlite3 "$(xcrun simctl get_app_container booted com.daidoko.app data)/Documents/SQLite/daidoko.db" "UPDATE app_meta SET value='' WHERE key='cooking_session';"`
+  （空文字は store の persist(null) と同じ表現で、起動時の復元がスキップされる）
 
 - 提出全体の進捗と残作業は `../SUBMISSION.md`。
 

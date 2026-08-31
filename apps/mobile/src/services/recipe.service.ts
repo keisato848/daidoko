@@ -251,6 +251,32 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
 }
 
 /** 作りたいリスト: ピン留めのオン/オフ（pinned_at = 日時 or null） */
+/**
+ * 手順写真をその場で付ける（料理中モード・レシピ詳細から。2026-08-28）。
+ *
+ * 編集フォームの全置換（updateRecipe）を通さない理由:
+ * - **版を切らない。** 写真の添付は「レシピ内容の変更」ではなく調理の記録で、
+ *   版履歴に「写真を付けた」だけの版が並ぶのはノイズ
+ * - **同期も触らない。** `photoPath` は同期ペイロードに入れない設計
+ *   （sync-payload.ts「写真は S3」）なので、updated_at を動かすと
+ *   無内容の同期送信と LWW の上書きリスクだけが増える
+ *
+ * web は撮影 UI 自体を出さない（呼ばれても何もしない）。
+ */
+export async function setStepPhoto(stepId: string, photoPath: string | null): Promise<void> {
+  if (!isNativePlatform) return;
+
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  await db
+    .update(schema.steps)
+    .set({ photoPath: toStoredPhotoPath(photoPath) })
+    .where(eq(schema.steps.id, stepId));
+}
+
 export async function setRecipePinned(recipeId: string, pinned: boolean): Promise<void> {
   if (!isNativePlatform) {
     setMockRecipePinned(recipeId, pinned);

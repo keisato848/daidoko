@@ -6,16 +6,20 @@
  */
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { NumberStepper } from '../../../../src/components/NumberStepper';
+import { PhotoPickerField } from '../../../../src/components/PhotoPickerField';
 import { TimerWidget } from '../../../../src/components/TimerWidget';
 import { Colors } from '../../../../src/constants/theme';
 import { t, tCount } from '../../../../src/i18n';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { dialog } from '../../../../src/services/dialog.service';
-import { getRecipeDetail } from '../../../../src/services/recipe.service';
+import { isNativePlatform } from '../../../../src/db/client';
+import { resolvePhotoUri } from '../../../../src/services/photo-path';
+import { getRecipeDetail, setStepPhoto } from '../../../../src/services/recipe.service';
+import { useCookingSessionStore } from '../../../../src/stores/cooking-session.store';
 import { useTimerStore } from '../../../../src/stores/timer.store';
 import { useUnitSystemStore } from '../../../../src/stores/unitSystem.store';
 import { scaleAmount, servingRatio } from '../../../../src/utils/shoppingScale';
@@ -54,6 +58,11 @@ export default function CookingModeScreen() {
   const [ingredients, setIngredients] = useState<IngredientData[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
+  // スワイプでステップ移動（設計 S06「スワイプ or ボタン」— ボタンのみで長らく
+  // 未実装だった）。濡れた手でも画面のどこを払っても効く、が価値。
+  // GestureHandler を持ち込まず素朴に測る: タップ（材料表示）とは移動量で切り分け、
+  // 大きく動けば Pressable 側の onPress は press-cancel されるので競合しない
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   // 分量換算のターゲット人数（undefined = レシピの基準人数のまま）
   const [targetServings, setTargetServings] = useState<number | undefined>(undefined);
   const timer = useTimerStore();
@@ -77,7 +86,26 @@ export default function CookingModeScreen() {
     setServings(detail.servings);
     setSteps(detail.steps);
     setIngredients(detail.ingredients);
+
+    // 調理セッションを開始（同じレシピの再開なら保存済みの手順位置が返る —
+    // ✕ で閉じても・アプリを再起動しても続きから。docs/画面設計.md S06 349行）
+    const store = useCookingSessionStore.getState();
+    store.begin({
+      recipeId: id,
+      recipeTitle: detail.title,
+      totalSteps: detail.steps.length,
+    });
+    const resumed = useCookingSessionStore.getState().session;
+    if (resumed && resumed.stepIndex > 0 && resumed.stepIndex < detail.steps.length) {
+      setCurrentStep(resumed.stepIndex);
+    }
   }, [id]);
+
+  /** 手順移動はここを通す — セッションに位置を刻み、復帰導線が追従する */
+  const goToStep = useCallback((index: number) => {
+    setCurrentStep(index);
+    useCookingSessionStore.getState().setStep(index);
+  }, []);
 
   useEffect(() => {
     void loadData();
@@ -139,11 +167,14 @@ export default function CookingModeScreen() {
     const stepId = useTimerStore.getState().context?.stepId;
     if (!stepId) return;
     const index = steps.findIndex((s) => s.id === stepId);
-    if (index >= 0) setCurrentStep(index);
+    if (index >= 0) goToStep(index);
   };
 
   const handleComplete = () => {
     useTimerStore.getState().clear();
+    // 完成 = セッション終了。復帰カード・pill も消える。
+    // ✕（router.back）では**終了しない** — それが「あとで続きから」の意味
+    useCookingSessionStore.getState().end();
     router.push(`/(tabs)/recipes/${id}/log`);
   };
 
@@ -187,7 +218,24 @@ export default function CookingModeScreen() {
       )}
 
       {/* Step content */}
-      <Pressable style={styles.stepArea} onPress={() => setShowIngredients(true)}>
+      <Pressable
+        style={styles.stepArea}
+        onPress={() => setShowIngredients(true)}
+        onTouchStart={(e) => {
+          touchStart.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+        }}
+        onTouchEnd={(e) => {
+          const start = touchStart.current;
+          touchStart.current = null;
+          if (!start) return;
+          const dx = e.nativeEvent.pageX - start.x;
+          const dy = e.nativeEvent.pageY - start.y;
+          // 横に 60px 以上・かつ横が縦の 1.5 倍以上（斜めの誤爆を弾く）
+          if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+          if (dx < 0 && !isLastStep) goToStep(currentStep + 1);
+          if (dx > 0 && currentStep > 0) goToStep(currentStep - 1);
+        }}
+      >
         <View style={styles.stepNumberCircle}>
           <Text style={styles.stepNumberText}>{current.sortOrder}</Text>
         </View>
@@ -198,6 +246,29 @@ export default function CookingModeScreen() {
 
         {current.photoPath && (
           <Image source={{ uri: current.photoPath }} style={styles.stepPhoto} resizeMode="cover" />
+        )}
+
+        {/* 手順写真をその場で記録する（2026-08-28・ユーザー要望）。
+            調理は「写真を撮る一番の現場」なのに、これまでは編集フォームまで
+            戻らないと付けられなかった。写真が無い手順にだけチップを出す —
+            集中モードの雑味を最小にする（撮り直しは詳細・編集から） */}
+        {isNativePlatform && !current.photoPath && (
+          <View style={styles.stepPhotoCapture}>
+            <PhotoPickerField
+              variant="thumb"
+              value={undefined}
+              onChange={(path) => {
+                if (!path) return;
+                void setStepPhoto(current.id, path);
+                // 画面の手順リストにも即反映（表示は絶対パスに解決してから）
+                setSteps((prev) =>
+                  prev.map((s) =>
+                    s.id === current.id ? { ...s, photoPath: resolvePhotoUri(path) } : s,
+                  ),
+                );
+              }}
+            />
+          </View>
         )}
 
         {effectiveTimerSec != null && !timerOnCurrentStep && (
@@ -222,7 +293,7 @@ export default function CookingModeScreen() {
       <View style={styles.navBar}>
         <Pressable
           style={[styles.navPrev, currentStep === 0 && styles.navDisabled]}
-          onPress={() => setCurrentStep(Math.max(0, currentStep - 1))}
+          onPress={() => goToStep(Math.max(0, currentStep - 1))}
           disabled={currentStep === 0}
         >
           <Text style={[styles.navPrevText, currentStep === 0 && styles.navDisabledText]}>
@@ -235,7 +306,7 @@ export default function CookingModeScreen() {
             <Text style={styles.navFinishText}>{t('recipe.cook.finish')}</Text>
           </Pressable>
         ) : (
-          <Pressable style={styles.navNext} onPress={() => setCurrentStep(currentStep + 1)}>
+          <Pressable style={styles.navNext} onPress={() => goToStep(currentStep + 1)}>
             <Text style={styles.navNextText}>{t('recipe.cook.next')}</Text>
           </Pressable>
         )}
@@ -381,6 +452,10 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     letterSpacing: 0.3,
   },
+  stepPhotoCapture: {
+    marginTop: 14,
+    alignItems: 'center',
+  },
   stepPhoto: {
     width: '100%',
     height: 200,
@@ -411,7 +486,9 @@ const styles = StyleSheet.create({
   tapHint: {
     fontSize: 12, // xs: ヒントテキスト
     fontWeight: '400',
-    color: Colors.muted,
+    // muted だと背景と同化して気づかれない（ペルソナレビュー 1.12.2 #5 —
+    // 老眼では「見過ごし確実」）。ここに気づけないと材料を見る手段が無い
+    color: Colors.paperDim,
     marginTop: 20,
   },
   navBar: {

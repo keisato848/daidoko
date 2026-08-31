@@ -12,7 +12,8 @@
  */
 const TITLE_EMOJI: Record<string, string> = {
   肉じゃが: '🍲',
-  味噌汁: '🍜',
+  // 🍜 はラーメン（麺鉢＋箸）で味噌汁と合わない（ペルソナレビュー 1.12.2 #15）
+  味噌汁: '🍲',
   唐揚げ: '🍗',
   炊き込みご飯: '🍚',
   豚汁: '🫕',
@@ -23,7 +24,7 @@ const TITLE_EMOJI: Record<string, string> = {
 const KEYWORD_EMOJI: readonly (readonly [string, string])[] = [
   ['scrambled egg', '🍳'],
   ['pork miso soup', '🫕'],
-  ['miso soup', '🍜'],
+  ['miso soup', '🍲'],
   ['fried chicken', '🍗'],
   ['hamburg', '🍔'],
   ['burger', '🍔'],

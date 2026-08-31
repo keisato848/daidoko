@@ -425,7 +425,8 @@ export default function ImportPhotoScreen() {
 
         <View style={styles.divider} />
 
-        <Text style={styles.altLabel}>{t('recipe.photo.manualLabel')}</Text>
+        {/* 「代わりに手動入力する」の見出しは削除した — 直下のボタンと同じ意味の文が
+            2 つ並び、違いを探して固まる（ペルソナレビュー 1.12.2 #7）。区切り線＋ボタンで足りる */}
         <Pressable style={styles.manualButton} onPress={handleManual}>
           <PenLine size={18} color={Colors.bg} />
           <Text style={styles.manualButtonText}>{t('recipe.photo.manualAction')}</Text>
@@ -800,13 +801,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.border,
     marginVertical: 8,
-  },
-  altLabel: {
-    fontSize: 12,
-    fontWeight: '400',
-    color: Colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   manualButton: {
     flexDirection: 'row',

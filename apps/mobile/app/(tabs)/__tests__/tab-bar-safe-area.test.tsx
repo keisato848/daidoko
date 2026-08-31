@@ -35,7 +35,13 @@ jest.mock('expo-router', () => {
     return null;
   };
   Tabs.Screen = () => null;
-  return { Tabs };
+  return {
+    Tabs,
+    // CookingResumeBar（タブバー直上の Now Cooking バー）が使う分。
+    // セッションが無ければ null を返すので、このテストでは描画されない
+    useRouter: () => ({ push: jest.fn() }),
+    usePathname: () => '/',
+  };
 });
 
 jest.mock('react-native-safe-area-context', () => {
