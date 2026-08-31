@@ -93,7 +93,7 @@ export default function HomeScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // 初回利用ガイド（コーチマーク）
-  const cartRef = useRef<View>(null);
+  const settingsRef = useRef<View>(null);
   const fabRef = useRef<View>(null);
   const coach = useCoachMarks(
     'home',
@@ -105,10 +105,10 @@ export default function HomeScreen() {
         ref: fabRef,
       },
       {
-        key: 'cart',
-        title: t('home.coach.cartTitle'),
-        text: t('home.coach.cartText'),
-        ref: cartRef,
+        key: 'settings',
+        title: t('home.coach.settingsTitle'),
+        text: t('home.coach.settingsText'),
+        ref: settingsRef,
       },
     ],
     !loading && !selectMode,
@@ -307,7 +307,7 @@ export default function HomeScreen() {
             {/* 買い物はボトムタブへ出したので、ここは重複。空いた枠に設定を置く
                 （設定はタブから降ろした — 滅多に開かないのに下端の一等地にあった） */}
             <Pressable
-              ref={cartRef}
+              ref={settingsRef}
               collapsable={false}
               style={styles.headerAction}
               onPress={() => router.push('/(tabs)/settings')}

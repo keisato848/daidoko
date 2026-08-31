@@ -126,13 +126,6 @@ export default function SettingsScreen() {
     }
   }
 
-  const showComingSoon = () => {
-    void dialog.alert({
-      title: t('settings.comingSoonTitle'),
-      message: t('settings.comingSoonBody'),
-    });
-  };
-
   // 初回利用ガイド（コーチマーク）
   const planRef = useRef<View>(null);
   const backupRef = useRef<View>(null);
@@ -272,12 +265,15 @@ export default function SettingsScreen() {
           onPress: () => router.push('/(tabs)/backup'),
         },
         {
+          // クラウド同期は出荷済み（_layout の initSync・family.tsx の共有セクション）なのに、
+          // ここだけ「今後追加予定」で無効のまま残っていた（〜1.12.2）。
+          // **データを守る話を探しに設定を開いた人が、アプリ自身の説明で「同期は無い」と
+          // 結論してしまう** — 家族共有は v2.0 の主役なので誤解のコストが一番高い
           id: 'sync',
           label: t('settings.data.sync'),
           subtitle: t('settings.data.syncSubtitle'),
-          statusLabel: t('settings.comingSoonStatus'),
-          enabled: false,
-          onPress: showComingSoon,
+          enabled: true,
+          onPress: () => router.push('/(tabs)/family'),
         },
         {
           id: 'name-aliases',

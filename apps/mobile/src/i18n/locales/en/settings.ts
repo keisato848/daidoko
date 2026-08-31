@@ -74,7 +74,7 @@ const settings: typeof ja = {
     backup: 'Backup & restore',
     backupSubtitle: 'Create and restore backups on this device',
     sync: 'Cloud sync',
-    syncSubtitle: 'Right now everything is stored on this device only',
+    syncSubtitle: 'Join a family group and your devices stay in sync automatically',
     nameAliases: 'Ingredient name dictionary',
     nameAliasesSubtitle: 'Review and fix the names the AI has learned',
     webShares: 'Recipe books',
@@ -98,7 +98,7 @@ const settings: typeof ja = {
       'AI features (photo recipes, ingredient matching, meal photos) are free once — after that, each ad you watch unlocks one use. Set a Gemini key under “Use your own AI key” to remove the limit.',
     backupTitle: 'Keeping your data safe',
     backupText:
-      'Your data lives on this device. Use “Backup & restore” to write it to a file and bring it back.',
+      'Your data lives on this device (share with family and the shared items sync between your devices). Use “Backup & restore” to write it to a file and bring it back.',
     guideTitle: 'Walkthrough',
     guideText:
       'Tap “?” on any screen to replay its guidance. “Show the walkthrough again” brings back the guidance on every screen.',

@@ -17,9 +17,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../constants/theme';
 import { t } from '../i18n';
 import { useCookingSessionStore } from '../stores/cooking-session.store';
+import { pathHasAnySegment } from '../utils/routeMatch';
 
-/** タブバーを隠す画面では pill も出さない（(tabs)/_layout の FULLSCREEN_CHILD_ROUTES と対応） */
-const HIDDEN_PATH_PARTS = ['/cook', '/import-photo', '/consult'];
+/**
+ * タブバーを隠す画面では pill も出さない（(tabs)/_layout の FULLSCREEN_CHILD_ROUTES と対応）。
+ * **セグメント一致で見る** — `includes` だと `/cookable`（在庫の作れるレシピ）が
+ * `/cook` に当たって、調理直前のいちばん復帰導線が要る画面で pill が消えていた。
+ */
+const HIDDEN_ROUTE_SEGMENTS = ['/cook', '/import-photo', '/consult'];
 
 export function CookingResumeBar({ bottomOffset }: { bottomOffset: number }) {
   const session = useCookingSessionStore((s) => s.session);
@@ -27,7 +32,7 @@ export function CookingResumeBar({ bottomOffset }: { bottomOffset: number }) {
   const pathname = usePathname();
 
   if (!session) return null;
-  if (HIDDEN_PATH_PARTS.some((part) => pathname.includes(part))) return null;
+  if (pathHasAnySegment(pathname, HIDDEN_ROUTE_SEGMENTS)) return null;
 
   return (
     <Pressable
