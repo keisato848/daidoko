@@ -217,6 +217,19 @@ private struct ShoppingWidgetView: View {
   @Environment(\.widgetFamily) private var family
   let entry: ShoppingEntry
 
+  /// 中サイズの 1 列ぶん。品名は 1 行に収め、溢れたら省略する
+  private func column(_ names: [String]) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      ForEach(names, id: \.self) { line in
+        Text("・\(line)")
+          .font(.caption2)
+          .foregroundColor(Brand.text)
+          .lineLimit(1)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
   var body: some View {
     let content = buildContent(from: entry.snapshot, family: family)
 
@@ -238,11 +251,23 @@ private struct ShoppingWidgetView: View {
           .fixedSize(horizontal: false, vertical: true)
       }
 
-      ForEach(content.lines, id: \.self) { line in
-        Text("・\(line)")
-          .font(.caption)
-          .foregroundColor(Brand.text)
-          .lineLimit(1)
+      // **中サイズは 2 列に割る。** iOS の systemMedium は縦が約 158pt しかなく、
+      // 6 行を 1 列で積むとタイトルと「HH:mm 時点」が上下に押し出される（実測）。
+      // Android の中サイズは縦長なので 1 列で入るが、こちらは横に伸ばして辻褄を合わせる。
+      // 「6 件見える」という設計 §2 の約束は保つ。
+      if family == .systemSmall {
+        ForEach(content.lines, id: \.self) { line in
+          Text("・\(line)")
+            .font(.caption)
+            .foregroundColor(Brand.text)
+            .lineLimit(1)
+        }
+      } else {
+        let half = (content.lines.count + 1) / 2
+        HStack(alignment: .top, spacing: 10) {
+          column(Array(content.lines.prefix(half)))
+          column(Array(content.lines.dropFirst(half)))
+        }
       }
 
       if let moreLabel = content.moreLabel {

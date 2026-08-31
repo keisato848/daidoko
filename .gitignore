@@ -11,6 +11,10 @@ build/
 .expo/
 ios/
 android/
+# ただしローカル expo モジュールの ios/ はソース。prebuild の生成物ではないので追跡する
+# （これが無いと Swift と podspec が push されず、他の環境でモジュールごと消える）
+!apps/mobile/modules/**/ios/
+!apps/mobile/modules/**/ios/**
 *.jks
 *.keystore
 keystore.properties

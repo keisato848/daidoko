@@ -35,6 +35,8 @@ const SNAPSHOT_FILE = 'snapshot.json';
  */
 const IOS_APP_GROUP = 'group.com.daidoko.app';
 const IOS_SNAPSHOT_KEY = 'widget_snapshot';
+/** `ShoppingWidget.swift` の `StaticConfiguration(kind:)` と揃える */
+const IOS_WIDGET_KIND = 'ShoppingWidget';
 
 /**
  * 連打で書き潰さないためのデバウンス。買い物リストのチェックは連続で起きる
@@ -84,21 +86,28 @@ async function write(snapshot: WidgetSnapshot): Promise<void> {
  * Swift 側（`targets/shopping-widget/ShoppingWidget.swift`）が
  * `UserDefaults(suiteName:)` で読む。
  *
- * 書いたあと `reloadWidget()` を呼ばないと、WidgetKit のタイムライン（30 分間隔）まで
+ * 書いたあと `reloadWidgets()` を呼ばないと、WidgetKit のタイムライン（30 分間隔）まで
  * 反映されない。Android の `requestWidgetUpdate` と同じ役割。
  *
+ * **書き込みは自前のローカルモジュール**（`modules/daidoko-widget-storage`）で持つ。
+ * `@bacons/apple-targets` の ExtensionStorage は autolinking に拾われず、しかも
+ * ネイティブ不在時に黙って no-op になるため、書けていないことに気づけない
+ * （設計 §7）。自前側は書けなかったら警告を 1 回出す。
+ *
  * ホーム画面に未追加でも無害（対象 0 件で何もしない）。失敗しても
- * `documentDirectory` への書き出しは済んでいるので、ここは黙って諦める。
+ * `documentDirectory` への書き出しは済んでいるので、本体は巻き込まない。
  */
 async function pushToIosWidget(snapshot: WidgetSnapshot): Promise<void> {
   if (Platform.OS !== 'ios') return;
   try {
-    const { ExtensionStorage } = await import('@bacons/apple-targets');
-    const storage = new ExtensionStorage(IOS_APP_GROUP);
-    storage.set(IOS_SNAPSHOT_KEY, JSON.stringify(snapshot));
-    ExtensionStorage.reloadWidget();
+    const { setWidgetSnapshot, reloadWidgets } = await import(
+      '../../modules/daidoko-widget-storage'
+    );
+    const written = setWidgetSnapshot(IOS_SNAPSHOT_KEY, JSON.stringify(snapshot), IOS_APP_GROUP);
+    // 書けていないのに再読み込みを促しても、古い姿を出し直すだけ
+    if (written) reloadWidgets(IOS_WIDGET_KIND);
   } catch {
-    // ウィジェット未導入・App Group 未設定でも本体機能は継続させる
+    // モジュール未リンクでも本体機能は継続させる（警告はモジュール側が出す）
   }
 }
 
