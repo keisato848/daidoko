@@ -84,6 +84,13 @@ if (!args.keepStatusBar) {
 const results = [];
 /** 直前に開いたのが cook 画面か（run の最後が 04 だとセッションが残るため、finally で消す用） */
 let lastShotOpenedCook = false;
+/**
+ * root の可否は最初の 1 回だけ判定して覚える（毎ショット adb root し直さない）。
+ * null = 未判定 / true = 消せる / false = 諦めた（警告済み）。
+ * 宣言はこの位置（最初の captureShot より前）に無いと TDZ で ReferenceError になる —
+ * 下の「cooking session guard」節に置いていた間、このスクリプトは 1 枚も撮れずに落ちていた。
+ */
+let sessionGuardUsable = null;
 try {
   for (const shot of selected) {
     if (shot.manual) {
@@ -185,9 +192,6 @@ function captureShot(shot) {
  * pill をあえて見せたいショットを作る日が来たら、--keep-cooking-session で
  * このガードをオプトアウトできる。
  */
-
-/** root の可否は最初の 1 回だけ判定して覚える（毎ショット adb root し直さない） */
-let sessionGuardUsable = null; // null = 未判定 / true = 消せる / false = 諦めた（警告済み）
 
 function clearCookingSession() {
   if (args.keepCookingSession) return;
