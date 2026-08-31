@@ -17,6 +17,7 @@
  * 使い方:
  *   node scripts/release/capture-store-screenshots.mjs [--serial <serial>] [--shots 01,02]
  *     [--out <dir>] [--recipe <id>] [--keep-status-bar] [--locale en-US]
+ *     [--keep-cooking-session]
  *
  * --locale はアプリ単位の言語（Android 13+ の per-app language）を一時的に切り替えてから
  * 撮る。終了時に必ず端末既定へ戻す。英語掲載用は
@@ -34,6 +35,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const DEFAULT_OUT = path.join(ROOT, 'docs/store/google-play/phone-screenshots');
 const PACKAGE = 'com.daidoko.app';
 const SCHEME = 'daidoko';
+const DB_PATH = `/data/data/${PACKAGE}/files/SQLite/daidoko.db`;
 
 const args = parseArgs(process.argv.slice(2));
 const RECIPE_ID = args.recipe ?? 'recipe-1';
@@ -106,6 +108,7 @@ process.exit(failed.length ? 1 : 0);
 function captureShot(shot) {
   const url = `${SCHEME}://${shot.route}`;
   adb(['shell', 'am', 'force-stop', PACKAGE]);
+  clearCookingSession();
   const start = adb([
     'shell',
     'am',
@@ -141,6 +144,67 @@ function captureShot(shot) {
   console.log(`captured: ${shot.file} (${size}) — ${shot.label}`);
   results.push({ ...shot, status: 'captured', size });
 }
+
+// ─── cooking session guard ───────────────────────────────────────────────────
+
+/**
+ * 調理セッション汚染ガード（PR #254 で必要になった）。
+ *
+ * PR #254 の「調理セッション」: 料理中モード（recipes/{id}/cook）を開くと
+ * cooking-session.store.ts がセッションを開始し、app_meta テーブルの
+ * `cooking_session` キーに永続化する。セッション中は**タブバー直上に
+ * Now Cooking pill**・ホームに復帰カードが出て、「完成」でだけ消える。
+ *
+ * このスクリプトは 04-cooking-mode で cook 画面をディープリンクで開くため
+ * セッションが始まり、その後に撮る 06-family-group や手動の 10 に pill が
+ * 写り込む（07 はタブバーを隠す画面なので写らない）。force-stop しても
+ * セッションは app_meta に残っていて次回起動で復元されるため、DB 側で消す。
+ *
+ * 消し方は store の persist(null) と同じ「空文字を書く」（loadCookingSession は
+ * 空文字なら復元しない）。adb root が効く端末（エミュレータ）のみ実行でき、
+ * root が取れない実機では警告を 1 度だけ出して続行する — 撮影順の工夫
+ * （04 を最後に撮る／撮影後にアプリで「完成」を押す）で回避できるため、
+ * 失敗で撮影は止めない。
+ *
+ * pill をあえて見せたいショットを作る日が来たら、--keep-cooking-session で
+ * このガードをオプトアウトできる。
+ */
+
+/** root の可否は最初の 1 回だけ判定して覚える（毎ショット adb root し直さない） */
+let sessionGuardUsable = null; // null = 未判定 / true = 消せる / false = 諦めた（警告済み）
+
+function clearCookingSession() {
+  if (args.keepCookingSession) return;
+  if (sessionGuardUsable === null) sessionGuardUsable = tryAdbRoot();
+  if (!sessionGuardUsable) return;
+  const res = adb([
+    'shell',
+    `sqlite3 ${DB_PATH} "UPDATE app_meta SET value='' WHERE key='cooking_session';"`,
+  ]);
+  if (!res.ok) {
+    // sqlite3 が無い・DB 未作成など。撮影は止めず、警告の繰り返しもしない
+    console.warn(`WARN: 調理セッションの削除に失敗（続行）: ${res.output.slice(0, 200)}`);
+    sessionGuardUsable = false;
+  }
+}
+
+function tryAdbRoot() {
+  const res = spawnSync(adbPath, ['-s', serial, 'root'], { encoding: 'utf8' });
+  const out = `${res.stdout ?? ''}${res.stderr ?? ''}`;
+  if (res.status !== 0 || /cannot run as root/i.test(out)) {
+    console.warn(
+      'WARN: adb root が使えない端末（実機）のため調理セッションを消せません。' +
+        '04-cooking-mode の後に撮るショットのタブバー直上に Now Cooking pill が' +
+        '写り込みえます。04 を最後に撮る／撮影後にアプリで「完成」を押す、で回避してください',
+    );
+    return false;
+  }
+  // adb root は adbd を再起動する。直後の shell が落ちないよう復帰を待つ
+  spawnSync(adbPath, ['-s', serial, 'wait-for-device']);
+  return true;
+}
+
+// ─── ANR dialog ──────────────────────────────────────────────────────────────
 
 /**
  * wipe-data 直後の重いエミュレータではデモモードのブロードキャストで SystemUI が
@@ -261,7 +325,7 @@ function sleep(ms) {
 }
 
 function parseArgs(argv) {
-  const parsed = { waitMs: 7000, keepStatusBar: false };
+  const parsed = { waitMs: 7000, keepStatusBar: false, keepCookingSession: false };
   for (let i = 0; i < argv.length; i += 1) {
     const t = argv[i];
     if (t === '--serial') parsed.serial = argv[++i];
@@ -271,6 +335,7 @@ function parseArgs(argv) {
     else if (t === '--locale') parsed.locale = argv[++i];
     else if (t === '--wait') parsed.waitMs = Number(argv[++i]);
     else if (t === '--keep-status-bar') parsed.keepStatusBar = true;
+    else if (t === '--keep-cooking-session') parsed.keepCookingSession = true;
   }
   return parsed;
 }
