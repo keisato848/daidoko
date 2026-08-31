@@ -9,6 +9,33 @@ module.exports = [
     ignores: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.expo/**', '**/coverage/**'],
   },
   {
+    /**
+     * **`scripts/**` は今まで lint も typecheck も無かった。** ここで最低限だけ掛ける。
+     *
+     * ただし **`no-use-before-define` は 2026-09-01 の TDZ 事故を捕まえない。**
+     * 実測した（`docs/品質基準.md` §2.3 の事故）:
+     *
+     * | 形 | eslint | 実行 |
+     * | --- | --- | --- |
+     * | 宣言より前に参照（教科書的） | 検出する | 落ちる |
+     * | **事故の形**（宣言は関数より前・呼び出しだけが先） | **素通り** | `ReferenceError` |
+     *
+     * 危ないのは**参照の位置ではなく呼び出しの順序**なので、このルールの守備範囲外。
+     * 事故の形を機械で捕まえるのは `scripts/agent/check-script-tdz.mjs`（CI で実行）。
+     * ここはその手前の安い網で、**これがあるから安全とは考えないこと。**
+     */
+    files: ['scripts/**/*.{mjs,js}', 'e2e/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'module',
+      globals: { process: 'readonly', console: 'readonly', URL: 'readonly', fetch: 'readonly' },
+    },
+    rules: {
+      'no-use-before-define': ['error', { functions: false, variables: true, classes: true }],
+      'no-undef': 'off',
+    },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
       parser: tsparser,

@@ -38,6 +38,13 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      # Q-6: scripts/** の module スコープ TDZ
+      # scripts/** はテストも typecheck も無く、`node --check` も eslint も
+      # この形（呼び出しだけが宣言より先）を捕まえない。2026-09-01 に撮影スクリプトが
+      # これでマージ以降ずっと死んでいた（docs/品質基準.md §2.3）。node 標準機能だけで走る。
+      - name: Script TDZ check
+        run: node scripts/agent/check-script-tdz.mjs
+
       # Q-5: Tests
       - name: Test (mobile + shared)
         run: pnpm -r test

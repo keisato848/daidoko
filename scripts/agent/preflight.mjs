@@ -171,13 +171,20 @@ async function resolveAdb() {
 }
 
 async function verifyGradleWrapper() {
-  const wrapperPath = join(
-    rootDir,
-    'apps',
-    'mobile',
-    'android',
-    platform() === 'win32' ? 'gradlew.bat' : 'gradlew',
-  );
+  const androidDir = join(rootDir, 'apps', 'mobile', 'android');
+  const wrapperPath = join(androidDir, platform() === 'win32' ? 'gradlew.bat' : 'gradlew');
+
+  // `apps/mobile/android/` は `expo prebuild` の生成物で .gitignore 済み。
+  // **新しい worktree には必ず存在しない**ので、ここで落とすと docs や scripts だけの
+  // コミットが pre-commit で止まる（2026-09-01 に実際に詰まった）。
+  // ディレクトリごと無い＝まだ prebuild していないだけなので、署名 env と同じ扱いで通す。
+  // ディレクトリはあるのに wrapper だけ無い場合は prebuild の壊れなので、従来どおり落とす。
+  try {
+    await access(androidDir, fsConstants.F_OK);
+  } catch {
+    return 'not prebuilt (run `expo prebuild` before building; not needed for docs/scripts work)';
+  }
+
   await access(wrapperPath, fsConstants.F_OK);
   return wrapperPath;
 }
