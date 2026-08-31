@@ -11,6 +11,8 @@ const notification = {
   timerDoneTitle: 'タイマー終了',
   timerDoneBody: '調理時間が終わりました。',
 
+  cookingChannel: '調理中の表示',
+  cookingBody: '手順 {{step}} / {{total}} ・ タップで続きへ',
   lowStockChannel: '在庫の残量通知',
   lowStockTitle: '在庫がなくなりそうです',
   lowStockBody: '{{names}} の残りが少なくなっています。買い物リストに追加しましょう。',

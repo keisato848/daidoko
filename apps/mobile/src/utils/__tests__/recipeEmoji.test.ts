@@ -13,7 +13,8 @@ describe('getRecipeEmoji', () => {
   });
 
   it('英語は語句の部分一致で引く', () => {
-    expect(getRecipeEmoji('Miso Soup')).toBe('🍜');
+    // 🍜 はラーメン（麺鉢＋箸）で味噌汁の絵として誤り（ペルソナレビュー 1.12.2 #15）
+    expect(getRecipeEmoji('Miso Soup')).toBe('🍲');
     expect(getRecipeEmoji('Karaage Fried Chicken')).toBe('🍗');
     expect(getRecipeEmoji('Takikomi Gohan (Mixed Rice)')).toBe('🍚');
   });

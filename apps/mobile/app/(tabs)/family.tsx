@@ -763,7 +763,11 @@ const styles = StyleSheet.create({
     color: Colors.bg,
   },
   buttonDisabled: {
+    // gold を半透過するだけだと「押せる薄い茶色のボタン」に見え、押せるのか
+    // 迷わせる（ペルソナレビュー 1.12.2 #8 — 63歳は判別できなかった）。
+    // 無彩色に落として「いまは押せない」を形で伝える
     opacity: 0.4,
+    backgroundColor: Colors.bgInput,
   },
   memberRow: {
     flexDirection: 'row',

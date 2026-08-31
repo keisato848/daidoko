@@ -45,7 +45,14 @@ function formatCookingNumber(value: number): string {
   if (value >= 100) return String(Math.round(value));
   if (value >= 10) return String(Math.round(value * 2) / 2);
   if (value >= 1) return trimZero(Math.round(value * 4) / 4);
-  return trimZero(Math.round(value * 8) / 8);
+  // 1 未満は小数でなく**分数**で出す。「0.38 oz」は機械の換算値にしか見えない —
+  // 英語圏のレシピ表記は 3/8・1/4 のような分数が慣習
+  // （ペルソナレビュー 1.12.2 #16・英語話者の指摘）
+  const eighths = Math.round(value * 8);
+  if (eighths <= 0) return trimZero(value);
+  if (eighths >= 8) return '1';
+  const FRACTIONS = ['', '1/8', '1/4', '3/8', '1/2', '5/8', '3/4', '7/8'];
+  return FRACTIONS[eighths];
 }
 
 function trimZero(value: number): string {
