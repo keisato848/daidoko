@@ -71,10 +71,25 @@ EXPO_PUBLIC_ENABLE_SAMPLE_DATA=1 EXPO_PUBLIC_DISABLE_COACH_MARKS=1 \
 node scripts/release/capture-ios-screenshots.mjs     # 9:41・満充電に固定して取得
 ```
 
-- 出力 = `docs/store/app-store/phone-screenshots/`（順序・サイズは同 README）。
-- 主サイズ = 6.9"（iPhone 16 Pro Max = 1320×2868）。`08`/`10` は manual（既存維持）。
-- **ストア公開物なのでユーザーに提示して承認を得る**。アップロードは App Store Connect Web UI か fastlane deliver
-  （Play のような API 一括スクリプトは未整備）。
+- 出力 = `docs/store/app-store/phone-screenshots/`（en は `phone-screenshots-en/`。順序・サイズは同 README）。
+- 主サイズ = 6.9"（iPhone 16 Pro Max = 1320×2868）。`08`/`10` は manual（AI 実行と実データが要る）。
+- **ストア公開物なのでユーザーに提示して承認を得る**。アップロードは Windows 側から
+  `node scripts/release/update-appstore-screenshots.mjs --lang ja|en`（ロケールごとに別セット。
+  `docs/リリース手順.md` §7-5）。
+
+### シミュレータ操作の罠（2026-08-29・1.12.3 の撮影で実測）
+
+- **`simctl erase` 後に Simulator.app のウィンドウが最小化されることがある。**
+  最小化されると `System Events` の `count of windows` が 0 になり AppleScript のタップが
+  全滅する。`open -a Simulator` でも Window メニューでも復帰せず、**Dock のアイコンを
+  クリック**して解決した。erase したら `count of windows` を確認すること
+- **撮影前に `simctl list devices booted` が 1 台だけか確認する。** `open -a Simulator` の
+  繰り返しで別の個体（iPhone 16 Plus）が意図せず同時起動していた。撮影スクリプトは
+  booted を自動選択するので、複数起動だと別の画面サイズを撮る。`--udid` 明示と二重で守る
+- **タップは座標でなくアクセシビリティ要素名で。** iOS の AX 要素は macOS 側から見える:
+  `entire contents of window 1` から `description` 一致で click。**`repeat with e in els` では
+  要素参照が解決されない — インデックス指定（`item i of els`）が必要**。URL 確認ダイアログの
+  「開く」は SpringBoard 側にあり、アプリの AX ツリーではなくウィンドウ全体から探す
 
 ## 3. EAS iOS 本番ビルド（**クラウド一択**）
 
