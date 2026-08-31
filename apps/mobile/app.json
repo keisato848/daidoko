@@ -2,7 +2,7 @@
   "expo": {
     "name": "だいどこ",
     "slug": "daidoko",
-    "version": "1.12.3",
+    "version": "1.13.0",
     "orientation": "default",
     "scheme": "daidoko",
     "userInterfaceStyle": "dark",
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.daidoko.app",
-      "buildNumber": "10033",
+      "buildNumber": "10034",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["ja", "en"]
@@ -29,7 +29,7 @@
     },
     "android": {
       "package": "com.daidoko.app",
-      "versionCode": 10033,
+      "versionCode": 10034,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"
