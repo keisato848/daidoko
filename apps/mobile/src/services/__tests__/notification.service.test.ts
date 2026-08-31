@@ -5,6 +5,7 @@ import * as Notifications from 'expo-notifications';
 import {
   addLowStockTapListener,
   addMenuTapListener,
+  cancelAllMenuNotifications,
   cancelScheduledNotification,
   cancelTimerNotification,
   consumeLowStockLaunchTap,
@@ -124,6 +125,42 @@ describe('notification.service', () => {
       jest.clearAllMocks();
       await cancelScheduledNotification(null);
       expect(Notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
+    });
+  });
+
+  // 再入対策（設計 §10.11.4）— id 帳簿の代わりに OS の予約一覧を実際に掃く
+  describe('cancelAllMenuNotifications', () => {
+    it('type:menu の予約だけを全部取り消し、他タイプ（タイマー等）は残す', async () => {
+      (Notifications.getAllScheduledNotificationsAsync as jest.Mock).mockResolvedValueOnce([
+        { identifier: 'menu-1', content: { data: { type: 'menu' } } },
+        { identifier: 'timer-1', content: { data: { type: undefined } } },
+        { identifier: 'low-stock-1', content: { data: { type: 'low-stock' } } },
+        { identifier: 'menu-2', content: { data: { type: 'menu' } } },
+      ]);
+
+      await cancelAllMenuNotifications();
+
+      expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(2);
+      expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('menu-1');
+      expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('menu-2');
+    });
+
+    it('menu の予約が無ければ何も取り消さない', async () => {
+      (Notifications.getAllScheduledNotificationsAsync as jest.Mock).mockResolvedValueOnce([
+        { identifier: 'timer-1', content: { data: { type: 'timer' } } },
+      ]);
+
+      await cancelAllMenuNotifications();
+
+      expect(Notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
+    });
+
+    it('一覧取得が失敗しても投げない（次回起動でまた掃く）', async () => {
+      (Notifications.getAllScheduledNotificationsAsync as jest.Mock).mockRejectedValueOnce(
+        new Error('unavailable'),
+      );
+
+      await expect(cancelAllMenuNotifications()).resolves.toBeUndefined();
     });
   });
 

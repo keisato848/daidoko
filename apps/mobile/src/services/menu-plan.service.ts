@@ -19,11 +19,12 @@ import {
   setAppMeta,
 } from './app-meta.service';
 import type { MenuCandidate } from './menu-arrange.provider';
-import { cancelScheduledNotification, scheduleMenuNotification } from './notification.service';
+import { cancelAllMenuNotifications, scheduleMenuNotification } from './notification.service';
 import { addShoppingItem, getShoppingItems, removeShoppingItem } from './shopping-list.service';
 import { runSyncAndAwaitPull } from './sync-runner.service';
 import { refreshWidgetSnapshot } from './widget-snapshot.service';
 import { isNativePlatform } from '../db/client';
+import { shouldHideSeedRecipe } from '../db/sampleData';
 import { secondsUntilNextMenuNotifyTime } from '../utils/menuAuto';
 import {
   adoptOrBuildMenuPlan,
@@ -44,8 +45,6 @@ import {
 } from '../utils/menuPlan';
 
 const MENU_PLAN_KEY = 'menu_plan';
-/** 前回予約した献立通知の id（毎起動で 1 本だけ予約し直す・§10.11.4） */
-const MENU_NOTIFICATION_ID_KEY = 'menu_notification_id';
 
 /** 保存する献立。`version` は将来の互換用（省略可フィールドで増やす・§10.6） */
 export interface StoredMenuPlan {
@@ -128,7 +127,7 @@ async function loadMenuRecipes(): Promise<MenuRecipe[]> {
   const schema = await import('../db/schema');
   const db = getDb();
 
-  const recipes = await db
+  const allRecipes = await db
     .select({
       id: schema.recipes.id,
       title: schema.recipes.title,
@@ -137,6 +136,12 @@ async function loadMenuRecipes(): Promise<MenuRecipe[]> {
     })
     .from(schema.recipes)
     .where(eq(schema.recipes.status, 'active'));
+
+  // シードレシピ（肉じゃが等）は一覧・検索・詳細で隠している
+  // （recipe.service.ts の getRecipeList/getRecipeDetail と同じ shouldHideSeedRecipe）。
+  // ここで揃えないと、隠しているはずのレシピが献立候補として選ばれ、選ばれた献立から
+  // 「レシピを開く」と「レシピが見つかりません」になる（実機で確認済み）。
+  const recipes = allRecipes.filter((r) => !shouldHideSeedRecipe(r.id));
   if (recipes.length === 0) return [];
 
   const revIds = recipes.map((r) => r.currentRevId).filter((id): id is string => Boolean(id));
@@ -496,23 +501,44 @@ export async function clearMenuPlan(): Promise<void> {
 // utils/menuAuto.ts の純関数側にあり、ここは読み書きと呼び出し順だけを持つ。
 
 /**
- * 翌朝の献立通知を 1 本だけ予約し直す（§10.11.4）。**毎起動で呼ぶ**——
- * 前回分をまず取り消してから予約するので、呼ぶたびに増えたりしない。
- * 自動モードがオフなら（呼び出し前に）既に取り消して終わる——これで
- * 「通知 → menu → 歯車 → OFF」の 3 タップで確実に止まる。
+ * `refreshMenuNotificationSchedule` の直列化キュー。前段が終わるまで次段を待たせるだけの
+ * モジュールレベル変数（DB には何も残さない）。
+ *
+ * 呼び出し元（`app/_layout.tsx` の起動/フォアグラウンド復帰、`menu-settings.tsx` の
+ * トグル）は互いを知らないので、通知権限ダイアログの表示でアプリが background/foreground
+ * を跨ぐと**同じタイミングで 2 回同時に呼ばれうる**——ここで 1 本の待ち行列にして、
+ * 常に「前の掃引＋予約が終わってから次の掃引＋予約」の順にする。
+ * 前段が失敗しても待ち行列自体は止めない（`.catch` で握り、呼び出し元へは
+ * 個別の `run` の方でエラーを伝える）。
  */
-export async function refreshMenuNotificationSchedule(): Promise<void> {
-  if (!isNativePlatform) return;
-  const prevId = await getAppMeta(MENU_NOTIFICATION_ID_KEY);
-  await cancelScheduledNotification(prevId);
-  await setAppMeta(MENU_NOTIFICATION_ID_KEY, '');
+let menuNotificationScheduleChain: Promise<void> = Promise.resolve();
 
+/**
+ * 翌朝の献立通知を 1 本だけ予約し直す（§10.11.4）。**毎起動で呼ぶ**——
+ * 掃引方式（`cancelAllMenuNotifications`）で OS 上の type:menu 予約を全部消してから、
+ * 自動モードがオンなら 1 本だけ予約する。
+ *
+ * 以前は「前回 id を app_meta に 1 本だけ覚えて、それだけ消す」帳簿方式だったが、
+ * 本関数が二重に走ると（下記の直列化コメント参照）両方が同じ id を読んで両方 cancel →
+ * 両方 schedule し、id の記録は後勝ちで**先に予約した方が孤児化**した
+ * （AQUOS 実機で確認・詳細は `docs/買い物リスト・在庫設計.md` §10.11.4）。
+ * 掃引方式なら二重予約が起きても・過去の版の孤児が残っていても、次に呼んだときに
+ * まとめて回収できる。
+ */
+export function refreshMenuNotificationSchedule(): Promise<void> {
+  const run = menuNotificationScheduleChain.then(() => doRefreshMenuNotificationSchedule());
+  menuNotificationScheduleChain = run.catch(() => undefined);
+  return run;
+}
+
+async function doRefreshMenuNotificationSchedule(): Promise<void> {
+  if (!isNativePlatform) return;
+  await cancelAllMenuNotifications();
   if (!(await isMenuAutoEnabled())) return;
 
   const time = await getMenuAutoNotifyTime();
   const seconds = secondsUntilNextMenuNotifyTime(new Date(), time);
-  const id = await scheduleMenuNotification(seconds);
-  if (id) await setAppMeta(MENU_NOTIFICATION_ID_KEY, id);
+  await scheduleMenuNotification(seconds);
 }
 
 /**

@@ -155,8 +155,8 @@ export async function cancelTimerNotification(id: string | null): Promise<void> 
 
 /**
  * 翌朝の献立通知を `seconds` 秒後に 1 本だけ予約する。
- * 呼び出し側（`menu-plan.service.ts`）が毎回、前回分を `cancelScheduledNotification`
- * してから呼ぶ責務を持つ — ここでは予約するだけ。
+ * 呼び出し側（`menu-plan.service.ts`）が毎回、`cancelAllMenuNotifications` で
+ * 既存の献立通知を掃いてから呼ぶ責務を持つ — ここでは予約するだけ。
  */
 export async function scheduleMenuNotification(seconds: number): Promise<string | null> {
   if (!isNativePlatform || seconds <= 0) return null;
@@ -183,6 +183,29 @@ export async function scheduleMenuNotification(seconds: number): Promise<string 
     });
   } catch {
     return null;
+  }
+}
+
+/**
+ * 予約済みの献立通知（`data.type === 'menu'`）を **OS の予約一覧を実際に見て** 全部取り消す。
+ *
+ * 以前は「前回予約した id を app_meta に 1 本だけ覚えておいて、それだけ消す」帳簿方式
+ * だったが、`refreshMenuNotificationSchedule`（`menu-plan.service.ts`）が二重に走ると
+ * 両方が同じ id を読んで両方 cancel → 両方 schedule し、id の記録は後勝ちで
+ * **先に予約した方が孤児化**した（AQUOS 実機・§10.11.4 の顛末）。
+ * 掃引方式なら「今 OS に残っている type:menu の予約」を毎回全部消すので、
+ * 二重予約が起きても・過去の版が残した孤児があっても、次に呼んだときに回収できる。
+ */
+export async function cancelAllMenuNotifications(): Promise<void> {
+  if (!isNativePlatform) return;
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const menuOnes = scheduled.filter((n) => n.content.data?.type === MENU_DATA_TYPE);
+    await Promise.all(
+      menuOnes.map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
+    );
+  } catch {
+    // 一覧取得・キャンセルの失敗は致命ではない（次回起動時にまた掃く）
   }
 }
 
