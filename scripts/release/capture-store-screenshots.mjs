@@ -82,6 +82,8 @@ if (!args.keepStatusBar) {
   dismissAnrIfPresent();
 }
 const results = [];
+/** 直前に開いたのが cook 画面か（run の最後が 04 だとセッションが残るため、finally で消す用） */
+let lastShotOpenedCook = false;
 try {
   for (const shot of selected) {
     if (shot.manual) {
@@ -94,6 +96,13 @@ try {
 } finally {
   if (!args.keepStatusBar) exitDemoMode();
   if (args.locale) applyAppLocale(''); // 端末既定に戻す（撮り忘れの言語汚染を残さない）
+  if (lastShotOpenedCook && !args.keepCookingSession) {
+    // --shots 04 のように cook 画面で撮影を終えるとセッションだけが残り、
+    // この後に人手で撮る 08/10 に Now Cooking pill が写り込む。
+    // 次のショットが無い＝captureShot 冒頭のガードはもう走らないため、ここで消す
+    adb(['shell', 'am', 'force-stop', PACKAGE]);
+    clearCookingSession();
+  }
 }
 
 console.log('\n=== summary ===');
@@ -109,6 +118,7 @@ function captureShot(shot) {
   const url = `${SCHEME}://${shot.route}`;
   adb(['shell', 'am', 'force-stop', PACKAGE]);
   clearCookingSession();
+  lastShotOpenedCook = false;
   const start = adb([
     'shell',
     'am',
@@ -125,6 +135,8 @@ function captureShot(shot) {
     results.push({ ...shot, status: 'FAILED' });
     return;
   }
+  // 起動に成功した時点でセッションは始まっている（screencap の成否とは無関係）
+  lastShotOpenedCook = shot.route.endsWith('/cook');
   sleep(args.waitMs); // コールドスタート＋データ読込＋アニメーション静定
   dismissAnrIfPresent();
 
@@ -159,6 +171,10 @@ function captureShot(shot) {
  * セッションが始まり、その後に撮る 06-family-group や手動の 10 に pill が
  * 写り込む（07 はタブバーを隠す画面なので写らない）。force-stop しても
  * セッションは app_meta に残っていて次回起動で復元されるため、DB 側で消す。
+ *
+ * 消すタイミングは 2 箇所: 各ショットの起動前（前のショットが残した分）と、
+ * run の終了時（--shots 04 のように cook 画面で撮り終えると起動前ガードが
+ * もう走らず、後で人手で撮る 08/10 に pill が残るため）。
  *
  * 消し方は store の persist(null) と同じ「空文字を書く」（loadCookingSession は
  * 空文字なら復元しない）。adb root が効く端末（エミュレータ）のみ実行でき、
