@@ -207,6 +207,10 @@ export function PhotoPickerField({
       {isCover && !canGenerate && !generating && (
         <Text style={styles.aiHint}>{t('coverImage.actionDisabledHint')}</Text>
       )}
+      {/* 押す前に「枠は生成に対して消費する」を伝える（採用/やめるでは戻らない・設計 §3）。 */}
+      {isCover && canGenerate && !generating && (
+        <Text style={styles.aiHint}>{t('coverImage.actionHint')}</Text>
+      )}
 
       {isCover && (
         <CoverImagePreviewSheet

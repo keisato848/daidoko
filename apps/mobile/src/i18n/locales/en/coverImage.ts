@@ -3,6 +3,7 @@ import type ja from '../ja/coverImage';
 const coverImage: typeof ja = {
   action: 'Create an image with AI',
   actionDisabledHint: 'Enter a dish name first',
+  actionHint: 'Each generation uses one from your free monthly credits',
   generating: 'Creating an image…',
 
   previewNotice: {
