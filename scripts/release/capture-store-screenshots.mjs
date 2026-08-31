@@ -202,7 +202,11 @@ function clearCookingSession() {
     `sqlite3 ${DB_PATH} "UPDATE app_meta SET value='' WHERE key='cooking_session';"`,
   ]);
   if (!res.ok) {
-    // sqlite3 が無い・DB 未作成など。撮影は止めず、警告の繰り返しもしない
+    // DB 未作成（wipe 直後・アプリ初回起動前）は「消すものが無い」だけ — 諦めない。
+    // 最初のショットの起動前は必ずここを通るため、ここで latch すると
+    // 推奨手順（-wipe-data 起動）では run 全体でガードが死ぬ
+    if (/unable to open database/i.test(res.output)) return;
+    // sqlite3 が無いなど。撮影は止めず、警告の繰り返しもしない
     console.warn(`WARN: 調理セッションの削除に失敗（続行）: ${res.output.slice(0, 200)}`);
     sessionGuardUsable = false;
   }
