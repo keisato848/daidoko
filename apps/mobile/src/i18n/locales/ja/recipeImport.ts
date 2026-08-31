@@ -12,8 +12,8 @@ const recipeImport = {
     loading: '共有ページを読み込んでいます',
     recipeLead: '家族から共有されたレシピです。内容を確認して保存してください。',
     bookLead: {
-      one: 'レシピ帖に{{count}}品あります。まとめて蔵書庫に保存できます。',
-      other: 'レシピ帖に{{count}}品あります。まとめて蔵書庫に保存できます。',
+      one: 'レシピ帖に{{count}}品あります。まとめて保存できます。',
+      other: 'レシピ帖に{{count}}品あります。まとめて保存できます。',
     } satisfies PluralMessage,
     ingredientCount: {
       one: '材料 {{count}}',
@@ -22,18 +22,18 @@ const recipeImport = {
     passcodeLead:
       'このレシピ帖はパスコードで守られています。共有した人から聞いた4桁を入力してください。',
     unlock: '開く',
-    save: '蔵書庫に保存',
+    save: '保存する',
     saveAll: {
-      one: '{{count}}品を蔵書庫に保存',
-      other: '{{count}}品を蔵書庫に保存',
+      one: '{{count}}品を保存',
+      other: '{{count}}品を保存',
     } satisfies PluralMessage,
     saving: '保存中…',
-    saved: '蔵書庫に保存しました',
+    saved: '保存しました',
     savedCount: {
-      one: '{{count}}品を蔵書庫に保存しました',
-      other: '{{count}}品を蔵書庫に保存しました',
+      one: '{{count}}品を保存しました',
+      other: '{{count}}品を保存しました',
     } satisfies PluralMessage,
-    backToLibrary: '蔵書庫へ戻る',
+    backToLibrary: 'レシピ一覧へ戻る',
     error: {
       notFound:
         'この共有ページは見つかりませんでした（共有が停止されたか、期限が切れた可能性があります）。',
