@@ -33,7 +33,8 @@ const LISTING_MD = path.join(ROOT, 'docs/store/google-play', SOURCE);
 
 // ─── listing-ja.md からセクション抽出 ───────────────────────────────────────
 function extractSection(md, heading) {
-  const re = new RegExp(`^## ${heading}\\s*$`, 'm');
+  // 見出しには「（25 字）」のような字数注記が付く（全角・半角の括弧どちらも許容）
+  const re = new RegExp(`^## ${heading}(?:[（(][^\\n]*)?\\s*$`, 'm');
   const m = re.exec(md);
   if (!m) throw new Error(`${SOURCE} に「## ${heading}」が見つかりません`);
   const start = m.index + m[0].length;
