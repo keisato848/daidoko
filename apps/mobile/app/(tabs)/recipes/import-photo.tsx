@@ -371,6 +371,10 @@ export default function ImportPhotoScreen() {
                   <Text style={styles.quotaText}>
                     {tCount('recipe.photo.quotaRemaining', freemium.remaining)}
                   </Text>
+                  {/* 残数の下に「使い切ったらどうなるか」を予告する。旧リンク
+                      「使い放題にする」は中身が読めず全ペルソナがためらった
+                      （docs/reviews/persona/1.12.2.md #1） */}
+                  <Text style={styles.quotaHint}>{t('recipe.photo.quotaHint')}</Text>
                 </Pressable>
               ))}
 
@@ -716,16 +720,27 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   disclosureText: {
-    fontSize: 11,
-    color: Colors.muted,
+    // 「サーバーに送信・保存されない」は写真を渡す前の判断材料そのもの。
+    // muted(#5A4A34) だと背景と同化して読めない（ペルソナレビュー #2 — 63歳は
+    // 「読めなかった」と明言）。開示は読めて初めて開示になる
+    fontSize: 12,
+    color: Colors.paperDim,
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: 17,
   },
   quotaText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.gold,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  quotaHint: {
     fontSize: 12,
     color: Colors.gold,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 17,
+    marginTop: 2,
   },
   quotaPremium: {
     fontSize: 12,

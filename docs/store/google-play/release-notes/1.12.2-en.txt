@@ -1,0 +1,1 @@
+Fixed the labels on the bottom tab bar being cut off at the edge of the screen on some devices, where they overlapped the gesture bar.

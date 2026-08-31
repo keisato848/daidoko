@@ -2,7 +2,7 @@
 
 作成日: 2026-08-27
 更新日: 2026-08-29（決定変更 B — 訴求の主語を「お店の味」→「献立」へ。詳細は下記）
-対象ビルド: iOS 1.13.0（予定）（App ID `6800964382`）
+対象ビルド: iOS 1.13.0（予定）（App ID `6800964382`・公開中は 1.12.0 / 10029・ASC の直前作業は 1.12.3 / 10033）
 反映方法: App Store Connect API（`appStoreVersionLocalizations` / `appInfoLocalizations`）
 
 **App Store に英語ロケールを新設するための原稿**（それまで ASC は `ja` のみ）。
@@ -124,6 +124,10 @@ Recipes without a photo can now get an AI-generated image (clearly labeled as AI
 The free AI allowance is now 5 uses per month.
 
 Also fixed: kana search breaking after edits, restaurant names being lost, a black cover-photo preview, and overlapping text for long names.
+
+Fixed the labels on the bottom tab bar being cut off at the edge of the screen on some devices.
+
+Made the free-usage note on "Photo to recipe" easier to read, and spelled out what happens when you run out: watch an ad to continue, or use your own AI key for unlimited use. Also removed a field that only made sense in Japanese from the English recipe form.
 
 ## URL・その他
 

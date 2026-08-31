@@ -28,13 +28,17 @@ description: Google Play へのアプリリリース一式。バージョンバ�
    - ローカル release ビルドは**必ず** `node scripts/agent/build-android.mjs`（生 gradlew は失敗する）
    - `adb reverse --remove-all` で localhost ブリッジを排除（API 既定 = Railway 本番）
    - 実機で AI 機能（食べた・名寄せ等）を操作し `railway logs --service daidoko` で 200 を裏どり
-6. **提出**（外向きアクション — ユーザーの明示承認を確認してから）:
+6. **ペルソナレビュー**（スクショ確定後・提出前 / advisory・ブロックしない）:
+   `Workflow persona-review` を `args={version, jaDir, enDir}` で実行し、レポートを
+   `docs/reviews/persona/<version>.md` へ保存（`docs/開発ハーネス.md` §8）。
+   high の指摘はユーザーに提示して「直してから出すか」を仰ぐ
+7. **提出**（外向きアクション — ユーザーの明示承認を確認してから）:
    ```
    cd apps/mobile
    pnpm exec eas submit -p android --profile production --path <AABパス> --non-interactive
    ```
    認証は `eas.json` の `submit.production`（キー: `C:\secure\play-service-account.json`）
-7. 提出後にユーザーへ案内: データセーフティ（Console UI のみ）・ストア掲載（`update-store-listing` スキル）・審査待ち
+8. 提出後にユーザーへ案内: データセーフティ（Console UI のみ）・ストア掲載（`update-store-listing` スキル）・審査待ち
 
 ## 既知の落とし穴
 
