@@ -65,6 +65,11 @@ const AUDITORS = [
   },
   { agent: 'audit-test-teeth', label: 'テストの歯', task: '緑だが守っていないテストが無いか' },
   { agent: 'audit-design-drift', label: '設計との乖離', task: '設計書と実装が食い違っていないか' },
+  {
+    agent: 'audit-listing-claims',
+    label: '掲載文の主張',
+    task: 'ストア掲載文の主張が実装で裏取りできるか',
+  },
 ];
 
 const scope = args?.scope === 'full' ? 'full' : 'changed';
@@ -80,7 +85,9 @@ const scopeNote =
     ? '**全体**を見よ。時間をかけてよい。'
     : `**直近の変更に関係する範囲**だけ見よ。まず \`git status --short\` と
 \`git diff --stat origin/main...HEAD\` で何が変わったかを掴み、**変更に関係しない指摘はしない**。
-変更が docs/ や .claude/ だけなら「対象なし」として即座に空で返してよい（無理に探さない）。`;
+変更が docs/ や .claude/ だけなら「対象なし」として即座に空で返してよい（無理に探さない）。
+**ただし \`docs/store/\` の変更は例外** — 掲載文は公開される約束なので、
+audit-listing-claims は docs のみの変更でも必ず点検すること。`;
 
 phase('Audit');
 const results = await parallel(
