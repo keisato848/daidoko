@@ -3,17 +3,19 @@
 # would show it to users). 1.12.1 (5 bug fixes: reading/kana search reset on
 # edit, restaurant name lost from "get closer to the taste", restaurant name
 # not saved on hand-typed recipes, black cover-photo preview, overlapping long
-# names) was left unsubmitted. It was never shipped on its own and is folded
-# into 1.13.0 here. The old draft stays at release-notes/1.12.1-en.txt.
+# names), 1.12.2 (tab labels cut off at the screen edge), and 1.12.3 (clearer
+# free-usage note, more readable disclosure text, dropped the Japanese-only
+# reading field from the English form) were all left unsubmitted (no
+# v1.12.2-play-10032 / v1.12.3-play-10033 submit tags). None shipped on its
+# own; all three are folded into 1.13.0 here. The old drafts stay at
+# release-notes/1.12.1-en.txt, 1.12.2-en.txt and 1.12.3-en.txt.
 
-Meal plan: build a 2-7 day plan from your pantry, with a reason per day. Swap out anything.
+Meal plan (2-7 days from your pantry, swap any day) and an optional auto-plan mode: ready each morning with a notification, off by default.
 
-New opt-in auto-plan: today's plan is ready each morning with a notification, and can auto-add missing ingredients. Off by default.
+Resume cooking from a bar or the home screen; add step photos as you cook.
 
-Recipes with no photo can get an AI image now.
+AI recipe images (3 free a month, separate allowance, always labeled AI-made). Shopping list widget (Android).
 
-Added a shopping list widget (Android).
+Free AI use: now 5 a month, up from 1 per install.
 
-Free AI allowance raised from 1 to 5 a month.
-
-Also fixed: kana search reset on edit, restaurant name lost in two flows, black cover-photo preview, overlapping long names.
+Also fixed: tab labels cut off, kana search reset, lost restaurant names, black cover preview, overlapping text.

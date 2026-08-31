@@ -40,31 +40,32 @@ Cooking is a chore with a lot of moving parts: find a recipe, plan the week, sho
 • Import from a recipe URL or pasted text — unlimited, no AI allowance used
 • Just photograph a dish and AI drafts the ingredients, amounts and steps; you always review and edit before saving
 • Photograph a cookbook page or food package and AI reads it — front and back merged into one recipe
-• No photo yet? **AI can generate an image** for the recipe (clearly labeled "AI-generated image"; 3 free a month)
+• **AI can generate an image** for the recipe, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance)
 • Recreate a restaurant dish, too — write how yours turned out and AI narrows the gap, showing exactly what changed
 • Cover photos, per-step photos, and a cooking log of what you made and when
 • Cooking mode shows one step at a time, large, with timers and no ads
 
 ■ Shopping and pantry, connected
-• Add what a meal plan or recipe is missing to your shopping list in one tap — items you already have stay on the list, so you can decide what to add
+• Add what a meal plan or recipe is missing to your shopping list in one tap
 • Check your shopping list from a home-screen widget too (Android)
 • Move what you bought into the pantry — by barcode or by scanning a receipt
 • Track expiry dates if you want to — nothing is required, and we don't nag you with reminders
-• See which recipes you can cook right now, ranked by how much you already have — handy for using up meal-prep batches, too
+• See which recipes you can cook right now, ranked by how much you already have
 • Get a reminder when something is running low
 
 ■ Shared with the family, automatically
 • Share an invite code — **no account, no email address**
-• Meal plans, recipes, shopping list and pantry arrive on every phone in the family automatically
+• Recipes, shopping list and pantry arrive on every phone in the family automatically (each phone builds its own meal plan)
 • Choose per item whether the shopping list and pantry are shared or private
 • Your meal plan, recipes, shopping list, pantry and cooking mode work offline; they catch up when you are back online
 • Only the AI features and URL import need a connection
 
 ■ Where your data lives
 • No account, no sign-up. We never hold your email address or phone number
-• **Unless you share with family, your data stays on your device**
+• **Unless you share with family or publish a recipe page, your data stays on your device**
 • Join a family group and only the items you share travel through our server.
 Delete the group and everything on the server goes with it
+• A published recipe page stays on our server until you stop sharing it
 • Backup, restore and a transfer file for moving to a new phone
 • AI features include a free monthly allowance (5 a month), then a short ad unlocks one more.
 Add your own Gemini key for no limit
@@ -72,9 +73,8 @@ Add your own Gemini key for no limit
 ■ Who it is for
 • Anyone tired of staring into the fridge every night
 • Cooks who want their recipes and cooking log in one place
-• Households managing pantry stock, expiry dates or meal prep without it becoming a chore
+• Households managing pantry stock, expiry dates or meal prep
 • Families who want a meal plan, shopping and pantry to work together
-• People who want to follow a recipe while cooking without ads in the way
 
 ■ Permissions
 • Camera: photographing dishes, reading text, scanning barcodes

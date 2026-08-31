@@ -45,13 +45,13 @@ DAIDOKO: Meal Plan & Recipes
 
 From pantry to shopping list
 
-## プロモーションテキスト（138 文字）
+## プロモーションテキスト（135 文字）
 
-Meal-plan from what you already have. No photo yet? AI can now generate one. Recipes, shopping, pantry and family sharing, all in one app.
+Meal-plan from what you already have. AI can now generate a recipe image. Recipes, shopping, pantry and family sharing, all in one app.
 
-## キーワード（93 文字・カンマ区切り・スペースを入れない）
+## キーワード（95 文字・カンマ区切り・スペースを入れない）
 
-cooking,recipe manager,pantry,grocery,shopping list,fridge,meal prep,expiry,leftovers,copycat
+cooking,recipe manager,grocery,fridge,meal prep,expiry,leftovers,copycat,menu planner,inventory
 
 > App 名・サブタイトルに入っている語は Apple が別途索引するので**繰り返さない**
 > （DAIDOKO / meal / plan / recipes / pantry / shopping list 等）。
@@ -72,10 +72,11 @@ Cooking is a chore with a lot of moving parts: find a recipe, plan the week, sho
 • Search by recipe name, tag or ingredient
 • Import from a recipe URL or pasted text
 • Just photograph a dish and AI drafts the ingredients, amounts and steps; you always review and edit before saving
-• No photo yet? **AI can generate an image** for the recipe (clearly labeled "AI-generated image"; 3 free a month)
+• Photograph a cookbook page or food package and AI reads it (front and back merged into one)
+• **AI can generate an image** for the recipe, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance)
 • Recreate a restaurant dish, too — write how yours turned out and AI narrows the gap, showing exactly what changed
 • Cover photos, per-step photos, and a cooking log of what you made and when
-• Cooking mode shows one step at a time, large, with timers and no ads
+• Cooking mode shows one step at a time, large, with timers and no ads. Leave and resume from a bar or the home screen; add step photos as you cook
 
 ■ Sharing with family and friends
 • Turn a recipe into a web page and hand the link only to the people you choose
@@ -91,15 +92,16 @@ Cooking is a chore with a lot of moving parts: find a recipe, plan the week, sho
 
 ■ Shared with the family, automatically
 • Share an invite code — no account, no email address
-• Meal plans, recipes, shopping list and pantry arrive on every phone in the family automatically
+• Recipes, shopping list and pantry arrive on every phone in the family automatically (each phone builds its own meal plan)
 • Choose per item whether the shopping list and pantry are shared or private
 
 ■ Where your data lives
 • No account, no sign-up. We never hold your email address or phone number
-• Unless you share with family, your data stays on your device
+• Unless you share with family or publish a recipe page, your data stays on your device
 • Join a family group and only the items you share travel through our server
+• A published recipe page stays on our server until you stop sharing it
 • Backup, restore and a transfer file for moving to a new phone
-• AI features include a free monthly allowance (5 a month). Add your own Gemini key for no limit
+• AI features include a free monthly allowance (5 a month; AI image generation is separate, 3 a month). Add your own Gemini key for no limit
 • Your meal plan, recipes, shopping list, pantry and cooking mode work offline; only the AI features and URL import need a connection
 
 ■ Who it is for
@@ -119,7 +121,9 @@ Meal plans: pick 2–7 days and DAIDOKO suggests dishes from what you already ha
 
 New opt-in auto mode: wake up to today's plan, with an optional morning reminder. Missing ingredients can be added to your shopping list automatically — and undone in one tap.
 
-Recipes without a photo can now get an AI-generated image (clearly labeled as AI-made).
+Cooking mode: leave mid-recipe and pick up right where you left off from a resume bar or the home screen, even after closing the app. Add step photos as you cook.
+
+Recipes can now get an AI-generated image, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance).
 
 The free AI allowance is now 5 uses per month.
 
