@@ -364,7 +364,9 @@ function DayCard({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   center: { alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 48 },
+  // paddingTop は他の href:null 画面（family.tsx・menu-settings.tsx 等）と同じ 58
+  // （ステータスバー分の余白。この画面だけ抜けていてタイトルと時計が重なっていた）
+  content: { paddingHorizontal: 16, paddingTop: 58, paddingBottom: 48 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   title: { fontSize: 17, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
   headerSpacer: { flex: 1 },
