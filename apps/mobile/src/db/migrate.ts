@@ -457,8 +457,14 @@ function backfillRecipePlaceName(expoDb: { execSync: (sql: string) => void }): v
  * 2 つだけ。どちらも中身を機械が推定している。`'url'` は JSON-LD の抽出で AI を
  * 通らないので**対象外**、`'manual'` も当然対象外。
  *
- * **相談・貼り付けテキスト由来は遡れない。** あの経路は `sources` 行を作らないので、
- * 判定材料がそもそも残っていない。それらは `NULL`（不明）のまま残る。
+ * **`sources` 行を持たない経路は遡れない**（相談・貼り付けテキスト・手入力）。
+ * 判定材料がそもそも残っていないので、それらは `NULL`（不明）のまま残る。
+ *
+ * **「お店の味に近づける」(refine) も遡れない。** あれは既存レシピの材料と手順を AI が
+ * 書き換えるが `sources` 行を作らないので、v17 より前に refine を通しただけのレシピは
+ * 無印のまま残る（写真・OCR 由来のものは元の出所が引き継がれるので拾える）。
+ * 通常の編集画面は印を触らないため、もう一度 refine を通すまで回復しない。
+ *
  * この非対称は仕様であって漏れではない。`NULL` を「AI ではない」と読まないこと。
  *
  * 現行リビジョンだけでなく**全リビジョン**を見る（`web-share.service.ts` の
@@ -467,7 +473,7 @@ function backfillRecipePlaceName(expoDb: { execSync: (sql: string) => void }): v
  *
  * **冪等**（`ai_generated IS NULL` の行だけ触る）。既に立っている印は下げない。
  */
-function backfillRecipeAiGenerated(expoDb: { execSync: (sql: string) => void }): void {
+export function backfillRecipeAiGenerated(expoDb: { execSync: (sql: string) => void }): void {
   try {
     expoDb.execSync(`
       UPDATE recipes SET ai_generated = 1

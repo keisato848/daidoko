@@ -374,6 +374,20 @@ function updateFtsForRecipe(payload: RecipeSyncPayload): void {
   }
 }
 
+/**
+ * 受信でレシピ行に書く「AI 由来の印」の差分（#266）。**立つときだけ返す。**
+ *
+ * `{ aiGenerated: payload.aiGenerated ? 1 : null }` と書いてはいけない。
+ * 印を知らない古い端末は payload にこの欄を持たないので、その 1 通が後勝ちした瞬間に
+ * **手元で立っている印が潰れる**。`pinnedAt` を `set` から外しているのと同じ考え方。
+ *
+ * 純関数にしてあるのは、`applyRecipePayload` が DB を掴んでいてテストから叩けないため
+ * （`docs/品質基準.md` §2.3「規則は分岐の手前の純関数へ切り出す」）。
+ */
+export function incomingAiGeneratedPatch(payload: { aiGenerated?: boolean }): { aiGenerated?: 1 } {
+  return payload.aiGenerated ? { aiGenerated: 1 } : {};
+}
+
 async function applyRecipePayload(payload: RecipeSyncPayload): Promise<ApplyOutcome> {
   const db = getDb();
 
@@ -437,10 +451,8 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<ApplyOutc
         status: payload.recipe.status,
         // pinnedAt は set に入れない ＝ ローカルのピンを消さない
         placeName: payload.recipe.placeName,
-        // **立つときだけ set に含める。** 素直に入れると、印を知らない古い端末が
-        // `aiGenerated` の無い payload を後勝ちで送ってきたときに印が潰れる。
-        // `pinnedAt` を set から外しているのと同じ考え方（受信で消さない列）
-        ...(payload.aiGenerated ? { aiGenerated: 1 } : {}),
+        // **立つときだけ含める。** 規則の実体は incomingAiGeneratedPatch（純関数・テスト対象）
+        ...incomingAiGeneratedPatch(payload),
         updatedAt: payload.recipe.updatedAt,
       },
     });

@@ -56,6 +56,7 @@ export default function CookingModeScreen() {
   const [servings, setServings] = useState<number | null>(null);
   const [steps, setSteps] = useState<StepData[]>([]);
   const [ingredients, setIngredients] = useState<IngredientData[]>([]);
+  const [isAiGenerated, setIsAiGenerated] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
   // スワイプでステップ移動（設計 S06「スワイプ or ボタン」— ボタンのみで長らく
@@ -86,6 +87,7 @@ export default function CookingModeScreen() {
     setServings(detail.servings);
     setSteps(detail.steps);
     setIngredients(detail.ingredients);
+    setIsAiGenerated(detail.isAiGenerated);
 
     // 調理セッションを開始（同じレシピの再開なら保存済みの手順位置が返る —
     // ✕ で閉じても・アプリを再起動しても続きから。docs/画面設計.md S06 349行）
@@ -323,6 +325,12 @@ export default function CookingModeScreen() {
           <Pressable style={styles.overlaySheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.overlayHandle} />
             <Text style={styles.overlayTitle}>{t('common.ingredients')}</Text>
+            {/*
+              **料理中モードは詳細画面を通らずに開けるとは限らない**が、ここは
+              分量を見ながら実際に作る面なので、注意書きを出す（#266）。
+              詳細画面だけに置くと、再開の導線から直接ここへ来た人は一度も見ない。
+            */}
+            {isAiGenerated && <Text style={styles.aiNote}>{t('ai.disclaimer')}</Text>}
             {servings != null && (
               <View style={styles.overlayStepper}>
                 <NumberStepper
@@ -566,6 +574,18 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 16,
+  },
+  // 詳細画面の aiRecipeNote と同じ見せ方（#266）
+  aiNote: {
+    fontSize: 11,
+    lineHeight: 17,
+    color: Colors.paper,
+    marginBottom: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.gold,
+    backgroundColor: 'rgba(201,161,106,0.07)',
   },
   overlayTitle: {
     fontSize: 13, // sm: オーバーレイタイトル

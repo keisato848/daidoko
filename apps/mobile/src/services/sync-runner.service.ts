@@ -311,6 +311,20 @@ async function pullAndApply(credentials: SyncCredentials): Promise<number> {
     if (!result.hasMore || result.changes.length === 0) break;
   }
 
+  // v17: 受信したレシピに AI 由来の印を貼り直す（#266）。
+  // **印を知らない端末から届いたレシピは印が付いていない。** 写真・紙面 OCR 由来なら
+  // 出所行から遡って立てられるので、受信のたびに冪等な backfill を 1 回流す。
+  // これが無いと、家族の端末から届いた AI レシピが**次に起動し直すまで無印**になる。
+  if (applied > 0) {
+    try {
+      const { backfillRecipeAiGenerated } = await import('../db/migrate');
+      const { getExpoDb } = await import('../db/client');
+      backfillRecipeAiGenerated(getExpoDb());
+    } catch {
+      // 受信そのものは成功している。印は次回起動時の runMigrations でも貼られる
+    }
+  }
+
   return applied;
 }
 

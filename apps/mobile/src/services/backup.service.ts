@@ -3,7 +3,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { Platform } from 'react-native';
 
 import { getDb, getExpoDb, isNativePlatform } from '../db/client';
-import { rebuildFts } from '../db/migrate';
+import { backfillRecipeAiGenerated, rebuildFts } from '../db/migrate';
 import { getAppMeta, setAppMeta } from './app-meta.service';
 import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
 import { t } from '../i18n';
@@ -946,6 +946,25 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
 const NON_RESTORABLE_APP_META_KEYS: readonly string[] = ['sync_cursor'];
 
 /** 復元直後: 未移行の在庫行をベースライン化し、持ち分から表示値を導出し直す（S2-B） */
+/**
+ * v17: 復元直後に AI 由来の印を貼り直す（#266）。
+ *
+ * **復元は列を明示的に束縛するので、印の列を持たない古いファイルは `NULL` を書き戻す。**
+ * `replaceDatabase` は `row[column] ?? null` で流し込むため、SQLite の DEFAULT も効かない。
+ * 移行は起動時にしか走らないので、これを呼ばないと**次にアプリを立ち上げ直すまで、
+ * 写真・OCR 由来のレシピの注意書きが消えたまま材料が読める**。
+ *
+ * 冪等（`ai_generated IS NULL` の行だけ触る）なので何度呼んでもよい。
+ */
+function backfillAiGenerated(): void {
+  try {
+    backfillRecipeAiGenerated(getExpoDb());
+  } catch {
+    // 復元そのものは成功しているので、印の貼り直しに失敗しても止めない
+    // （次回起動時の runMigrations が同じ SQL を流す）
+  }
+}
+
 async function rebaselineQuantities(): Promise<void> {
   const { ensureQuantityBaseline, rematerializeAll } = await import('./pantry-quantity-db');
   await ensureQuantityBaseline();
@@ -998,6 +1017,7 @@ export async function restoreLocalBackup(uri: string): Promise<BackupOperationRe
   replaceDatabase(payload);
   await rebuildFts(getDb());
   await rebaselineQuantities(); // v16: 旧 ZIP の在庫にベースラインを与え、表示値を導出し直す（§5-3-1）
+  backfillAiGenerated(); // v17: 旧ファイルには印の列が無く、NULL が明示的に書き戻される（#266）
 
   const fileName = uri.split('/').pop() ?? 'backup.json';
   return {
@@ -1066,6 +1086,9 @@ export async function restoreMigrationBackupPackage(
 
     replaceDatabase(payload);
     await rebuildFts(getDb());
+    // JSON 復元と同じ後処理を通す。**ここだけ抜けていた**（設計 §5-3-1 は両経路を指定している）
+    await rebaselineQuantities();
+    backfillAiGenerated(); // v17（#266）
   } catch (error) {
     await Promise.all(
       copiedPhotoUris.map((photoUri) => FileSystem.deleteAsync(photoUri, { idempotent: true })),
