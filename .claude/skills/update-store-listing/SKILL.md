@@ -12,16 +12,31 @@ description: Google Play ストア掲載（ja-JP / en-US のアプリ名・説�
 1. `docs/store/google-play/listing-ja.md` / `listing-en.md` の「## アプリ名」（30字以内・ASO のため
    キーワードを含める）「## 短い説明」（80字以内）「## 詳しい説明」（4000字以内・プレーンテキスト、
    ■/・で整形）を編集。**英語版は日本語の訳ではなく、その言語で通る文面を書く**
-2. **公開文面なので必ずユーザーに文面を提示して承認を得る**
-3. 掲載のある言語の確認（読み取りのみ）: `node scripts/release/list-play-listings.mjs`
-4. ドライラン: `node scripts/release/update-play-listing.mjs --lang ja-JP --dry-run`
-5. 反映: `node scripts/release/update-play-listing.mjs --lang ja-JP`
+2. **主張を実装で裏取りする（承認より前）。**
+   `Workflow drift-audit` を `args = { scope: 'changed', focus: ['audit-listing-claims'] }` で回す。
+   自動化に頼れないときは、最低限これを手でやる:
+   - 「〜が家族に届く / 同期する」と書いた機能が **`sync-payload.ts` の `SYNC_ENTITY_*` に
+     実在するか**。無ければ虚偽
+   - 「〜だけ」「〜しません」という**否定の主張**は、例外が 1 つでもあれば崩れる。
+     サーバーへ送る経路（`infer/*`・Web 共有・クラウド同期・プッシュトークン）を数えて確かめる
+   - 無料枠などの**数値**が `usage.service.ts` / `config.ts` の実値と一致するか
+   - ja / en で**違うことを約束していないか**（訳ではなく別文面なので起きる）
+
+   > **2026-09-01 に「献立が家族の端末にも自動で届きます」を ASC ja/en へ出荷した。**
+   > 献立は同期対象外（`app_meta` にローカル保存）。書いた本人が同じセッション内で
+   > 「献立は同期対象外」と調査記録に書いていたのに、掲載文と突き合わせなかった。
+   > **知識があっても照合の手順が無ければ同じことが起きる**ので、承認の前段に置く。
+
+3. **公開文面なので必ずユーザーに文面を提示して承認を得る**
+4. 掲載のある言語の確認（読み取りのみ）: `node scripts/release/list-play-listings.mjs`
+5. ドライラン: `node scripts/release/update-play-listing.mjs --lang ja-JP --dry-run`
+6. 反映: `node scripts/release/update-play-listing.mjs --lang ja-JP`
    （**Play の edit は同時に 1 つだけ**なので言語ごとに実行を分ける）
    - 動画は Play 側の現行値を自動維持
    - 認証キー: `C:\secure\play-service-account.json`（`PLAY_SERVICE_ACCOUNT_KEY` で上書き可・値は出力しない）
    - `COMMITTED edit: <id>` が出れば完了
    - **API の commit は即時成功するが公開ページへの伝播は数分〜数時間かかる**（Console 管理画面は即時反映）
-6. listing-ja.md の変更を PR で develop にマージ（リポジトリ記録と Play の同期を保つ）
+7. listing-ja.md の変更を PR で develop にマージ（リポジトリ記録と Play の同期を保つ）
 
 ## アプリのアイコン（ストア掲載用・アプリ本体とは独立）
 
