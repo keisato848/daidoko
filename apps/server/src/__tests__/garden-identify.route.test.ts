@@ -90,6 +90,86 @@ describe('POST /api/v1/garden/identify', () => {
     expect(body.data.plantedAs).toBeUndefined();
   });
 
+  // 株の写真では生育ステージと推定経過日数を返せる（端末側の栽培登録が使う）。
+  it('株の写真から生育ステージと推定経過日数を返す', async () => {
+    setIdentifyProviderForTesting({
+      analyze: async () => ({
+        found: true,
+        source: 'plant',
+        cropGuess: 'ミニトマト',
+        cropConfidence: 'medium',
+        growthStage: 'flowering',
+        estimatedAgeDays: 45,
+      }),
+    } as IdentifyVisionProvider);
+
+    const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+    const body = (await res.json()) as { ok: boolean; data: Record<string, unknown> };
+    expect(body.data.growthStage).toBe('flowering');
+    expect(body.data.estimatedAgeDays).toBe(45);
+  });
+
+  // ラベルはまだ植えていないので生育ステージ・経過日数は意味を持たない。
+  // モデルが誤って付けてきても境界で落とす。
+  it('ラベルの写真では生育ステージも推定経過日数も返さない', async () => {
+    setIdentifyProviderForTesting({
+      analyze: async () => ({
+        found: true,
+        source: 'label',
+        cropGuess: 'ミニトマト',
+        variety: 'アイコ',
+        // モデルが誤って付けてきたケースを模擬する
+        growthStage: 'vegetative',
+        estimatedAgeDays: 20,
+      }),
+    } as IdentifyVisionProvider);
+
+    const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+    const body = (await res.json()) as { ok: boolean; data: Record<string, unknown> };
+    expect(body.data.growthStage).toBeUndefined();
+    expect(body.data.estimatedAgeDays).toBeUndefined();
+  });
+
+  // モデルが自信の無さから省略したときも壊れない（端末側は撮影日にフォールバックする）。
+  it('モデルが生育ステージ・推定経過日数を省略しても壊れない', async () => {
+    setIdentifyProviderForTesting({
+      analyze: async () => ({
+        found: true,
+        source: 'plant',
+        cropGuess: 'キュウリ',
+        cropConfidence: 'low',
+        note: '双葉のみで判別が難しいです',
+      }),
+    } as IdentifyVisionProvider);
+
+    const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+    const body = (await res.json()) as { ok: boolean; data: Record<string, unknown> };
+    expect(body.ok).toBe(true);
+    expect(body.data.cropGuess).toBe('キュウリ');
+    expect(body.data.growthStage).toBeUndefined();
+    expect(body.data.estimatedAgeDays).toBeUndefined();
+  });
+
+  // ありえない値（不正な enum・負数・非現実的に大きい日数）は境界で落とす。
+  it('不正な生育ステージ・非現実的な経過日数は落とす', async () => {
+    setIdentifyProviderForTesting({
+      analyze: async () =>
+        ({
+          found: true,
+          source: 'plant',
+          cropGuess: 'ナス',
+          growthStage: 'blooming', // 5値のどれでもない
+          estimatedAgeDays: -3,
+        }) as unknown as Awaited<ReturnType<IdentifyVisionProvider['analyze']>>,
+    } as IdentifyVisionProvider);
+
+    const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+    const body = (await res.json()) as { ok: boolean; data: Record<string, unknown> };
+    expect(body.data.cropGuess).toBe('ナス');
+    expect(body.data.growthStage).toBeUndefined();
+    expect(body.data.estimatedAgeDays).toBeUndefined();
+  });
+
   it('作物名が無ければ found=false に落とす（空の下書きを作らせない）', async () => {
     setIdentifyProviderForTesting({
       analyze: async () => ({
@@ -228,5 +308,15 @@ describe('identify のプロンプト', () => {
   it('作物名に括弧の補足を足さないよう指示している', () => {
     // 実測で consult は「エダマメ（大豆）」を返した。登録名としては使いにくい。
     expect(IDENTIFY_SYSTEM_PROMPT_FOR_TESTING).toContain('補足を括弧で足しません');
+  });
+
+  it('ラベルでは生育ステージ・推定経過日数を返さないよう指示している', () => {
+    expect(IDENTIFY_SYSTEM_PROMPT_FOR_TESTING).toContain(
+      'growthStage と estimatedAgeDays は返しません（まだ植えていないため）。',
+    );
+  });
+
+  it('自信が無いときは生育ステージ・推定経過日数を省略するよう指示している', () => {
+    expect(IDENTIFY_SYSTEM_PROMPT_FOR_TESTING).toContain('当てずっぽうの日数を入れてはいけません');
   });
 });
