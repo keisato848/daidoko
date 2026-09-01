@@ -100,9 +100,8 @@ async function write(snapshot: WidgetSnapshot): Promise<void> {
 async function pushToIosWidget(snapshot: WidgetSnapshot): Promise<void> {
   if (Platform.OS !== 'ios') return;
   try {
-    const { setWidgetSnapshot, reloadWidgets } = await import(
-      '../../modules/daidoko-widget-storage'
-    );
+    const { setWidgetSnapshot, reloadWidgets } =
+      await import('../../modules/daidoko-widget-storage');
     const written = setWidgetSnapshot(IOS_SNAPSHOT_KEY, JSON.stringify(snapshot), IOS_APP_GROUP);
     // 書けていないのに再読み込みを促しても、古い姿を出し直すだけ
     if (written) reloadWidgets(IOS_WIDGET_KIND);
