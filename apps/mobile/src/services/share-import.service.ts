@@ -21,6 +21,11 @@ export interface SharedRecipeJson {
   steps: { body: string }[];
   tags: string[];
   hasPhoto: boolean;
+  /**
+   * 中身が AI 由来か（#266）。**省略可** — 旧サーバーは返さない。
+   * 未定義は「AI ではない」ではなく「分からない」。
+   */
+  aiGenerated?: boolean;
 }
 
 export interface SharedBookJson {

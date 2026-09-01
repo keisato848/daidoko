@@ -256,7 +256,9 @@ export default function ImportPhotoScreen() {
         labelSummary: photoResult.evidenceSummary ?? photoResult.labelSummary,
         capturedAt: capturedPhoto?.takenAt,
       });
-      const recipeId = await createRecipe({ ...data, sourceId });
+      // 写真から中身を推定した下書き（#266）。クラウド Vision も端末内推定も同じ扱い —
+      // フォールバックした回だけ印が消えるのは安全表示の穴になる
+      const recipeId = await createRecipe({ ...data, sourceId, aiGenerated: true });
 
       // Preserve the user's impression as a recipe memo (best-effort).
       if (notes.trim()) {

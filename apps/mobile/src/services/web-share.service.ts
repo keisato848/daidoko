@@ -126,6 +126,12 @@ export interface SharePayload {
    * 返さないことが前提（`aiNote` と同じ手法）。false は送らない（省略で表す）。
    */
   coverIsAiGenerated?: boolean;
+  /**
+   * 中身（材料・手順）を AI が推定したレシピか（#266）。
+   * `coverIsAiGenerated` と同じく**省略可・false は送らない**。
+   * 表紙が AI というだけの場合はこちらは立たない（別の意味の別フィールド）。
+   */
+  aiGenerated?: boolean;
 }
 
 /** レシピ 1 件ぶんの本文（単品共有と帖で共通）。純粋（テスト対象） */
@@ -146,6 +152,7 @@ export function buildShareRecipeBody(
     steps: recipe.steps.map((step) => ({ body: step.body })),
     tags: recipe.tags,
     ...(recipe.isCoverAiGenerated ? { coverIsAiGenerated: true } : {}),
+    ...(recipe.isAiGenerated ? { aiGenerated: true } : {}),
   };
 }
 

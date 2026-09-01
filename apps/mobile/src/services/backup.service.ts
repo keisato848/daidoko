@@ -94,6 +94,9 @@ export const BACKUP_TABLES = [
       'cover_photo_path',
       'pinned_at',
       'place_name',
+      // v17（#266）。**足し忘れると復元で印が静かに消える** — 在庫 4 テーブルが
+      // まるごと漏れた前例がある
+      'ai_generated',
       'created_by',
       'created_at',
       'updated_at',

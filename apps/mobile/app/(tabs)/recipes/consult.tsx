@@ -182,7 +182,9 @@ export default function ConsultScreen() {
   };
 
   const handleSave = async (data: RecipeFormData) => {
-    const recipeId = await createRecipe(data);
+    // 会話から AI が全文を書いた下書き（#266）。**ここが最大の無印地帯だった** —
+    // 出所行も作らないので、印を立てないと AI 由来だと後から一切分からない
+    const recipeId = await createRecipe({ ...data, aiGenerated: true });
     router.replace(`/(tabs)/recipes/${recipeId}`);
   };
 

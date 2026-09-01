@@ -143,6 +143,16 @@ export interface RecipeSyncPayload {
    * 省略可（古い版の送信には無い＝ false 扱い）。
    */
   urlImported?: boolean;
+  /**
+   * 中身（材料・手順）を AI が推定したレシピか（#266）。**レシピ単位**で、
+   * リビジョンの属性ではない — 編集しても落とさない印なので、版ごとに新しい行を作る
+   * リビジョン側に置くと引き継ぎを書き忘れた瞬間に消える。
+   *
+   * 省略可（印を知らない古い版の送信には無い）。**受信側は `false` で上書きしないこと。**
+   * 未指定は「AI ではない」ではなく「分からない」なので、既に立っている印を消す根拠にならない。
+   * `SYNC_PAYLOAD_SCHEMA_VERSION` は**上げない**（省略可の追加なので破壊的変更ではない）。
+   */
+  aiGenerated?: boolean;
   ingredients: {
     id: string;
     sortOrder: number;
@@ -352,6 +362,7 @@ const recipePayloadSchema = z.object({
     .nullish()
     .transform((v) => v ?? null),
   urlImported: z.boolean().optional(),
+  aiGenerated: z.boolean().optional(),
   ingredients: z.array(
     z.object({
       id: z.string().min(1),

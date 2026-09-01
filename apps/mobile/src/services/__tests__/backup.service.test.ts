@@ -102,6 +102,12 @@ describe('バックアップ対象の取りこぼし防止', () => {
     expect(columnsOf('recipes')).toContain('place_name');
   });
 
+  it('v17 の recipes.ai_generated が入っている（復元で AI の印が消えないため・#266）', () => {
+    // 落とすと、バックアップから戻した瞬間に安全表示だけが静かに消える。
+    // 在庫 4 テーブルがまるごと漏れた前例があるので、列ごとに固定する
+    expect(columnsOf('recipes')).toContain('ai_generated');
+  });
+
   it('v13 のグループ・賞味期限・誰が が入っている（復元で消えないため）', () => {
     expect(columnsOf('pantry_items')).toEqual(expect.arrayContaining(['group_name', 'expires_on']));
     // v15: 同期の列もバックアップに含める（落とすと復元で共有設定が消える）

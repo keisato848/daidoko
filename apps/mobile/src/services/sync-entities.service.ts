@@ -203,6 +203,9 @@ async function buildRecipeChange(recipeId: string, deletedAt: string): Promise<O
         }
       : null,
     urlImported,
+    // AI 由来の印（#266）。**真のときだけ送る** — false を送っても意味が無いうえ、
+    // 受信側が「AI ではないと確かめた」と誤解する余地を作らない
+    ...(recipe.aiGenerated === 1 ? { aiGenerated: true } : {}),
     ingredients: ingredientRows.map((row) => ({
       id: row.id,
       sortOrder: row.sortOrder,
@@ -420,6 +423,7 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<ApplyOutc
       // 作りたいリストは人ごとの都合なので運ばない（新規受信は未ピンで入る）
       pinnedAt: null,
       placeName: payload.recipe.placeName,
+      aiGenerated: payload.aiGenerated ? 1 : null,
       createdBy: USER_ID,
       createdAt: payload.recipe.createdAt,
       updatedAt: payload.recipe.updatedAt,
@@ -433,6 +437,10 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<ApplyOutc
         status: payload.recipe.status,
         // pinnedAt は set に入れない ＝ ローカルのピンを消さない
         placeName: payload.recipe.placeName,
+        // **立つときだけ set に含める。** 素直に入れると、印を知らない古い端末が
+        // `aiGenerated` の無い payload を後勝ちで送ってきたときに印が潰れる。
+        // `pinnedAt` を set から外しているのと同じ考え方（受信で消さない列）
+        ...(payload.aiGenerated ? { aiGenerated: 1 } : {}),
         updatedAt: payload.recipe.updatedAt,
       },
     });

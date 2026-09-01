@@ -132,21 +132,23 @@ export default function ImportShareScreen() {
   }, [load, slug]);
 
   const saveOne = useCallback(
-    async (data: RecipeFormData, title: string) => {
+    async (data: RecipeFormData, title: string, aiGenerated: boolean | undefined) => {
       const sourceId = await createShareSource({ url: shareUrlFor(kind, slug), pageTitle: title });
-      await createRecipe({ ...data, sourceId });
+      // 共有元が AI 由来なら引き継ぐ（#266）。取り込んだ側でも印が残らないと、
+      // 人づてに渡るうちに AI 由来だと分からなくなる
+      await createRecipe({ ...data, sourceId, aiGenerated });
     },
     [kind, slug],
   );
 
   const handleSaveRecipe = useCallback(
     async (data: RecipeFormData) => {
-      await saveOne(data, data.title);
+      await saveOne(data, data.title, recipe?.aiGenerated);
       setShowToast(true);
       setPhase('done');
       setTimeout(() => router.replace('/(tabs)/recipes'), 1200);
     },
-    [router, saveOne],
+    [recipe, router, saveOne],
   );
 
   const handleSaveAll = useCallback(async () => {
@@ -155,7 +157,7 @@ export default function ImportShareScreen() {
     let count = 0;
     try {
       for (const item of book.recipes) {
-        await saveOne(toFormData(item), item.title);
+        await saveOne(toFormData(item), item.title, item.aiGenerated);
         count += 1;
       }
       setSavedCount(count);

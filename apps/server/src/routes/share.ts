@@ -99,6 +99,8 @@ const shareRecipeBodySchema = z.object({
   photoMime: z.enum(['image/jpeg', 'image/png', 'image/webp']).optional(),
   // 表紙が AI 生成イメージか（docs/レシピ表紙AI生成設計.md §4）。省略可（旧アプリ互換）
   coverIsAiGenerated: z.boolean().optional(),
+  // 中身が AI 由来か（#266）。表紙の AI とは別の意味。省略可（旧アプリは送らない）
+  aiGenerated: z.boolean().optional(),
 });
 
 const shareRecipeSchema = shareRecipeBodySchema.extend({
@@ -181,6 +183,7 @@ shareApiRouter.post('/recipes', zValidator('json', shareRecipeSchema), (c) => {
     tags: body.tags,
     photo,
     coverIsAiGenerated: body.coverIsAiGenerated,
+    aiGenerated: body.aiGenerated,
   });
 
   return c.json({ ok: true, slug, url: `${shareBaseUrl()}/r/${slug}`, deleteToken });
@@ -260,6 +263,7 @@ function bookInputFromBody(body: {
     photoBase64?: string | undefined;
     photoMime?: string | undefined;
     coverIsAiGenerated?: boolean | undefined;
+    aiGenerated?: boolean | undefined;
   }[];
 }): Parameters<typeof createBookShare>[0] {
   return {
@@ -276,6 +280,7 @@ function bookInputFromBody(body: {
       tags: recipe.tags,
       photo: decodePhoto(recipe.photoBase64, recipe.photoMime),
       coverIsAiGenerated: recipe.coverIsAiGenerated,
+      aiGenerated: recipe.aiGenerated,
     })),
   };
 }
@@ -380,6 +385,7 @@ shareApiRouter.get('/books/:slug', (c) => {
         steps: JSON.parse(r.stepsJson) as unknown,
         tags: JSON.parse(r.tagsJson) as unknown,
         coverIsAiGenerated: r.coverIsAiGenerated === 1,
+        aiGenerated: r.aiGenerated === 1,
       })),
     },
   });
@@ -399,6 +405,7 @@ function shareRowToJson(row: ReturnType<typeof getActiveShare>): Record<string, 
     tags: JSON.parse(row.tagsJson) as unknown,
     hasPhoto: row.photo !== null,
     coverIsAiGenerated: row.coverIsAiGenerated === 1,
+    aiGenerated: row.aiGenerated === 1,
   };
 }
 

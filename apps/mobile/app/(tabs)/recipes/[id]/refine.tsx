@@ -212,6 +212,10 @@ export default function RefineRecipeScreen() {
       // 以前はここで渡さなかった `titleReading` / `prepTimeMin` / `placeName` が
       // 黙って消えていた — 味を近づけるたびに店名まで失われていた（#220）
       await updateRecipe(recipe.id, {
+        // **AI が材料と手順を書き換えた**ので印を立てる（#266）。
+        // この経路は `createRecipe` を通らないため、作成時だけ実装すると丸ごと漏れる。
+        // 元が人の手書きレシピでも、近づけた後の中身は AI の推定を含む
+        aiGenerated: true,
         title: refined.title,
         // **料理名が変わったときだけ**読みを差し替える。
         // AI は現在の読みがなを渡されていない（RefineRecipeSnapshot に無い）ので、
