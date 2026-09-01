@@ -63,7 +63,7 @@ export const sharedBooks = sqliteTable('shared_books', {
   revokedAt: text('revoked_at'),
   /** 有効期限（ISO）。超えたら 404 と同じ扱い（S4-2） */
   expiresAt: text('expires_at'),
-  /** パスコード（数字4桁）の SHA-256(slug + ':' + passcode)。NULL = 保護なし（S4-2） */
+  /** パスコード（数字6桁）の SHA-256(slug + ':' + passcode)。NULL = 保護なし（S4-2） */
   passcodeHash: text('passcode_hash'),
 });
 
@@ -423,7 +423,10 @@ export function getActiveBook(
 }
 
 // ── パスコード検証（S4-2）─────────────────────────────────────────────────────
-// 4 桁 = 1 万通りなので総当たり対策が必須。slug ごとに失敗を数えてロックする。
+// 6 桁 = 100 万通り。4 桁（1 万通り）だと 5 回/15 分のレート制限があっても
+// 平均 10 日ほどで総当たりされる計算だったので、桁を増やして底上げした
+// （100 万通りなら平均 2 か月・最悪 4 か月）。DB でロック状態を永続化する案もあるが、
+// 採らない（意図的な判断）。slug ごとに失敗を数えてロックする。
 // カウンタはメモリ（再起動でリセット — 許容。ロック時間より再起動間隔の方が長い）
 
 const PASSCODE_MAX_FAILS = 5;

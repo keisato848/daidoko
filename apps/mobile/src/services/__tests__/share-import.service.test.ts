@@ -66,14 +66,16 @@ describe('fetchSharedRecipe / fetchSharedBook', () => {
     await expect(fetchSharedBook('bk')).rejects.toMatchObject({ code: 'PASSCODE_REQUIRED' });
 
     const wrong = mockFetch(401, { ok: false, error: 'PASSCODE_WRONG' });
-    await expect(fetchSharedBook('bk', '0000')).rejects.toMatchObject({ code: 'PASSCODE_WRONG' });
+    await expect(fetchSharedBook('bk', '000000')).rejects.toMatchObject({ code: 'PASSCODE_WRONG' });
     // パスコードはヘッダで渡す（URL に載せない）
     expect((wrong.mock.calls[0] as unknown[])[1]).toEqual({
-      headers: { 'x-share-passcode': '0000' },
+      headers: { 'x-share-passcode': '000000' },
     });
 
     mockFetch(429, { ok: false, error: 'PASSCODE_LOCKED' });
-    await expect(fetchSharedBook('bk', '1111')).rejects.toMatchObject({ code: 'PASSCODE_LOCKED' });
+    await expect(fetchSharedBook('bk', '111111')).rejects.toMatchObject({
+      code: 'PASSCODE_LOCKED',
+    });
   });
 
   it('通信断は NETWORK、それ以外の失敗は SERVER', async () => {

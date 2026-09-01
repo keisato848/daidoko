@@ -1,7 +1,7 @@
 /**
  * レシピ帖の編集（S4 — docs/Web共有設計.md §7）。
  *
- * 題名・収録レシピの編集と、公開設定（パスコード4桁・有効期限）を担う。
+ * 題名・収録レシピの編集と、公開設定（パスコード6桁・有効期限）を担う。
  * 共有済みの帖は「更新を反映」で **同じリンクのまま** サーバー側を差し替える
  * （PATCH — 配ったリンクを生かすのが S4 の目的）。
  */
@@ -97,7 +97,7 @@ export default function BookEditScreen() {
   );
 
   const accessOptions = useCallback((): ShareAccessOptions | null => {
-    if (passcodeOn && !/^\d{4}$/.test(passcode)) {
+    if (passcodeOn && !/^\d{6}$/.test(passcode)) {
       void dialog.alert({
         title: t('settings.book.title'),
         message: t('settings.book.passcodeInvalid'),
@@ -260,10 +260,10 @@ export default function BookEditScreen() {
             <TextInput
               style={[styles.input, styles.passcodeInput]}
               value={passcode}
-              onChangeText={(v) => setPasscode(v.replace(/[^0-9]/g, '').slice(0, 4))}
+              onChangeText={(v) => setPasscode(v.replace(/[^0-9]/g, '').slice(0, 6))}
               keyboardType="number-pad"
-              maxLength={4}
-              placeholder="0000"
+              maxLength={6}
+              placeholder="000000"
               placeholderTextColor={Colors.muted}
             />
           )}
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxOn: { backgroundColor: Colors.gold, borderColor: Colors.gold },
-  passcodeInput: { letterSpacing: 8, textAlign: 'center', width: 120 },
+  passcodeInput: { letterSpacing: 6, textAlign: 'center', width: 168 },
   expiryRow: { flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 20 },
   expiryChip: {
     borderWidth: 1,

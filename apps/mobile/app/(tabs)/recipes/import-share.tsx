@@ -215,18 +215,18 @@ export default function ImportShareScreen() {
             <TextInput
               style={styles.passcodeInput}
               value={passcode}
-              onChangeText={(v) => setPasscode(v.replace(/[^0-9]/g, '').slice(0, 4))}
+              onChangeText={(v) => setPasscode(v.replace(/[^0-9]/g, '').slice(0, 6))}
               keyboardType="number-pad"
-              maxLength={4}
-              placeholder="0000"
+              maxLength={6}
+              placeholder="000000"
               placeholderTextColor={Colors.muted}
             />
             {passcodeWrong && (
               <Text style={styles.errorText}>{t('recipeImport.share.error.wrong')}</Text>
             )}
             <Pressable
-              style={[styles.primaryBtn, passcode.length !== 4 && styles.disabled]}
-              disabled={passcode.length !== 4}
+              style={[styles.primaryBtn, passcode.length !== 6 && styles.disabled]}
+              disabled={passcode.length !== 6}
               onPress={() => void load(passcode)}
             >
               <Text style={styles.primaryBtnText}>{t('recipeImport.share.unlock')}</Text>
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   muted: { color: Colors.muted, fontSize: 12 },
   errorText: { color: '#FF6B6B', fontSize: 14, textAlign: 'center' },
   passcodeInput: {
-    width: 140,
+    width: 190,
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 8,

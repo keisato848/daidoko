@@ -20,7 +20,7 @@ const recipeImport = {
       other: '材料 {{count}}',
     } satisfies PluralMessage,
     passcodeLead:
-      'このレシピ帖はパスコードで守られています。共有した人から聞いた4桁を入力してください。',
+      'このレシピ帖はパスコードで守られています。共有した人から聞いた6桁を入力してください。',
     unlock: '開く',
     save: '保存する',
     saveAll: {

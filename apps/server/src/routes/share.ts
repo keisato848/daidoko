@@ -123,7 +123,7 @@ const shareBookSchema = z.object({
     .optional(),
   passcode: z
     .string()
-    .regex(/^\d{4}$/)
+    .regex(/^\d{6}$/)
     .nullable()
     .optional(),
 });
@@ -364,7 +364,7 @@ shareApiRouter.get('/books/:slug', (c) => {
   if (!found) return c.json({ ok: false, error: 'NOT_FOUND' }, 404);
   if (found.book.passcodeHash) {
     const passcode = c.req.header('x-share-passcode') ?? '';
-    if (!/^\d{4}$/.test(passcode)) return c.json({ ok: false, error: 'PASSCODE_REQUIRED' }, 401);
+    if (!/^\d{6}$/.test(passcode)) return c.json({ ok: false, error: 'PASSCODE_REQUIRED' }, 401);
     const check = verifyBookPasscode(slug, passcode);
     if (check === 'locked') return c.json({ ok: false, error: 'PASSCODE_LOCKED' }, 429);
     if (check === 'wrong') return c.json({ ok: false, error: 'PASSCODE_WRONG' }, 401);

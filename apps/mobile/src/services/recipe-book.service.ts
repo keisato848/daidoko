@@ -5,7 +5,7 @@
  * 共有済みの帖は削除トークンを編集トークンとして PATCH し、**slug（＝配った
  * リンク）を変えずに**中身を差し替えられる。
  *
- * 「権限」は人ベースではなくリンクの強度（パスコード4桁・有効期限）。
+ * 「権限」は人ベースではなくリンクの強度（パスコード6桁・有効期限）。
  * パスコードは更新時に再送するため平文で保存する（端末内 SQLite のみ・
  * 端末外に出るのはハッシュだけ）。
  */
@@ -24,7 +24,7 @@ import {
 } from './web-share.service';
 
 export interface ShareAccessOptions {
-  /** 数字4桁。null = 保護なし */
+  /** 数字6桁。null = 保護なし */
   passcode: string | null;
   /** null = 無期限 */
   expiresInDays: 7 | 30 | null;

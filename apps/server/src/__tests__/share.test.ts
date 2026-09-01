@@ -322,17 +322,17 @@ describe('Web 共有', () => {
     });
 
     it('JSON: パスコード付きの帖は x-share-passcode が要る（#198）', async () => {
-      const res = await publishBook({ ...bookPayload(), passcode: '1234' });
+      const res = await publishBook({ ...bookPayload(), passcode: '123456' });
       const { slug } = (await res.json()) as { slug: string };
 
       const noCode = await app.request(`/api/v1/share/books/${slug}`);
       expect(noCode.status).toBe(401);
       const wrong = await app.request(`/api/v1/share/books/${slug}`, {
-        headers: { 'x-share-passcode': '0000' },
+        headers: { 'x-share-passcode': '000000' },
       });
       expect(wrong.status).toBe(401);
       const ok = await app.request(`/api/v1/share/books/${slug}`, {
-        headers: { 'x-share-passcode': '1234' },
+        headers: { 'x-share-passcode': '123456' },
       });
       expect(ok.status).toBe(200);
       const body = (await ok.json()) as { data: { title: string; recipes: { title: string }[] } };
@@ -502,7 +502,7 @@ describe('レシピ帖 S4', () => {
   });
 
   it('パスコード: 未認証はページ 401（中身もタイトルも出ない）・写真も 404', async () => {
-    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '1234' });
+    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '123456' });
     const page = await app.request(`/b/${slug}`);
     expect(page.status).toBe(401);
     const html = await page.text();
@@ -513,18 +513,18 @@ describe('レシピ帖 S4', () => {
   });
 
   it('パスコード: 正解で Cookie が発行され、ページも写真も読める', async () => {
-    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '1234' });
+    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '123456' });
     const wrong = await app.request(`/b/${slug}/unlock`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'passcode=0000',
+      body: 'passcode=000000',
     });
     expect(wrong.status).toBe(401);
 
     const ok = await app.request(`/b/${slug}/unlock`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'passcode=1234',
+      body: 'passcode=123456',
     });
     expect(ok.status).toBe(303);
     const setCookie = ok.headers.get('set-cookie') ?? '';
@@ -538,18 +538,18 @@ describe('レシピ帖 S4', () => {
   });
 
   it('パスコード: 5 回失敗でロックされ、正解でも通らない', async () => {
-    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '1234' });
+    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '123456' });
     for (let i = 0; i < 5; i++) {
       await app.request(`/b/${slug}/unlock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'passcode=9999',
+        body: 'passcode=999999',
       });
     }
     const locked = await app.request(`/b/${slug}/unlock`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'passcode=1234',
+      body: 'passcode=123456',
     });
     expect(locked.status).toBe(401);
     expect(await locked.text()).toContain('試行回数');
