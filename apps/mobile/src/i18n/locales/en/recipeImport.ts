@@ -13,7 +13,8 @@ const recipeImport: typeof ja = {
       one: '{{count}} ingredient',
       other: '{{count}} ingredients',
     },
-    passcodeLead: 'This recipe book is protected by a passcode. Enter the 6 digits you were given.',
+    passcodeLead:
+      'This recipe book is protected by a passcode. Enter the numeric passcode you were given.',
     unlock: 'Open',
     save: 'Save to library',
     saveAll: {

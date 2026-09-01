@@ -428,6 +428,12 @@ export function getActiveBook(
 // （100 万通りなら平均 2 か月・最悪 4 か月）。DB でロック状態を永続化する案もあるが、
 // 採らない（意図的な判断）。slug ごとに失敗を数えてロックする。
 // カウンタはメモリ（再起動でリセット — 許容。ロック時間より再起動間隔の方が長い）
+//
+// **この関数（hashPasscode/verifyBookPasscode）自体は桁数を見ない** — 渡された
+// 文字列をそのままハッシュ・比較するだけ。既に 4 桁で公開済みの帖のパスコードも
+// そのまま通る。6 桁必須は新規発行（`createBookSchema`/`patchBookSchema` の zod）
+// だけが強制する。入力ゲート（JSON API・HTML の unlock フォーム）も 4 桁を
+// 弾かないよう揃えてある（routes/share.ts・share-page.ts）
 
 const PASSCODE_MAX_FAILS = 5;
 const PASSCODE_LOCK_MS = 15 * 60 * 1000;

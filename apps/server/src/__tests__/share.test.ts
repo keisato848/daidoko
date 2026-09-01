@@ -339,6 +339,91 @@ describe('Web 共有', () => {
       expect(body.data.recipes.length).toBeGreaterThan(0);
     });
 
+    it('新規発行は 6 桁未満のパスコードを拒否する（#269）', async () => {
+      const res = await publishBook({ ...bookPayload(), passcode: '1234' });
+      expect(res.status).toBe(400);
+    });
+
+    it('JSON: 4 桁で公開済みの帖は 6 桁化のあとも開ける（#269 の後方互換）', async () => {
+      // zod を経由せず直接ストアへ書く — publish API は既に 6 桁を強制するので、
+      // 「6 桁化より前に 4 桁で公開された既存の帖」を再現するにはこうするしかない
+      const { slug } = createBookShare(
+        {
+          locale: 'ja',
+          title: '昔からの定番',
+          recipes: [
+            {
+              title: '肉じゃが',
+              ingredients: [{ name: '牛肉' }],
+              steps: [{ body: '煮る' }],
+              tags: [],
+            },
+          ],
+        },
+        { passcode: '1234' },
+      );
+
+      const noCode = await app.request(`/api/v1/share/books/${slug}`);
+      expect(noCode.status).toBe(401);
+      const wrong = await app.request(`/api/v1/share/books/${slug}`, {
+        headers: { 'x-share-passcode': '9999' },
+      });
+      expect(wrong.status).toBe(401);
+      const ok = await app.request(`/api/v1/share/books/${slug}`, {
+        headers: { 'x-share-passcode': '1234' },
+      });
+      expect(ok.status).toBe(200);
+    });
+
+    it('HTML: unlock のサーバー処理は 4 桁を弾かない（#269 の後方互換）', async () => {
+      const { slug } = createBookShare(
+        {
+          locale: 'ja',
+          title: '昔からの定番',
+          recipes: [
+            {
+              title: '肉じゃが',
+              ingredients: [{ name: '牛肉' }],
+              steps: [{ body: '煮る' }],
+              tags: [],
+            },
+          ],
+        },
+        { passcode: '1234' },
+      );
+
+      const ok = await app.request(`/b/${slug}/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'passcode=1234',
+      });
+      expect(ok.status).toBe(303);
+    });
+
+    it('HTML: 入力欄の pattern がブラウザ側で 4 桁を弾かない（#269）', async () => {
+      // ここは実際のブラウザを動かしていないので、サーバーの POST 処理だけでは
+      // ブラウザの HTML5 バリデーション（pattern/maxlength）の壊れを検出できない。
+      // レンダリングされた HTML そのものを見て固定する
+      const { slug } = createBookShare(
+        {
+          locale: 'ja',
+          title: '昔からの定番',
+          recipes: [
+            {
+              title: '肉じゃが',
+              ingredients: [{ name: '牛肉' }],
+              steps: [{ body: '煮る' }],
+              tags: [],
+            },
+          ],
+        },
+        { passcode: '1234' },
+      );
+      const html = await (await app.request(`/b/${slug}`)).text();
+      expect(html).toContain('pattern="\\d{4}|\\d{6}"');
+      expect(html).not.toContain('パスコード（6桁）'); // 4 桁の帖にも 6 桁を名乗らない
+    });
+
     it('attested なしでは公開できない', async () => {
       expect((await publishBook({ ...bookPayload(), attested: false })).status).toBe(400);
     });

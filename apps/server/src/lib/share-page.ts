@@ -45,8 +45,8 @@ const STRINGS = {
       'このページは投稿者が共有したレシピ帖です。投稿者が共有を停止すると表示されなくなります。',
     protectedTitle: '保護されたレシピ帖',
     passcodePrompt:
-      'このレシピ帖はパスコードで保護されています。投稿者から聞いた6桁の数字を入力してください。',
-    passcodeLabel: 'パスコード（6桁）',
+      'このレシピ帖はパスコードで保護されています。投稿者から聞いた数字のパスコードを入力してください。',
+    passcodeLabel: 'パスコード',
     passcodeSubmit: '開く',
     passcodeWrong: 'パスコードが違います。',
     passcodeLocked: '試行回数が多すぎます。しばらく待ってからやり直してください。',
@@ -71,8 +71,8 @@ const STRINGS = {
       'This recipe book was shared by its author. It disappears when the author stops sharing.',
     protectedTitle: 'Protected recipe book',
     passcodePrompt:
-      'This recipe book is protected with a passcode. Enter the 6-digit code you received from the author.',
-    passcodeLabel: 'Passcode (6 digits)',
+      'This recipe book is protected with a passcode. Enter the numeric passcode you received from the author.',
+    passcodeLabel: 'Passcode',
     passcodeSubmit: 'Open',
     passcodeWrong: 'Wrong passcode.',
     passcodeLocked: 'Too many attempts. Please wait a while and try again.',
@@ -378,7 +378,7 @@ export function renderPasscodePage(
   <h1>${t.protectedTitle}</h1>
   <p>${t.passcodePrompt}</p>
   <form class="pass-form" method="post" action="/b/${escapeHtml(slug)}/unlock">
-    <input name="passcode" inputmode="numeric" autocomplete="one-time-code" pattern="\\d{6}" maxlength="6" required aria-label="${t.passcodeLabel}">
+    <input name="passcode" inputmode="numeric" autocomplete="one-time-code" pattern="\\d{4}|\\d{6}" maxlength="6" required aria-label="${t.passcodeLabel}">
     <button type="submit">${t.passcodeSubmit}</button>
   </form>
   ${error ? `<p class="pass-error">${error}</p>` : ''}

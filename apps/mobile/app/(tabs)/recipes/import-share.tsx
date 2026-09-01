@@ -224,9 +224,18 @@ export default function ImportShareScreen() {
             {passcodeWrong && (
               <Text style={styles.errorText}>{t('recipeImport.share.error.wrong')}</Text>
             )}
+            {/*
+              入力欄の桁数は新旧どちらも受け付ける（#269 の後方互換）。
+              **6 桁必須なのは新規発行時（book-edit.tsx）だけ** — 既に 4 桁で
+              公開済みの帖はそのまま開けないと困る。サーバーのハッシュ照合も
+              桁数を見ないので、ここで弾かなければ 4 桁も正しく通る。
+            */}
             <Pressable
-              style={[styles.primaryBtn, passcode.length !== 6 && styles.disabled]}
-              disabled={passcode.length !== 6}
+              style={[
+                styles.primaryBtn,
+                passcode.length !== 4 && passcode.length !== 6 && styles.disabled,
+              ]}
+              disabled={passcode.length !== 4 && passcode.length !== 6}
               onPress={() => void load(passcode)}
             >
               <Text style={styles.primaryBtnText}>{t('recipeImport.share.unlock')}</Text>

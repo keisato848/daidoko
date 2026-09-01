@@ -24,7 +24,11 @@ import {
 } from './web-share.service';
 
 export interface ShareAccessOptions {
-  /** 数字6桁。null = 保護なし */
+  /**
+   * 数字6桁。null = 保護なし。**新規発行・変更時のみ 6 桁を強制**（#269）。
+   * 既に 4 桁で公開済みの帖は、入力側（消費画面）が 4 桁も受け付けるので
+   * そのまま開ける — ハッシュ照合は桁数を見ないため
+   */
   passcode: string | null;
   /** null = 無期限 */
   expiresInDays: 7 | 30 | null;
