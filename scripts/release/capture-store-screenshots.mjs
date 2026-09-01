@@ -68,6 +68,12 @@ const serial = args.serial ?? autoSelectSerial();
 const outDir = args.out ? path.resolve(args.out) : DEFAULT_OUT;
 fs.mkdirSync(outDir, { recursive: true });
 
+/** root の可否は最初の 1 回だけ判定して覚える（毎ショット adb root し直さない）
+ *  ※ モジュール実行順の都合で captureShot より前に宣言しておく必要がある
+ *  （末尾の関数定義ブロック内に置くと、for ループが先に実行されて TDZ で落ちる）。 */
+let sessionGuardUsable = null; // null = 未判定 / true = root 可 / false = root 不可（実機など・諦め）
+let sessionGuardWarned = false; // sqlite 失敗の警告は 1 度だけ出す（DB 未作成の初回は必ず失敗する）
+
 console.log(`device: ${serial}`);
 ensureAppInstalled();
 if (args.locale) applyAppLocale(args.locale);
@@ -170,9 +176,6 @@ function captureShot(shot) {
  * このガードをオプトアウトできる。
  */
 
-/** root の可否は最初の 1 回だけ判定して覚える（毎ショット adb root し直さない） */
-let sessionGuardUsable = null; // null = 未判定 / true = 消せる / false = 諦めた（警告済み）
-
 function clearCookingSession() {
   if (args.keepCookingSession) return;
   if (sessionGuardUsable === null) sessionGuardUsable = tryAdbRoot();
@@ -181,10 +184,14 @@ function clearCookingSession() {
     'shell',
     `sqlite3 ${DB_PATH} "UPDATE app_meta SET value='' WHERE key='cooking_session';"`,
   ]);
-  if (!res.ok) {
-    // sqlite3 が無い・DB 未作成など。撮影は止めず、警告の繰り返しもしない
+  if (!res.ok && !sessionGuardWarned) {
+    // sqlite3 が無い・DB 未作成など。**初回ショットは DB がまだ無いので必ずここに来る**
+    // （初回起動前）。root 自体は使えている（sessionGuardUsable=true のまま）ので
+    // 諦めずに次のショットでも再試行する — DB は 1 枚目のあとに作られ、以降は
+    // 成功するようになる。以前は毎回 sessionGuardUsable=false にして丸ごと諦めていたため、
+    // 04 の後に撮る 06/07 で調理セッション pill が写り込む欠陥があった。警告だけ 1 度に絞る
     console.warn(`WARN: 調理セッションの削除に失敗（続行）: ${res.output.slice(0, 200)}`);
-    sessionGuardUsable = false;
+    sessionGuardWarned = true;
   }
 }
 
