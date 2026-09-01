@@ -49,6 +49,11 @@ const SHOTS = [
   { file: '02-recipe-library.png', route: 'recipes', label: 'レシピ蔵書庫' },
   { file: '03-recipe-detail.png', route: `recipes/${RECIPE_ID}`, label: 'レシピ詳細' },
   { file: '04-cooking-mode.png', route: `recipes/${RECIPE_ID}/cook`, label: '料理中モード' },
+  {
+    file: '05-menu-plan.png',
+    route: 'menu',
+    label: '献立（組んだ状態・#215 M1・1.13.0 主役機能）',
+  },
   { file: '06-family-group.png', route: 'family', label: '家族グループ' },
   {
     file: '07-photo-to-recipe.png',
