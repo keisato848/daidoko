@@ -73,12 +73,6 @@ const serial = args.serial ?? autoSelectSerial();
 const outDir = args.out ? path.resolve(args.out) : DEFAULT_OUT;
 fs.mkdirSync(outDir, { recursive: true });
 
-/** root の可否は最初の 1 回だけ判定して覚える（毎ショット adb root し直さない）
- *  ※ モジュール実行順の都合で captureShot より前に宣言しておく必要がある
- *  （末尾の関数定義ブロック内に置くと、for ループが先に実行されて TDZ で落ちる）。 */
-let sessionGuardUsable = null; // null = 未判定 / true = root 可 / false = root 不可（実機など・諦め）
-let sessionGuardWarned = false; // sqlite 失敗の警告は 1 度だけ出す（DB 未作成の初回は必ず失敗する）
-
 console.log(`device: ${serial}`);
 ensureAppInstalled();
 if (args.locale) applyAppLocale(args.locale);
@@ -102,6 +96,8 @@ let lastShotOpenedCook = false;
  * 下の「cooking session guard」節に置いていた間、このスクリプトは 1 枚も撮れずに落ちていた。
  */
 let sessionGuardUsable = null;
+/** sqlite の失敗警告は 1 度だけ出す（DB 未作成の初回は必ず失敗するため） */
+let sessionGuardWarned = false;
 try {
   for (const shot of selected) {
     if (shot.manual) {
