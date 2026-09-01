@@ -1,7 +1,7 @@
 /**
  * 設定画面。
  */
-import type { PluralMessage } from '../../types';
+import type { CriticalMessage, PluralMessage } from '../../types';
 
 const settings = {
   title: '設定',
@@ -88,7 +88,20 @@ const settings = {
     sync: 'クラウド同期',
     syncSubtitle: '家族グループに参加すると、端末どうしで自動的に同期されます',
     nameAliases: '名寄せ辞書',
-    nameAliasesSubtitle: 'AIが覚えた食材名の対応を確認・修正',
+    /**
+     * 名寄せは**利用者が AI 機能を使わなくても走る**（在庫で作れるレシピを開いたとき・
+     * 足りない材料を買い物リストへ入れたとき — `name-resolve.service.ts`）。
+     * 挙動は変えられないので、自動であることと**送るのは材料名だけ**であることを
+     * ここで開示する。A 階層。
+     */
+    nameAliasesSubtitle: {
+      text: '在庫やレシピの材料名は、表記を揃えるため自動でサーバー（AI 提供元）に送信されます（送るのは材料名だけ）。覚えた対応はここで確認・修正できます',
+      intent:
+        'MUST state that this happens AUTOMATICALLY, without the user starting an AI feature, ' +
+        'AND that ONLY ingredient names are sent. This is the only place the automatic ' +
+        'transmission is disclosed; dropping either half contradicts the store listing and the ' +
+        'privacy policy, which say sending happens on AI screens only.',
+    } satisfies CriticalMessage,
     webShares: 'レシピ帖',
     webSharesSubtitle: '帖の作成・編集と、Web共有の管理',
   },
@@ -129,8 +142,7 @@ const settings = {
     legacyNote: '以前の形式の共有（停止のみ可）',
     send: 'リンクを送る',
     stopTitle: 'Web共有を停止',
-    stopConfirm:
-      '共有ページを削除します。リンクを知っている人も見られなくなります。よろしいですか？',
+    stopConfirm: '共有を停止すると、リンクを知っている人も見られなくなります。よろしいですか？',
     stopAction: '停止する',
     stopFailed: '停止できませんでした。通信環境を確認してもう一度お試しください。',
     deleteTitle: 'レシピ帖を削除',

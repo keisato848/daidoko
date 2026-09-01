@@ -333,10 +333,12 @@ export default function ConsultScreen() {
               </Pressable>
             </View>
           ))}
-          {/* 送信先の開示。**送る前に見えている**必要があるので写真の隣に置く */}
-          <Text style={styles.pendingDisclosure}>{t('recipeImport.consult.photoDisclosure')}</Text>
         </View>
       )}
+
+      {/* 送信先の開示。**写真の有無によらず常に出す** — 文字だけの相談でも、
+          会話・作りかけの下書き・（在庫を考慮するときは）材料名を毎回送っている */}
+      <Text style={styles.disclosureText}>{t('recipeImport.consult.disclosure')}</Text>
 
       <View style={styles.composer}>
         <Pressable
@@ -471,12 +473,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pendingDisclosure: {
-    flex: 1,
-    minWidth: 160,
-    fontSize: 10,
-    lineHeight: 15,
-    color: Colors.muted,
+  // 開示は読めて初めて開示になる。import-photo の disclosureText と同じ色・大きさ
+  disclosureText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: Colors.paperDim,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   attachButton: {
     width: 42,

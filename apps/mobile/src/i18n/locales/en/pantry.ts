@@ -103,6 +103,13 @@ const pantry: typeof ja = {
     analyzing: 'Analysing your meal',
     lead: 'Photograph a meal and we’ll estimate what you used and subtract it (experimental).',
     capture: 'Photograph a meal',
+    disclosure: {
+      text: 'Your meal photo is sent to our server (and the AI provider) for analysis. It is not stored.',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    },
     quotaRemaining: {
       one: 'Free analyses left: {{count}}',
       other: 'Free analyses left: {{count}}',

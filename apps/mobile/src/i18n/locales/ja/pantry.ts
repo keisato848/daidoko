@@ -124,6 +124,14 @@ const pantry = {
     analyzing: '食事を解析しています',
     lead: '食事の写真を撮ると、使った食材を推定して在庫を減らせます（実験的）。',
     capture: '食事を撮影',
+    /** 送信先の開示。**書かないと不当な収集になる**ので A 階層。 */
+    disclosure: {
+      text: '食事の写真は解析のためサーバー（AI 提供元）に送信されます。保存はされません。',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    } satisfies CriticalMessage,
     // 写真レシピと**同じ月次枠**（getFreemiumStatus().remaining）を表示している。
     // 「今日の」と書くと明日また使えると誤解させるので、期間を示す語は入れない
     quotaRemaining: {

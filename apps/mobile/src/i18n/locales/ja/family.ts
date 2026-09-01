@@ -1,7 +1,7 @@
 /**
  * 家族グループ（S16）。
  */
-import type { PluralMessage } from '../../types';
+import type { CriticalMessage, PluralMessage } from '../../types';
 
 const family = {
   title: '家族グループ',
@@ -110,8 +110,23 @@ const family = {
       'この端末が共有から外れます。端末の中のデータはそのまま残ります。もう一度参加するには招待コードが必要です。',
     deleteGroup: '共有グループを削除',
     deleteConfirmTitle: '共有グループを削除しますか？',
-    deleteConfirmBody:
-      'サーバー上の共有データがすべて消え、全端末で共有が止まります。各端末の中のデータは残ります。この操作は取り消せません。',
+    /**
+     * 取り消せない削除を、この文だけを読んで決める。**消える範囲を広く書かない。**
+     * 消えるのは同期用サーバーのグループだけで（`apps/server/src/lib/sync-store.ts`
+     * の `deleteGroup`）、Web共有のページは別のストアに残る
+     * （`apps/server/src/lib/share-store.ts`）。「サーバー上の共有データがすべて消える」
+     * と書いていた頃は、公開したページが残っていることに気づけなかった。A 階層。
+     */
+    deleteConfirmBody: {
+      text: 'クラウド同期の共有データが消え、全端末で共有が止まります。各端末の中のデータは残ります。Web共有で公開したページはこの操作では消えません — レシピ1品はそのレシピの詳細のメニューから、レシピ帖は設定の「レシピ帖」から、それぞれ別に停止してください。この操作は取り消せません。',
+      intent:
+        'MUST scope the erasure to the SYNC server only, and MUST say that web-shared pages ' +
+        'SURVIVE this and have to be stopped separately — a single shared recipe from its own ' +
+        'detail menu, and a shared recipe book from Settings. The user decides an irreversible ' +
+        'deletion from this text alone; implying it removes everything on the server would leave ' +
+        'published pages online without them knowing, and naming only one of the two stop paths ' +
+        'would leave the other kind of page stuck online too.',
+    } satisfies CriticalMessage,
     offlineJoined: '共有グループに参加中です（オンラインになると詳細を表示します）。',
     retry: '再読み込み',
     unavailable: '共有機能はサーバーの準備中です。アプリの他の機能は通常どおり使えます。',

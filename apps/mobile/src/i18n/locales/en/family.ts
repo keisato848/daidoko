@@ -99,8 +99,16 @@ const family: typeof ja = {
       'This device stops sharing. Everything already on this device stays. You\u2019ll need an invite code to join again.',
     deleteGroup: 'Delete the share group',
     deleteConfirmTitle: 'Delete the share group?',
-    deleteConfirmBody:
-      'All shared data on the server is erased and sharing stops on every device. Data stored on each device stays. This cannot be undone.',
+    deleteConfirmBody: {
+      text: 'The synced data on the server is erased and sharing stops on every device. Data stored on each device stays. Pages you published with web sharing are not deleted by this — stop a single shared recipe from its own detail menu, and a shared recipe book under Settings › Recipe books. This cannot be undone.',
+      intent:
+        'MUST scope the erasure to the SYNC server only, and MUST say that web-shared pages ' +
+        'SURVIVE this and have to be stopped separately — a single shared recipe from its own ' +
+        'detail menu, and a shared recipe book from Settings. The user decides an irreversible ' +
+        'deletion from this text alone; implying it removes everything on the server would leave ' +
+        'published pages online without them knowing, and naming only one of the two stop paths ' +
+        'would leave the other kind of page stuck online too.',
+    },
     offlineJoined: 'You are in a share group (details will show when online).',
     retry: 'Reload',
     unavailable: 'Sharing is being prepared on the server. Everything else works as usual.',

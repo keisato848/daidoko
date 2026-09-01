@@ -82,7 +82,14 @@ const settings: typeof ja = {
     sync: 'Cloud sync',
     syncSubtitle: 'Join a family group and your devices stay in sync automatically',
     nameAliases: 'Ingredient name dictionary',
-    nameAliasesSubtitle: 'Review and fix the names the AI has learned',
+    nameAliasesSubtitle: {
+      text: 'Ingredient names from your pantry and recipes are sent automatically to our server (and the AI provider) to match up spellings — only the names are sent. Review and fix what it has learned here',
+      intent:
+        'MUST state that this happens AUTOMATICALLY, without the user starting an AI feature, ' +
+        'AND that ONLY ingredient names are sent. This is the only place the automatic ' +
+        'transmission is disclosed; dropping either half contradicts the store listing and the ' +
+        'privacy policy, which say sending happens on AI screens only.',
+    },
     webShares: 'Recipe books',
     webSharesSubtitle: 'Create and edit books, and manage web sharing',
   },
@@ -124,7 +131,7 @@ const settings: typeof ja = {
     send: 'Send link',
     stopTitle: 'Stop web sharing',
     stopConfirm:
-      'This deletes the share page. People with the link will no longer see it. Continue?',
+      'This stops sharing. People with the link will no longer be able to see it. Continue?',
     stopAction: 'Stop sharing',
     stopFailed: 'Could not stop sharing. Check your connection and try again.',
     deleteTitle: 'Delete recipe book',

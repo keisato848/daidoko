@@ -402,18 +402,23 @@ export default function RefineRecipeScreen() {
             </Pressable>
           </View>
         ) : (
-          <Pressable
-            style={[
-              styles.primaryButton,
-              (phase !== 'input' || !feedback.trim()) && styles.primaryButtonDisabled,
-            ]}
-            onPress={handleRefine}
-            disabled={phase !== 'input' || !feedback.trim()}
-          >
-            <Text style={styles.primaryButtonText}>
-              {phase === 'processing' ? t('recipe.refine.processing') : t('recipe.refine.start')}
-            </Text>
-          </Pressable>
+          <>
+            {/* 送る前に、何が出ていくのかを見せる。この経路は写真だけでなく
+                レシピ本文と感想の自由記述を送るので、「写真」とだけ書かない */}
+            <Text style={styles.disclosureText}>{t('recipe.refine.disclosure')}</Text>
+            <Pressable
+              style={[
+                styles.primaryButton,
+                (phase !== 'input' || !feedback.trim()) && styles.primaryButtonDisabled,
+              ]}
+              onPress={handleRefine}
+              disabled={phase !== 'input' || !feedback.trim()}
+            >
+              <Text style={styles.primaryButtonText}>
+                {phase === 'processing' ? t('recipe.refine.processing') : t('recipe.refine.start')}
+              </Text>
+            </Pressable>
+          </>
         )}
       </View>
 
@@ -442,7 +447,8 @@ const styles = StyleSheet.create({
   backText: { fontSize: 13, fontWeight: '400', color: Colors.goldDim },
   headerTitle: { fontSize: 16, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
   headerSpacer: { width: 72 },
-  scrollContent: { paddingBottom: 120 },
+  // フッターに開示の 2 行が乗ったぶん、隠れないよう余白を足してある
+  scrollContent: { paddingBottom: 170 },
   recipeTitle: {
     fontSize: 15,
     fontWeight: '400',
@@ -639,6 +645,14 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
   },
   footerRow: { flexDirection: 'row', gap: 10 },
+  // import-photo の disclosureText と同じ色・大きさ（muted は背景と同化して読めない）
+  disclosureText: {
+    fontSize: 12,
+    color: Colors.paperDim,
+    textAlign: 'center',
+    lineHeight: 17,
+    marginBottom: 10,
+  },
   primaryButton: {
     flex: 1,
     backgroundColor: Colors.gold,

@@ -159,12 +159,14 @@ const recipeImport: typeof ja = {
     attachedPhoto: 'Attached photos',
     removePhoto: 'Remove this photo',
     photoHint: 'You can attach a photo of your fridge, or a dish you want to aim for',
-    photoDisclosure: {
-      text: 'Attached photos are sent to our server (and the AI provider) for the conversation. They are not stored.',
+    disclosure: {
+      text: 'Your messages and the draft so far — plus your ingredient names when “Use what I have” is on, and any photo you attach — are sent to our server (and the AI provider) to write the reply. They are not stored.',
       intent:
-        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
-        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
-        'dropping either half misrepresents what happens to their data.',
+        'MUST name what leaves the device on EVERY turn: the conversation and the draft recipe — ' +
+        'not only attached photos. Pantry names and photos are conditional and MUST be marked as ' +
+        'such. MUST also state it goes to a third-party AI provider and is not retained. This ' +
+        'line is shown even with no photo attached; a photo-only wording hides the text that is ' +
+        'always sent.',
     },
     firstMessage:
       'What shall we make? Something rough is fine — "a light noodle dish", "chicken breast I need to use up".',

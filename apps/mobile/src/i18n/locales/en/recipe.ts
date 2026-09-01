@@ -90,9 +90,9 @@ const recipe: typeof ja = {
       publishFailedBody: 'Could not create the share page. Check your connection and try again.',
       stopTitle: 'Stop web sharing',
       stopConfirm:
-        'This deletes the share page. People with the link will no longer see it. Continue?',
+        'This stops sharing. People with the link will no longer be able to see it. Continue?',
       stopAction: 'Stop sharing',
-      stopDoneBody: 'The share page has been deleted.',
+      stopDoneBody: 'Sharing has stopped. People with the link can no longer see it.',
       stopFailedBody: 'Could not stop sharing. Check your connection and try again.',
     },
 
@@ -398,6 +398,14 @@ const recipe: typeof ja = {
 
     noticeNoChange:
       'Nothing in the recipe changed. Being more specific about the taste often helps.',
+
+    disclosure: {
+      text: 'Your whole recipe (ingredients, steps, tags), the notes you write and any attached photo are sent to our server (and the AI provider) to make the adjustment. They are not stored.',
+      intent:
+        'MUST name WHAT leaves the device: the ENTIRE recipe AND the free-text notes the user ' +
+        'typed, not just the photo. MUST also state it goes to a third-party AI provider and is ' +
+        'not retained. Naming only the photo hides that the notes and the whole recipe are sent.',
+    },
 
     feedbackLabel: 'How did it turn out?',
     feedbackPlaceholder: 'Much sweeter than the restaurant’s, and not thick enough…',

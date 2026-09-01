@@ -209,7 +209,11 @@ export function PhotoPickerField({
       )}
       {/* 押す前に「枠は生成に対して消費する」を伝える（採用/やめるでは戻らない・設計 §3）。 */}
       {isCover && canGenerate && !generating && (
-        <Text style={styles.aiHint}>{t('coverImage.actionHint')}</Text>
+        <>
+          <Text style={styles.aiHint}>{t('coverImage.actionHint')}</Text>
+          {/* 枠の話とは別に、何が端末から出るのかを出す（写真は出ない） */}
+          <Text style={styles.disclosureText}>{t('coverImage.actionDisclosure')}</Text>
+        </>
       )}
 
       {isCover && (
@@ -294,4 +298,6 @@ const styles = StyleSheet.create({
   pickButtonText: { fontSize: 13, color: Colors.goldDim },
   pickButtonTextDisabled: { color: Colors.muted },
   aiHint: { fontSize: 11, color: Colors.muted },
+  // 開示は読めて初めて開示になる。import-photo の disclosureText と同じ色・大きさ
+  disclosureText: { fontSize: 12, color: Colors.paperDim, lineHeight: 17 },
 });

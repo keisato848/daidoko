@@ -144,6 +144,8 @@ export default function ConsumeMealScreen() {
             <ImageIcon size={20} color={Colors.gold} />
             <Text style={styles.bigButtonOutlineText}>{t('common.pickFromGallery')}</Text>
           </Pressable>
+          {/* 撮る前に、写真が端末から出ることを見せる（receipt.tsx と同じ扱い） */}
+          <Text style={styles.disclosureText}>{t('pantry.consumeMeal.disclosure')}</Text>
           {freemium && !freemium.isPremium && !freemium.isByok && (
             <Text style={styles.quota}>
               {tCount('pantry.consumeMeal.quotaRemaining', freemium.remaining)}
@@ -257,6 +259,13 @@ const styles = StyleSheet.create({
   },
   bigButtonOutlineText: { color: Colors.gold, fontSize: 15, fontWeight: '600' },
   quota: { color: Colors.muted, fontSize: 12, marginTop: 4 },
+  // 開示は読めて初めて開示になる。import-photo の disclosureText と同じ色・大きさ
+  disclosureText: {
+    fontSize: 12,
+    color: Colors.paperDim,
+    textAlign: 'center',
+    lineHeight: 17,
+  },
   reviewHint: {
     color: Colors.muted,
     fontSize: 13,

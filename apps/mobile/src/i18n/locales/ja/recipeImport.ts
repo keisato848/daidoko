@@ -188,14 +188,20 @@ const recipeImport = {
     removePhoto: 'この写真を外す',
     photoHint: '冷蔵庫の中身や、参考にしたい料理の写真を添えられます',
     /**
-     * 送信先の開示。**写真を添えたときだけ出す**（文字だけの相談では写真は出ない）。
+     * 送信先の開示。**常に出す**。
+     * 以前は写真を添えたときだけ出していたが、この機能は写真が無くても毎回
+     * 会話・作りかけの下書き・（在庫を考慮するときは）材料名を送っている
+     * （`recipe-consult.provider.ts`）。写真だけを言うと、文字だけの相談では
+     * 1 行も出ず、送っていることを隠すことになる。
      */
-    photoDisclosure: {
-      text: '添えた写真は相談のためサーバー（AI 提供元）に送信されます。保存はされません。',
+    disclosure: {
+      text: '会話の内容と作りかけの下書き（在庫を考慮するときは材料名、写真を添えたときは写真も）が、返事をつくるためサーバー（AI 提供元）に送信されます。保存はされません。',
       intent:
-        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
-        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
-        'dropping either half misrepresents what happens to their data.',
+        'MUST name what leaves the device on EVERY turn: the conversation and the draft recipe — ' +
+        'not only attached photos. Pantry names and photos are conditional and MUST be marked as ' +
+        'such. MUST also state it goes to a third-party AI provider and is not retained. This ' +
+        'line is shown even with no photo attached; a photo-only wording hides the text that is ' +
+        'always sent.',
     } satisfies CriticalMessage,
     firstMessage:
       '何を作りましょうか。「あっさりした麺類」「冷蔵庫の鶏むねを使いたい」など、ざっくりで大丈夫です。',

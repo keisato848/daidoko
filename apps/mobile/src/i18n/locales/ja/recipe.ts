@@ -103,10 +103,9 @@ const recipe = {
       publishFailedBody:
         '共有ページを作成できませんでした。通信環境を確認してもう一度お試しください。',
       stopTitle: 'Web共有を停止',
-      stopConfirm:
-        '共有ページを削除します。リンクを知っている人も見られなくなります。よろしいですか？',
+      stopConfirm: '共有を停止すると、リンクを知っている人も見られなくなります。よろしいですか？',
       stopAction: '停止する',
-      stopDoneBody: '共有ページは削除されました。',
+      stopDoneBody: '共有を停止しました。リンクを知っている人も見られなくなりました。',
       stopFailedBody: '停止できませんでした。通信環境を確認してもう一度お試しください。',
     },
 
@@ -448,6 +447,19 @@ const recipe = {
 
     noticeNoChange:
       'レシピに変更はありませんでした。感想をもう少し具体的に書くと直せることがあります。',
+
+    /**
+     * 送信先の開示。**書かないと不当な収集になる**ので A 階層。
+     * この経路は写真だけでなく**レシピ本文と感想の自由記述**を送る（`recipe-refine.provider.ts`）。
+     * 「写真を送ります」と書くと、書いた文章が出ていくことを隠すことになる。
+     */
+    disclosure: {
+      text: 'レシピ全体（材料・手順・タグ）と、書いた感想・添えた写真が、調整のためサーバー（AI 提供元）に送信されます。保存はされません。',
+      intent:
+        'MUST name WHAT leaves the device: the ENTIRE recipe AND the free-text notes the user ' +
+        'typed, not just the photo. MUST also state it goes to a third-party AI provider and is ' +
+        'not retained. Naming only the photo hides that the notes and the whole recipe are sent.',
+    } satisfies CriticalMessage,
 
     feedbackLabel: '作ってみてどうだった？',
     feedbackPlaceholder: 'お店のよりかなり甘かった。とろみも足りない気がする...',

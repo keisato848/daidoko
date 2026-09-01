@@ -4,6 +4,13 @@ const coverImage: typeof ja = {
   action: 'Create an image with AI',
   actionDisabledHint: 'Enter a dish name first',
   actionHint: 'Each generation uses one from your free monthly credits',
+  actionDisclosure: {
+    text: 'The dish name, ingredient names and tags are sent to our server (and the AI provider). Your photos are not sent.',
+    intent:
+      'MUST name the three things that leave the device (dish name, ingredient names, tags) AND ' +
+      'MUST say photos are NOT sent — this sits beside a photo picker, so silence reads as ' +
+      '"my photos go too". MUST NOT be merged into the free-credit hint, which is about quota.',
+  },
   generating: 'Creating an image…',
 
   previewNotice: {

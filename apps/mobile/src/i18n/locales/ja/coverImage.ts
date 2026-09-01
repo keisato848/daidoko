@@ -17,6 +17,18 @@ const coverImage = {
    * 消費する**（プレビューで［やめる］を押しても戻らない・設計 §3）ので、押す前に伝える。
    */
   actionHint: '生成のたびに無料枠を1枚つかいます',
+  /**
+   * 送信先の開示。**書かないと不当な収集になる**ので A 階層。
+   * `actionHint` は枠の話であって送信の話ではないので、別の 1 行として出す。
+   * 送るのは料理名・材料名・タグだけ（`cover-image.provider.ts`）— 写真は送らない。
+   */
+  actionDisclosure: {
+    text: '料理名・材料名・タグをサーバー（AI 提供元）に送信します。写真は送りません。',
+    intent:
+      'MUST name the three things that leave the device (dish name, ingredient names, tags) AND ' +
+      'MUST say photos are NOT sent — this sits beside a photo picker, so silence reads as ' +
+      '"my photos go too". MUST NOT be merged into the free-credit hint, which is about quota.',
+  } satisfies CriticalMessage,
   generating: 'イメージを作っています…',
 
   /**
