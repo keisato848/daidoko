@@ -20,9 +20,8 @@ interface DaidokoWidgetStorageNativeModule {
   reloadWidgets(kind?: string | null): void;
 }
 
-const nativeModule = requireOptionalNativeModule<DaidokoWidgetStorageNativeModule>(
-  'DaidokoWidgetStorage',
-);
+const nativeModule =
+  requireOptionalNativeModule<DaidokoWidgetStorageNativeModule>('DaidokoWidgetStorage');
 
 /** 警告は 1 回だけ。連打のたびにログを埋めない */
 let warnedMissingNative = false;

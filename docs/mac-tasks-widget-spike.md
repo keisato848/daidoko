@@ -235,13 +235,13 @@ $ npx expo prebuild -p ios --clean       ✔ Finished prebuild / ✔ Installed C
 $ xcodebuild ... -configuration Release  ** BUILD SUCCEEDED **（Swift のエラー 0）
 ```
 
-| 確認 | 結果 |
-| --- | --- |
-| ウィジェットターゲットの生成 | ✅ `productName = ShoppingWidget` |
-| `WidgetKit.framework` のリンク | ✅ |
-| `.appex` の同梱 | ✅ `app.app/PlugIns/ShoppingWidget.appex` |
-| App Group（本体・拡張の両側） | ✅ `group.com.daidoko.app` |
-| typecheck / lint / jest | ✅ 123 suite・1113 件 |
+| 確認                           | 結果                                      |
+| ------------------------------ | ----------------------------------------- |
+| ウィジェットターゲットの生成   | ✅ `productName = ShoppingWidget`         |
+| `WidgetKit.framework` のリンク | ✅                                        |
+| `.appex` の同梱                | ✅ `app.app/PlugIns/ShoppingWidget.appex` |
+| App Group（本体・拡張の両側）  | ✅ `group.com.daidoko.app`                |
+| typecheck / lint / jest        | ✅ 123 suite・1113 件                     |
 
 **SDK 54 の prebuild で SDK 55 世代の `@expo/prebuild-config` を持つ apple-targets は動く** —
 フェーズ 2 で保留にしていた本題は「問題なし」で決着。overrides も patch も要らなかった。
@@ -283,7 +283,8 @@ SDK 54 の autolinking は `"apple"` を期待する。`resolve` は互換で拾
 
 ```js
 const nativeModule = ExtensionStorageModule ?? {
-    setString() { }, reloadWidget() { },   // ← 何もしないで成功したふりをする
+  setString() {},
+  reloadWidget() {}, // ← 何もしないで成功したふりをする
 };
 ```
 
