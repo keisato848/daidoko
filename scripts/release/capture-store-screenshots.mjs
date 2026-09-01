@@ -82,6 +82,15 @@ if (!args.keepStatusBar) {
   dismissAnrIfPresent();
 }
 const results = [];
+/** 直前に開いたのが cook 画面か（run の最後が 04 だとセッションが残るため、finally で消す用） */
+let lastShotOpenedCook = false;
+/**
+ * root の可否は最初の 1 回だけ判定して覚える（毎ショット adb root し直さない）。
+ * null = 未判定 / true = 消せる / false = 諦めた（警告済み）。
+ * 宣言はこの位置（最初の captureShot より前）に無いと TDZ で ReferenceError になる —
+ * 下の「cooking session guard」節に置いていた間、このスクリプトは 1 枚も撮れずに落ちていた。
+ */
+let sessionGuardUsable = null;
 try {
   for (const shot of selected) {
     if (shot.manual) {
@@ -94,6 +103,13 @@ try {
 } finally {
   if (!args.keepStatusBar) exitDemoMode();
   if (args.locale) applyAppLocale(''); // 端末既定に戻す（撮り忘れの言語汚染を残さない）
+  if (lastShotOpenedCook && !args.keepCookingSession) {
+    // --shots 04 のように cook 画面で撮影を終えるとセッションだけが残り、
+    // この後に人手で撮る 08/10 に Now Cooking pill が写り込む。
+    // 次のショットが無い＝captureShot 冒頭のガードはもう走らないため、ここで消す
+    adb(['shell', 'am', 'force-stop', PACKAGE]);
+    clearCookingSession();
+  }
 }
 
 console.log('\n=== summary ===');
@@ -109,6 +125,7 @@ function captureShot(shot) {
   const url = `${SCHEME}://${shot.route}`;
   adb(['shell', 'am', 'force-stop', PACKAGE]);
   clearCookingSession();
+  lastShotOpenedCook = false;
   const start = adb([
     'shell',
     'am',
@@ -125,6 +142,8 @@ function captureShot(shot) {
     results.push({ ...shot, status: 'FAILED' });
     return;
   }
+  // 起動に成功した時点でセッションは始まっている（screencap の成否とは無関係）
+  lastShotOpenedCook = shot.route.endsWith('/cook');
   sleep(args.waitMs); // コールドスタート＋データ読込＋アニメーション静定
   dismissAnrIfPresent();
 
@@ -160,6 +179,10 @@ function captureShot(shot) {
  * 写り込む（07 はタブバーを隠す画面なので写らない）。force-stop しても
  * セッションは app_meta に残っていて次回起動で復元されるため、DB 側で消す。
  *
+ * 消すタイミングは 2 箇所: 各ショットの起動前（前のショットが残した分）と、
+ * run の終了時（--shots 04 のように cook 画面で撮り終えると起動前ガードが
+ * もう走らず、後で人手で撮る 08/10 に pill が残るため）。
+ *
  * 消し方は store の persist(null) と同じ「空文字を書く」（loadCookingSession は
  * 空文字なら復元しない）。adb root が効く端末（エミュレータ）のみ実行でき、
  * root が取れない実機では警告を 1 度だけ出して続行する — 撮影順の工夫
@@ -170,9 +193,6 @@ function captureShot(shot) {
  * このガードをオプトアウトできる。
  */
 
-/** root の可否は最初の 1 回だけ判定して覚える（毎ショット adb root し直さない） */
-let sessionGuardUsable = null; // null = 未判定 / true = 消せる / false = 諦めた（警告済み）
-
 function clearCookingSession() {
   if (args.keepCookingSession) return;
   if (sessionGuardUsable === null) sessionGuardUsable = tryAdbRoot();
@@ -182,7 +202,11 @@ function clearCookingSession() {
     `sqlite3 ${DB_PATH} "UPDATE app_meta SET value='' WHERE key='cooking_session';"`,
   ]);
   if (!res.ok) {
-    // sqlite3 が無い・DB 未作成など。撮影は止めず、警告の繰り返しもしない
+    // DB 未作成（wipe 直後・アプリ初回起動前）は「消すものが無い」だけ — 諦めない。
+    // 最初のショットの起動前は必ずここを通るため、ここで latch すると
+    // 推奨手順（-wipe-data 起動）では run 全体でガードが死ぬ
+    if (/unable to open database/i.test(res.output)) return;
+    // sqlite3 が無いなど。撮影は止めず、警告の繰り返しもしない
     console.warn(`WARN: 調理セッションの削除に失敗（続行）: ${res.output.slice(0, 200)}`);
     sessionGuardUsable = false;
   }

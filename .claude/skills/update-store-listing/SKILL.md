@@ -78,7 +78,8 @@ description: Google Play ストア掲載（ja-JP / en-US のアプリ名・説�
    - ステータスバーは SystemUI デモモードで固定（09:00・電池100%・通知なし）
    - `manual` 指定のショット（AI 結果画面など）はスキップして既存ファイルを維持
    - `04` が始めた調理セッション（Now Cooking pill が後続ショットに写り込む）は
-     各ショット前に `adb root`＋sqlite3 で自動で消される（実機は警告して続行。
+     各ショット前と run 終了時に `adb root`＋sqlite3 で自動で消される
+     （`--shots 04` で撮り終えても手動の `08`/`10` に持ち越さない。実機は警告して続行。
      詳細は `docs/store/google-play/phone-screenshots/README.md`）
    - 部分再取得: `--shots 01,04` / 対象レシピ変更: `--recipe recipe-3`
    - 英語版: `--locale en-US --out docs/store/google-play/phone-screenshots-en`
