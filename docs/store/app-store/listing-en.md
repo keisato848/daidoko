@@ -1,7 +1,7 @@
 # App Store 掲載情報（EN）
 
 作成日: 2026-08-27
-更新日: 2026-08-29（決定変更 B — 訴求の主語を「お店の味」→「献立」へ。詳細は下記）
+更新日: 2026-09-01（開示 5 件を実装と突き合わせて修正。2026-08-29 は決定変更 B — 訴求の主語を「お店の味」→「献立」へ）
 対象ビルド: iOS 1.13.0（予定）（App ID `6800964382`・公開中は 1.12.0 / 10029・ASC の直前作業は 1.12.3 / 10033）
 反映方法: App Store Connect API（`appStoreVersionLocalizations` / `appInfoLocalizations`）
 
@@ -22,7 +22,27 @@ Play の英語版（`../google-play/listing-en.md`）と**同じ訴求**で書�
 
 過大な主張をしないこと。**アレルゲンの検出はしていない**（`docs/privacy-policy.md` §7）ので、
 「アレルギー対応」に読める書き方をしない。**「すべてオフラインで動く」とも書かない** —
-AI 機能と URL 取り込みは通信が要る（Play 版で 1.12.0 のときに直した）。
+AI 機能・URL 取り込みに加えて、**Web 共有の公開/停止・共有リンクの取り込み・リワード広告**も
+通信が要る（2026-09-01 の実装突き合わせで判明。以前は「AI と URL 取り込みだけ」と書いていた）。
+
+**開示（AI の送信範囲・グループ削除で消える範囲・オフラインの範囲・家族共有の通知）の根拠と
+「戻さないこと」は `../google-play/listing-ja.md` の「実装と突き合わせて直した開示」にある。**
+**同じ日の第 2 次「さらに直した開示」も併せて読むこと** — ①共有の停止は**ソフト削除**
+（止めても控えはサーバーに残る）なので「消えます」と書かない ②Web 共有の停止経路は 2 つ
+（レシピ 1 品＝レシピ詳細のメニュー / レシピ帖＝設定。`web-shares.tsx` は帖しか一覧しない）
+③**「The screen says so before you send」が成立するのは実装側に開示を足したから**
+（食材名の名寄せだけは画面ではなく設定の説明とプライバシーポリシー §3.2 で担保）
+④献立の AI 並べ替えは 1.13.0 では無効なので書かない。
+
+**2026-09-01 第 3 次（戻さないこと）**: AI 注記の「送信することは画面に書いてあります」
+（英語版は "The screen says so before you send"）は名寄せの例外を含まない全称断定だった
+（`privacy-policy.md` §3.2 と食い違う）。ja/en とも短く例外を足した — 名寄せだけは操作なし
+に自動送信され、案内は画面ではなく設定とプライバシーポリシーにある、という区別を残すこと。
+
+**説明は 4000 字が上限。** 開示を正確にしたぶん、重複していた「Who it is for」の 3 行を落とした
+（Apple は説明文を検索索引に使わないので ASO の損は無い）。2026-09-01 の第 2 次で Web 共有の
+停止経路を足すため、「Who it is for」を 1 行に畳み、2 段落目の言い回しも詰めた。
+第 3 次（AI 注記に名寄せの例外を追記）の時点で 3972 字（残り 28 字）。
 
 ## フィールドの上限（App Store Connect）
 
@@ -60,7 +80,7 @@ cooking,recipe manager,grocery,fridge,meal prep,expiry,leftovers,copycat,menu pl
 
 "What should I cook tonight?" You open the fridge and answer the same question again. DAIDOKO starts from what you already have — a meal plan, then recipes, shopping and pantry, all in one app instead of scattered across screenshots and links.
 
-Cooking is a chore with a lot of moving parts: find a recipe, plan the week, shop, put things away, and start over. DAIDOKO keeps that whole loop in one place.
+Cooking has a lot of moving parts: find a recipe, plan the week, shop, put things away, start over. DAIDOKO keeps that loop in one place.
 
 ■ Plan today's meals
 • Build a 2, 3, 5 or 7-day meal plan from what's in your pantry
@@ -98,20 +118,16 @@ Cooking is a chore with a lot of moving parts: find a recipe, plan the week, sho
 ■ Where your data lives
 • No account, no sign-up. We never hold your email address or phone number
 • Unless you share with family or publish a recipe page, your data stays on your device
-• Join a family group and only the items you share travel through our server
-• A published recipe page stays on our server until you stop sharing it
+• Join a family group and only the items you share travel through our server. Delete the group and that synced data is erased from the server
+• A published recipe page is separate — deleting the group does not stop it. Stop a single recipe from its own menu, a recipe book from Settings → Recipe books; nobody can open it after that
 • Backup, restore and a transfer file for moving to a new phone
 • AI features include a free monthly allowance (5 a month; AI image generation is separate, 3 a month). Add your own Gemini key for no limit
-• Your meal plan, recipes, shopping list, pantry and cooking mode work offline; only the AI features and URL import need a connection
+• Your meal plan, recipes, shopping list, pantry and cooking mode work offline. A connection is needed for the AI features, URL import, publishing or opening a shared recipe page, and watching an ad for more AI
 
 ■ Who it is for
-• Anyone tired of staring into the fridge every night
-• Cooks who want their recipes and cooking log in one place
-• Households managing pantry stock, expiry dates or meal prep without it becoming a chore
-• Families who want a meal plan, shopping and pantry to work together
-• People who want to follow a recipe while cooking without ads in the way
+• Cooks and households who want recipes, cooking logs, pantry stock and expiry dates in one place, without it becoming a chore
 
-Note on AI: your photo, or the ingredient names you selected, is sent for analysis only when you use an AI feature. You are told before it happens, and nothing is stored on our servers.
+Note on AI: an AI feature sends what it needs (photo, ingredients, recipe, notes, or receipt text) and the screen says so first. Ingredient matching alone runs automatically (see Settings and our privacy policy). Not stored on our servers.
 
 DAIDOKO does not detect allergens. Always check the ingredients yourself, especially if you have food allergies.
 
