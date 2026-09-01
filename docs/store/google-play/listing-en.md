@@ -29,6 +29,13 @@
 （本文の他の節が同じ語を持っている）。増やすときは日本語版に無い厚みから削ること。
 2026-09-01 第 3 次（AI 注記に名寄せの例外を追記）の時点で 3982 字（残り 18 字）。
 
+**第 4 次（2026-09-01・#266 の AI 由来注記を書き戻し）**: 根拠・引用の一致確認・
+「戻さないこと」は `listing-ja.md` の同名の節を見ること（Play/ASC の 4 面共通）。
+18 字では文が入らないため、ここでも意味を削らない軽い言い回し詰め（barcode/receipt・
+email address→email・short ad→ad・expiry の言い回し）で計 43 字を確保してから
+"AI-made recipes come with a check-yourself note" を追加。**3989 字（残り 11 字）**。
+次に増やすときはここも同じやり方（意味を保ったまま冗長な語を削る）で余白を作ること。
+
 ## アプリ名（28 字）
 
 - DAIDOKO: Meal Plan & Recipes
@@ -56,14 +63,15 @@ Cooking has a lot of moving parts: find a recipe, plan the week, shop, put thing
 • Photograph a cookbook page or food package and AI reads it — front and back merged into one recipe
 • **AI can generate an image** for the recipe, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance)
 • Recreate a restaurant dish, too — write how yours turned out and AI narrows the gap, showing exactly what changed
+• AI-made recipes come with a check-yourself note
 • Cover photos, per-step photos, and a cooking log of what you made and when
 • Cooking mode shows one step at a time, large, with timers and no ads
 
 ■ Shopping and pantry, connected
 • Add what a meal plan or recipe is missing to your shopping list in one tap
 • Check your shopping list from a home-screen widget too (Android)
-• Move what you bought into the pantry — by barcode or by scanning a receipt
-• Track expiry dates if you want to — nothing is required, and we don't nag you with reminders
+• Move what you bought into the pantry — by barcode or receipt scan
+• Track expiry dates if you want — nothing required, no nagging reminders
 • See which recipes you can cook right now, ranked by how much you already have
 • Get a reminder when something is running low
 
@@ -75,13 +83,13 @@ Cooking has a lot of moving parts: find a recipe, plan the week, shop, put thing
 • Needs a connection: AI features, URL import, publishing or opening a shared recipe page, and watching an ad for more AI
 
 ■ Where your data lives
-• No account, no sign-up. We never hold your email address or phone number
+• No account, no sign-up. We never hold your email or phone number
 • **Unless you share with family or publish a recipe page, your data stays on your device**
 • Join a family group and only the items you share travel through our server.
 Delete the group and that synced data is erased from the server
 • A published recipe page is separate — deleting the group does not stop it. Stop a single recipe from its own menu, a recipe book from Settings → Recipe books; nobody can open it after that
 • Backup, restore and a transfer file for moving to a new phone
-• AI features include a free monthly allowance (5 a month), then a short ad unlocks one more.
+• AI features include a free monthly allowance (5 a month), then an ad unlocks one more.
 Add your own Gemini key for no limit
 
 ■ Who it is for

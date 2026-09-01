@@ -9,6 +9,10 @@
 # v1.12.2-play-10032 / v1.12.3-play-10033 submit tags). None shipped on its
 # own; all three are folded into 1.13.0 here. The old drafts stay at
 # release-notes/1.12.1-en.txt, 1.12.2-en.txt and 1.12.3-en.txt.
+#
+# #266 (the AI-recipe check-yourself note; merged into release/1.13.0 in 4829584) is not
+# included in the body below: it's 493/500 chars already, no room for a new sentence.
+# Already reflected in the store descriptions and What's New sections (see listing-en.md).
 
 Meal plan (2-7 days from your pantry, swap any day) and an optional auto-plan mode: ready each morning with a notification, off by default.
 

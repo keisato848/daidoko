@@ -39,6 +39,12 @@ AI 機能・URL 取り込みに加えて、**Web 共有の公開/停止・共有
 （`privacy-policy.md` §3.2 と食い違う）。ja/en とも短く例外を足した — 名寄せだけは操作なし
 に自動送信され、案内は画面ではなく設定とプライバシーポリシーにある、という区別を残すこと。
 
+**2026-09-01 第 4 次（#266 の AI 由来注記を書き戻し・戻さないこと）**: 根拠・引用の一致確認・
+「戻さないこと」は `../google-play/listing-ja.md` の同名の節を見ること（Play/ASC の 4 面共通）。
+説明は 33 字しか余裕が無かったため、ja に無い「オフラインで動く」の長い箇条書き（208 字・ja の
+説明本文には存在しない）を 89 字に削って確認バッジの 1 文（115 字）を作った。「バージョンごとの
+新機能（1.13.0）」は 4000 字上限に対して余裕が大きいので、そのまま段落を追加した。
+
 **説明は 4000 字が上限。** 開示を正確にしたぶん、重複していた「Who it is for」の 3 行を落とした
 （Apple は説明文を検索索引に使わないので ASO の損は無い）。2026-09-01 の第 2 次で Web 共有の
 停止経路を足すため、「Who it is for」を 1 行に畳み、2 段落目の言い回しも詰めた。
@@ -95,6 +101,7 @@ Cooking has a lot of moving parts: find a recipe, plan the week, shop, put thing
 • Photograph a cookbook page or food package and AI reads it (front and back merged into one)
 • **AI can generate an image** for the recipe, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance)
 • Recreate a restaurant dish, too — write how yours turned out and AI narrows the gap, showing exactly what changed
+• AI-drafted recipes carry a reminder to check the ingredients, amounts and steps yourself (especially for allergies)
 • Cover photos, per-step photos, and a cooking log of what you made and when
 • Cooking mode shows one step at a time, large, with timers and no ads. Leave and resume from a bar or the home screen; add step photos as you cook
 
@@ -122,7 +129,7 @@ Cooking has a lot of moving parts: find a recipe, plan the week, shop, put thing
 • A published recipe page is separate — deleting the group does not stop it. Stop a single recipe from its own menu, a recipe book from Settings → Recipe books; nobody can open it after that
 • Backup, restore and a transfer file for moving to a new phone
 • AI features include a free monthly allowance (5 a month; AI image generation is separate, 3 a month). Add your own Gemini key for no limit
-• Your meal plan, recipes, shopping list, pantry and cooking mode work offline. A connection is needed for the AI features, URL import, publishing or opening a shared recipe page, and watching an ad for more AI
+• Most of the app works offline; AI features, URL import, sharing and ads need a connection
 
 ■ Who it is for
 • Cooks and households who want recipes, cooking logs, pantry stock and expiry dates in one place, without it becoming a chore
@@ -140,6 +147,8 @@ New opt-in auto mode: wake up to today's plan, with an optional morning reminder
 Cooking mode: leave mid-recipe and pick up right where you left off from a resume bar or the home screen, even after closing the app. Add step photos as you cook.
 
 Recipes can now get an AI-generated image, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance).
+
+Recipes with AI-written ingredients or steps now carry an on-screen reminder to check them yourself (recipe view, cooking mode, and shared previews).
 
 The free AI allowance is now 5 uses per month.
 
