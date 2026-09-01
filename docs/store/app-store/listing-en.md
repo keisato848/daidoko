@@ -1,7 +1,7 @@
 # App Store 掲載情報（EN）
 
 作成日: 2026-08-27
-更新日: 2026-09-01（開示 5 件を実装と突き合わせて修正。2026-08-29 は決定変更 B — 訴求の主語を「お店の味」→「献立」へ）
+更新日: 2026-09-02（独立監査で発見した「データは端末の中だけ」の反例を修正。2026-09-01 は開示 5 件を実装と突き合わせて修正。2026-08-29 は決定変更 B — 訴求の主語を「お店の味」→「献立」へ）
 対象ビルド: iOS 1.13.0（予定）（App ID `6800964382`・公開中は 1.12.0 / 10029・ASC の直前作業は 1.12.3 / 10033）
 反映方法: App Store Connect API（`appStoreVersionLocalizations` / `appInfoLocalizations`）
 
@@ -48,7 +48,16 @@ AI 機能・URL 取り込みに加えて、**Web 共有の公開/停止・共有
 **説明は 4000 字が上限。** 開示を正確にしたぶん、重複していた「Who it is for」の 3 行を落とした
 （Apple は説明文を検索索引に使わないので ASO の損は無い）。2026-09-01 の第 2 次で Web 共有の
 停止経路を足すため、「Who it is for」を 1 行に畳み、2 段落目の言い回しも詰めた。
-第 3 次（AI 注記に名寄せの例外を追記）の時点で 3972 字（残り 28 字）。
+第 3 次（AI 注記に名寄せの例外を追記）の時点で 3972 字（残り 28 字）。第 4 次の時点で 3967 字。
+
+**第 5 次（2026-09-02・独立監査で発見・戻さないこと）**: 根拠は `../google-play/listing-ja.md`
+の同名の節（Android の OS 標準クラウドバックアップに DB が含まれる・iOS の iCloud バックアップにも
+既定で含まれる・SAF 外部保存先への自動書き出し。3 つとも「共有」を経ない端末外コピー）。
+"your data stays on your device" を "we do not send your data to our servers" に、
+バックアップの 1 行に OS バックアップ/SAF の開示を追加。33 字の余裕では足りないため、
+重複していた 2 文目「DAIDOKO keeps that loop in one place.」を削除し、"too" の重複語・
+冗長な修飾（expiry の言い回し・meal-prep の一文）を数か所削って余白を確保した。
+**3975 字（残り 25 字）**。
 
 ## フィールドの上限（App Store Connect）
 
@@ -86,13 +95,13 @@ cooking,recipe manager,grocery,fridge,meal prep,expiry,leftovers,copycat,menu pl
 
 "What should I cook tonight?" You open the fridge and answer the same question again. DAIDOKO starts from what you already have — a meal plan, then recipes, shopping and pantry, all in one app instead of scattered across screenshots and links.
 
-Cooking has a lot of moving parts: find a recipe, plan the week, shop, put things away, start over. DAIDOKO keeps that loop in one place.
+Cooking has a lot of moving parts: find a recipe, plan the week, shop, put things away, start over.
 
 ■ Plan today's meals
 • Build a 2, 3, 5 or 7-day meal plan from what's in your pantry
 • Each day comes with a one-line reason; swap out anything you don't like
 • Anything missing goes straight to your shopping list
-• Optional auto-plan mode: today's plan is ready when you wake up, with a notification. Missing ingredients can be added automatically too — undo or turn it off any time
+• Optional auto-plan mode: today's plan is ready when you wake up, with a notification. Missing ingredients can be added automatically — undo or turn it off any time
 
 ■ Building your recipe collection
 • Search by recipe name, tag or ingredient
@@ -100,7 +109,7 @@ Cooking has a lot of moving parts: find a recipe, plan the week, shop, put thing
 • Just photograph a dish and AI drafts the ingredients, amounts and steps; you always review and edit before saving
 • Photograph a cookbook page or food package and AI reads it (front and back merged into one)
 • **AI can generate an image** for the recipe, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance)
-• Recreate a restaurant dish, too — write how yours turned out and AI narrows the gap, showing exactly what changed
+• Recreate a restaurant dish — write how yours turned out and AI narrows the gap, showing exactly what changed
 • AI-drafted recipes carry a reminder to check the ingredients, amounts and steps yourself (especially for allergies)
 • Cover photos, per-step photos, and a cooking log of what you made and when
 • Cooking mode shows one step at a time, large, with timers and no ads. Leave and resume from a bar or the home screen; add step photos as you cook
@@ -113,8 +122,8 @@ Cooking has a lot of moving parts: find a recipe, plan the week, shop, put thing
 ■ Shopping and pantry, connected
 • Add what a meal plan or recipe is missing to your shopping list in one tap
 • Move what you bought into the pantry — by barcode or by scanning a receipt
-• Track expiry dates if you want to — nothing is required, and we don't nag you with reminders
-• See which recipes you can cook right now, ranked by how much you already have — handy for using up meal-prep batches, too
+• Track expiry dates if you want — nothing required, no nagging reminders
+• See which recipes you can cook right now, ranked by how much you already have — handy for meal-prep rotations, too
 • Get a reminder when something is running low
 
 ■ Shared with the family, automatically
@@ -124,10 +133,10 @@ Cooking has a lot of moving parts: find a recipe, plan the week, shop, put thing
 
 ■ Where your data lives
 • No account, no sign-up. We never hold your email address or phone number
-• Unless you share with family or publish a recipe page, your data stays on your device
+• Unless you share with family or publish a recipe page, we do not send your data to our servers
 • Join a family group and only the items you share travel through our server. Delete the group and that synced data is erased from the server
 • A published recipe page is separate — deleting the group does not stop it. Stop a single recipe from its own menu, a recipe book from Settings → Recipe books; nobody can open it after that
-• Backup, restore and a transfer file for moving to a new phone
+• Backup, restore, a transfer file for a new phone, plus your OS backup (Android/iCloud) or chosen folder if set — your account, not ours
 • AI features include a free monthly allowance (5 a month; AI image generation is separate, 3 a month). Add your own Gemini key for no limit
 • Most of the app works offline; AI features, URL import, sharing and ads need a connection
 
