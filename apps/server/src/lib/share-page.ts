@@ -210,9 +210,10 @@ ${photoUrl ? `<meta property="og:image" content="${escapeHtml(photoUrl)}">\n<met
   <h1>${title}</h1>
   ${metaParts.length > 0 ? `<div class="meta">${escapeHtml(metaParts.join(' ・ '))}</div>` : ''}
   ${tags.length > 0 ? `<div class="tags">${escapeHtml(tags.map((t) => `#${t}`).join(' '))}</div>` : ''}
+  ${row.aiGenerated === 1 ? `<p class="ai-recipe-notice">${s.aiRecipeNotice}</p>` : ''}
   ${
     ingredients.length > 0
-      ? `${row.aiGenerated === 1 ? `<p class="ai-recipe-notice">${s.aiRecipeNotice}</p>` : ''}<h2>${s.ingredients}</h2>\n<ul class="ings">${renderIngredients(ingredients, locale)}</ul>`
+      ? `<h2>${s.ingredients}</h2>\n<ul class="ings">${renderIngredients(ingredients, locale)}</ul>`
       : ''
   }
   ${
@@ -286,9 +287,10 @@ export function renderBookPage(
   ${aiCover ? `<p class="ai-cover-notice">${s.aiCoverNotice}</p>` : ''}
   <h2 class="rtitle">${escapeHtml(recipe.title)}</h2>
   ${metaParts.length > 0 ? `<div class="meta">${escapeHtml(metaParts.join(' ・ '))}</div>` : ''}
+  ${recipe.aiGenerated === 1 ? `<p class="ai-recipe-notice">${s.aiRecipeNotice}</p>` : ''}
   ${
     ingredients.length > 0
-      ? `${recipe.aiGenerated === 1 ? `<p class="ai-recipe-notice">${s.aiRecipeNotice}</p>` : ''}<h3>${s.ingredients}</h3>\n<ul class="ings">${renderIngredients(ingredients, locale)}</ul>`
+      ? `<h3>${s.ingredients}</h3>\n<ul class="ings">${renderIngredients(ingredients, locale)}</ul>`
       : ''
   }
   ${
