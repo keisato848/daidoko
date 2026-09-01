@@ -110,11 +110,12 @@
 
 ## 7. 実装時に確認すること
 
-1. **画像生成 API の表面を実呼び出しで検証する（未検証・2026-08-28 実装時点）。**
-   実装は公式ドキュメント（image-generation・2026-08-28 取得）が示す **Interactions API**
-   （`POST /v1beta/interactions`・`response_format.image_size: '1K'`・応答 `output_image.data`）に
-   合わせてある — このモデル系は既存 provider の generateContent とは**別の表面**。
-   フィールド名が違っても直すのは `GeminiCoverImageProvider.generate()` の応答解析だけ
+1. ~~**画像生成 API の表面を実呼び出しで検証する（未検証・2026-08-28 実装時点）。**~~
+   **検証済み（2026-08-29）。** エンドポイント・認証ヘッダ・リクエスト body は 200 応答で確認できたが、
+   **応答側の形はドキュメントと違った** — `output_image.data` ではなく、`steps[]` の中の
+   `type: 'model_output'` → `content[].type === 'image'` から拾う形だった（`思考`ステップを
+   画像と誤読しないこと。実装は `apps/server/src/lib/cover-image.ts` の
+   `extractModelOutputImage()` を見よ）。フィールド名が違っても直すのは応答解析だけ
    （agent/route が使う CoverImageProvider 契約は安定）
 2. **Lite の料理写真品質**: リリース前に和食 10 題 × Lite/3.1-flash の目視比較（≒¥150）で既定モデルを確定
 3. 見送った代替案も残す: 素材写真ライブラリ（ライセンス管理が要る）・
