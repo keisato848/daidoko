@@ -14,9 +14,24 @@ import { t } from '../../../src/i18n';
 
 const mockGetSyncState = jest.fn();
 const mockFetchSyncMe = jest.fn();
+const mockJoinSyncGroup = jest.fn();
+const mockSetParams = jest.fn();
+const mockDialogConfirm = jest.fn();
+const mockDialogAlert = jest.fn();
+// 招待リンク（app/j/[code].tsx）から来たときの ?invite=。各テストで差し替える
+let mockSearchParams: Record<string, string> = {};
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ back: jest.fn(), push: jest.fn(), canGoBack: () => false }),
+  useRouter: () => ({
+    back: jest.fn(),
+    push: jest.fn(),
+    canGoBack: () => false,
+    setParams: (...args: unknown[]) => {
+      mockSetParams(...args);
+      mockSearchParams = {}; // 本物と同じく、消したら次の描画から空になる
+    },
+  }),
+  useLocalSearchParams: () => mockSearchParams,
   useFocusEffect: (callback: () => void) => {
     const { useEffect } = jest.requireActual('react');
     useEffect(callback, [callback]);
@@ -37,12 +52,26 @@ jest.mock('../../../src/services/sync-client.service', () => {
     getSyncState: (...args: unknown[]) => mockGetSyncState(...args),
     fetchSyncMe: (...args: unknown[]) => mockFetchSyncMe(...args),
     createSyncGroup: jest.fn(),
-    joinSyncGroup: jest.fn(),
+    joinSyncGroup: (...args: unknown[]) => mockJoinSyncGroup(...args),
+    inviteLinkUrl: (code: string) => `https://example.test/j/${code}`,
     rotateSyncInvite: jest.fn(),
     leaveSyncGroup: jest.fn(),
     deleteSyncGroup: jest.fn(),
   };
 });
+
+jest.mock('../../../src/services/dialog.service', () => ({
+  dialog: {
+    alert: (...args: unknown[]) => mockDialogAlert(...args),
+    confirm: (...args: unknown[]) => mockDialogConfirm(...args),
+    choose: jest.fn(),
+  },
+}));
+
+jest.mock('../../../src/services/sync-runner.service', () => ({
+  onSyncGroupJoined: jest.fn(async () => undefined),
+  onSyncGroupLeft: jest.fn(async () => undefined),
+}));
 
 jest.mock('../../../src/services/user.service', () => ({
   getCurrentFamily: () => ({
@@ -81,6 +110,11 @@ describe('FamilyScreen — クラウド共有', () => {
   beforeEach(() => {
     mockGetSyncState.mockReset();
     mockFetchSyncMe.mockReset();
+    mockJoinSyncGroup.mockReset();
+    mockSetParams.mockReset();
+    mockDialogConfirm.mockReset();
+    mockDialogAlert.mockReset();
+    mockSearchParams = {};
   });
 
   it('未参加: 説明・作成ボタン・招待コード入力が出る', async () => {
@@ -143,5 +177,63 @@ describe('FamilyScreen — クラウド共有', () => {
     await waitFor(() => expect(screen.getByText(t('family.sync.offlineJoined'))).toBeTruthy());
     expect(screen.getByText(t('family.sync.retry'))).toBeTruthy();
     expect(screen.queryByText(/Network request failed/)).toBeNull();
+  });
+
+  // ── 招待リンク（docs/クラウド同期設計.md §2-2b） ─────────────────────────
+
+  it('招待リンクで開いた（未参加）: コードが入り、同意ダイアログ→参加まで進む', async () => {
+    mockSearchParams = { invite: 'abcd-2345' };
+    mockGetSyncState.mockResolvedValue({ kind: 'none' });
+    mockDialogConfirm.mockResolvedValue(true); // 同意
+    mockJoinSyncGroup.mockResolvedValue({ groupId: 'g1', deviceId: 'd2', deviceSecret: 's' });
+    render(<FamilyScreen />);
+
+    await waitFor(() => expect(mockJoinSyncGroup).toHaveBeenCalledWith('ABCD2345', null));
+    // 同意の瞬間は既存の確認ダイアログ（消費者側の文言は変えない）
+    expect(mockDialogConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ confirmLabel: t('family.sync.join') }),
+    );
+    // 処理したらパラメータを消す（同じリンクをもう一度タップしたときに再び動くため）
+    expect(mockSetParams).toHaveBeenCalledWith({ invite: '' });
+  });
+
+  it('招待リンクで開いた（未参加）: 同意しなければ参加しない', async () => {
+    mockSearchParams = { invite: 'ABCD2345' };
+    mockGetSyncState.mockResolvedValue({ kind: 'none' });
+    mockDialogConfirm.mockResolvedValue(false);
+    render(<FamilyScreen />);
+
+    await waitFor(() => expect(mockDialogConfirm).toHaveBeenCalled());
+    expect(mockJoinSyncGroup).not.toHaveBeenCalled();
+    // コードは入力欄に残る（手で参加し直せる）
+    expect(screen.getByDisplayValue('ABCD2345')).toBeTruthy();
+  });
+
+  it('招待リンクで開いた（参加中）: 参加は走らず「離脱してから」と伝える', async () => {
+    mockSearchParams = { invite: 'ABCD2345' };
+    mockGetSyncState.mockResolvedValue({
+      kind: 'joined',
+      credentials: { groupId: 'g1', deviceId: 'd1', deviceSecret: 's' },
+    });
+    mockFetchSyncMe.mockResolvedValue(ME_OWNER);
+    render(<FamilyScreen />);
+
+    await waitFor(() =>
+      expect(mockDialogAlert).toHaveBeenCalledWith(
+        expect.objectContaining({ message: t('family.sync.inviteLinkAlreadyJoined') }),
+      ),
+    );
+    expect(mockJoinSyncGroup).not.toHaveBeenCalled();
+    expect(mockDialogConfirm).not.toHaveBeenCalled();
+  });
+
+  it('招待リンクなし: ダイアログは何も出ない', async () => {
+    mockGetSyncState.mockResolvedValue({ kind: 'none' });
+    render(<FamilyScreen />);
+
+    await waitFor(() => expect(screen.getByText(t('family.sync.create'))).toBeTruthy());
+    expect(mockDialogConfirm).not.toHaveBeenCalled();
+    expect(mockDialogAlert).not.toHaveBeenCalled();
+    expect(mockSetParams).not.toHaveBeenCalled();
   });
 });

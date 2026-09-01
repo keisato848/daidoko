@@ -48,6 +48,11 @@
               "scheme": "https",
               "host": "daidoko-production.up.railway.app",
               "pathPrefix": "/b/"
+            },
+            {
+              "scheme": "https",
+              "host": "daidoko-production.up.railway.app",
+              "pathPrefix": "/j/"
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]

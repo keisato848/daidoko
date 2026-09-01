@@ -70,7 +70,10 @@ const family: typeof ja = {
     inviteLabel: 'Invite code (valid for 24h)',
     inviteExpires: 'Expires: {{when}}',
     shareMessage:
-      'Join my DAIDOKO family share. Enter this code under \u201cFamily group\u201d in the app: {{code}}',
+      'Join my DAIDOKO family share. Open this link to join:\n{{url}}\n\nIf the link does not open, enter this code under \u201cFamily group\u201d in the app: {{code}}',
+    inviteLinkTitle: 'Family share invitation',
+    inviteLinkAlreadyJoined:
+      'This device is already in a share group. To join a different group, leave the current one first.',
     memberCountLabel: {
       one: 'Devices sharing: {{count}}',
       other: 'Devices sharing: {{count}}',
