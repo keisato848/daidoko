@@ -44,6 +44,7 @@ describe('buildSharePayload', () => {
     heroPhotoUri: null,
     coverPhotoPath: null,
     isCoverAiGenerated: false,
+    isAiGenerated: false,
     pinnedAt: null,
     placeName: null,
   };
@@ -55,6 +56,15 @@ describe('buildSharePayload', () => {
   it('coverIsAiGenerated: true が乗る（表紙が AI 生成イメージのとき）', () => {
     const payload = buildSharePayload({ ...recipe, isCoverAiGenerated: true }, 'ja');
     expect(payload.coverIsAiGenerated).toBe(true);
+  });
+
+  it('aiGenerated は省略される（中身が AI 由来でないとき）', () => {
+    expect(buildSharePayload(recipe, 'ja').aiGenerated).toBeUndefined();
+  });
+
+  it('aiGenerated: true が乗る（中身が AI 推定のとき・#266）', () => {
+    const payload = buildSharePayload({ ...recipe, isAiGenerated: true }, 'ja');
+    expect(payload.aiGenerated).toBe(true);
   });
 
   it('attested: true が必ず載る（確認ダイアログ通過後にのみ呼ばれる前提）', () => {
