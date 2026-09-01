@@ -134,7 +134,9 @@ export default function ImportRecipePageScreen() {
         rawText: '',
         capturedAt: pages[0]?.takenAt,
       });
-      await createRecipe({ ...data, sourceId });
+      // 紙面の撮影から中身を起こした下書き（#266）。端末内 OCR は廃止済みで、
+      // この経路は現在すべて生成モデルを通る
+      await createRecipe({ ...data, sourceId, aiGenerated: true });
       setToastMessage(t('recipeImport.saved'));
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },

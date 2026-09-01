@@ -396,3 +396,33 @@ describe('sync-payload — 版を上げても古い payload が読めること',
     expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(3);
   });
 });
+
+/**
+ * #266: AI 由来の印は**省略可**で運ぶ。版は上げない。
+ *
+ * ここが崩れると、印を知らない古い端末（v3 の payload）を受け取った瞬間に
+ * レシピが 1 件まるごと捨てられる。**省略可の追加で版を上げてはいけない**理由の実体。
+ */
+describe('AI 由来の印（#266）', () => {
+  it('印が無い payload も通る（印を知らない古い端末からの受信）', () => {
+    const raw = serializeSyncPayload(recipePayload());
+    const parsed = parseSyncPayload(SYNC_ENTITY_RECIPE, raw) as RecipeSyncPayload | null;
+
+    expect(parsed).not.toBeNull();
+    // 未指定は「AI ではない」ではなく「分からない」。false に潰さない
+    expect(parsed?.aiGenerated).toBeUndefined();
+  });
+
+  it('印が付いた payload はそのまま通る', () => {
+    const raw = serializeSyncPayload(recipePayload({ aiGenerated: true }));
+    const parsed = parseSyncPayload(SYNC_ENTITY_RECIPE, raw) as RecipeSyncPayload | null;
+
+    expect(parsed?.aiGenerated).toBe(true);
+  });
+
+  it('版は据え置き（上げると旧端末がレシピを 1 件も受け取れなくなる）', () => {
+    // 省略可のフィールド追加は破壊的変更ではない。上げるとカーソルが 0 に戻り、
+    // 旧端末は `schemaVersion` が自分より新しい payload を全部捨てる
+    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(3);
+  });
+});

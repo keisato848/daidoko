@@ -62,11 +62,14 @@ export default function ImportTextScreen() {
 
   const handleSave = useCallback(
     async (data: RecipeFormData) => {
-      await createRecipe(data);
+      // **同じ画面でも、AI を通る回と通らない回がある**（#266）。
+      // 既定は正規表現パーサ（`parser` / `local-heuristic`）で、これは生成ではない。
+      // 画面単位で固定値にすると、パーサで作った回にも AI の印が付いて誤表示になる
+      await createRecipe({ ...data, aiGenerated: parsed?.normalizedBy === 'gemma-native' });
       showToast(t('recipeImport.saved'));
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
-    [router, showToast],
+    [parsed, router, showToast],
   );
 
   if (phase === 'preview') {

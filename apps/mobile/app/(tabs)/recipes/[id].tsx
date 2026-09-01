@@ -523,6 +523,16 @@ export default function RecipeDetailScreen() {
         {recipe.isCoverAiGenerated && (
           <Text style={styles.aiDetailNote}>{t('coverImage.detailNote')}</Text>
         )}
+        {/*
+          中身が AI 由来のときの注意書き（#266）。表紙の一行とは**別の意味**なので
+          両方出ることがある（AI で作ったレシピに AI の表紙を付けた場合）。
+          材料・分量を読む直前の面なので、ここに置く。**ここだけではない** —
+          料理中モードの材料オーバーレイと、共有リンクの取り込みプレビューにも同じ
+          注意書きを出している（詳細を通らずに材料を読める経路があるため）。
+          文言は `ai.disclaimer` をそのまま使う — 短いバッジに薄めると
+          アレルギーの警告が落ちる（あの文が唯一の警告）。
+        */}
+        {recipe.isAiGenerated && <Text style={styles.aiRecipeNote}>{t('ai.disclaimer')}</Text>}
         {/* お店の名前（v12）。編集画面で後から足せるので、足した結果がここに出る */}
         {recipe.placeName ? (
           <View style={styles.placeRow}>
@@ -898,6 +908,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   aiDetailNote: { fontSize: 11, color: Colors.muted, marginBottom: 6 },
+  // 表紙の一行より強く見せる（材料と分量の安全に関わる）。警告色は使わない — ブランド外
+  aiRecipeNote: {
+    fontSize: 11,
+    lineHeight: 17,
+    color: Colors.paper,
+    marginBottom: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.gold,
+    backgroundColor: 'rgba(201,161,106,0.07)',
+  },
   placeRow: {
     flexDirection: 'row',
     alignItems: 'center',

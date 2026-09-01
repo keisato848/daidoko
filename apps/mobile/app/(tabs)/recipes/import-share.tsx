@@ -132,21 +132,23 @@ export default function ImportShareScreen() {
   }, [load, slug]);
 
   const saveOne = useCallback(
-    async (data: RecipeFormData, title: string) => {
+    async (data: RecipeFormData, title: string, aiGenerated: boolean | undefined) => {
       const sourceId = await createShareSource({ url: shareUrlFor(kind, slug), pageTitle: title });
-      await createRecipe({ ...data, sourceId });
+      // 共有元が AI 由来なら引き継ぐ（#266）。取り込んだ側でも印が残らないと、
+      // 人づてに渡るうちに AI 由来だと分からなくなる
+      await createRecipe({ ...data, sourceId, aiGenerated });
     },
     [kind, slug],
   );
 
   const handleSaveRecipe = useCallback(
     async (data: RecipeFormData) => {
-      await saveOne(data, data.title);
+      await saveOne(data, data.title, recipe?.aiGenerated);
       setShowToast(true);
       setPhase('done');
       setTimeout(() => router.replace('/(tabs)/recipes'), 1200);
     },
-    [router, saveOne],
+    [recipe, router, saveOne],
   );
 
   const handleSaveAll = useCallback(async () => {
@@ -155,7 +157,7 @@ export default function ImportShareScreen() {
     let count = 0;
     try {
       for (const item of book.recipes) {
-        await saveOne(toFormData(item), item.title);
+        await saveOne(toFormData(item), item.title, item.aiGenerated);
         count += 1;
       }
       setSavedCount(count);
@@ -235,6 +237,12 @@ export default function ImportShareScreen() {
         {phase === 'recipe' && recipe && (
           <View style={styles.flex}>
             <Text style={styles.lead}>{t('recipeImport.share.recipeLead')}</Text>
+            {/*
+              **他人が作った AI レシピの材料と分量を、保存前にここで全部読める**（#266）。
+              共有ページ側には注意書きが出るが、アプリで開くとこの画面に来るので、
+              ここに無いと注意書きを一度も見ずに材料を読むことになる。
+            */}
+            {recipe.aiGenerated && <Text style={styles.aiNote}>{t('ai.disclaimer')}</Text>}
             <RecipeForm
               title={t('recipeImport.share.title')}
               initialValues={toFormData(recipe)}
@@ -252,6 +260,10 @@ export default function ImportShareScreen() {
             <Text style={styles.lead}>
               {tCount('recipeImport.share.bookLead', book.recipes.length)}
             </Text>
+            {/* 1 件でも AI 由来なら、帖の一覧の手前で断る */}
+            {book.recipes.some((item) => item.aiGenerated) && (
+              <Text style={styles.aiNote}>{t('ai.disclaimer')}</Text>
+            )}
             {book.recipes.map((item, index) => (
               <View key={`${index}-${item.title}`} style={styles.bookRow}>
                 <Text style={styles.bookRowTitle}>{item.title}</Text>
@@ -301,6 +313,18 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: Colors.paper, fontSize: 16, fontWeight: '600' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
+  // 詳細画面の aiRecipeNote と同じ見せ方に揃える（#266）
+  aiNote: {
+    fontSize: 11,
+    lineHeight: 17,
+    color: Colors.paper,
+    marginBottom: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.gold,
+    backgroundColor: 'rgba(201,161,106,0.07)',
+  },
   lead: {
     color: Colors.paper,
     fontSize: 14,

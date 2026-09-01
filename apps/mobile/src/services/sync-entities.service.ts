@@ -203,6 +203,9 @@ async function buildRecipeChange(recipeId: string, deletedAt: string): Promise<O
         }
       : null,
     urlImported,
+    // AI 由来の印（#266）。**真のときだけ送る** — false を送っても意味が無いうえ、
+    // 受信側が「AI ではないと確かめた」と誤解する余地を作らない
+    ...(recipe.aiGenerated === 1 ? { aiGenerated: true } : {}),
     ingredients: ingredientRows.map((row) => ({
       id: row.id,
       sortOrder: row.sortOrder,
@@ -371,6 +374,20 @@ function updateFtsForRecipe(payload: RecipeSyncPayload): void {
   }
 }
 
+/**
+ * 受信でレシピ行に書く「AI 由来の印」の差分（#266）。**立つときだけ返す。**
+ *
+ * `{ aiGenerated: payload.aiGenerated ? 1 : null }` と書いてはいけない。
+ * 印を知らない古い端末は payload にこの欄を持たないので、その 1 通が後勝ちした瞬間に
+ * **手元で立っている印が潰れる**。`pinnedAt` を `set` から外しているのと同じ考え方。
+ *
+ * 純関数にしてあるのは、`applyRecipePayload` が DB を掴んでいてテストから叩けないため
+ * （`docs/品質基準.md` §2.3「規則は分岐の手前の純関数へ切り出す」）。
+ */
+export function incomingAiGeneratedPatch(payload: { aiGenerated?: boolean }): { aiGenerated?: 1 } {
+  return payload.aiGenerated ? { aiGenerated: 1 } : {};
+}
+
 async function applyRecipePayload(payload: RecipeSyncPayload): Promise<ApplyOutcome> {
   const db = getDb();
 
@@ -420,6 +437,7 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<ApplyOutc
       // 作りたいリストは人ごとの都合なので運ばない（新規受信は未ピンで入る）
       pinnedAt: null,
       placeName: payload.recipe.placeName,
+      aiGenerated: payload.aiGenerated ? 1 : null,
       createdBy: USER_ID,
       createdAt: payload.recipe.createdAt,
       updatedAt: payload.recipe.updatedAt,
@@ -433,6 +451,8 @@ async function applyRecipePayload(payload: RecipeSyncPayload): Promise<ApplyOutc
         status: payload.recipe.status,
         // pinnedAt は set に入れない ＝ ローカルのピンを消さない
         placeName: payload.recipe.placeName,
+        // **立つときだけ含める。** 規則の実体は incomingAiGeneratedPatch（純関数・テスト対象）
+        ...incomingAiGeneratedPatch(payload),
         updatedAt: payload.recipe.updatedAt,
       },
     });

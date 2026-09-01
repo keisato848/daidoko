@@ -21,6 +21,8 @@ export interface RecipeUpdateCurrent {
   titleReading: string | null;
   coverPhotoPath: string | null;
   placeName: string | null;
+  /** 中身が AI 由来か（#266）。一度立ったら下がらない */
+  aiGenerated: boolean;
   revision: {
     servings: number | null;
     cookTimeMin: number | null;
@@ -35,6 +37,8 @@ export interface ResolvedRecipeUpdate {
   titleReading: string | null;
   coverPhotoPath: string | null;
   placeName: string | null;
+  /** 中身が AI 由来か（#266）。一度立ったら下がらない */
+  aiGenerated: boolean;
   servings: number | null;
   cookTimeMin: number | null;
   prepTimeMin: number | null;
@@ -85,5 +89,16 @@ export function resolveRecipeUpdate(
       同期でも現行リビジョンの出所しか運ばないので、ここで切れると受信側で素通りになる。
     */
     sourceId: input.sourceId ?? rev?.sourceId ?? null,
+    /*
+      AI 由来の印は**一方向**。立てることはできるが、下げることはできない（#266）。
+
+      `keep()` を使わないのはそのため。編集で `undefined` が来たら現行値を保つのは
+      同じだが、`false` が来ても現行の `true` を消さない点が違う。**分量を 1 つ
+      直しただけで「人が作ったレシピ」に化けると、安全表示として逆方向になる。**
+
+      同期でも同じ理由で効く。印を知らない古い端末から `aiGenerated` の無い
+      payload が後勝ちで届いても、ここを通れば印は残る。
+    */
+    aiGenerated: current.aiGenerated || input.aiGenerated === true,
   };
 }

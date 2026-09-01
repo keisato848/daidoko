@@ -128,6 +128,31 @@ describe('Web 共有', () => {
     expect(plainPage).not.toContain('AIが作ったイメージです');
   });
 
+  it('AI 由来のレシピ: aiGenerated を送ると注意書きが出る（省略時は出ない・#266）', async () => {
+    const withLabel = (await (await publish({ ...basePayload(), aiGenerated: true })).json()) as {
+      slug: string;
+    };
+    const page = await (await app.request(`/r/${withLabel.slug}`)).text();
+    // 文言はアプリの `ai.disclaimer` と同一。**アレルギーの警告を落とさない**
+    expect(page).toContain('AIが推定したレシピです');
+    expect(page).toContain('アレルギーのある方は特にご注意ください');
+
+    const plain = (await (await publish({ ...basePayload() })).json()) as { slug: string };
+    const plainPage = await (await app.request(`/r/${plain.slug}`)).text();
+    expect(plainPage).not.toContain('AIが推定したレシピです');
+  });
+
+  it('AI 由来のレシピ: 材料が空でも注意書きは出る（#266・入れ子で消さない）', async () => {
+    // 材料の節の中に入れると、材料が空のレシピで警告ごと消える。
+    // 手順は AI のままなので、材料の有無に関わらず出す
+    const { slug } = (await (
+      await publish({ ...basePayload(), ingredients: [], aiGenerated: true })
+    ).json()) as { slug: string };
+    const page = await (await app.request(`/r/${slug}`)).text();
+
+    expect(page).toContain('AIが推定したレシピです');
+  });
+
   it('取り消し: 誤トークンは 403・正トークンで取り消し → ページも写真も 404', async () => {
     const { slug, deleteToken } = (await (
       await publish({ ...basePayload(), photoBase64: TINY_JPEG_BASE64, photoMime: 'image/jpeg' })
