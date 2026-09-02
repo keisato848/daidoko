@@ -117,17 +117,49 @@ shared_recipes
 同じ仕組みに **家族共有の招待リンク `/j/:code`** も載っている（2026-09-02・1.13.0。
 `docs/クラウド同期設計.md` §2-2b）。intentFilter・AASA の `paths` は `/r/`・`/b/`・`/j/` の 3 つ。
 
-**まだ利用者側でやること（環境変数を入れるまで App Links は効かない）** — 2026-09-02 時点で本番の
-`/.well-known/assetlinks.json`・`apple-app-site-association` はともに **404 ＝ 2 つとも未設定**を確認
-（`curl -o /dev/null -w '%{http_code}'` で見られる。Railway CLI は worktree からはリンクされていない）。
-未設定のままだと共有リンクも招待リンクもブラウザで開き、招待は `/j/:code` の「アプリで開く」経由になる:
+**環境変数（2026-09-02 に設定・デプロイ済み）。** それまで本番の `/.well-known/assetlinks.json`・
+`apple-app-site-association` はともに 404 ＝ 未設定で、共有リンクも招待リンクもブラウザで開いていた
+（招待は `/j/:code` の「アプリで開く」経由）。現在は両方 200 を返す:
 
-1. Play Console → アプリの完全性 → **アプリ署名鍵証明書**の SHA-256 を `APP_LINKS_SHA256_FINGERPRINTS` に
-   （Railway の環境変数・複数はカンマ区切り）。**アップロード鍵ではない**（Google が配布時に署名し直す鍵）。
-   ローカルの検証ビルドで試すなら、その APK の署名鍵の SHA-256 も足す
-2. Apple Developer の **Team ID** を `APPLE_TEAM_ID` に。iOS は次のビルドから `associatedDomains` が効く
-3. 実機で `adb shell pm get-app-links com.daidoko.app` が `verified` になることを確認（検証は
-   インストール時に OS が非同期で行う。`pm verify-app-links --re-verify com.daidoko.app` で再検証）
+```
+/health                                  200
+/.well-known/assetlinks.json             200   com.daidoko.app / 指紋 1 件
+/.well-known/apple-app-site-association  200   VY7SNHS2BY.com.daidoko.app / paths ["/r/*","/b/*","/j/*"]
+/j/<8桁の正しい形式>                     200
+/j/xx                                    404   形式チェック（実在確認はしない — 同期設計 §2-2b）
+```
+
+同じ作業をもう一度する場合（鍵の入れ替え・別環境）の手順:
+
+1. Play Console の **アプリ署名鍵証明書**の SHA-256 を `APP_LINKS_SHA256_FINGERPRINTS` に
+   （Railway の環境変数・複数はカンマ区切り・`AA:BB:…` のコロン区切りのままでよい）。
+   **アップロード鍵ではない**（Google が配布時に署名し直す鍵）。
+   ローカルの検証ビルドで試すなら、その APK の署名鍵の SHA-256 も足す。
+   **場所はメニュー再編で動く。** 2026-09-02 時点では左メニューの「テストとリリース → アプリの完全性」を開いても
+   「アプリの完全性の設定は [Google Play による保護] に移動しました」と案内が出るだけで鍵が見えない。
+   URL を直接叩くのが確実:
+   `https://play.google.com/console/u/0/developers/<開発者ID>/app/<アプリID>/keymanagement`
+   （今開いている画面の URL の `developers/…/app/…` をそのまま使い、末尾を `/keymanagement` に差し替える）
+2. Apple Developer（https://developer.apple.com/account → Membership details）の **Team ID**（10 文字）を
+   `APPLE_TEAM_ID` に。iOS は次のビルドから `associatedDomains` が効く
+3. `railway variables --service daidoko --set "KEY=値" --skip-deploys` で入れ、**`railway up` で配り直す**
+   （`.well-known` は環境変数を起動時に読むので、変数を入れただけでは 404 のまま）。
+   worktree は `railway link --project daidoko --environment production --service daidoko` で先に繋ぐ
+4. 値の形式は `app.ts` が検証する（SHA-256 は `XX:` ×31 + `XX` の大文字 32 バイト。合わない指紋は
+   **黙って捨てられて 404 のまま**＝設定ミスとサーバー障害が見分けられない）。入れたら上の表の `curl` で確かめる
+5. 実機で `adb shell pm get-app-links com.daidoko.app` が `verified` になることを確認（検証は
+   インストール時に OS が非同期で行う。`pm verify-app-links --re-verify com.daidoko.app` で再検証）。
+   **すでに入っている端末は再検証されない** — 入れ直すか上のコマンドを叩く
+
+**App Links の検証だけはローカルビルドでは確かめられない**（2026-09-02 の 1.13.0 準備で判明）。
+`assetlinks.json` に載るのは **Play アプリ署名鍵**の指紋なので、`build-android.mjs` で作った
+ローカル署名（debug 鍵・アップロード鍵）の APK は指紋が一致せず、`pm get-app-links` が
+**`1024`（未検証）のまま**になる。実装が正しくても失敗するので、実機検証の項目表で
+「https リンクがアプリで開く」をローカルビルドの合否にしてはいけない。
+**確認できるのは Play 配布版だけ**（内部テストトラックに上げてから）。
+ローカルビルドで見られるのは `daidoko://` スキームの遷移までで、そこは指紋に依存しない。
+どうしてもローカルで通したいなら、その APK の署名鍵の SHA-256 を
+`APP_LINKS_SHA256_FINGERPRINTS` にカンマ区切りで足す（検証環境限定。本番に残さない）。
 
 ## 7. レシピ帖を「モノ」にする（S4）
 
