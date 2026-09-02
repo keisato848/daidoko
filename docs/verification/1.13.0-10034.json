@@ -1,0 +1,20 @@
+{
+  "version": "1.13.0",
+  "versionCode": 10034,
+  "verifiedAt": "2026-09-02T11:56:15.887Z",
+  "device": {
+    "serialHash": "a21c401427d6",
+    "model": "SH-RM19s",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10034,
+  "checked": [
+    "招待コードをリンク化(#273): 8桁コード発行→共有シートに正しいURL形式(https://…/j/<code>)で本文生成→Chrome直接遷移で招待ページ正常表示",
+    "App Links検証状態はpm get-app-linksで1024(未検証・署名鍵不一致)を確認、VIEW intentもChromeへフォールバック(想定どおり)",
+    "AI由来レシピをWeb共有→APIでaiGenerated:true確認→取り込み画面でAI注意書き表示を目視確認→保存せず停止(404確認)",
+    "レシピ帖を6桁パスコードで共有→4桁誤り拒否/6桁正解で解錠(API+UI双方)を一気通貫確認→共有停止・帖削除・同期グループ削除まで後片付け完了"
+  ],
+  "screenshot": "screenshots/1.13.0-10034-2026-09-02T11-56-15-887Z.png",
+  "headCommit": "9cdd1ede209fee68861d6a79f169c16ad8797bc8"
+}
