@@ -122,11 +122,15 @@ shared_recipes
 （`curl -o /dev/null -w '%{http_code}'` で見られる。Railway CLI は worktree からはリンクされていない）。
 未設定のままだと共有リンクも招待リンクもブラウザで開き、招待は `/j/:code` の「アプリで開く」経由になる:
 
-1. Play Console（https://play.google.com/console → だいどこ → テスト、リリース → 設定 → **アプリの署名**）の
-   **アプリ署名鍵証明書**の SHA-256 を `APP_LINKS_SHA256_FINGERPRINTS` に
+1. Play Console の **アプリ署名鍵証明書**の SHA-256 を `APP_LINKS_SHA256_FINGERPRINTS` に
    （Railway の環境変数・複数はカンマ区切り・`AA:BB:…` のコロン区切りのままでよい）。
    **アップロード鍵ではない**（Google が配布時に署名し直す鍵）。
-   ローカルの検証ビルドで試すなら、その APK の署名鍵の SHA-256 も足す
+   ローカルの検証ビルドで試すなら、その APK の署名鍵の SHA-256 も足す。
+   **場所はメニュー再編で動く。** 2026-09-02 時点では左メニューの「テストとリリース → アプリの完全性」を開いても
+   「アプリの完全性の設定は [Google Play による保護] に移動しました」と案内が出るだけで鍵が見えない。
+   URL を直接叩くのが確実:
+   `https://play.google.com/console/u/0/developers/<開発者ID>/app/<アプリID>/keymanagement`
+   （今開いている画面の URL の `developers/…/app/…` をそのまま使い、末尾を `/keymanagement` に差し替える）
 2. Apple Developer（https://developer.apple.com/account → Membership details）の **Team ID**（10 文字）を
    `APPLE_TEAM_ID` に。iOS は次のビルドから `associatedDomains` が効く
 3. 値の形式は `app.ts` が検証する（SHA-256 は `XX:` ×31 + `XX` の大文字 32 バイト。合わない指紋は黙って落ちて
