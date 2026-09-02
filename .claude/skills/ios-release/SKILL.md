@@ -132,7 +132,7 @@ pnpm exec eas build:view <BUILD_ID> --json   # status FINISHED / artifacts
 > `EXPO_ASC_API_KEY_PATH` / `EXPO_ASC_KEY_ID` / `EXPO_ASC_ISSUER_ID` を渡しても**変わらない**
 > （ASC API キーは submit 用で、Developer Portal のプロファイル作成には効かない）。
 > **先に Bundle ID が Apple Developer Portal に登録されているか確かめる。** 1.13.0 では
-> `com.daidoko.app.widget` が**未登録**で、対話メニューを最後まで進めても профиль を作れず
+> `com.daidoko.app.widget` が**未登録**で、対話メニューを最後まで進めてもプロファイルを作れず
 > 同じエラーに戻った（登録してから対話をやり直す必要がある）。EAS のエラー文には
 > 「App ID が無い」とは出ないので、ここを疑えないと同じ対話を何度も繰り返すことになる。
 > 確認は App Store Connect API で非対話にできる（`C:\secure\AuthKey_8C387NYC2T.p8`・
@@ -158,6 +158,15 @@ original profile?` で出る名前が `[expo] com.daidoko.app AppStore …`（`.
 > **本体ターゲット**に居る。本体は既に正常なので **Yes（再利用）**を選び、`Go back` して
 > ウィジェットのターゲットを選び直す。ここで本体のプロファイルを作り直すと、動いている
 > 配布設定を壊しかねない。ウィジェット側はプロファイルが存在しないので新規作成になる。
+> **配布証明書は必ず「再利用」を選ぶ。** `Reuse this distribution certificate?` で出る
+> `5HJ3PY728Y` は `📲 Used by: @keisato848/daidoko,@keisato848/saien-techo` ＝**2 アプリ共用**。
+> Apple は配布証明書の本数に上限があり、新規作成すると枠を食ううえ、さいえん手帳側の
+> ビルドにも影響しうる。新規作成が要るのは**プロファイルだけ**。
+>
+> **App Group は EAS が自動で面倒を見る。** ウィジェットのターゲットを通すと
+> `Synced capabilities: Enabled: App Groups` / `Linked: group.com.daidoko.app` が出て、
+> 本体とウィジェットの App Group が Apple 側で紐づく（手で Portal を触る必要はない）。
+>
 > **新しい extension ターゲットを足す PR を見たら、リリース前にこの一手が要ると思うこと。**
 
 ## 4. TestFlight → 提出（外向きアクション — ユーザー承認を確認）
