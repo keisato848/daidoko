@@ -131,9 +131,18 @@ pnpm exec eas build:view <BUILD_ID> --json   # status FINISHED / artifacts
 > その作成は Apple への対話ログインを伴うため `--non-interactive` では必ず落ちる。
 > `EXPO_ASC_API_KEY_PATH` / `EXPO_ASC_KEY_ID` / `EXPO_ASC_ISSUER_ID` を渡しても**変わらない**
 > （ASC API キーは submit 用で、Developer Portal のプロファイル作成には効かない）。
-> 対処: **人間が対話ターミナルで一度だけ** `pnpm exec eas credentials -p ios` を実行し、
-> production プロファイルで新ターゲットのクレデンシャルを作る。以後は非対話で通る。
-> 新しい extension ターゲットを足す PR を見たら、**リリース前にこの一手が要る**と思うこと。
+> 対処: **人間が対話ターミナルで一度だけ**（エージェントはメニューを操作できない）:
+>
+> ```
+> cd apps/mobile && pnpm exec eas credentials -p ios
+> ```
+>
+> `production` → ターゲット選択で **新しい extension の方**（例 `ShoppingWidget
+(com.daidoko.app.widget)`）→ `Build Credentials` → `All: Set up all the required
+credentials to build your project` → Apple ID でログイン（2FA）→ 配布証明書は
+> **既存を再利用**・プロビジョニングプロファイルだけ新規作成 → `Go back` → `Exit`。
+> 以後は非対話で通る。
+> **新しい extension ターゲットを足す PR を見たら、リリース前にこの一手が要ると思うこと。**
 
 ## 4. TestFlight → 提出（外向きアクション — ユーザー承認を確認）
 
