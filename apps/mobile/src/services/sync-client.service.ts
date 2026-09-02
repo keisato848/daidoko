@@ -292,6 +292,16 @@ export async function rotateSyncInvite(): Promise<{ inviteCode: string; inviteEx
 }
 
 /**
+ * 招待コードを LINE 等で送るためのリンク（docs/クラウド同期設計.md §2-2b）。
+ * `/j/:code` は App Links / Universal Links でアプリが直接開き（app.json・`app/j/[code].tsx`）、
+ * アプリが無ければサーバーがストア誘導ページを返す。ホストは API と同じ（別ドメインにすると
+ * assetlinks / AASA の検証先も増える）。
+ */
+export function inviteLinkUrl(code: string): string {
+  return `${API_V1.replace(/\/api\/v1$/, '')}/j/${encodeURIComponent(code)}`;
+}
+
+/**
  * グループから離脱。サーバー側の削除に成功してもしなくても（既に消えている＝401 でも）
  * ローカルのクレデンシャルは破棄する — 「抜けたのに端末に鍵が残る」を作らない。
  */

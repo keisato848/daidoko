@@ -88,7 +88,8 @@ export function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-const PAGE_CSS = `
+/** 共有ページ共通の配色・組版。招待ページ（invite-page.ts）とも共有する */
+export const PAGE_CSS = `
   :root { color-scheme: dark; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0A0805; color: #DCC9A8; font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;

@@ -6,9 +6,9 @@
  * 以前はローカルのモックで、コードを発行しても相手に何も届かなかった。
  * docs/クラウド同期設計.md §2。参加/作成の確認ダイアログが同意の瞬間（§5-2）。
  */
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, Copy, LogOut, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -32,6 +32,7 @@ import {
   evictSyncDevice,
   fetchSyncMe,
   getSyncState,
+  inviteLinkUrl,
   joinSyncGroup,
   leaveSyncGroup,
   rotateSyncInvite,
@@ -120,6 +121,11 @@ function formatInviteExpiry(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+/** 日本語 IME は全角で確定することがある（実機で 404 になった）。NFKC で半角に寄せる */
+function normalizeJoinCode(value: string): string {
+  return value.normalize('NFKC').toUpperCase();
 }
 
 export default function FamilyScreen() {
@@ -322,8 +328,9 @@ export default function FamilyScreen() {
     });
   };
 
-  const handleJoinGroup = async () => {
-    const code = joinCode.trim();
+  /** 参加。`codeArg` は招待リンクから来たとき（state の反映を待たずに始める） */
+  const handleJoinGroup = async (codeArg?: string) => {
+    const code = (codeArg ?? joinCode).trim();
     if (!code) return;
     const agreed = await dialog.confirm({
       title: t('family.sync.consentTitle'),
@@ -347,11 +354,51 @@ export default function FamilyScreen() {
     });
   };
 
+  /**
+   * 招待を OS の共有シートへ（LINE 等）。本文にリンクを入れる — 受け取った側はタップで
+   * だいどこが開き、参加の確認まで進む（§2-2b）。コードも併記して手入力の逃げ道を残す
+   */
   const handleShareInvite = (code: string) => {
-    void Share.share({ message: t('family.sync.shareMessage', { code }) }).catch(() => {
+    const message = t('family.sync.shareMessage', { code, url: inviteLinkUrl(code) });
+    void Share.share({ message }).catch(() => {
       void dialog.alert({ title: t('family.sync.inviteLabel'), message: code });
     });
   };
+
+  // ── 招待リンクの受け取り（app/j/[code].tsx → ?invite=CODE） ──────────────
+  // クラウドの状態が分かってから 1 回だけ動かす。処理したらパラメータを消し、
+  // 同じリンクをもう一度タップしたときにまた動けるようにする（画面は残り続けるため）
+  const { invite: inviteParam } = useLocalSearchParams<{ invite?: string }>();
+  const inviteFromLink =
+    typeof inviteParam === 'string' ? normalizeJoinCode(inviteParam).replace(/[\s-]/g, '') : '';
+  // 参加が終わって cloud.kind が変わったときに、消す前のパラメータでもう一度動かないための控え
+  const handledInviteRef = useRef('');
+  useEffect(() => {
+    if (!inviteFromLink) {
+      handledInviteRef.current = '';
+      return;
+    }
+    if (cloud.kind === 'loading' || handledInviteRef.current === inviteFromLink) return;
+    handledInviteRef.current = inviteFromLink;
+    router.setParams({ invite: '' });
+    if (cloud.kind === 'none') {
+      setJoinCode(inviteFromLink);
+      void handleJoinGroup(inviteFromLink);
+      return;
+    }
+    // 既に参加中（またはサーバーに届かない・同期が使えない環境）。
+    // 黙って捨てると「タップしたのに何も起きない」になるので一言出す
+    void dialog.alert({
+      title: t('family.sync.inviteLinkTitle'),
+      message: t(
+        cloud.kind === 'unavailable'
+          ? 'family.sync.unavailable'
+          : 'family.sync.inviteLinkAlreadyJoined',
+      ),
+    });
+    // handleJoinGroup は毎描画で作り直されるので依存に入れない（入れると無限に再実行する）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteFromLink, cloud.kind, router]);
 
   const handleRotateInvite = () => {
     void runSyncAction(async () => {
@@ -541,8 +588,7 @@ export default function FamilyScreen() {
                 <TextInput
                   style={[styles.input, styles.inlineInput]}
                   value={joinCode}
-                  // 日本語 IME は全角で確定することがある（実機で 404 になった）。NFKC で半角に寄せる
-                  onChangeText={(value) => setJoinCode(value.normalize('NFKC').toUpperCase())}
+                  onChangeText={(value) => setJoinCode(normalizeJoinCode(value))}
                   placeholder={t('family.sync.joinPlaceholder')}
                   placeholderTextColor={Colors.muted}
                   autoCapitalize="characters"

@@ -27,6 +27,7 @@ import {
   fetchSyncMe,
   getStoredCredentials,
   getSyncState,
+  inviteLinkUrl,
   joinSyncGroup,
   leaveSyncGroup,
 } from '../sync-client.service';
@@ -148,5 +149,13 @@ describe('SyncError', () => {
     } catch (err) {
       expect(err).toBeInstanceOf(SyncError);
     }
+  });
+});
+
+describe('招待リンク（§2-2b）', () => {
+  it('API と同じホストの /j/<code>（api/v1 は含めない）', () => {
+    const url = inviteLinkUrl('ABCD2345');
+    expect(url).toMatch(/^https?:\/\/[^/]+\/j\/ABCD2345$/);
+    expect(url).not.toContain('/api/v1');
   });
 });

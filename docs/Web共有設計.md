@@ -114,7 +114,13 @@ shared_recipes
 「どこから来たか」は出所（`share`・URL）で残る。帖ごと取り込んでも帖は作らない（受け取った側が
 自分の帖を作ればよい — 作るなら蔵書庫の棚から）。
 
-**まだ利用者側でやること（環境変数を入れるまで App Links は効かない）**:
+同じ仕組みに **家族共有の招待リンク `/j/:code`** も載っている（2026-09-02・1.13.0。
+`docs/クラウド同期設計.md` §2-2b）。intentFilter・AASA の `paths` は `/r/`・`/b/`・`/j/` の 3 つ。
+
+**まだ利用者側でやること（環境変数を入れるまで App Links は効かない）** — 2026-09-02 時点で本番の
+`/.well-known/assetlinks.json`・`apple-app-site-association` はともに **404 ＝ 2 つとも未設定**を確認
+（`curl -o /dev/null -w '%{http_code}'` で見られる。Railway CLI は worktree からはリンクされていない）。
+未設定のままだと共有リンクも招待リンクもブラウザで開き、招待は `/j/:code` の「アプリで開く」経由になる:
 
 1. Play Console → アプリの完全性 → **アプリ署名鍵証明書**の SHA-256 を `APP_LINKS_SHA256_FINGERPRINTS` に
    （Railway の環境変数・複数はカンマ区切り）。**アップロード鍵ではない**（Google が配布時に署名し直す鍵）。
