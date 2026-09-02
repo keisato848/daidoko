@@ -171,6 +171,24 @@ original profile?` で出る名前が `[expo] com.daidoko.app AppStore …`（`.
 
 ## 4. TestFlight → 提出（外向きアクション — ユーザー承認を確認）
 
+**審査提出まで全部 Windows の API で通る**（2026-09-03 の 1.13.0 で実証。ASC の画面は不要）:
+
+```bash
+node scripts/release/create-appstore-version.mjs --version <x.y.z> [--rename]  # 器（編集中があれば付け替え）
+node scripts/release/update-appstore-listing.mjs --lang ja --version <x.y.z>   # 掲載文＋whatsNew
+node scripts/release/update-appstore-listing.mjs --lang en --version <x.y.z>
+node scripts/release/submit-appstore-version.mjs --version <x.y.z> --build-number <NNNNN> [--dry-run]
+```
+
+最後のスクリプトがビルド紐づけ → reviewSubmission 作成 → submitted:true まで行う。
+
+> **新しいロケールを足した直後の提出は `STATE_ERROR.ENTITY_STATE_INVALID` で落ちる**
+> （2026-09-03・en-US 追加直後に 2 連発）。`update-appstore-listing.mjs` が新規作成する
+> ロケールには **`privacyPolicyUrl`（appInfoLocalizations 側）と `supportUrl`
+> （appStoreVersionLocalizations 側）が入っていない**が、この 2 つは提出の必須属性。
+> エラー本文の `associatedErrors` に欠けた属性名がそのまま出るので、ja から値を PATCH で
+> 写して再実行すれば通る。掲載スクリプト側の恒久修正は今後の宿題（このときは手で埋めた）。
+
 1. `pnpm exec eas submit -p ios --profile production --latest`（または App Store Connect にアップロード）。
    **アップロードが届いたかの裏どりは ASC API が確実**（eas-cli 16.x に `submit:list` は無く、
    `build:view --json` にも submissions フィールドが無い — 2026-09-03 実測）。
