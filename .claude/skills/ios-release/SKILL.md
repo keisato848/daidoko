@@ -152,6 +152,12 @@ pnpm exec eas build:view <BUILD_ID> --json   # status FINISHED / artifacts
 credentials to build your project` → Apple ID でログイン（2FA）→ 配布証明書は
 > **既存を再利用**・プロビジョニングプロファイルだけ新規作成 → `Go back` → `Exit`。
 > 以後は非対話で通る。
+>
+> **どちらのターゲットに居るかはプロファイル名で見分ける。** `Would you like to reuse the
+original profile?` で出る名前が `[expo] com.daidoko.app AppStore …`（`.widget` が付かない）なら
+> **本体ターゲット**に居る。本体は既に正常なので **Yes（再利用）**を選び、`Go back` して
+> ウィジェットのターゲットを選び直す。ここで本体のプロファイルを作り直すと、動いている
+> 配布設定を壊しかねない。ウィジェット側はプロファイルが存在しないので新規作成になる。
 > **新しい extension ターゲットを足す PR を見たら、リリース前にこの一手が要ると思うこと。**
 
 ## 4. TestFlight → 提出（外向きアクション — ユーザー承認を確認）
