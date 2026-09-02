@@ -131,7 +131,17 @@ pnpm exec eas build:view <BUILD_ID> --json   # status FINISHED / artifacts
 > その作成は Apple への対話ログインを伴うため `--non-interactive` では必ず落ちる。
 > `EXPO_ASC_API_KEY_PATH` / `EXPO_ASC_KEY_ID` / `EXPO_ASC_ISSUER_ID` を渡しても**変わらない**
 > （ASC API キーは submit 用で、Developer Portal のプロファイル作成には効かない）。
-> 対処: **人間が対話ターミナルで一度だけ**（エージェントはメニューを操作できない）:
+> **先に Bundle ID が Apple Developer Portal に登録されているか確かめる。** 1.13.0 では
+> `com.daidoko.app.widget` が**未登録**で、対話メニューを最後まで進めても профиль を作れず
+> 同じエラーに戻った（登録してから対話をやり直す必要がある）。EAS のエラー文には
+> 「App ID が無い」とは出ないので、ここを疑えないと同じ対話を何度も繰り返すことになる。
+> 確認は App Store Connect API で非対話にできる（`C:\secure\AuthKey_8C387NYC2T.p8`・
+> `kid=8C387NYC2T`・`iss=5390b406-…` で ES256 の JWT を作り
+> `GET https://api.appstoreconnect.apple.com/v1/bundleIds?limit=200`）。
+> 登録も同じキーで `POST /v1/bundleIds`（`identifier` / `name` / `platform: "IOS"`）でできる
+> ＝**Portal の画面を開かずに登録まで通せる**。2026-09-02 はこれで登録した（id `HX44G883F7`）。
+>
+> 対処: Bundle ID を登録したうえで、**人間が対話ターミナルで一度だけ**（エージェントはメニューを操作できない）:
 >
 > ```
 > cd apps/mobile && pnpm exec eas credentials -p ios
