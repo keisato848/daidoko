@@ -122,6 +122,19 @@ pnpm exec eas build:view <BUILD_ID> --json   # status FINISHED / artifacts
   `appVersionSource: local` なので app.json の `version` を上げる。
 - `ITSAppUsesNonExemptEncryption: false` は設定済み（輸出コンプライアンス質問を回避）。
 
+> **App Extension ターゲットを足した版は、非対話ビルドが通らない**（2026-09-02・1.13.0 で被弾）。
+> 症状: `Setting up credentials for target ShoppingWidget (com.daidoko.app.widget)` の直後に
+> `Distribution Certificate is not validated for non-interactive builds.` →
+> `Failed to set up credentials. Run this command again in interactive mode.` でビルドが始まらない。
+> 原因: EAS 管理のクレデンシャル（上の 2026-08-13 構築分）は**本体 `com.daidoko.app` の分しか無い**。
+> ウィジェットは別バンドル ID なので、専用のプロビジョニングプロファイルを作る必要があり、
+> その作成は Apple への対話ログインを伴うため `--non-interactive` では必ず落ちる。
+> `EXPO_ASC_API_KEY_PATH` / `EXPO_ASC_KEY_ID` / `EXPO_ASC_ISSUER_ID` を渡しても**変わらない**
+> （ASC API キーは submit 用で、Developer Portal のプロファイル作成には効かない）。
+> 対処: **人間が対話ターミナルで一度だけ** `pnpm exec eas credentials -p ios` を実行し、
+> production プロファイルで新ターゲットのクレデンシャルを作る。以後は非対話で通る。
+> 新しい extension ターゲットを足す PR を見たら、**リリース前にこの一手が要る**と思うこと。
+
 ## 4. TestFlight → 提出（外向きアクション — ユーザー承認を確認）
 
 1. `pnpm exec eas submit -p ios --profile production --latest`（または App Store Connect にアップロード）。
