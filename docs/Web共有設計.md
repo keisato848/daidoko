@@ -122,11 +122,17 @@ shared_recipes
 （`curl -o /dev/null -w '%{http_code}'` で見られる。Railway CLI は worktree からはリンクされていない）。
 未設定のままだと共有リンクも招待リンクもブラウザで開き、招待は `/j/:code` の「アプリで開く」経由になる:
 
-1. Play Console → アプリの完全性 → **アプリ署名鍵証明書**の SHA-256 を `APP_LINKS_SHA256_FINGERPRINTS` に
-   （Railway の環境変数・複数はカンマ区切り）。**アップロード鍵ではない**（Google が配布時に署名し直す鍵）。
+1. Play Console（https://play.google.com/console → だいどこ → テスト、リリース → 設定 → **アプリの署名**）の
+   **アプリ署名鍵証明書**の SHA-256 を `APP_LINKS_SHA256_FINGERPRINTS` に
+   （Railway の環境変数・複数はカンマ区切り・`AA:BB:…` のコロン区切りのままでよい）。
+   **アップロード鍵ではない**（Google が配布時に署名し直す鍵）。
    ローカルの検証ビルドで試すなら、その APK の署名鍵の SHA-256 も足す
-2. Apple Developer の **Team ID** を `APPLE_TEAM_ID` に。iOS は次のビルドから `associatedDomains` が効く
-3. 実機で `adb shell pm get-app-links com.daidoko.app` が `verified` になることを確認（検証は
+2. Apple Developer（https://developer.apple.com/account → Membership details）の **Team ID**（10 文字）を
+   `APPLE_TEAM_ID` に。iOS は次のビルドから `associatedDomains` が効く
+3. 値の形式は `app.ts` が検証する（SHA-256 は `XX:` ×31 + `XX` の大文字 32 バイト。合わない指紋は黙って落ちて
+   404 のまま）。入れたあと `curl` で 200 を確かめる。`/j/:code` ページ自体はマージ済み #273 を
+   `railway up` で配るまで本番では 404 のまま
+4. 実機で `adb shell pm get-app-links com.daidoko.app` が `verified` になることを確認（検証は
    インストール時に OS が非同期で行う。`pm verify-app-links --re-verify com.daidoko.app` で再検証）
 
 ## 7. レシピ帖を「モノ」にする（S4）
