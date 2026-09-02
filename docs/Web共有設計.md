@@ -117,10 +117,19 @@ shared_recipes
 同じ仕組みに **家族共有の招待リンク `/j/:code`** も載っている（2026-09-02・1.13.0。
 `docs/クラウド同期設計.md` §2-2b）。intentFilter・AASA の `paths` は `/r/`・`/b/`・`/j/` の 3 つ。
 
-**まだ利用者側でやること（環境変数を入れるまで App Links は効かない）** — 2026-09-02 時点で本番の
-`/.well-known/assetlinks.json`・`apple-app-site-association` はともに **404 ＝ 2 つとも未設定**を確認
-（`curl -o /dev/null -w '%{http_code}'` で見られる。Railway CLI は worktree からはリンクされていない）。
-未設定のままだと共有リンクも招待リンクもブラウザで開き、招待は `/j/:code` の「アプリで開く」経由になる:
+**環境変数（2026-09-02 に設定・デプロイ済み）。** それまで本番の `/.well-known/assetlinks.json`・
+`apple-app-site-association` はともに 404 ＝ 未設定で、共有リンクも招待リンクもブラウザで開いていた
+（招待は `/j/:code` の「アプリで開く」経由）。現在は両方 200 を返す:
+
+```
+/health                                  200
+/.well-known/assetlinks.json             200   com.daidoko.app / 指紋 1 件
+/.well-known/apple-app-site-association  200   VY7SNHS2BY.com.daidoko.app / paths ["/r/*","/b/*","/j/*"]
+/j/<8桁の正しい形式>                     200
+/j/xx                                    404   形式チェック（実在確認はしない — 同期設計 §2-2b）
+```
+
+同じ作業をもう一度する場合（鍵の入れ替え・別環境）の手順:
 
 1. Play Console の **アプリ署名鍵証明書**の SHA-256 を `APP_LINKS_SHA256_FINGERPRINTS` に
    （Railway の環境変数・複数はカンマ区切り・`AA:BB:…` のコロン区切りのままでよい）。
@@ -133,11 +142,14 @@ shared_recipes
    （今開いている画面の URL の `developers/…/app/…` をそのまま使い、末尾を `/keymanagement` に差し替える）
 2. Apple Developer（https://developer.apple.com/account → Membership details）の **Team ID**（10 文字）を
    `APPLE_TEAM_ID` に。iOS は次のビルドから `associatedDomains` が効く
-3. 値の形式は `app.ts` が検証する（SHA-256 は `XX:` ×31 + `XX` の大文字 32 バイト。合わない指紋は黙って落ちて
-   404 のまま）。入れたあと `curl` で 200 を確かめる。`/j/:code` ページ自体はマージ済み #273 を
-   `railway up` で配るまで本番では 404 のまま
-4. 実機で `adb shell pm get-app-links com.daidoko.app` が `verified` になることを確認（検証は
-   インストール時に OS が非同期で行う。`pm verify-app-links --re-verify com.daidoko.app` で再検証）
+3. `railway variables --service daidoko --set "KEY=値" --skip-deploys` で入れ、**`railway up` で配り直す**
+   （`.well-known` は環境変数を起動時に読むので、変数を入れただけでは 404 のまま）。
+   worktree は `railway link --project daidoko --environment production --service daidoko` で先に繋ぐ
+4. 値の形式は `app.ts` が検証する（SHA-256 は `XX:` ×31 + `XX` の大文字 32 バイト。合わない指紋は
+   **黙って捨てられて 404 のまま**＝設定ミスとサーバー障害が見分けられない）。入れたら上の表の `curl` で確かめる
+5. 実機で `adb shell pm get-app-links com.daidoko.app` が `verified` になることを確認（検証は
+   インストール時に OS が非同期で行う。`pm verify-app-links --re-verify com.daidoko.app` で再検証）。
+   **すでに入っている端末は再検証されない** — 1.13.0 を入れ直すか上のコマンドを叩く
 
 ## 7. レシピ帖を「モノ」にする（S4）
 
