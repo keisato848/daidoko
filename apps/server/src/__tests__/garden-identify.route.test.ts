@@ -319,4 +319,19 @@ describe('identify のプロンプト', () => {
   it('自信が無いときは生育ステージ・推定経過日数を省略するよう指示している', () => {
     expect(IDENTIFY_SYSTEM_PROMPT_FOR_TESTING).toContain('当てずっぽうの日数を入れてはいけません');
   });
+
+  // 実機で作話した（2026-09-02）。空芯菜 1 株だけの写真に
+  // 「ほかにトマトも写っています」と返した。note は確認画面にそのまま出るので、
+  // 嘘が利用者の目に直接触れる。原因は例文に具体的な作物名を書いていたこと。
+  it('写っていないものを note に書かないよう指示している', () => {
+    expect(IDENTIFY_SYSTEM_PROMPT_FOR_TESTING).toContain(
+      '**写っていないものを note に書いてはいけません。**',
+    );
+    expect(IDENTIFY_SYSTEM_PROMPT_FOR_TESTING).toContain('ほかの作物には**一切触れません**');
+  });
+
+  // 例文に作物名があるとモデルが形式ごと真似る。名前入りの例を復活させない
+  it('note の例文に具体的な作物名を書かない', () => {
+    expect(IDENTIFY_SYSTEM_PROMPT_FOR_TESTING).not.toContain('ほかにキュウリも写っています');
+  });
 });
