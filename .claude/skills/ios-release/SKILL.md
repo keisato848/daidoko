@@ -182,6 +182,14 @@ node scripts/release/submit-appstore-version.mjs --version <x.y.z> --build-numbe
 
 最後のスクリプトがビルド紐づけ → reviewSubmission 作成 → submitted:true まで行う。
 
+**審査の状態確認（「却下された？」に API で即答する）** — 見る場所は 2 つ:
+
+- `listVersions`（`lib/asc-api.mjs`）で `appStoreState`。審査待ち = `WAITING_FOR_REVIEW`、
+  却下は `REJECTED` / `METADATA_REJECTED` / `DEVELOPER_REJECTED`
+- `GET /v1/reviewSubmissions?filter[app]=<id>&limit=5` と `GET /v1/reviewSubmissions/<id>/items`。
+  過去分も並ぶので履歴ごと分かる（APPROVED / REMOVED など）。
+  却下理由の本文（Resolution Center のメッセージ）だけは API に無い — ASC の画面かメールで読む
+
 > **新しいロケールを足した直後の提出は `STATE_ERROR.ENTITY_STATE_INVALID` で落ちる**
 > （2026-09-03・en-US 追加直後に 2 連発）。`update-appstore-listing.mjs` が新規作成する
 > ロケールには **`privacyPolicyUrl`（appInfoLocalizations 側）と `supportUrl`
