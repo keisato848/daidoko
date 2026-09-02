@@ -161,6 +161,24 @@ shared_recipes
 どうしてもローカルで通したいなら、その APK の署名鍵の SHA-256 を
 `APP_LINKS_SHA256_FINGERPRINTS` にカンマ区切りで足す（検証環境限定。本番に残さない）。
 
+**入れた指紋が正しいかは、AAB の署名者と突き合わせれば分かる。** 1.13.0 で本番に入れた
+SHA-256 は、EAS が組んだ AAB の署名者の SHA-256 と**完全に一致していた**
+（`keytool -printcert -jarfile <aab>` の SHA-1 は `76:BA:F0:3E:…:8A:51` ＝ §2-3b の
+EAS 管理アップロード鍵）。Play App Signing で Google が別鍵に再署名する構成なら、
+**一致してはいけない**（一致＝アップロード鍵の指紋を入れてしまっている）。同じ値なら
+アップロード鍵とアプリ署名鍵が同一鍵の運用、という可能性も残るので、Console の
+`keymanagement` ページで「アプリ署名鍵の証明書」「アップロード鍵の証明書」の
+**どちらの下にその SHA-1 があるか**を見るのが確実。
+
+```bash
+keytool -printcert -jarfile <aab>   # ここの SHA-256 と本番の assetlinks.json が一致したら疑う
+curl -s https://daidoko-production.up.railway.app/.well-known/assetlinks.json
+```
+
+決着は**内部テスト配布版を実機に入れて `pm get-app-links` を見る**のが早い
+（`verified` なら現状の指紋で正しい。`1024` のままならアプリ署名鍵の指紋に差し替える）。
+差し替えは Railway の変数を入れ直して `railway up` するだけで、アプリの再ビルドは要らない。
+
 ## 7. レシピ帖を「モノ」にする（S4）
 
 > 2026-08-13 起草（ユーザー提案「まずレシピ帖を作成して、それを共有する。共有する時に権限を設定する」）。
