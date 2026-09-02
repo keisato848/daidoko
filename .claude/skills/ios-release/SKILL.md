@@ -172,6 +172,10 @@ original profile?` で出る名前が `[expo] com.daidoko.app AppStore …`（`.
 ## 4. TestFlight → 提出（外向きアクション — ユーザー承認を確認）
 
 1. `pnpm exec eas submit -p ios --profile production --latest`（または App Store Connect にアップロード）。
+   **アップロードが届いたかの裏どりは ASC API が確実**（eas-cli 16.x に `submit:list` は無く、
+   `build:view --json` にも submissions フィールドが無い — 2026-09-03 実測）。
+   `GET /v1/builds?filter[app]=6800964382&sort=-uploadedDate`（JWT は §3 の要領）で
+   該当 build number が `processingState: VALID` で並べば成功。
 2. **TestFlight** で実機インストールし、写真レシピ・ローカル機能を最終確認。
 3. App Store Connect でメタデータを設定:
    - **App Privacy（栄養ラベル）**: AI 機能利用時に写真・食材名をサーバー送信する旨を申告（Play のデータセーフティ相当）。
