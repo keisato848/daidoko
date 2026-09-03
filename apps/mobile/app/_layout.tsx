@@ -30,6 +30,7 @@ import {
   consumeMenuLaunchTap,
 } from '../src/services/notification.service';
 import { initSync, runSync } from '../src/services/sync-runner.service';
+import { refreshWidgetSnapshot } from '../src/services/widget-snapshot.service';
 import { loadCookingSession, useCookingSessionStore } from '../src/stores/cooking-session.store';
 import { loadUnitSystem } from '../src/stores/unitSystem.store';
 import { decideLaunchDestination } from '../src/utils/launchDestination';
@@ -142,7 +143,12 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isReady) return;
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background') noteAppBackgrounded();
+      if (state === 'background') {
+        noteAppBackgrounded();
+        // 離れる瞬間の姿を焼き込む（ウィジェット設計 §1「AppState background」— 2026-09-04 配線。
+        // 「HH:mm 時点」の時刻が、アプリを最後に見た瞬間と一致するようになる）
+        refreshWidgetSnapshot();
+      }
       if (state === 'active') {
         maybeShowAppOpenAdOnForeground(pathnameRef.current).catch(() => undefined);
         void runSync();

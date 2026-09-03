@@ -58,6 +58,7 @@ import {
   setSyncQueueListener,
   type SyncQueueEntry,
 } from './sync-queue.service';
+import { refreshWidgetSnapshot } from './widget-snapshot.service';
 import { isNativePlatform } from '../db/client';
 import { getLocale } from '../i18n';
 import { notifySyncApplied, setSyncing, setSyncJoined } from '../stores/sync.store';
@@ -518,6 +519,9 @@ async function pullAndApply(credentials: SyncCredentials, groupId: string): Prom
     } catch {
       // 受信そのものは成功している。印は次回起動時の runMigrations でも貼られる
     }
+    // 家族の変更（買い物・献立）が届いたらウィジェットも追随させる
+    // （ウィジェット設計 §1 の 5 フックのうち「同期 pull 完了後」— 2026-09-04 配線）
+    refreshWidgetSnapshot();
   }
 
   return applied;
