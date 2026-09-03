@@ -179,6 +179,24 @@ curl -s https://daidoko-production.up.railway.app/.well-known/assetlinks.json
 （`verified` なら現状の指紋で正しい。`1024` のままならアプリ署名鍵の指紋に差し替える）。
 差し替えは Railway の変数を入れ直して `railway up` するだけで、アプリの再ビルドは要らない。
 
+**決着（2026-09-03、1.13.0 公開後）: 疑いは当たっていた — 本番に入れたのはアップロード鍵の指紋。**
+Play からインストール済みの端末（Pixel 9a、`dumpsys package` の
+`installerPackageName=com.android.vending`）で `pm get-app-links com.daidoko.app` を見ると
+`Signatures: [0A:BD:74:C2:…:DB:1F]` で、本番の assetlinks.json（`52:9C:…:93:9B` ＝ AAB の
+署名者）と**別の鍵**。当然 `1024`。つまり Play App Signing は別鍵で再署名しており、
+Console の「アプリの完全性」から拾った SHA-256 は**アップロード鍵の証明書の方**だった。
+
+**アプリ署名鍵の SHA-256 は Console を開かなくても取れる:** Play からインストール済みの
+端末で `adb shell pm get-app-links com.daidoko.app` の `Signatures:` がそれ
+（内部テスト配布でも同じ鍵）。Console のページで上下 2 つの証明書を見分けるより確実。
+アップロード鍵の方は `keytool -printcert -jarfile <aab>` — この 2 つが違えば
+assetlinks.json に要るのは前者。
+
+対処は `APP_LINKS_SHA256_FINGERPRINTS` を `0A:BD:…` に差し替えて（アップロード鍵は
+併記しても害はないが不要）`railway up`。指紋の値そのものはここに書かない（Railway が正）。
+影響範囲: 公開・審査には無関係。Android で招待 https リンクがアプリ直開きにならず
+ブラウザ経由になるだけ（`/j/:code` ページのボタンから `daidoko://` で開けるので機能は動く）。
+
 ## 7. レシピ帖を「モノ」にする（S4）
 
 > 2026-08-13 起草（ユーザー提案「まずレシピ帖を作成して、それを共有する。共有する時に権限を設定する」）。
