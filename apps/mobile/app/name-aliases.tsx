@@ -3,23 +3,23 @@
  * AIが解決した「表記ゆれ→正規名」キャッシュ（name_aliases）の一覧・編集・削除。
  * 削除した項目は次に同じ表記が出た際に再度AIで解決される。docs/買い物リスト・在庫設計.md §6
  */
-import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronLeft, Pencil, X } from 'lucide-react-native';
+import { useFocusEffect } from 'expo-router';
+import { Pencil, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
-import { Colors } from '../../src/constants/theme';
-import { t } from '../../src/i18n';
+import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
+import { Colors } from '../src/constants/theme';
+import { t } from '../src/i18n';
 import {
   deleteAlias,
   getAliasEntries,
   updateAliasCanonical,
   type AliasRecord,
-} from '../../src/services/name-alias.service';
+} from '../src/services/name-alias.service';
 
 export default function NameAliasesScreen() {
-  const router = useRouter();
   const [entries, setEntries] = useState<AliasRecord[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [editInput, setEditInput] = useState('');
@@ -59,9 +59,7 @@ export default function NameAliasesScreen() {
   return (
     <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-          <ChevronLeft size={20} color={Colors.goldDim} />
-        </Pressable>
+        <HeaderBackButton />
         <Text style={styles.headerTitle}>{t('pantry.aliases.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -145,12 +143,6 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: { fontSize: 18, fontWeight: '500', color: Colors.paper },
   headerSpacer: { width: 36 },

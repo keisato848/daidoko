@@ -9,22 +9,22 @@ import { Camera, Check, ImageIcon, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Loading } from '../../src/components/Loading';
-import { Colors } from '../../src/constants/theme';
-import { t, tCount } from '../../src/i18n';
-import { ensureInferenceCredit } from '../../src/services/inference-gate.service';
-import { expoImagePickerPhotoCaptureAdapter } from '../../src/services/expo-photo-capture.adapter';
-import { applyConsumption, inferMealConsumption } from '../../src/services/meal-consume.service';
+import { Loading } from '../src/components/Loading';
+import { Colors } from '../src/constants/theme';
+import { t, tCount } from '../src/i18n';
+import { ensureInferenceCredit } from '../src/services/inference-gate.service';
+import { expoImagePickerPhotoCaptureAdapter } from '../src/services/expo-photo-capture.adapter';
+import { applyConsumption, inferMealConsumption } from '../src/services/meal-consume.service';
 import {
   capturePhoto,
   PhotoCaptureCancelledError,
   type PhotoCaptureSource,
-} from '../../src/services/photo-capture.service';
+} from '../src/services/photo-capture.service';
 import {
   getFreemiumStatus,
   recordCloudInference,
   type FreemiumStatus,
-} from '../../src/services/usage.service';
+} from '../src/services/usage.service';
 
 type Phase = 'select' | 'processing' | 'review' | 'error';
 

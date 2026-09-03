@@ -9,12 +9,12 @@ import { X } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
-import { Colors } from '../../src/constants/theme';
-import { t } from '../../src/i18n';
-import { dialog } from '../../src/services/dialog.service';
-import { lookupJan, rememberJan } from '../../src/services/jan.service';
-import { addPantryItem } from '../../src/services/pantry.service';
+import { KeyboardAwareScroll } from '../src/components/KeyboardAwareScroll';
+import { Colors } from '../src/constants/theme';
+import { t } from '../src/i18n';
+import { dialog } from '../src/services/dialog.service';
+import { lookupJan, rememberJan } from '../src/services/jan.service';
+import { addPantryItem } from '../src/services/pantry.service';
 
 export default function ScanBarcodeScreen() {
   const router = useRouter();

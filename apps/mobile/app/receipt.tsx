@@ -14,39 +14,36 @@ import { Camera, Check, ImageIcon, Store, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { GroupPicker } from '../../src/components/GroupPicker';
-import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
-import { Loading } from '../../src/components/Loading';
-import { Colors } from '../../src/constants/theme';
-import { t, tCount } from '../../src/i18n';
-import {
-  recognizeTextOnDevice,
-  isClientOcrAvailable,
-} from '../../src/services/client-ocr.provider';
-import { expoImageManipulatorPreprocessAdapter } from '../../src/services/expo-image-preprocess.adapter';
-import { expoImagePickerPhotoCaptureAdapter } from '../../src/services/expo-photo-capture.adapter';
+import { GroupPicker } from '../src/components/GroupPicker';
+import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
+import { Loading } from '../src/components/Loading';
+import { Colors } from '../src/constants/theme';
+import { t, tCount } from '../src/i18n';
+import { recognizeTextOnDevice, isClientOcrAvailable } from '../src/services/client-ocr.provider';
+import { expoImageManipulatorPreprocessAdapter } from '../src/services/expo-image-preprocess.adapter';
+import { expoImagePickerPhotoCaptureAdapter } from '../src/services/expo-photo-capture.adapter';
 import {
   ON_DEVICE_OCR_MAX_DIMENSION,
   preprocessImageForOcr,
-} from '../../src/services/image-preprocess.service';
-import { addPantryItem, defaultGroupFor } from '../../src/services/pantry.service';
+} from '../src/services/image-preprocess.service';
+import { addPantryItem, defaultGroupFor } from '../src/services/pantry.service';
 import {
   capturePhoto,
   PhotoCaptureCancelledError,
   type PhotoCaptureSource,
-} from '../../src/services/photo-capture.service';
+} from '../src/services/photo-capture.service';
 import {
   inferReceiptFromText,
   inferReceiptFromVision,
   type ReceiptInference,
-} from '../../src/services/receipt-vision.provider';
-import { checkOffByNames, matchPendingByNames } from '../../src/services/shopping-list.service';
+} from '../src/services/receipt-vision.provider';
+import { checkOffByNames, matchPendingByNames } from '../src/services/shopping-list.service';
 import {
   getShoppingStoreGroups,
   getStoreGroupFor,
   learnStoreGroup,
-} from '../../src/services/store-group.service';
-import { formatQuantityInput, parseQuantityInput } from '../../src/utils/receiptQuantity';
+} from '../src/services/store-group.service';
+import { formatQuantityInput, parseQuantityInput } from '../src/utils/receiptQuantity';
 
 /**
  * 端末内OCRで文字起こしする。**読めなければ null**（呼び出し側は画像経路へ）。

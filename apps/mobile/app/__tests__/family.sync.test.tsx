@@ -10,7 +10,7 @@
 import { render, screen, waitFor } from '@testing-library/react-native';
 
 import FamilyScreen from '../family';
-import { t } from '../../../src/i18n';
+import { t } from '../../src/i18n';
 
 const mockGetSyncState = jest.fn();
 const mockFetchSyncMe = jest.fn();
@@ -32,13 +32,16 @@ jest.mock('expo-router', () => ({
     },
   }),
   useLocalSearchParams: () => mockSearchParams,
+  // ヘッダの「＜」（HeaderBackButton）が戻り先ラベルを引くのに使う。
+  // 履歴なし（= ラベル無しの「＜」だけ）として描画する
+  useNavigation: () => ({ getState: () => ({ index: 0, routes: [] }) }),
   useFocusEffect: (callback: () => void) => {
     const { useEffect } = jest.requireActual('react');
     useEffect(callback, [callback]);
   },
 }));
 
-jest.mock('../../../src/services/sync-client.service', () => {
+jest.mock('../../src/services/sync-client.service', () => {
   class SyncError extends Error {
     code: string;
     constructor(mockCode: string) {
@@ -60,7 +63,7 @@ jest.mock('../../../src/services/sync-client.service', () => {
   };
 });
 
-jest.mock('../../../src/services/dialog.service', () => ({
+jest.mock('../../src/services/dialog.service', () => ({
   dialog: {
     alert: (...args: unknown[]) => mockDialogAlert(...args),
     confirm: (...args: unknown[]) => mockDialogConfirm(...args),
@@ -68,12 +71,12 @@ jest.mock('../../../src/services/dialog.service', () => ({
   },
 }));
 
-jest.mock('../../../src/services/sync-runner.service', () => ({
+jest.mock('../../src/services/sync-runner.service', () => ({
   onSyncGroupJoined: jest.fn(async () => undefined),
   onSyncGroupLeft: jest.fn(async () => undefined),
 }));
 
-jest.mock('../../../src/services/user.service', () => ({
+jest.mock('../../src/services/user.service', () => ({
   getCurrentFamily: () => ({
     id: 'family-001',
     name: 'テスト家',

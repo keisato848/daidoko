@@ -5,18 +5,19 @@
  * 共有済みの帖は「更新を反映」で **同じリンクのまま** サーバー側を差し替える
  * （PATCH — 配ったリンクを生かすのが S4 の目的）。
  */
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, ChevronLeft, Plus, X } from 'lucide-react-native';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Check, Plus, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BottomSheet } from '../../src/components/BottomSheet';
-import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
-import { Toast } from '../../src/components/Toast';
-import { Colors } from '../../src/constants/theme';
-import { t } from '../../src/i18n';
-import { dialog } from '../../src/services/dialog.service';
+import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { BottomSheet } from '../src/components/BottomSheet';
+import { KeyboardAwareScroll } from '../src/components/KeyboardAwareScroll';
+import { Toast } from '../src/components/Toast';
+import { Colors } from '../src/constants/theme';
+import { t } from '../src/i18n';
+import { dialog } from '../src/services/dialog.service';
 import {
   getRecipeBook,
   renameRecipeBook,
@@ -25,14 +26,13 @@ import {
   shareRecipeBook,
   type RecipeBookDetail,
   type ShareAccessOptions,
-} from '../../src/services/recipe-book.service';
-import { getRecipeList } from '../../src/services/recipe.service';
-import type { RecipeListItem } from '../../src/services/types';
+} from '../src/services/recipe-book.service';
+import { getRecipeList } from '../src/services/recipe.service';
+import type { RecipeListItem } from '../src/services/types';
 
 const EXPIRY_OPTIONS = [null, 7, 30] as const;
 
 export default function BookEditScreen() {
-  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [book, setBook] = useState<RecipeBookDetail | null>(null);
   const [title, setTitle] = useState('');
@@ -183,9 +183,7 @@ export default function BookEditScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-            <ChevronLeft size={20} color={Colors.goldDim} />
-          </Pressable>
+          <HeaderBackButton />
           <Text style={styles.headerTitle}>{t('settings.book.title')}</Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -198,9 +196,7 @@ export default function BookEditScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-          <ChevronLeft size={20} color={Colors.goldDim} />
-        </Pressable>
+        <HeaderBackButton />
         <Text style={styles.headerTitle}>{t('settings.book.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -353,7 +349,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
   },
-  backButton: { padding: 8 },
   headerTitle: {
     flex: 1,
     textAlign: 'center',

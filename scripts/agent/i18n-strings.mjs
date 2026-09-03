@@ -7,7 +7,7 @@
  * 目で追うと必ず取りこぼすので、移行の前後で必ずこれを通す。
  *
  * 使い方:
- *   node scripts/agent/i18n-strings.mjs --file "app/(tabs)/settings.tsx"   # そのファイルの一覧
+ *   node scripts/agent/i18n-strings.mjs --file "app/settings.tsx"   # そのファイルの一覧
  *   node scripts/agent/i18n-strings.mjs --dupes                            # 複数ファイルに出る文言（common 候補）
  *   node scripts/agent/i18n-strings.mjs                                    # 未移行のファイルを多い順に
  */

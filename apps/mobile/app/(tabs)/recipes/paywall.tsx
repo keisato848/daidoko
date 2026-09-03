@@ -267,7 +267,7 @@ export default function PaywallScreen() {
             <Pressable
               accessibilityRole="button"
               style={styles.adButton}
-              onPress={() => router.replace('/(tabs)/ai-key')}
+              onPress={() => router.replace('/ai-key')}
             >
               <KeyRound size={18} color={Colors.gold} />
               <Text style={styles.adButtonText}>{t('paywall.useOwnKey')}</Text>

@@ -6,14 +6,15 @@
  * S2（app_meta 時代）の共有はレガシーとして表示し、停止のみできる。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { BookOpen, ChevronLeft, Share2, Trash2 } from 'lucide-react-native';
+import { BookOpen, Share2, Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { FlatList, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '../../src/constants/theme';
-import { t, tCount } from '../../src/i18n';
-import { dialog } from '../../src/services/dialog.service';
+import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { Colors } from '../src/constants/theme';
+import { t, tCount } from '../src/i18n';
+import { dialog } from '../src/services/dialog.service';
 import {
   deleteRecipeBook,
   getRecipeBooks,
@@ -21,7 +22,7 @@ import {
   renewSharedBook,
   revokeSharedBook,
   type RecipeBookListItem,
-} from '../../src/services/recipe-book.service';
+} from '../src/services/recipe-book.service';
 
 export default function WebSharesScreen() {
   const router = useRouter();
@@ -92,9 +93,7 @@ export default function WebSharesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-          <ChevronLeft size={20} color={Colors.goldDim} />
-        </Pressable>
+        <HeaderBackButton />
         <Text style={styles.headerTitle}>{t('settings.webShares.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -115,7 +114,7 @@ export default function WebSharesScreen() {
           <Pressable
             style={styles.card}
             disabled={item.isLegacyShare}
-            onPress={() => router.push({ pathname: '/(tabs)/book-edit', params: { id: item.id } })}
+            onPress={() => router.push({ pathname: '/book-edit', params: { id: item.id } })}
           >
             <View style={styles.cardBody}>
               <Text style={styles.cardTitle} numberOfLines={1}>
@@ -173,7 +172,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
   },
-  backButton: { padding: 8 },
   headerTitle: {
     flex: 1,
     textAlign: 'center',

@@ -9,18 +9,15 @@ import { Sparkles, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { GroupChips } from '../../src/components/GroupChips';
-import { Colors } from '../../src/constants/theme';
-import { t, tCount } from '../../src/i18n';
-import { getAdRewardProvider, isAdRewardAvailable } from '../../src/services/ad-reward.service';
-import type { PreparedRewardedAd } from '../../src/services/ad-reward.types';
-import { getCookableRecipes, type CookableRecipe } from '../../src/services/cookable.service';
-import { getAppMeta, setAppMeta } from '../../src/services/app-meta.service';
-import {
-  grantResolveAdBonus,
-  resolveUnmatchedNames,
-} from '../../src/services/name-resolve.service';
-import { getPantryGroups, UNGROUPED } from '../../src/services/pantry.service';
+import { GroupChips } from '../src/components/GroupChips';
+import { Colors } from '../src/constants/theme';
+import { t, tCount } from '../src/i18n';
+import { getAdRewardProvider, isAdRewardAvailable } from '../src/services/ad-reward.service';
+import type { PreparedRewardedAd } from '../src/services/ad-reward.types';
+import { getCookableRecipes, type CookableRecipe } from '../src/services/cookable.service';
+import { getAppMeta, setAppMeta } from '../src/services/app-meta.service';
+import { grantResolveAdBonus, resolveUnmatchedNames } from '../src/services/name-resolve.service';
+import { getPantryGroups, UNGROUPED } from '../src/services/pantry.service';
 
 /** 直前に選んだ絞り込みを覚えておく（毎回「冷蔵庫」を選び直させない） */
 const GROUP_FILTER_KEY = 'cookable_group_filter';
