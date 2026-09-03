@@ -7,7 +7,16 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  BackHandler,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { NumberStepper } from '../../../../src/components/NumberStepper';
 import { PhotoPickerField } from '../../../../src/components/PhotoPickerField';
@@ -109,6 +118,27 @@ export default function CookingModeScreen() {
     useCookingSessionStore.getState().setStep(index);
   }, []);
 
+  /**
+   * ✕ と Android 戻るの共通の出口（N4・`docs/画面設計.md` §4-1）。
+   * セッションは**終了しない** — 「あとで続きから」の意味（handleComplete だけが end() する）。
+   * 通知やディープリンクで直接開かれて戻り先が無いときは、終了ではなくレシピ詳細へ —
+   * 濡れた手の誤爆でアプリごと閉じると、復帰の pill もホームカードも見えなくなる。
+   */
+  const handleClose = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace(`/(tabs)/recipes/${id}`);
+  }, [router, id]);
+
+  // Android のハードウェア戻るを ✕ と同じ経路に合流させる。
+  // ここで拾わないと、入れ子のタブ／スタックの履歴次第で行き先が変わり得る
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [handleClose]);
+
   useEffect(() => {
     void loadData();
   }, [loadData]);
@@ -184,7 +214,7 @@ export default function CookingModeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable onPress={handleClose} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
         {/*
