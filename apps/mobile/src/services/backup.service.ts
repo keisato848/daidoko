@@ -943,7 +943,22 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
  * 再送のきっかけが無い）。復元後に `resetCursor()` も走るが、それは別の手順で、
  * 途中でアプリが落ちれば飛ぶ。**同じトランザクションの中で落とすのが確実。**
  */
-const NON_RESTORABLE_APP_META_KEYS: readonly string[] = ['sync_cursor'];
+const NON_RESTORABLE_APP_META_KEYS: readonly string[] = [
+  'sync_cursor',
+  // §12（多グループ・G-2a）: 所属バックフィル完了フラグと現在/参加グループの控えも
+  // 「この端末といまのグループ」の状態。他端末のバックアップから持ち込むと、
+  // 所属が空のままフラグだけ立ち、push が全実体を「自分だけ」と誤読して捨てる。
+  // 復元後の `onLocalDataReplaced` でも白紙にするが、sync_cursor と同じく
+  // 同じトランザクションの中で落とすのが確実
+  'sync_entity_groups_migrated',
+  'sync_current_group',
+  'sync_known_groups',
+];
+
+/** グループ別カーソル `sync_cursor:<groupId>`（§12）も sync_cursor と同じ理由で落とす */
+function isNonRestorableAppMetaKey(key: string): boolean {
+  return NON_RESTORABLE_APP_META_KEYS.includes(key) || key.startsWith('sync_cursor:');
+}
 
 /** 復元直後: 未移行の在庫行をベースライン化し、持ち分から表示値を導出し直す（S2-B） */
 /**
@@ -985,11 +1000,15 @@ function replaceDatabase(payload: LocalBackupPayload): void {
     // 復元後に `clearSyncQueue()` も走るが、それは別の手順で、間にアプリが落ちたり
     // 同期が割り込んだりすると飛ぶ。`sync_cursor` と同じ理由で同じトランザクションに入れる
     expoDb.runSync('DELETE FROM sync_queue');
+    // 実体のグループ所属（§12-3）も復元対象ではないが、ここで必ず捨てる。
+    // 復元前の所属が復元後の行に残ると中身と食い違う。バックフィル完了フラグは
+    // 上の NON_RESTORABLE で必ず落ちるので、次の同期で所属は付け直される
+    expoDb.runSync('DELETE FROM entity_groups');
 
     for (const table of BACKUP_TABLES) {
       const sql = `INSERT INTO ${quoteIdentifier(table.name)} (${tableColumnList(table)}) VALUES (${tablePlaceholders(table)})`;
       for (const row of payload.tables[table.name]) {
-        if (table.name === 'app_meta' && NON_RESTORABLE_APP_META_KEYS.includes(String(row.key))) {
+        if (table.name === 'app_meta' && isNonRestorableAppMetaKey(String(row.key))) {
           continue;
         }
         // `as const` の配列なので、defaults を持たない要素の型には defaults が無い

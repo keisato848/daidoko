@@ -30,6 +30,9 @@ import {
   inviteLinkUrl,
   joinSyncGroup,
   leaveSyncGroup,
+  listSyncGroups,
+  pullSyncChanges,
+  pushSyncChanges,
 } from '../sync-client.service';
 
 const CREDS = { groupId: 'g1', deviceId: 'd1', deviceSecret: 's1' };
@@ -157,5 +160,73 @@ describe('招待リンク（§2-2b）', () => {
     const url = inviteLinkUrl('ABCD2345');
     expect(url).toMatch(/^https?:\/\/[^/]+\/j\/ABCD2345$/);
     expect(url).not.toContain('/api/v1');
+  });
+});
+
+describe('多グループ（G-2a — 設計 §12-2）', () => {
+  const change = {
+    entityType: 'recipe',
+    entityId: 'r1',
+    payload: '{}',
+    clientUpdatedAt: '2026-09-01T00:00:00.000Z',
+    deleted: false,
+  };
+
+  it('groupId 指定で x-sync-group が付き、未指定なら付かない（現行と同一リクエスト＝互換の要）', async () => {
+    mockMemory.set('sync_credentials_v1', JSON.stringify(CREDS));
+
+    mockFetchOnce(200, { ok: true, data: { applied: 1, latestSeq: 1 } });
+    await pushSyncChanges([change], 'g2');
+    const withGroup = (global.fetch as jest.Mock).mock.calls[0][1] as {
+      headers: Record<string, string>;
+    };
+    expect(withGroup.headers['x-sync-group']).toBe('g2');
+
+    mockFetchOnce(200, { ok: true, data: { applied: 1, latestSeq: 1 } });
+    await pushSyncChanges([change]);
+    const withoutGroup = (global.fetch as jest.Mock).mock.calls[1][1] as {
+      headers: Record<string, string>;
+    };
+    expect('x-sync-group' in withoutGroup.headers).toBe(false);
+  });
+
+  it('groupId 指定の 401 ではクレデンシャルを破棄しない（外されたのはそのグループだけかもしれない）', async () => {
+    mockMemory.set('sync_credentials_v1', JSON.stringify(CREDS));
+    mockFetchOnce(401, { ok: false, error: 'AUTH_INVALID' });
+
+    await expectSyncError(pullSyncChanges(0, 500, 'g2'), 'AUTH_INVALID');
+
+    expect(await getStoredCredentials()).toEqual(CREDS);
+  });
+
+  it('groupId 未指定の 401 は従来どおりクレデンシャルを破棄する', async () => {
+    mockMemory.set('sync_credentials_v1', JSON.stringify(CREDS));
+    mockFetchOnce(401, { ok: false, error: 'AUTH_INVALID' });
+
+    await expectSyncError(pushSyncChanges([change]), 'AUTH_INVALID');
+
+    expect(await getStoredCredentials()).toBeNull();
+  });
+
+  it('参加グループの一覧を取得する（GET /sync/me/groups）', async () => {
+    mockMemory.set('sync_credentials_v1', JSON.stringify(CREDS));
+    mockFetchOnce(200, {
+      ok: true,
+      data: {
+        groups: [{ groupId: 'g1', name: null, scope: 'all', isOwner: true, memberCount: 2 }],
+      },
+    });
+
+    const groups = await listSyncGroups();
+
+    expect(groups).toEqual([
+      { groupId: 'g1', name: null, scope: 'all', isOwner: true, memberCount: 2 },
+    ]);
+    expect(String((global.fetch as jest.Mock).mock.calls[0][0])).toContain('/sync/me/groups');
+  });
+
+  it('未参加で一覧を求めたら AUTH_INVALID（サーバーを叩かない）', async () => {
+    await expectSyncError(listSyncGroups(), 'AUTH_INVALID');
+    expect(global.fetch as jest.Mock).not.toHaveBeenCalled();
   });
 });

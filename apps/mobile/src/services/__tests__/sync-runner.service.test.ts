@@ -68,6 +68,30 @@ jest.mock('../app-meta.service', () => ({
   setAppMeta: jest.fn(async (key: string, value: string) => {
     mockMeta[key] = value;
   }),
+  getAppMetaByPrefix: jest.fn(async (prefix: string) =>
+    Object.entries(mockMeta)
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, value]) => ({ key, value })),
+  ),
+}));
+
+// 多グループの所属（G-2a）。既定は「単一グループ・バックフィル済み」＝現行の全利用者の状態
+const mockEnsureBackfilled = jest.fn();
+const mockResolveMemberships = jest.fn();
+const mockRegisterEntityGroup = jest.fn();
+const mockGetKnownGroups = jest.fn();
+const mockGetCurrentGroup = jest.fn();
+const mockRemoveKnownGroup = jest.fn();
+const mockResetEntityGroups = jest.fn();
+
+jest.mock('../entity-groups.service', () => ({
+  ensureEntityGroupsBackfilled: (...args: unknown[]) => mockEnsureBackfilled(...args),
+  resolveMembershipsForPush: (...args: unknown[]) => mockResolveMemberships(...args),
+  registerEntityGroup: (...args: unknown[]) => mockRegisterEntityGroup(...args),
+  getKnownSyncGroupIds: (...args: unknown[]) => mockGetKnownGroups(...args),
+  getCurrentSyncGroupId: (...args: unknown[]) => mockGetCurrentGroup(...args),
+  removeKnownSyncGroup: (...args: unknown[]) => mockRemoveKnownGroup(...args),
+  resetEntityGroupsForLeave: (...args: unknown[]) => mockResetEntityGroups(...args),
 }));
 
 const mockGetExpoPushToken = jest.fn();
@@ -83,7 +107,7 @@ jest.mock('../pantry-quantity-db', () => ({
 }));
 
 import { SyncError } from '../sync-client.service';
-import { SYNC_PAYLOAD_SCHEMA_VERSION } from '../sync-payload';
+import { SYNC_PAYLOAD_SCHEMA_VERSION, entityGroupKeyOf, entityGroupMapKey } from '../sync-payload';
 import {
   onLocalDataReplaced,
   onSyncGroupJoined,
@@ -133,6 +157,18 @@ function emptyPull(latestSeq = 0) {
   return { changes: [], deltas: [], latestSeq, hasMore: false };
 }
 
+/** 全部を指定グループへ所属させた所属表（既定は単一グループ = 主グループのみ） */
+function membershipsOf(
+  changes: readonly { entityType: string; entityId: string }[],
+  groupIds: readonly string[] = ['group-1'],
+): Map<string, readonly string[]> {
+  const map = new Map<string, readonly string[]>();
+  for (const change of changes) {
+    map.set(entityGroupMapKey(entityGroupKeyOf(change.entityType, change.entityId)), groupIds);
+  }
+  return map;
+}
+
 function storedCursor(): { groupId: string; seq: number; payloadVersion: number } {
   return JSON.parse(mockMeta['sync_cursor']);
 }
@@ -157,6 +193,17 @@ beforeEach(() => {
   mockBumpRetry.mockResolvedValue(undefined);
   mockClearQueue.mockResolvedValue(undefined);
   mockEnqueueEntities.mockResolvedValue(undefined);
+  // 多グループの既定: バックフィル済み・単一グループ（現行の全利用者の状態）。
+  // これで既存のテストが**本番と同じファンアウト経路**を通る
+  mockEnsureBackfilled.mockResolvedValue(true);
+  mockGetKnownGroups.mockResolvedValue(['group-1']);
+  mockGetCurrentGroup.mockResolvedValue('group-1');
+  mockResolveMemberships.mockImplementation(
+    async (changes: { entityType: string; entityId: string }[]) => membershipsOf(changes),
+  );
+  mockRegisterEntityGroup.mockResolvedValue(undefined);
+  mockRemoveKnownGroup.mockResolvedValue(undefined);
+  mockResetEntityGroups.mockResolvedValue(undefined);
 });
 
 describe('runSync — 未参加', () => {
@@ -643,5 +690,137 @@ describe('グループの出入り', () => {
     ]);
     expect(mockPullSyncChanges).toHaveBeenCalledWith(0);
     expect(mockDeleteOrphanParts).toHaveBeenCalled();
+  });
+
+  it('参加・離脱・復元は所属の文脈も白紙に戻す（§12-3 — 再参加で全実体が所属し直すため）', async () => {
+    await onSyncGroupJoined();
+    await onSyncGroupLeft();
+    await onLocalDataReplaced();
+
+    expect(mockResetEntityGroups).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('多グループ（G-2a — 設計 §12）', () => {
+  it('所属バックフィル前は従来どおり全部を主グループへ送る（所属を見ない安全弁）', async () => {
+    mockEnsureBackfilled.mockResolvedValue(false);
+    mockListSyncQueue.mockResolvedValueOnce([queueEntry('recipe-1')]).mockResolvedValue([]);
+    mockBuildOutgoingChange.mockResolvedValue(outgoing('recipe-1'));
+
+    await runSync();
+
+    expect(mockResolveMemberships).not.toHaveBeenCalled();
+    expect(mockPushSyncChanges).toHaveBeenCalledTimes(1);
+    // groupId 引数なし ＝ x-sync-group を付けない従来のリクエスト
+    expect(mockPushSyncChanges.mock.calls[0]).toHaveLength(1);
+    expect(mockRemoveSent).toHaveBeenCalledWith([
+      expect.objectContaining({ entityId: 'recipe-1' }),
+    ]);
+  });
+
+  it('所属ゼロの実体は送らない（G9: 自分だけ）— 送信済み扱いで待ち行列から消す', async () => {
+    mockListSyncQueue.mockResolvedValueOnce([queueEntry('mine-only')]).mockResolvedValue([]);
+    mockBuildOutgoingChange.mockResolvedValue(outgoing('mine-only'));
+    mockResolveMemberships.mockImplementation(
+      async (changes: { entityType: string; entityId: string }[]) => membershipsOf(changes, []),
+    );
+
+    await runSync();
+
+    expect(mockPushSyncChanges).not.toHaveBeenCalled();
+    expect(mockRemoveSent).toHaveBeenCalledWith([
+      expect.objectContaining({ entityId: 'mine-only' }),
+    ]);
+  });
+
+  it('複数グループに属する実体は各グループへ送る（G3）。主グループだけヘッダ無し', async () => {
+    mockGetKnownGroups.mockResolvedValue(['group-1', 'group-2']);
+    mockListSyncQueue.mockResolvedValueOnce([queueEntry('recipe-1')]).mockResolvedValue([]);
+    mockBuildOutgoingChange.mockResolvedValue(outgoing('recipe-1'));
+    mockResolveMemberships.mockImplementation(
+      async (changes: { entityType: string; entityId: string }[]) =>
+        membershipsOf(changes, ['group-1', 'group-2']),
+    );
+
+    await runSync();
+
+    const pushCalls = mockPushSyncChanges.mock.calls;
+    expect(pushCalls).toHaveLength(2);
+    expect(pushCalls[0]).toHaveLength(1); // 主グループ: 従来と同一の呼び方
+    expect(pushCalls[1][1]).toBe('group-2'); // 2 つ目のグループ: x-sync-group つき
+    // **全グループへ送り終えてから** 1 回で消す（先に消すと後段の失敗で欠落する）
+    expect(mockRemoveSent).toHaveBeenCalledTimes(1);
+  });
+
+  it('後のグループへの送信が失敗したら待ち行列を消さない（次回に全グループへ再送）', async () => {
+    mockGetKnownGroups.mockResolvedValue(['group-1', 'group-2']);
+    mockListSyncQueue.mockResolvedValue([queueEntry('recipe-1')]);
+    mockBuildOutgoingChange.mockResolvedValue(outgoing('recipe-1'));
+    mockResolveMemberships.mockImplementation(
+      async (changes: { entityType: string; entityId: string }[]) =>
+        membershipsOf(changes, ['group-1', 'group-2']),
+    );
+    mockPushSyncChanges
+      .mockResolvedValueOnce({ applied: 1, latestSeq: 1 }) // group-1 は成功
+      .mockRejectedValueOnce(new SyncError('NETWORK')); // group-2 で通信断
+
+    await runSync();
+
+    expect(mockRemoveSent).not.toHaveBeenCalled();
+    expect(mockBumpRetry).toHaveBeenCalled();
+  });
+
+  it('参加グループぶん pull を回し、カーソルはグループごとに保存する', async () => {
+    mockGetKnownGroups.mockResolvedValue(['group-1', 'group-2']);
+    mockPullSyncChanges
+      .mockResolvedValueOnce({
+        changes: [incoming('recipe-1', 3, 'device-other')],
+        deltas: [],
+        latestSeq: 3,
+        hasMore: false,
+      })
+      .mockResolvedValueOnce({
+        changes: [incoming('recipe-9', 8, 'device-other')],
+        deltas: [],
+        latestSeq: 8,
+        hasMore: false,
+      });
+
+    await runSync();
+
+    // 主グループは従来と同一の呼び方（引数 1 つ）。他グループは groupId つき
+    expect(mockPullSyncChanges).toHaveBeenNthCalledWith(1, 0);
+    expect(mockPullSyncChanges).toHaveBeenNthCalledWith(2, 0, 500, 'group-2');
+    expect(storedCursor().seq).toBe(3);
+    expect(JSON.parse(mockMeta['sync_cursor:group-2']).seq).toBe(8);
+  });
+
+  it('受信した実体は受信元グループへ所属させる（tombstone は除く）', async () => {
+    mockGetKnownGroups.mockResolvedValue(['group-1', 'group-2']);
+    mockPullSyncChanges.mockResolvedValueOnce(emptyPull()).mockResolvedValueOnce({
+      changes: [
+        incoming('recipe-9', 8, 'device-other'),
+        { ...incoming('gone', 9, 'device-other'), deleted: true, payload: null },
+      ],
+      deltas: [],
+      latestSeq: 9,
+      hasMore: false,
+    });
+
+    await runSync();
+
+    expect(mockRegisterEntityGroup).toHaveBeenCalledWith('recipe', 'recipe-9', 'group-2');
+    expect(mockRegisterEntityGroup).not.toHaveBeenCalledWith('recipe', 'gone', 'group-2');
+  });
+
+  it('主グループ以外の 401 はそのグループを控えから外すだけ（同期全体は成功扱い）', async () => {
+    mockGetKnownGroups.mockResolvedValue(['group-1', 'group-2']);
+    mockPullSyncChanges
+      .mockResolvedValueOnce(emptyPull())
+      .mockRejectedValueOnce(new SyncError('AUTH_INVALID'));
+
+    await expect(runSyncAndAwaitPull()).resolves.toBe(true);
+
+    expect(mockRemoveKnownGroup).toHaveBeenCalledWith('group-2');
   });
 });
