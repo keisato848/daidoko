@@ -87,6 +87,8 @@ const settings = {
     backupSubtitle: '端末内にバックアップを作成・復元',
     sync: 'クラウド同期',
     syncSubtitle: '家族グループに参加すると、端末どうしで自動的に同期されます',
+    shareStatus: '共有の管理',
+    shareStatusSubtitle: '家族と共有中のもの・リンクで公開中のものを一覧',
     nameAliases: '名寄せ辞書',
     /**
      * 名寄せは**利用者が AI 機能を使わなくても走る**（在庫で作れるレシピを開いたとき・
@@ -147,6 +149,40 @@ const settings = {
     stopFailed: '停止できませんでした。通信環境を確認してもう一度お試しください。',
     deleteTitle: 'レシピ帖を削除',
     deleteConfirm: 'この帖を削除しますか？（レシピ自体は消えません）',
+  },
+  shareStatus: {
+    title: '共有の管理',
+    familySection: '家族グループ',
+    familyJoined: '家族グループに参加中',
+    familyJoinedNote: 'メンバーの確認・招待はこちら',
+    familyNotJoined: '家族グループに未参加',
+    familyNotJoinedNote: '参加するとグループの端末どうしで自動的に同期されます',
+    familyScope:
+      '共有されるもの: レシピ・レシピ帖・買い物リスト・在庫（グループのメンバーにだけ見えます）。調理記録・写真・献立は共有されません。',
+    linkSection: 'リンクで公開中',
+    linkScope: 'リンクを知っている人は誰でも見られます（家族以外も）。',
+    linkEmpty: 'リンクで公開しているものはありません。',
+    deletedRecipe: '（削除したレシピ）',
+    resend: 'リンクを送る',
+    stopTitle: '公開を停止',
+    stopConfirm: '公開を停止すると、リンクを知っている人も見られなくなります。よろしいですか？',
+    stopAction: '停止する',
+    stopFailed: '停止できませんでした。通信環境を確認してもう一度お試しください。',
+    sharedBooks: {
+      one: '共有中のレシピ帖 {{count}}冊',
+      other: '共有中のレシピ帖 {{count}}冊',
+    } satisfies PluralMessage,
+    sharedBooksNote: 'リンクの送付・停止はレシピ帖の管理から',
+    privateSection: '自分だけの品目',
+    privateScope: '「自分だけ」にした品目は家族グループに共有されません。切替は各品目から。',
+    privateShopping: {
+      one: '買い物リスト {{count}}件',
+      other: '買い物リスト {{count}}件',
+    } satisfies PluralMessage,
+    privatePantry: {
+      one: '在庫 {{count}}件',
+      other: '在庫 {{count}}件',
+    } satisfies PluralMessage,
   },
   book: {
     title: 'レシピ帖',

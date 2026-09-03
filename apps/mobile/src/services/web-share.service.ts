@@ -12,10 +12,13 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
-import { getAppMeta, setAppMeta } from './app-meta.service';
+import { inArray } from 'drizzle-orm';
+
+import { getAppMeta, getAppMetaByPrefix, setAppMeta } from './app-meta.service';
 import type { RecipeDetail } from './types';
 import { API_V1 } from '../config';
-import { isNativePlatform } from '../db/client';
+import { getDb, isNativePlatform } from '../db/client';
+import * as schema from '../db/schema';
 import { getLocale } from '../i18n';
 
 /** Web 共有ページの写真は表示幅が最大 640px — 1200px あれば Retina でも十分 */
@@ -104,6 +107,52 @@ export async function getWebShare(recipeId: string): Promise<WebShareRecord | nu
 
 async function clearWebShare(recipeId: string): Promise<void> {
   await setAppMeta(META_PREFIX + recipeId, '');
+}
+
+export interface WebShareRecipeListItem {
+  recipeId: string;
+  /** レシピが端末から消えていても共有は生きているので null を許す（停止だけできる） */
+  title: string | null;
+  record: WebShareRecord;
+}
+
+/**
+ * リンクで公開中のレシピ単体を列挙する（「共有の管理」画面用）。
+ * 共有状態は app_meta にしか無く、これまで一覧する手段が無かった —
+ * 「今なにを公開しているか」を利用者が確かめられるようにするための関数。
+ * 停止済みは値が '' になっている（clearWebShare）ので parse で自然に落ちる。
+ */
+export async function listWebShareRecipes(): Promise<WebShareRecipeListItem[]> {
+  const rows = await getAppMetaByPrefix(META_PREFIX);
+  const items: Array<{ recipeId: string; record: WebShareRecord }> = [];
+  for (const row of rows) {
+    if (!row.value) continue;
+    try {
+      const parsed = JSON.parse(row.value) as Partial<WebShareRecord>;
+      if (parsed.slug && parsed.url && parsed.deleteToken) {
+        items.push({
+          recipeId: row.key.slice(META_PREFIX.length),
+          record: parsed as WebShareRecord,
+        });
+      }
+    } catch {
+      // 壊れた値は一覧に出さない（getWebShare と同じ扱い）
+    }
+  }
+  if (items.length === 0) return [];
+  const recipeRows = await getDb()
+    .select({ id: schema.recipes.id, title: schema.recipes.title })
+    .from(schema.recipes)
+    .where(
+      inArray(
+        schema.recipes.id,
+        items.map((item) => item.recipeId),
+      ),
+    );
+  const titles = new Map(recipeRows.map((row) => [row.id, row.title]));
+  return items
+    .map((item) => ({ ...item, title: titles.get(item.recipeId) ?? null }))
+    .sort((a, b) => (a.record.sharedAt < b.record.sharedAt ? 1 : -1));
 }
 
 // ── 公開ペイロード ───────────────────────────────────────────────────────────

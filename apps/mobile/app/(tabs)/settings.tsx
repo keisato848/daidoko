@@ -289,6 +289,14 @@ export default function SettingsScreen() {
           onPress: () => router.push('/(tabs)/family'),
         },
         {
+          // 「今なにが誰に共有されているか」を 1 画面で見せる（2026-09-03 利用者指摘）
+          id: 'share-status',
+          label: t('settings.data.shareStatus'),
+          subtitle: t('settings.data.shareStatusSubtitle'),
+          enabled: true,
+          onPress: () => router.push('/(tabs)/share-status'),
+        },
+        {
           id: 'name-aliases',
           label: t('settings.data.nameAliases'),
           subtitle: t('settings.data.nameAliasesSubtitle'),

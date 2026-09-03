@@ -3,7 +3,7 @@
  * table (survives restarts, no extra dependency). Used for things like the
  * cloud Vision inference opt-in consent.
  */
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
@@ -33,6 +33,20 @@ export async function getAppMeta(key: string): Promise<string | null> {
     .where(eq(schema.appMeta.key, key))
     .limit(1);
   return rows[0]?.value ?? null;
+}
+
+/**
+ * 前方一致でキーと値を列挙する。呼び出し側はコード内の固定プレフィックスだけを渡すこと
+ * （`%`/`_` を含む動的文字列を渡すと LIKE のワイルドカードとして解釈される）。
+ */
+export async function getAppMetaByPrefix(
+  prefix: string,
+): Promise<Array<{ key: string; value: string }>> {
+  if (!isNativePlatform) return [];
+  return getDb()
+    .select({ key: schema.appMeta.key, value: schema.appMeta.value })
+    .from(schema.appMeta)
+    .where(like(schema.appMeta.key, `${prefix}%`));
 }
 
 export async function setAppMeta(key: string, value: string): Promise<void> {

@@ -81,6 +81,8 @@ const settings: typeof ja = {
     backupSubtitle: 'Create and restore backups on this device',
     sync: 'Cloud sync',
     syncSubtitle: 'Join a family group and your devices stay in sync automatically',
+    shareStatus: 'Sharing overview',
+    shareStatusSubtitle: 'See what is shared with family and what is public by link',
     nameAliases: 'Ingredient name dictionary',
     nameAliasesSubtitle: {
       text: 'Ingredient names from your pantry and recipes are sent automatically to our server (and the AI provider) to match up spellings — only the names are sent. Review and fix what it has learned here',
@@ -136,6 +138,42 @@ const settings: typeof ja = {
     stopFailed: 'Could not stop sharing. Check your connection and try again.',
     deleteTitle: 'Delete recipe book',
     deleteConfirm: 'Delete this book? (Your recipes themselves are not deleted.)',
+  },
+  shareStatus: {
+    title: 'Sharing overview',
+    familySection: 'Family group',
+    familyJoined: 'In a family group',
+    familyJoinedNote: 'See members and invite family here',
+    familyNotJoined: 'Not in a family group',
+    familyNotJoinedNote: 'Join one and devices in the group stay in sync automatically',
+    familyScope:
+      'Shared with the group: recipes, recipe books, shopping list, and pantry (visible only to group members). Cooking logs, photos, and menu plans are not shared.',
+    linkSection: 'Public by link',
+    linkScope: 'Anyone with the link can view these — not just family.',
+    linkEmpty: 'Nothing is public by link.',
+    deletedRecipe: '(deleted recipe)',
+    resend: 'Send link',
+    stopTitle: 'Stop sharing',
+    stopConfirm:
+      'This stops sharing. People with the link will no longer be able to see it. Continue?',
+    stopAction: 'Stop sharing',
+    stopFailed: 'Could not stop sharing. Check your connection and try again.',
+    sharedBooks: {
+      one: '{{count}} shared recipe book',
+      other: '{{count}} shared recipe books',
+    },
+    sharedBooksNote: 'Send or stop links from the recipe book manager',
+    privateSection: 'Only-me items',
+    privateScope:
+      'Items marked “only me” are not shared with your family group. Change this on each item.',
+    privateShopping: {
+      one: '{{count}} shopping list item',
+      other: '{{count}} shopping list items',
+    },
+    privatePantry: {
+      one: '{{count}} pantry item',
+      other: '{{count}} pantry items',
+    },
   },
   book: {
     title: 'Recipe book',
