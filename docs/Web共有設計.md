@@ -179,6 +179,44 @@ curl -s https://daidoko-production.up.railway.app/.well-known/assetlinks.json
 （`verified` なら現状の指紋で正しい。`1024` のままならアプリ署名鍵の指紋に差し替える）。
 差し替えは Railway の変数を入れ直して `railway up` するだけで、アプリの再ビルドは要らない。
 
+**決着（2026-09-03、1.13.0 公開後）: 疑いは当たっていた — 本番に入れたのはアップロード鍵の指紋。**
+Play からインストール済みの端末（Pixel 9a、`dumpsys package` の
+`installerPackageName=com.android.vending`）で `pm get-app-links com.daidoko.app` を見ると
+`Signatures: [0A:BD:74:C2:…:DB:1F]` で、本番の assetlinks.json（`52:9C:…:93:9B` ＝ AAB の
+署名者）と**別の鍵**。当然 `1024`。つまり Play App Signing は別鍵で再署名しており、
+Console の「アプリの完全性」から拾った SHA-256 は**アップロード鍵の証明書の方**だった。
+
+**アプリ署名鍵の SHA-256 は Console を開かなくても取れる:** Play からインストール済みの
+端末で `adb shell pm get-app-links com.daidoko.app` の `Signatures:` がそれ
+（内部テスト配布でも同じ鍵）。Console のページで上下 2 つの証明書を見分けるより確実。
+アップロード鍵の方は `keytool -printcert -jarfile <aab>` — この 2 つが違えば
+assetlinks.json に要るのは前者。
+
+対処は `APP_LINKS_SHA256_FINGERPRINTS` を `0A:BD:…` に差し替えて（アップロード鍵は
+併記しても害はないが不要）`railway up`。指紋の値そのものはここに書かない（Railway が正）。
+影響範囲: 公開・審査には無関係。Android で招待 https リンクがアプリ直開きにならず
+ブラウザ経由になるだけ（`/j/:code` ページのボタンから `daidoko://` で開けるので機能は動く）。
+
+**差し替え後すぐには `verified` にならない — Google 側の 1 時間キャッシュ**（2026-09-03 に実施、
+Railway 差し替え → `railway up` SUCCESS → `curl assetlinks.json` は新指紋を返すのに、
+Pixel で `pm verify-app-links --re-verify com.daidoko.app` しても `1024` のまま）。
+Android 12+ の検証は端末が直接 assetlinks.json を読むのではなく **Google の
+Digital Asset Links API 経由**で、そこが `maxAge: 3600s` で statement を持っている。
+サーバーが何を返しているかではなく**Google が何を見ているか**を確かめる:
+
+```bash
+# linked:true が返れば Google 側が新指紋を認識済み。{"maxAge":"…"} だけなら未反映（残り秒数が maxAge）
+node -e "fetch('https://digitalassetlinks.googleapis.com/v1/assetlinks:check?source.web.site=https://daidoko-production.up.railway.app&relation=delegate_permission/common.handle_all_urls&target.android_app.package_name=com.daidoko.app&target.android_app.certificate.sha256_fingerprint=<SHA256>').then(r=>r.json()).then(j=>console.log(j))"
+# Google が今持っている statement 一覧（古い指紋しか無ければキャッシュ中）
+node -e "fetch('https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://daidoko-production.up.railway.app&relation=delegate_permission/common.handle_all_urls').then(r=>r.json()).then(j=>console.log(JSON.stringify(j)))"
+```
+
+`maxAge` が切れてから（最長 1 時間）`pm verify-app-links --re-verify` → `pm get-app-links` で
+`verified` を確認する。それまで端末側で何度叩いても結果は変わらない。
+**確認済み（2026-09-03）:** キャッシュ切れ後に `assetlinks:check` が `linked:true` → Pixel で
+`--re-verify` → `daidoko-production.up.railway.app: verified`。Play 配布版（10032）でも
+署名鍵は同じなので、1.13.0 を Play から入れた端末は初回起動時の自動検証で通る。
+
 ## 7. レシピ帖を「モノ」にする（S4）
 
 > 2026-08-13 起草（ユーザー提案「まずレシピ帖を作成して、それを共有する。共有する時に権限を設定する」）。
