@@ -18,6 +18,7 @@ import {
   deleteRecipeBook,
   getRecipeBooks,
   migrateLegacyWebShareBooks,
+  renewSharedBook,
   revokeSharedBook,
   type RecipeBookListItem,
 } from '../../src/services/recipe-book.service';
@@ -41,6 +42,8 @@ export default function WebSharesScreen() {
 
   const handleSend = async (book: RecipeBookListItem) => {
     if (!book.shareUrl) return;
+    // 受け取り期限を張り直してから送る（§3-6・ベストエフォート）
+    void renewSharedBook(book.id);
     try {
       await Share.share({ message: `${book.title}\n${book.shareUrl}` });
     } catch {

@@ -117,6 +117,24 @@ export interface WebShareRecipeListItem {
 }
 
 /**
+ * 受け取り期限を「今から 7 日」に張り直す（docs/共有設計.md §3-6）。
+ * 「リンクを送る」たびにベストエフォートで呼ぶ — 失敗しても送付自体は続行する
+ * （相手が期限内に開けない事故より、送れない事故のほうが困る）。
+ */
+export async function renewWebShare(recipeId: string): Promise<void> {
+  const record = await getWebShare(recipeId);
+  if (!record) return;
+  try {
+    await fetch(`${API_V1}/share/recipes/${record.slug}/renew`, {
+      method: 'POST',
+      headers: { 'x-share-delete-token': record.deleteToken },
+    });
+  } catch {
+    // オフライン等。次に送るときに張り直される
+  }
+}
+
+/**
  * リンクで公開中のレシピ単体を列挙する（「共有の管理」画面用）。
  * 共有状態は app_meta にしか無く、これまで一覧する手段が無かった —
  * 「今なにを公開しているか」を利用者が確かめられるようにするための関数。

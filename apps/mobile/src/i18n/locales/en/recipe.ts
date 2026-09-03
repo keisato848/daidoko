@@ -86,7 +86,8 @@ const recipe: typeof ja = {
       linkTitle: 'Send a link',
       linkPublish: 'Create a link and send it',
       linkSend: 'Send the link (already public)',
-      linkNote: 'Anyone with the link can view it, anytime — not just family.',
+      linkNote:
+        'Anyone with the link can view it — not just family. New viewers can open it for 7 days after you send it; anyone who opened it in time keeps access.',
       linkStop: 'Stop sharing the link',
       linkStopNote: 'People with the link will no longer be able to see it.',
       linkBlocked: 'Recipes imported from a URL cannot be shared by link (we never host reposts).',
@@ -97,7 +98,7 @@ const recipe: typeof ja = {
     webShare: {
       attestTitle: 'Is this your own recipe?',
       attestBody:
-        'Sharing by link is only for content you created yourself. Recipes copied from other sites or books cannot be shared.\n\nAnyone with the link can view this recipe (no app needed). You can stop sharing at any time.',
+        'Sharing by link is only for content you created yourself. Recipes copied from other sites or books cannot be shared.\n\nAnyone with the link can view this recipe (no app needed). New viewers can open the link for 7 days after you send it, and you can stop sharing at any time.',
       attestOk: 'Share',
       failedTitle: 'Send a link',
       publishFailedBody: 'Could not create the share page. Check your connection and try again.',

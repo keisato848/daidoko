@@ -149,7 +149,8 @@ const settings: typeof ja = {
     familyScope:
       'Shared with the group: recipes, recipe books, shopping list, and pantry (visible only to group members). Cooking logs, photos, and menu plans are not shared.',
     linkSection: 'Public by link',
-    linkScope: 'Anyone with the link can view these — not just family.',
+    linkScope:
+      'Anyone with the link can view these — not just family. New viewers can open a link for 7 days after it was sent; sending it again resets the window.',
     linkEmpty: 'Nothing is public by link.',
     deletedRecipe: '(deleted recipe)',
     resend: 'Send link',

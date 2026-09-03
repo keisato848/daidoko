@@ -63,6 +63,7 @@ import {
   getShareBlockReason,
   getWebShare,
   publishRecipeToWeb,
+  renewWebShare,
   revokeWebShare,
   type WebShareRecord,
 } from '../../../src/services/web-share.service';
@@ -268,7 +269,8 @@ export default function RecipeDetailScreen() {
   const handleWebShare = async () => {
     if (!recipe) return;
     if (webShare) {
-      // 発行済み — リンクを再共有するだけ
+      // 発行済み — 受け取り期限を張り直して（§3-6・ベストエフォート）再共有する
+      if (id) void renewWebShare(id);
       try {
         await Share.share({ message: `${recipe.title}\n${webShare.url}` });
       } catch {

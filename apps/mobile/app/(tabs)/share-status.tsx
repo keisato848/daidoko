@@ -16,7 +16,11 @@ import { Colors } from '../../src/constants/theme';
 import { t, tCount } from '../../src/i18n';
 import { dialog } from '../../src/services/dialog.service';
 import { getShareStatus, type ShareStatus } from '../../src/services/share-status.service';
-import { revokeWebShare, type WebShareRecipeListItem } from '../../src/services/web-share.service';
+import {
+  renewWebShare,
+  revokeWebShare,
+  type WebShareRecipeListItem,
+} from '../../src/services/web-share.service';
 
 export default function ShareStatusScreen() {
   const router = useRouter();
@@ -33,6 +37,8 @@ export default function ShareStatusScreen() {
   );
 
   const handleResend = async (item: WebShareRecipeListItem) => {
+    // 受け取り期限を張り直してから送る（§3-6・ベストエフォート）
+    void renewWebShare(item.recipeId);
     try {
       await Share.share({
         message: `${item.title ?? t('settings.shareStatus.deletedRecipe')}\n${item.record.url}`,
