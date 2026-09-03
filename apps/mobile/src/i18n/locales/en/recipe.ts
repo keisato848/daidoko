@@ -85,14 +85,14 @@ const recipe: typeof ja = {
       familyNote: 'Visible only to group members. Syncs automatically while you are in a group.',
       linkTitle: 'Send a link',
       linkPublish: 'Create a link and send it',
-      linkSend: 'Send the link (already public)',
+      linkSend: 'Send the link (public)',
       linkNote:
         'Anyone with the link can view it — not just family. New viewers can open it for 7 days after you send it; anyone who opened it in time keeps access.',
       linkStop: 'Stop sharing the link',
       linkStopNote: 'People with the link will no longer be able to see it.',
       linkBlocked: 'Recipes imported from a URL cannot be shared by link (we never host reposts).',
       textSend: 'Send as text',
-      textNote: 'Importable text format. Recipients can add it via text import.',
+      textNote: 'Sent as plain text. Recipients can import it into the app.',
     },
 
     webShare: {

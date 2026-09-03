@@ -147,7 +147,7 @@ const settings: typeof ja = {
     familyNotJoined: 'Not in a family group',
     familyNotJoinedNote: 'Join one and devices in the group stay in sync automatically',
     familyScope:
-      'Shared with the group: recipes, recipe books, shopping list, and pantry (visible only to group members). Cooking logs, photos, and menu plans are not shared.',
+      'Shared: recipes / recipe books / shopping list / pantry — visible only to group members.\nNot shared: cooking logs, photos, menu plans.',
     linkSection: 'Public by link',
     linkScope:
       'Anyone with the link can view these — not just family. New viewers can open a link for 7 days after it was sent; sending it again resets the window.',
