@@ -197,6 +197,23 @@ assetlinks.json に要るのは前者。
 影響範囲: 公開・審査には無関係。Android で招待 https リンクがアプリ直開きにならず
 ブラウザ経由になるだけ（`/j/:code` ページのボタンから `daidoko://` で開けるので機能は動く）。
 
+**差し替え後すぐには `verified` にならない — Google 側の 1 時間キャッシュ**（2026-09-03 に実施、
+Railway 差し替え → `railway up` SUCCESS → `curl assetlinks.json` は新指紋を返すのに、
+Pixel で `pm verify-app-links --re-verify com.daidoko.app` しても `1024` のまま）。
+Android 12+ の検証は端末が直接 assetlinks.json を読むのではなく **Google の
+Digital Asset Links API 経由**で、そこが `maxAge: 3600s` で statement を持っている。
+サーバーが何を返しているかではなく**Google が何を見ているか**を確かめる:
+
+```bash
+# linked:true が返れば Google 側が新指紋を認識済み。{"maxAge":"…"} だけなら未反映（残り秒数が maxAge）
+node -e "fetch('https://digitalassetlinks.googleapis.com/v1/assetlinks:check?source.web.site=https://daidoko-production.up.railway.app&relation=delegate_permission/common.handle_all_urls&target.android_app.package_name=com.daidoko.app&target.android_app.certificate.sha256_fingerprint=<SHA256>').then(r=>r.json()).then(j=>console.log(j))"
+# Google が今持っている statement 一覧（古い指紋しか無ければキャッシュ中）
+node -e "fetch('https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://daidoko-production.up.railway.app&relation=delegate_permission/common.handle_all_urls').then(r=>r.json()).then(j=>console.log(JSON.stringify(j)))"
+```
+
+`maxAge` が切れてから（最長 1 時間）`pm verify-app-links --re-verify` → `pm get-app-links` で
+`verified` を確認する。それまで端末側で何度叩いても結果は変わらない。
+
 ## 7. レシピ帖を「モノ」にする（S4）
 
 > 2026-08-13 起草（ユーザー提案「まずレシピ帖を作成して、それを共有する。共有する時に権限を設定する」）。
