@@ -27,6 +27,7 @@ import {
 
 import { Avatar } from '../../../src/components/Avatar';
 import { PhotoViewer } from '../../../src/components/PhotoViewer';
+import { ShareSheet } from '../../../src/components/ShareSheet';
 import { ShoppingPickSheet } from '../../../src/components/ShoppingPickSheet';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../../src/components/HelpButton';
@@ -43,6 +44,7 @@ import { t, tCount } from '../../../src/i18n';
 import { canSkipSelection, type ShoppingPlanRow } from '../../../src/utils/shoppingPlan';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
 import { dialog } from '../../../src/services/dialog.service';
+import { getStoredCredentials } from '../../../src/services/sync-client.service';
 import {
   addSelectedIngredientsToList,
   buildRecipeShoppingPlan,
@@ -109,6 +111,9 @@ export default function RecipeDetailScreen() {
   const [webShare, setWebShare] = useState<WebShareRecord | null>(null);
   const [webShareBlocked, setWebShareBlocked] = useState(true);
   const [webSharePublishing, setWebSharePublishing] = useState(false);
+  // 統一共有シート（docs/共有設計.md §3-2）。共有アクションはメニューからここへ集約
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [familyJoined, setFamilyJoined] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   /** 全画面で見ている写真。null = 閉じている。一覧・詳細は cover で切っているので逃げ道を置く */
   const [viewerUri, setViewerUri] = useState<string | null>(null);
@@ -141,9 +146,14 @@ export default function RecipeDetailScreen() {
 
   const loadWebShareState = useCallback(async () => {
     if (!id) return;
-    const [blockReason, record] = await Promise.all([getShareBlockReason(id), getWebShare(id)]);
+    const [blockReason, record, credentials] = await Promise.all([
+      getShareBlockReason(id),
+      getWebShare(id),
+      getStoredCredentials().catch(() => null),
+    ]);
     setWebShareBlocked(blockReason != null);
     setWebShare(record);
+    setFamilyJoined(credentials !== null);
   }, [id]);
 
   // 編集モーダルから戻ったときも最新を表示するためフォーカス毎に再取得。
@@ -466,35 +476,11 @@ export default function RecipeDetailScreen() {
             style={styles.menuItem}
             onPress={() => {
               setShowMenu(false);
-              void handleShare();
+              setShareSheetOpen(true);
             }}
           >
             <Text style={styles.menuItemText}>{t('recipe.detail.menu.share')}</Text>
           </Pressable>
-          {!webShareBlocked && (
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                void handleWebShare();
-              }}
-            >
-              <Text style={styles.menuItemText}>
-                {webShare ? t('recipe.detail.menu.webShareSend') : t('recipe.detail.menu.webShare')}
-              </Text>
-            </Pressable>
-          )}
-          {!webShareBlocked && webShare && (
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                void handleWebShareStop();
-              }}
-            >
-              <Text style={styles.menuItemText}>{t('recipe.detail.menu.webShareStop')}</Text>
-            </Pressable>
-          )}
           <Pressable
             style={styles.menuItem}
             onPress={() => {
@@ -781,6 +767,31 @@ export default function RecipeDetailScreen() {
       />
 
       <PhotoViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
+
+      <ShareSheet
+        visible={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        familyJoined={familyJoined}
+        linkShared={webShare != null}
+        linkBlocked={webShareBlocked}
+        onFamily={() => {
+          setShareSheetOpen(false);
+          router.push('/(tabs)/family');
+        }}
+        onLinkSend={() => {
+          // OS の共有シート（や権利確認ダイアログ）と重ならないよう先に閉じる
+          setShareSheetOpen(false);
+          void handleWebShare();
+        }}
+        onLinkStop={() => {
+          setShareSheetOpen(false);
+          void handleWebShareStop();
+        }}
+        onTextSend={() => {
+          setShareSheetOpen(false);
+          void handleShare();
+        }}
+      />
 
       <ShoppingPickSheet
         visible={pickRows !== null}

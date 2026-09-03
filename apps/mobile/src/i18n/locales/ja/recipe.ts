@@ -88,10 +88,24 @@ const recipe = {
       refine: 'お店の味に近づける',
       edit: '編集',
       share: '共有',
-      webShare: 'Webページで共有',
-      webShareSend: 'Web共有リンクを送る',
-      webShareStop: 'Web共有を停止',
       revisions: '版履歴',
+    },
+
+    // 統一共有シート（docs/共有設計.md §3-2）。可視範囲の 1 行は省略不可
+    shareSheet: {
+      title: 'このレシピを共有',
+      familyJoined: '家族と共有',
+      familyNotJoined: '家族と共有（グループをつくる / 参加する）',
+      familyNote: 'グループのメンバーだけに見えます。参加中は自動で同期されます。',
+      linkTitle: 'リンクで渡す',
+      linkPublish: 'リンクを発行して送る',
+      linkSend: 'リンクを送る（発行済み）',
+      linkNote: 'リンクを知っている人は誰でも・いつまでも見られます（家族以外も）。',
+      linkStop: '公開を停止',
+      linkStopNote: 'リンクを知っている人も見られなくなります。',
+      linkBlocked: 'URL から取り込んだレシピはリンクにできません（転載をサーバーに置かないため）。',
+      textSend: 'テキストで送る',
+      textNote: '取り込み書式のテキスト。受け取った人はテキスト取り込みで登録できます。',
     },
 
     webShare: {

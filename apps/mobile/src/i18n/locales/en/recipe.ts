@@ -75,10 +75,23 @@ const recipe: typeof ja = {
       refine: 'Get closer to the restaurant taste',
       edit: 'Edit',
       share: 'Share',
-      webShare: 'Share as web page',
-      webShareSend: 'Send web share link',
-      webShareStop: 'Stop web sharing',
       revisions: 'Version history',
+    },
+
+    shareSheet: {
+      title: 'Share this recipe',
+      familyJoined: 'Share with family',
+      familyNotJoined: 'Share with family (create or join a group)',
+      familyNote: 'Visible only to group members. Syncs automatically while you are in a group.',
+      linkTitle: 'Send a link',
+      linkPublish: 'Create a link and send it',
+      linkSend: 'Send the link (already public)',
+      linkNote: 'Anyone with the link can view it, anytime — not just family.',
+      linkStop: 'Stop sharing the link',
+      linkStopNote: 'People with the link will no longer be able to see it.',
+      linkBlocked: 'Recipes imported from a URL cannot be shared by link (we never host reposts).',
+      textSend: 'Send as text',
+      textNote: 'Importable text format. Recipients can add it via text import.',
     },
 
     webShare: {
