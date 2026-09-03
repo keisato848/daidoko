@@ -184,7 +184,7 @@ describe('画面の見出しを日本語のまま出さない', () => {
       'home.wantTitle',
       'home.empty.allTitle',
       'home.empty.allMessage',
-      'home.coach.fabTitle',
+      'home.coach.addTitle',
       'home.action.calendarLabel',
       'log.kind.eatenOut',
       'log.freeform',

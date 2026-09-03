@@ -96,15 +96,15 @@ export default function HomeScreen() {
 
   // 初回利用ガイド（コーチマーク）
   const settingsRef = useRef<View>(null);
-  const fabRef = useRef<View>(null);
+  // 追加の入口は下の「追加」タブに一本化（2026-09-03）。右下 FAB は「＋が2つあって迷う」
+  // （ペルソナ点検 P1・監査 B1）ため削除した。タブは Portal の外なので ref で指せず中央吹き出し
   const coach = useCoachMarks(
     'home',
     [
       {
-        key: 'fab',
-        title: t('home.coach.fabTitle'),
-        text: t('home.coach.fabText'),
-        ref: fabRef,
+        key: 'add',
+        title: t('home.coach.addTitle'),
+        text: t('home.coach.addText'),
       },
       {
         key: 'settings',
@@ -523,7 +523,7 @@ export default function HomeScreen() {
         />
       )}
 
-      {selectMode ? (
+      {selectMode && (
         <View style={styles.actionBar}>
           <Pressable
             style={[
@@ -541,16 +541,6 @@ export default function HomeScreen() {
               {t('common.delete')}
             </Text>
           </Pressable>
-        </View>
-      ) : (
-        <View ref={fabRef} collapsable={false} style={styles.fabContainer}>
-          <PressableScale
-            style={styles.fab}
-            scaleTo={0.9}
-            onPress={() => router.push('/(tabs)/add')}
-          >
-            <Text style={styles.fabText}>＋</Text>
-          </PressableScale>
         </View>
       )}
 
@@ -908,27 +898,5 @@ const styles = StyleSheet.create({
   },
   actionBtnTextDisabled: {
     color: Colors.muted,
-  },
-  fabContainer: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-  },
-  fab: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: Colors.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-  },
-  fabText: {
-    fontSize: 24,
-    color: Colors.bg,
   },
 });
