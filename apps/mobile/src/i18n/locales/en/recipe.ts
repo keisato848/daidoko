@@ -355,7 +355,7 @@ const recipe: typeof ja = {
     timerPaused: '{{time}} (paused)',
     startTimer: 'Start timer',
     detectedFromBody: ' (found in the step)',
-    tapHint: 'Tap the screen to see the ingredients',
+    tapHint: 'Tap for ingredients / swipe to move between steps',
     resumeLabel: 'Cooking now',
     resumeStep: 'Step {{step}} of {{total}}',
     resumeAction: 'Resume',

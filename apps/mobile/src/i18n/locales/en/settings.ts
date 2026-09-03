@@ -114,13 +114,13 @@ const settings: typeof ja = {
       'Your data lives on this device (share with family and the shared items sync between your devices). Use “Backup & restore” to write it to a file and bring it back.',
     guideTitle: 'Walkthrough',
     guideText:
-      'Tap “?” on any screen to replay its guidance. “Show the walkthrough again” brings back the guidance on every screen.',
+      'Tap “?” on main screens to replay their guidance. “Show the walkthrough again” brings the guidance back.',
   },
   webShares: {
     title: 'Recipe books',
     emptyTitle: 'No recipe books yet',
     emptyBody:
-      'In the recipe list, long-press to select multiple recipes, then tap "Recipe book". Books you create can be edited and shared here.',
+      'Create one from “+ New book” on the shelf in the recipe list (or long-press to select recipes, then tap “Recipe book”). Books you create can be edited and shared here.',
     recipeCount: {
       one: '{{count}} recipe',
       other: '{{count}} recipes',

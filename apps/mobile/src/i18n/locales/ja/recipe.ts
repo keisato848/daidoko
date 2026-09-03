@@ -395,7 +395,7 @@ const recipe = {
     timerPaused: '{{time}}（一時停止中）',
     startTimer: 'タイマーを開始',
     detectedFromBody: '（本文から検出）',
-    tapHint: '画面をタップで材料を表示',
+    tapHint: '画面をタップで材料 / 左右に払って手順を移動',
     prev: '← 前へ',
     finish: '✓ 完成！記録する',
     next: '次へ →',
