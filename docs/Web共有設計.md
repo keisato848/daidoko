@@ -213,6 +213,9 @@ node -e "fetch('https://digitalassetlinks.googleapis.com/v1/statements:list?sour
 
 `maxAge` が切れてから（最長 1 時間）`pm verify-app-links --re-verify` → `pm get-app-links` で
 `verified` を確認する。それまで端末側で何度叩いても結果は変わらない。
+**確認済み（2026-09-03）:** キャッシュ切れ後に `assetlinks:check` が `linked:true` → Pixel で
+`--re-verify` → `daidoko-production.up.railway.app: verified`。Play 配布版（10032）でも
+署名鍵は同じなので、1.13.0 を Play から入れた端末は初回起動時の自動検証で通る。
 
 ## 7. レシピ帖を「モノ」にする（S4）
 
