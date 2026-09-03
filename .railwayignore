@@ -1,0 +1,16 @@
+# railway up は cwd 全体を tar して送る。Dockerfile（apps/server/Dockerfile）が
+# COPY するのは root manifests・packages/shared・apps/server だけなので、
+# それ以外を送らない（スクショ入りの docs/ 等で 35MB になり、CLI の ~30s
+# アップロード期限に引っかかって「operation timed out」になった — 2026-09-03）。
+.git
+.github
+.claude
+.expo
+docs
+mockup
+scripts
+apps/mobile
+apps/server/.data
+apps/server/node_modules
+packages/shared/node_modules
+node_modules
