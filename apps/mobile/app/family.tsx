@@ -7,7 +7,7 @@
  * docs/クラウド同期設計.md §2。参加/作成の確認ダイアログが同意の瞬間（§5-2）。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, Copy, LogOut, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
+import { Copy, LogOut, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,12 +19,13 @@ import {
   View,
 } from 'react-native';
 
-import { Avatar } from '../../src/components/Avatar';
-import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
-import { Toast } from '../../src/components/Toast';
-import { Colors } from '../../src/constants/theme';
-import { t, tCount } from '../../src/i18n';
-import { dialog } from '../../src/services/dialog.service';
+import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { Avatar } from '../src/components/Avatar';
+import { KeyboardAwareScroll } from '../src/components/KeyboardAwareScroll';
+import { Toast } from '../src/components/Toast';
+import { Colors } from '../src/constants/theme';
+import { t, tCount } from '../src/i18n';
+import { dialog } from '../src/services/dialog.service';
 import {
   SyncError,
   createSyncGroup,
@@ -38,18 +39,18 @@ import {
   rotateSyncInvite,
   type SyncErrorCode,
   type SyncMe,
-} from '../../src/services/sync-client.service';
+} from '../src/services/sync-client.service';
 import {
   countUndecidedSharedPantryItems,
   revertUndecidedPantryItemsShared,
   setUndecidedPantryItemsShared,
-} from '../../src/services/pantry.service';
+} from '../src/services/pantry.service';
 import {
   countUndecidedSharedShoppingItems,
   revertUndecidedShoppingItemsShared,
   setUndecidedShoppingItemsShared,
-} from '../../src/services/shopping-list.service';
-import { onSyncGroupJoined, onSyncGroupLeft } from '../../src/services/sync-runner.service';
+} from '../src/services/shopping-list.service';
+import { onSyncGroupJoined, onSyncGroupLeft } from '../src/services/sync-runner.service';
 import {
   addFamilyMember,
   getCurrentFamily,
@@ -60,9 +61,9 @@ import {
   removeFamilyMember,
   updateCurrentFamilyName,
   updateCurrentUserDisplayName,
-} from '../../src/services/user.service';
-import type { CurrentFamily, CurrentUser, FamilyMember } from '../../src/services/types';
-import { formatProfileDisplayName } from '../../src/utils/profile';
+} from '../src/services/user.service';
+import type { CurrentFamily, CurrentUser, FamilyMember } from '../src/services/types';
+import { formatProfileDisplayName } from '../src/utils/profile';
 
 /** 「最終同期」の相対表示。日付そのものは個人情報ではないが、細かすぎる時刻は出さない */
 function formatLastSeen(iso: string): string {
@@ -465,9 +466,7 @@ export default function FamilyScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-          <ChevronLeft size={20} color={Colors.goldDim} />
-        </Pressable>
+        <HeaderBackButton />
         <Text style={styles.headerTitle}>{t('family.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -722,12 +721,6 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,

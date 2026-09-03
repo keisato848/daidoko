@@ -2,10 +2,9 @@
  * Local backup / restore screen.
  */
 import * as DocumentPicker from 'expo-document-picker';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import {
-  ChevronLeft,
   DatabaseBackup,
   Download,
   FolderOutput,
@@ -16,11 +15,12 @@ import {
 import { useCallback, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Toast } from '../../src/components/Toast';
-import { Colors } from '../../src/constants/theme';
-import { t, tCount } from '../../src/i18n';
-import { formatDateTime } from '../../src/i18n/format';
-import { dialog } from '../../src/services/dialog.service';
+import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { Toast } from '../src/components/Toast';
+import { Colors } from '../src/constants/theme';
+import { t, tCount } from '../src/i18n';
+import { formatDateTime } from '../src/i18n/format';
+import { dialog } from '../src/services/dialog.service';
 import {
   AUTO_SNAPSHOT_KEEP,
   chooseSafBackupDirectory,
@@ -37,8 +37,8 @@ import {
   restoreMigrationBackupPackage,
   restoreLatestLocalBackup,
   type BackupFileSummary,
-} from '../../src/services/backup.service';
-import { onLocalDataReplaced } from '../../src/services/sync-runner.service';
+} from '../src/services/backup.service';
+import { onLocalDataReplaced } from '../src/services/sync-runner.service';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -65,7 +65,6 @@ function describeLastExport(iso: string | null): { text: string; warn: boolean }
 }
 
 export default function BackupScreen() {
-  const router = useRouter();
   const [backups, setBackups] = useState<BackupFileSummary[]>([]);
   const [migrationBackups, setMigrationBackups] = useState<BackupFileSummary[]>([]);
   const [busy, setBusy] = useState(false);
@@ -271,9 +270,7 @@ export default function BackupScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-          <ChevronLeft size={20} color={Colors.goldDim} />
-        </Pressable>
+        <HeaderBackButton />
         <Text style={styles.headerTitle}>{t('backup.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -435,12 +432,6 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,

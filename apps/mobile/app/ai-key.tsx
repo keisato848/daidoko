@@ -9,17 +9,17 @@ import { KeyRound, X } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { InfoTooltip } from '../../src/components/InfoTooltip';
-import { KeyboardAwareScroll } from '../../src/components/KeyboardAwareScroll';
-import { Colors } from '../../src/constants/theme';
-import { t } from '../../src/i18n';
-import { dialog } from '../../src/services/dialog.service';
+import { InfoTooltip } from '../src/components/InfoTooltip';
+import { KeyboardAwareScroll } from '../src/components/KeyboardAwareScroll';
+import { Colors } from '../src/constants/theme';
+import { t } from '../src/i18n';
+import { dialog } from '../src/services/dialog.service';
 import {
   clearUserApiKey,
   getUserApiKey,
   looksLikeApiKey,
   setUserApiKey,
-} from '../../src/services/byok.service';
+} from '../src/services/byok.service';
 
 const AI_STUDIO_URL = 'https://aistudio.google.com/apikey';
 

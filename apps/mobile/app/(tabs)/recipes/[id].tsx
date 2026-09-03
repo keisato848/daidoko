@@ -778,7 +778,7 @@ export default function RecipeDetailScreen() {
         linkBlocked={webShareBlocked}
         onFamily={() => {
           setShareSheetOpen(false);
-          router.push('/(tabs)/family');
+          router.push('/family');
         }}
         onLinkSend={() => {
           // OS の共有シート（や権利確認ダイアログ）と重ならないよう先に閉じる

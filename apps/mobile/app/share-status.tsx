@@ -7,20 +7,21 @@
  * （帖の一覧は既存のレシピ帖管理と重複させない — 導線を 2 つ持つと案内が腐る）。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronLeft, ChevronRight, Link2, Share2, Trash2, Users } from 'lucide-react-native';
+import { ChevronRight, Link2, Share2, Trash2, Users } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '../../src/constants/theme';
-import { t, tCount } from '../../src/i18n';
-import { dialog } from '../../src/services/dialog.service';
-import { getShareStatus, type ShareStatus } from '../../src/services/share-status.service';
+import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { Colors } from '../src/constants/theme';
+import { t, tCount } from '../src/i18n';
+import { dialog } from '../src/services/dialog.service';
+import { getShareStatus, type ShareStatus } from '../src/services/share-status.service';
 import {
   renewWebShare,
   revokeWebShare,
   type WebShareRecipeListItem,
-} from '../../src/services/web-share.service';
+} from '../src/services/web-share.service';
 
 export default function ShareStatusScreen() {
   const router = useRouter();
@@ -70,9 +71,7 @@ export default function ShareStatusScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-          <ChevronLeft size={20} color={Colors.goldDim} />
-        </Pressable>
+        <HeaderBackButton />
         <Text style={styles.headerTitle}>{t('settings.shareStatus.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -80,7 +79,7 @@ export default function ShareStatusScreen() {
         <ScrollView contentContainerStyle={styles.list}>
           {/* ── 家族グループ ── */}
           <Text style={styles.sectionLabel}>{t('settings.shareStatus.familySection')}</Text>
-          <Pressable style={styles.card} onPress={() => router.push('/(tabs)/family')}>
+          <Pressable style={styles.card} onPress={() => router.push('/family')}>
             <Users size={18} color={Colors.gold} />
             <View style={styles.cardBody}>
               <Text style={styles.cardTitle}>
@@ -134,7 +133,7 @@ export default function ShareStatusScreen() {
             </View>
           ))}
           {status.sharedBookCount > 0 && (
-            <Pressable style={styles.card} onPress={() => router.push('/(tabs)/web-shares')}>
+            <Pressable style={styles.card} onPress={() => router.push('/web-shares')}>
               <Link2 size={16} color={Colors.goldDim} />
               <View style={styles.cardBody}>
                 <Text style={styles.cardTitle}>
@@ -179,7 +178,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
   },
-  backButton: { padding: 8 },
   headerTitle: {
     flex: 1,
     textAlign: 'center',

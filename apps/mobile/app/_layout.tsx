@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { CookingResumeBar } from '../src/components/CookingResumeBar';
 import { DialogHost } from '../src/components/DialogHost';
 import { Colors } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
@@ -181,6 +182,10 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
       </Stack>
+      {/* Now Cooking バー — 調理中はどの画面からも 1 タップで続きに戻れる。
+          (tabs) の外の階層画面（設定系など）でも文脈を保つため、ルートに 1 つだけ置く。
+          出す画面・位置の判断はコンポーネント側が持つ */}
+      <CookingResumeBar />
       {/*
         アプリのデザインのダイアログ（`docs/画面設計.md` §7）。**アプリに 1 つだけ**置く。
         `Stack` の外に出しているのは、どの画面から出した確認でも同じ場所に描くため

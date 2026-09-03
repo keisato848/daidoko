@@ -16,7 +16,7 @@ describe('pathHasSegment', () => {
 
   it('**部分一致では当たらない** — /cookable は /cook ではない', () => {
     expect(pathHasSegment('/cookable', 'cook')).toBe(false);
-    expect(pathHasSegment('/(tabs)/cookable', '/cook')).toBe(false);
+    expect(pathHasSegment('/cookable', '/cook')).toBe(false);
     // 逆向きも（/cook は /cookable ではない）
     expect(pathHasSegment('/recipes/abc/cook', 'cookable')).toBe(false);
   });
@@ -42,7 +42,7 @@ describe('pathHasAnySegment', () => {
   });
 
   it('実在の隣接ルートに誤爆しない', () => {
-    // (tabs)/cookable.tsx は実在するルート
+    // app/cookable.tsx は実在するルート（1.13.1 で (tabs) からルート Stack へ移設）
     expect(pathHasAnySegment('/cookable', HIDDEN)).toBe(false);
     expect(pathHasAnySegment('/recipes', HIDDEN)).toBe(false);
     expect(pathHasAnySegment('/', HIDDEN)).toBe(false);

@@ -333,7 +333,7 @@ export default function HomeScreen() {
               ref={settingsRef}
               collapsable={false}
               style={styles.headerAction}
-              onPress={() => router.push('/(tabs)/settings')}
+              onPress={() => router.push('/settings')}
               hitSlop={8}
               accessibilityLabel={t('home.action.settings')}
             >
@@ -455,7 +455,7 @@ export default function HomeScreen() {
                   <PressableScale
                     style={styles.consultButton}
                     scaleTo={0.98}
-                    onPress={() => router.push('/(tabs)/cookable')}
+                    onPress={() => router.push('/cookable')}
                     accessibilityRole="button"
                     accessibilityLabel={t('home.cookable')}
                   >

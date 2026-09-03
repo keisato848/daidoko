@@ -8,26 +8,27 @@ import { ChevronRight } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { Avatar } from '../../src/components/Avatar';
-import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
-import { HelpButton } from '../../src/components/HelpButton';
-import { Colors } from '../../src/constants/theme';
-import { t, tCount } from '../../src/i18n';
-import { useCoachMarks } from '../../src/hooks/useCoachMarks';
-import { resetCoachMarks } from '../../src/services/coach-marks.service';
-import { dialog } from '../../src/services/dialog.service';
+import { Avatar } from '../src/components/Avatar';
+import { CoachMarkOverlay } from '../src/components/CoachMarkOverlay';
+import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { HelpButton } from '../src/components/HelpButton';
+import { Colors } from '../src/constants/theme';
+import { t, tCount } from '../src/i18n';
+import { useCoachMarks } from '../src/hooks/useCoachMarks';
+import { resetCoachMarks } from '../src/services/coach-marks.service';
+import { dialog } from '../src/services/dialog.service';
 import {
   getCurrentFamily,
   getCurrentFamilyProfile,
   getCurrentUser,
   getCurrentUserProfile,
-} from '../../src/services/user.service';
-import { getAdRewardProvider } from '../../src/services/ad-reward.service';
-import { isEntitlementConfigured } from '../../src/services/entitlement.service';
-import { isLaunchCameraEnabled, setLaunchCameraEnabled } from '../../src/services/app-meta.service';
-import { getFreemiumStatus, type FreemiumStatus } from '../../src/services/usage.service';
-import { useUnitSystemStore } from '../../src/stores/unitSystem.store';
-import { formatProfileDisplayName } from '../../src/utils/profile';
+} from '../src/services/user.service';
+import { getAdRewardProvider } from '../src/services/ad-reward.service';
+import { isEntitlementConfigured } from '../src/services/entitlement.service';
+import { isLaunchCameraEnabled, setLaunchCameraEnabled } from '../src/services/app-meta.service';
+import { getFreemiumStatus, type FreemiumStatus } from '../src/services/usage.service';
+import { useUnitSystemStore } from '../src/stores/unitSystem.store';
+import { formatProfileDisplayName } from '../src/utils/profile';
 
 interface SettingItem {
   id: string;
@@ -120,7 +121,7 @@ export default function SettingsScreen() {
     } else if (freemium.isByok) {
       planLabel = t('settings.plan.byok');
       planSubtitle = t('settings.plan.byokSubtitle');
-      planOnPress = () => router.push('/(tabs)/ai-key');
+      planOnPress = () => router.push('/ai-key');
     } else {
       planSubtitle = tCount('settings.plan.freeRemaining', freemium.remaining);
     }
@@ -190,7 +191,7 @@ export default function SettingsScreen() {
           label: t('settings.menu.label'),
           subtitle: t('settings.menu.subtitle'),
           enabled: true,
-          onPress: () => router.push('/(tabs)/menu-settings'),
+          onPress: () => router.push('/menu-settings'),
         },
       ],
     },
@@ -211,7 +212,7 @@ export default function SettingsScreen() {
             ? t('settings.byok.configured')
             : t('settings.byok.notConfigured'),
           enabled: true,
-          onPress: () => router.push('/(tabs)/ai-key'),
+          onPress: () => router.push('/ai-key'),
         },
         ...(adPrivacyRequired
           ? [
@@ -243,7 +244,7 @@ export default function SettingsScreen() {
           label: t('settings.account.profile'),
           subtitle: userDisplayName,
           enabled: true,
-          onPress: () => router.push('/(tabs)/family'),
+          onPress: () => router.push('/family'),
         },
       ],
     },
@@ -257,13 +258,13 @@ export default function SettingsScreen() {
             name: family.name,
           }),
           enabled: true,
-          onPress: () => router.push('/(tabs)/family'),
+          onPress: () => router.push('/family'),
         },
         {
           id: 'invite',
           label: t('settings.family.invite'),
           enabled: true,
-          onPress: () => router.push('/(tabs)/family'),
+          onPress: () => router.push('/family'),
         },
       ],
     },
@@ -275,7 +276,7 @@ export default function SettingsScreen() {
           label: t('settings.data.backup'),
           subtitle: t('settings.data.backupSubtitle'),
           enabled: true,
-          onPress: () => router.push('/(tabs)/backup'),
+          onPress: () => router.push('/backup'),
         },
         {
           // クラウド同期は出荷済み（_layout の initSync・family.tsx の共有セクション）なのに、
@@ -286,7 +287,7 @@ export default function SettingsScreen() {
           label: t('settings.data.sync'),
           subtitle: t('settings.data.syncSubtitle'),
           enabled: true,
-          onPress: () => router.push('/(tabs)/family'),
+          onPress: () => router.push('/family'),
         },
         {
           // 「今なにが誰に共有されているか」を 1 画面で見せる（2026-09-03 利用者指摘）
@@ -294,21 +295,21 @@ export default function SettingsScreen() {
           label: t('settings.data.shareStatus'),
           subtitle: t('settings.data.shareStatusSubtitle'),
           enabled: true,
-          onPress: () => router.push('/(tabs)/share-status'),
+          onPress: () => router.push('/share-status'),
         },
         {
           id: 'name-aliases',
           label: t('settings.data.nameAliases'),
           subtitle: t('settings.data.nameAliasesSubtitle'),
           enabled: true,
-          onPress: () => router.push('/(tabs)/name-aliases'),
+          onPress: () => router.push('/name-aliases'),
         },
         {
           id: 'web-shares',
           label: t('settings.data.webShares'),
           subtitle: t('settings.data.webSharesSubtitle'),
           enabled: true,
-          onPress: () => router.push('/(tabs)/web-shares'),
+          onPress: () => router.push('/web-shares'),
         },
       ],
     },
@@ -340,7 +341,7 @@ export default function SettingsScreen() {
           label: t('settings.app.licenses'),
           subtitle: t('settings.app.licensesSubtitle'),
           enabled: true,
-          onPress: () => router.push('/(tabs)/licenses'),
+          onPress: () => router.push('/licenses'),
         },
       ],
     },
@@ -349,7 +350,12 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headerBar}>
-        <Text style={styles.headerTitle}>{t('settings.title')}</Text>
+        {/* タブ時代は無かった「＜」。ルート Stack へ移した（N2）ので、iOS でも
+            見える戻り口が要る（Android は HW 戻る＝同じ router.back()） */}
+        <View style={styles.headerLead}>
+          <HeaderBackButton />
+          <Text style={styles.headerTitle}>{t('settings.title')}</Text>
+        </View>
         <HelpButton onPress={coach.show} />
       </View>
 
@@ -431,6 +437,11 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+  },
+  headerLead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   headerTitle: {
     fontSize: 20, // lg: 画面タイトル

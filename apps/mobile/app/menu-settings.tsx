@@ -7,13 +7,14 @@
  * 「通知 → menu → 歯車 → OFF」の 3 タップで確実に止められることが設計要件（§10.11.4）。
  */
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronLeft, Trash2 } from 'lucide-react-native';
+import { Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { NumberStepper } from '../../src/components/NumberStepper';
-import { Colors } from '../../src/constants/theme';
-import { t } from '../../src/i18n';
+import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { NumberStepper } from '../src/components/NumberStepper';
+import { Colors } from '../src/constants/theme';
+import { t } from '../src/i18n';
 import {
   getMenuAutoDays,
   getMenuAutoNotifyTime,
@@ -23,14 +24,14 @@ import {
   setMenuAutoDays,
   setMenuAutoEnabled,
   setMenuAutoNotifyTime,
-} from '../../src/services/app-meta.service';
-import { dialog } from '../../src/services/dialog.service';
+} from '../src/services/app-meta.service';
+import { dialog } from '../src/services/dialog.service';
 import {
   clearMenuPlan,
   refreshMenuNotificationSchedule,
   runDailyMenuMaintenance,
-} from '../../src/services/menu-plan.service';
-import { formatMenuAutoNotifyTime, type MenuAutoNotifyTime } from '../../src/utils/menuAuto';
+} from '../src/services/menu-plan.service';
+import { formatMenuAutoNotifyTime, type MenuAutoNotifyTime } from '../src/utils/menuAuto';
 
 /** 通知時刻の選択肢。専用の時刻ピッカーは入れず、既存の「日数チップ」と同じ形で選ばせる */
 const NOTIFY_TIME_OPTIONS: readonly MenuAutoNotifyTime[] = [
@@ -127,9 +128,7 @@ export default function MenuSettingsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-          <ChevronLeft size={20} color={Colors.goldDim} />
-        </Pressable>
+        <HeaderBackButton />
         <Text style={styles.headerTitle}>{t('menu.settings.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -217,7 +216,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  backButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '500', color: Colors.paper },
   headerSpacer: { width: 36 },
   content: { padding: 20, paddingBottom: 48, gap: 18 },

@@ -180,7 +180,7 @@ export default function MenuScreen() {
         {/* 献立の設定（S21）。通知 → menu → 歯車 → OFF の 3 タップで止められる導線（§10.11.4） */}
         <Pressable
           style={styles.gearButton}
-          onPress={() => router.push('/(tabs)/menu-settings')}
+          onPress={() => router.push('/menu-settings')}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={t('menu.auto.settingsButton')}

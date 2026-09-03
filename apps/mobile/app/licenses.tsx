@@ -1,23 +1,19 @@
 /**
  * OSS license information screen.
  */
-import { useRouter } from 'expo-router';
-import { ChevronLeft } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { LICENSE_ITEMS } from '../../src/constants/licenses';
-import { Colors } from '../../src/constants/theme';
-import { t } from '../../src/i18n';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { LICENSE_ITEMS } from '../src/constants/licenses';
+import { Colors } from '../src/constants/theme';
+import { t } from '../src/i18n';
 
 export default function LicensesScreen() {
-  const router = useRouter();
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} hitSlop={12}>
-          <ChevronLeft size={20} color={Colors.goldDim} />
-        </Pressable>
+        <HeaderBackButton />
         <Text style={styles.headerTitle}>{t('ui.licenses.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
@@ -58,12 +54,6 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,

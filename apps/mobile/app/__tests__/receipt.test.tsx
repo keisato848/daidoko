@@ -13,7 +13,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import ReceiptScreen from '../receipt';
-import { t, tCount } from '../../../src/i18n';
+import { t, tCount } from '../../src/i18n';
 
 const mockAddPantryItem = jest.fn(async () => null);
 const mockInferFromVision = jest.fn();
@@ -30,33 +30,33 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), replace: jest.fn(), push: jest.fn() }),
 }));
 
-jest.mock('../../../src/services/pantry.service', () => ({
+jest.mock('../../src/services/pantry.service', () => ({
   addPantryItem: (...args: unknown[]) => mockAddPantryItem(...(args as [])),
   defaultGroupFor: (...args: unknown[]) => mockDefaultGroupFor(...(args as [])),
 }));
 
-jest.mock('../../../src/services/shopping-list.service', () => ({
+jest.mock('../../src/services/shopping-list.service', () => ({
   checkOffByNames: (...args: unknown[]) => mockCheckOffByNames(...(args as [])),
   matchPendingByNames: (...args: unknown[]) => mockMatchPendingByNames(...(args as [])),
 }));
 
-jest.mock('../../../src/services/store-group.service', () => ({
+jest.mock('../../src/services/store-group.service', () => ({
   getStoreGroupFor: (...args: unknown[]) => mockGetStoreGroupFor(...(args as [])),
   getShoppingStoreGroups: async () => [],
   learnStoreGroup: (...args: unknown[]) => mockLearnStoreGroup(...(args as [])),
 }));
 
-jest.mock('../../../src/services/receipt-vision.provider', () => ({
+jest.mock('../../src/services/receipt-vision.provider', () => ({
   inferReceiptFromVision: (...args: unknown[]) => mockInferFromVision(...(args as [])),
   inferReceiptFromText: (...args: unknown[]) => mockInferFromText(...(args as [])),
 }));
 
-jest.mock('../../../src/services/client-ocr.provider', () => ({
+jest.mock('../../src/services/client-ocr.provider', () => ({
   recognizeTextOnDevice: (...args: unknown[]) => mockRecognizeTextOnDevice(...(args as [])),
   isClientOcrAvailable: (...args: unknown[]) => mockIsClientOcrAvailable(...(args as [])),
 }));
 
-jest.mock('../../../src/services/photo-capture.service', () => ({
+jest.mock('../../src/services/photo-capture.service', () => ({
   capturePhoto: async () => ({ localPath: '/tmp/receipt.jpg' }),
   PhotoCaptureCancelledError: class extends Error {},
 }));

@@ -226,7 +226,7 @@ export default function RecipeListScreen() {
       const id = await createBookFromSelection();
       setBookSheetOpen(false);
       exitSelectMode();
-      router.push({ pathname: '/(tabs)/book-edit', params: { id } });
+      router.push({ pathname: '/book-edit', params: { id } });
     } catch {
       // シートを閉じてから出す。開いたシートの上に重ねると iOS で
       // Modal の入れ子になって表示に失敗しうる（docs/画面設計.md §7-4）
@@ -446,7 +446,7 @@ export default function RecipeListScreen() {
                       key={book.id}
                       style={styles.bookChip}
                       onPress={() =>
-                        router.push({ pathname: '/(tabs)/book-edit', params: { id: book.id } })
+                        router.push({ pathname: '/book-edit', params: { id: book.id } })
                       }
                       accessibilityLabel={t('recipe.list.books.openLabel', { title: book.title })}
                     >
