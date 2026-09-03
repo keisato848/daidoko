@@ -107,6 +107,19 @@ describe('database migrations', () => {
     expect(backfill).toContain('WHERE ai_generated IS NULL');
   });
 
+  it('v18: 実体のグループ所属（entity_groups）を作る（多グループ G-2a — 同期設計 §12-3）', () => {
+    const statements: string[] = [];
+
+    const result = runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS entity_groups');
+    // 主キーが (entity_type, entity_id, group_id) であることが「1 実体・複数グループ参照
+    // （G3）を重複無しで持てる」の実体。所属の初期化はここではなく sync-runner の
+    // 一度きりのバックフィル（挙動不変の移行 — §12-4）
+    expect(statements[0]).toContain('PRIMARY KEY (entity_type, entity_id, group_id)');
+  });
+
   it('v14: クラウド同期の送信待ち（sync_queue）を作る', () => {
     const statements: string[] = [];
 

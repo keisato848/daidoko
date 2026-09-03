@@ -31,7 +31,8 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 // v12: レシピの店名 / v13: 在庫・買い物のグループ、賞味期限、誰が / v14: クラウド同期の送信待ち
 // v15: 買い物・在庫の同期（LWW の基準となる updated_at と、個人/家族の shared フラグ）
 // v17: AI が中身を推定したレシピの印（#266）。レシピ単位・一度立てたら消さない
-export const CURRENT_SCHEMA_VERSION = 17;
+// v18: 実体のグループ所属 entity_groups（多グループ G-2a — docs/クラウド同期設計.md §12-3）
+export const CURRENT_SCHEMA_VERSION = 18;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -377,6 +378,16 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE UNIQUE INDEX IF NOT EXISTS idx_store_group_aliases_family_store ON store_group_aliases(family_id, store_name);
+
+  -- v18: entity-to-group memberships (multi-group G-2a, sync design section 12-3).
+  -- No rows = do not send anywhere (G9 "mine only"). Initial memberships are backfilled
+  -- once by the sync runner (app_meta 'sync_entity_groups_migrated'), not here.
+  CREATE TABLE IF NOT EXISTS entity_groups (
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    group_id TEXT NOT NULL,
+    PRIMARY KEY (entity_type, entity_id, group_id)
+  );
 `;
 
 // Columns added after a table first shipped (SQLite has no ADD COLUMN IF NOT

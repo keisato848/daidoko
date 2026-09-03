@@ -19,6 +19,8 @@
  */
 import { z } from 'zod';
 
+import { parsePartEntityId } from './pantry-quantity';
+
 /**
  * payload の版。列を増やしたら上げる（受信側は自分より新しい版を読み飛ばす）。
  *
@@ -557,4 +559,130 @@ export function incomingChangeWins(
   if (Number.isNaN(incoming)) return false;
   if (Number.isNaN(local)) return true;
   return incoming >= local;
+}
+
+// ── 多グループ（G-2a — 設計 §12-3・共有設計 §5-4）──────────────────────────
+// entity_groups（ローカル DB）の読み書きは entity-groups.service.ts。ここには
+// **判断だけ**を置く（DB を掴む経路は jest で叩けない — このファイル冒頭の分割方針）。
+
+/** 所属解決の鍵（entity_groups の (entity_type, entity_id) に対応する） */
+export interface EntityGroupKey {
+  entityType: string;
+  entityId: string;
+}
+
+/**
+ * この実体の所属を引くための鍵。
+ *
+ * **在庫数量の持ち分（pantry_quantity）は自分では所属を持たず、親品目に従う。**
+ * 持ち分は品目の数量の一部でしかなく、別々のグループに入れられる形にすると
+ * 「品目はグループ A・数量はグループ B」という意味の無い状態を作れてしまう。
+ */
+export function entityGroupKeyOf(entityType: string, entityId: string): EntityGroupKey {
+  if (entityType === SYNC_ENTITY_PANTRY_QUANTITY) {
+    const parsed = parsePartEntityId(entityId);
+    if (parsed) return { entityType: SYNC_ENTITY_PANTRY_ITEM, entityId: parsed.itemId };
+  }
+  return { entityType, entityId };
+}
+
+/** Map の鍵（entityType/entityId の組を 1 文字列に。区切りは id に現れない NUL） */
+export function entityGroupMapKey(key: EntityGroupKey): string {
+  return `${key.entityType}\u0000${key.entityId}`;
+}
+
+/**
+ * 所属の無い実体に「現在のグループ」を既定所属として付けてよいか（G2）。
+ *
+ * - 既に所属がある → 付けない（既定は初回だけ。以後の所属変更は利用者の操作）
+ * - 行が無い（＝削除済みの tombstone）→ 付けない。過去に共有していれば所属が
+ *   残っていてそこへ届くし、一度も共有していなければ**削除の事実ごと外に出さない**
+ * - `shared = 0`（自分だけ）→ 付けない（G9: どのグループにも入れない）。
+ *   `null` は共有扱い（`sync-row-entities.service.ts` の `isShared` と同じ読み方）
+ */
+export function shouldAssignDefaultGroup(input: {
+  hasMemberships: boolean;
+  rowExists: boolean;
+  shared: number | null;
+}): boolean {
+  if (input.hasMemberships) return false;
+  if (!input.rowExists) return false;
+  return input.shared !== 0;
+}
+
+/** push のファンアウト計画。indices は入力 `entities` の添字 */
+export interface PushFanoutPlan {
+  /** グループごとの送信対象。**主グループが先頭**、以降は groupId 昇順（決定的） */
+  groups: { groupId: string; indices: number[] }[];
+  /**
+   * どのグループにも属さない実体（G9: 自分だけ）。**送らずに送信待ちから消してよい。**
+   * 移行（§12-4）で既存実体には必ず所属が付くので、所属ゼロは「送らない」と確定できる
+   */
+  selfOnlyIndices: number[];
+}
+
+/**
+ * 送信 1 バッチをグループ別に分配する（G3: 所属グループぶんファンアウト）。
+ *
+ * `memberships` の鍵は `entityGroupMapKey(entityGroupKeyOf(...))`。呼び出し側
+ * （entity-groups.service）が **参加中のグループとの交わりを取った後**の所属を渡す
+ * （他人のバックアップ復元などで残った、参加していないグループへは送らない —
+ * 送ると 401 で同期全体が止まる）。
+ */
+export function planPushFanout(
+  entities: readonly EntityGroupKey[],
+  memberships: ReadonlyMap<string, readonly string[]>,
+  primaryGroupId: string,
+): PushFanoutPlan {
+  const byGroup = new Map<string, number[]>();
+  const selfOnlyIndices: number[] = [];
+  entities.forEach((entity, index) => {
+    const key = entityGroupMapKey(entityGroupKeyOf(entity.entityType, entity.entityId));
+    const groups = memberships.get(key) ?? [];
+    if (groups.length === 0) {
+      selfOnlyIndices.push(index);
+      return;
+    }
+    for (const groupId of new Set(groups)) {
+      const list = byGroup.get(groupId);
+      if (list) list.push(index);
+      else byGroup.set(groupId, [index]);
+    }
+  });
+  const order = [...byGroup.keys()].sort((a, b) => {
+    if (a === primaryGroupId) return -1;
+    if (b === primaryGroupId) return 1;
+    return a < b ? -1 : 1;
+  });
+  return {
+    groups: order.map((groupId) => ({ groupId, indices: byGroup.get(groupId) ?? [] })),
+    selfOnlyIndices,
+  };
+}
+
+/** 同期カーソルを保存する app_meta の鍵（従来からの単一グループ用） */
+export const SYNC_CURSOR_META_KEY = 'sync_cursor';
+
+/**
+ * グループごとのカーソル保存鍵。
+ *
+ * **主グループは従来の鍵のまま**にする — これが §12-4「既存キーは主グループの
+ * カーソルとして読み替える」の実体で、データ移行そのものが要らない
+ * （1.13.0 以前が書いた `sync_cursor` を 1.13.1 がそのまま主グループとして読む）。
+ */
+export function syncCursorStorageKey(groupId: string, primaryGroupId: string): string {
+  return groupId === primaryGroupId ? SYNC_CURSOR_META_KEY : `${SYNC_CURSOR_META_KEY}:${groupId}`;
+}
+
+/**
+ * 「現在のグループ」（G2 の既定所属先）の解決。
+ * 未設定・参加していないグループを指している（他人のバックアップ復元・離脱後の残骸）
+ * ときは**主グループへ倒す** — 現行の単一グループ挙動そのもの。
+ */
+export function resolveCurrentGroupId(
+  stored: string | null,
+  primaryGroupId: string,
+  knownGroupIds: readonly string[],
+): string {
+  return stored && knownGroupIds.includes(stored) ? stored : primaryGroupId;
 }

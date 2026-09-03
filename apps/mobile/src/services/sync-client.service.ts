@@ -141,6 +141,11 @@ interface RequestOptions {
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   auth?: SyncCredentials;
+  /**
+   * 操作対象グループ（§12-2 の `x-sync-group` ヘッダ）。**未指定なら現行と同一リクエスト**
+   * （ヘッダを付けない ＝ サーバーは主グループへ解決する。1.13.0 以前と互換）。
+   */
+  groupId?: string;
 }
 
 /**
@@ -171,6 +176,7 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
         ...(options.auth
           ? { Authorization: `Bearer ${options.auth.deviceId}.${options.auth.deviceSecret}` }
           : {}),
+        ...(options.groupId ? { 'x-sync-group': options.groupId } : {}),
       },
       ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
       signal: controller.signal,
@@ -205,16 +211,28 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
 /**
  * 認証つき呼び出し。401 ならローカルの鍵を破棄して AUTH_INVALID を投げる
  * （グループが消えた・この端末が外された ＝ 持っていても意味の無い鍵を残さない）。
+ *
+ * **`groupId` を指定した呼び出し（`x-sync-group` つき・§12-2）では鍵を破棄しない。**
+ * その 401 は「そのグループの membership が無い」でしかなく、端末の鍵はまだ他の
+ * グループで有効かもしれない。破棄すると、外されたのが 1 グループだけなのに
+ * 端末が全グループから抜けてしまう。
  */
 async function authedRequest<T>(
   path: string,
-  options: Omit<RequestOptions, 'auth'>,
+  options: Omit<RequestOptions, 'auth' | 'groupId'>,
   credentials: SyncCredentials,
+  groupId?: string,
 ): Promise<T> {
   try {
-    return await request<T>(path, { ...options, auth: credentials });
+    return await request<T>(path, {
+      ...options,
+      auth: credentials,
+      ...(groupId ? { groupId } : {}),
+    });
   } catch (err) {
-    if (err instanceof SyncError && err.code === 'AUTH_INVALID') await clearCredentials();
+    if (err instanceof SyncError && err.code === 'AUTH_INVALID' && !groupId) {
+      await clearCredentials();
+    }
     throw err;
   }
 }
@@ -370,23 +388,71 @@ export interface SyncPushResult {
   latestSeq: number;
 }
 
-/** 変更をまとめて送る。呼び出し側はグループ参加済みであることを確かめてから呼ぶ */
-export async function pushSyncChanges(changes: readonly SyncPushChange[]): Promise<SyncPushResult> {
+/**
+ * 変更をまとめて送る。呼び出し側はグループ参加済みであることを確かめてから呼ぶ。
+ * `groupId` を渡すと `x-sync-group` でそのグループへ送る（§12-2）。
+ * **省略すれば現行と同一リクエスト**（主グループ扱い — 互換の要）。
+ */
+export async function pushSyncChanges(
+  changes: readonly SyncPushChange[],
+  groupId?: string,
+): Promise<SyncPushResult> {
   const credentials = await getStoredCredentials();
   if (!credentials) throw new SyncError('AUTH_INVALID');
   if (changes.length === 0) return { applied: 0, latestSeq: 0 };
-  return authedRequest<SyncPushResult>('/push', { method: 'POST', body: { changes } }, credentials);
+  return authedRequest<SyncPushResult>(
+    '/push',
+    { method: 'POST', body: { changes } },
+    credentials,
+    groupId,
+  );
 }
 
-/** since より後の変更を取る。`hasMore` が立っていれば呼び出し側が繰り返す */
-export async function pullSyncChanges(since: number, limit = 500): Promise<SyncPullResult> {
+/**
+ * since より後の変更を取る。`hasMore` が立っていれば呼び出し側が繰り返す。
+ * `groupId` の意味は push と同じ（省略＝主グループ・現行と同一リクエスト）。
+ */
+export async function pullSyncChanges(
+  since: number,
+  limit = 500,
+  groupId?: string,
+): Promise<SyncPullResult> {
   const credentials = await getStoredCredentials();
   if (!credentials) throw new SyncError('AUTH_INVALID');
   return authedRequest<SyncPullResult>(
     `/pull?since=${encodeURIComponent(String(since))}&limit=${encodeURIComponent(String(limit))}`,
     { method: 'GET' },
     credentials,
+    groupId,
   );
+}
+
+// ── 多グループ（G-2a — 設計 §12-2） ─────────────────────────────────────────
+
+/** 参加グループ 1 件の要約（`GET /sync/me/groups` の 1 行） */
+export interface SyncGroupSummary {
+  groupId: string;
+  /** グループの表示名（無名なら null）。個人名ではない */
+  name: string | null;
+  scope: 'all' | 'recipes';
+  isOwner: boolean;
+  memberCount: number;
+}
+
+/**
+ * 自分が参加しているグループの一覧（§12-2）。
+ * 多グループ未対応の古いサーバーでは 404 → SyncError('SERVER') になる。
+ * 呼び出し側は失敗を「主グループのみ」として扱うこと（同期を止める理由にしない）。
+ */
+export async function listSyncGroups(): Promise<SyncGroupSummary[]> {
+  const credentials = await getStoredCredentials();
+  if (!credentials) throw new SyncError('AUTH_INVALID');
+  const data = await authedRequest<{ groups: SyncGroupSummary[] }>(
+    '/me/groups',
+    { method: 'GET' },
+    credentials,
+  );
+  return data.groups;
 }
 
 /**

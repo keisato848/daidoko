@@ -606,3 +606,29 @@ export const recipeBookItems = sqliteTable(
     ),
   }),
 );
+
+// ─── EntityGroups（多グループの所属, v18 — docs/クラウド同期設計.md §12-3）────
+/**
+ * 「この実体はどの同期グループに属するか」。ローカル行は 1 つのまま、
+ * **所属だけを多重化**する（1 実体・複数グループ参照 — 共有設計 §5-4 G3）。
+ *
+ * - 行が無い ＝ どのグループにも送らない（「自分だけ」— G9。`shared = 0` の写像先）
+ * - `pantry_quantity`（持ち分）は行を持たず、**親品目の所属に従う**
+ *   （`sync-payload.ts` の `entityGroupKeyOf`）
+ * - **バックアップには含めない**（`sync_queue` と同じ扱い）。所属は再構築できる —
+ *   復元時は `onLocalDataReplaced` が白紙にし、バックフィル（→主グループ）と
+ *   カーソル 0 からの pull（→受信元グループ）で付き直る。逆に他人のバックアップの
+ *   所属を持ち込むと、参加していないグループ宛ての所属が残って push が「自分だけ」に
+ *   誤読される（G-2b で所属が利用者の見える状態になったら方針を見直す）
+ */
+export const entityGroups = sqliteTable(
+  'entity_groups',
+  {
+    entityType: text('entity_type').notNull(),
+    entityId: text('entity_id').notNull(),
+    groupId: text('group_id').notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.entityType, table.entityId, table.groupId] }),
+  }),
+);
