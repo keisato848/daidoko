@@ -122,9 +122,86 @@ pnpm exec eas build:view <BUILD_ID> --json   # status FINISHED / artifacts
   `appVersionSource: local` なので app.json の `version` を上げる。
 - `ITSAppUsesNonExemptEncryption: false` は設定済み（輸出コンプライアンス質問を回避）。
 
+> **App Extension ターゲットを足した版は、非対話ビルドが通らない**（2026-09-02・1.13.0 で被弾）。
+> 症状: `Setting up credentials for target ShoppingWidget (com.daidoko.app.widget)` の直後に
+> `Distribution Certificate is not validated for non-interactive builds.` →
+> `Failed to set up credentials. Run this command again in interactive mode.` でビルドが始まらない。
+> 原因: EAS 管理のクレデンシャル（上の 2026-08-13 構築分）は**本体 `com.daidoko.app` の分しか無い**。
+> ウィジェットは別バンドル ID なので、専用のプロビジョニングプロファイルを作る必要があり、
+> その作成は Apple への対話ログインを伴うため `--non-interactive` では必ず落ちる。
+> `EXPO_ASC_API_KEY_PATH` / `EXPO_ASC_KEY_ID` / `EXPO_ASC_ISSUER_ID` を渡しても**変わらない**
+> （ASC API キーは submit 用で、Developer Portal のプロファイル作成には効かない）。
+> **先に Bundle ID が Apple Developer Portal に登録されているか確かめる。** 1.13.0 では
+> `com.daidoko.app.widget` が**未登録**で、対話メニューを最後まで進めてもプロファイルを作れず
+> 同じエラーに戻った（登録してから対話をやり直す必要がある）。EAS のエラー文には
+> 「App ID が無い」とは出ないので、ここを疑えないと同じ対話を何度も繰り返すことになる。
+> 確認は App Store Connect API で非対話にできる（`C:\secure\AuthKey_8C387NYC2T.p8`・
+> `kid=8C387NYC2T`・`iss=5390b406-…` で ES256 の JWT を作り
+> `GET https://api.appstoreconnect.apple.com/v1/bundleIds?limit=200`）。
+> 登録も同じキーで `POST /v1/bundleIds`（`identifier` / `name` / `platform: "IOS"`）でできる
+> ＝**Portal の画面を開かずに登録まで通せる**。2026-09-02 はこれで登録した（id `HX44G883F7`）。
+>
+> 対処: Bundle ID を登録したうえで、**人間が対話ターミナルで一度だけ**（エージェントはメニューを操作できない）:
+>
+> ```
+> cd apps/mobile && pnpm exec eas credentials -p ios
+> ```
+>
+> `production` → ターゲット選択で **新しい extension の方**（例 `ShoppingWidget
+(com.daidoko.app.widget)`）→ `Build Credentials` → `All: Set up all the required
+credentials to build your project` → Apple ID でログイン（2FA）→ 配布証明書は
+> **既存を再利用**・プロビジョニングプロファイルだけ新規作成 → `Go back` → `Exit`。
+> 以後は非対話で通る。
+>
+> **どちらのターゲットに居るかはプロファイル名で見分ける。** `Would you like to reuse the
+original profile?` で出る名前が `[expo] com.daidoko.app AppStore …`（`.widget` が付かない）なら
+> **本体ターゲット**に居る。本体は既に正常なので **Yes（再利用）**を選び、`Go back` して
+> ウィジェットのターゲットを選び直す。ここで本体のプロファイルを作り直すと、動いている
+> 配布設定を壊しかねない。ウィジェット側はプロファイルが存在しないので新規作成になる。
+> **配布証明書は必ず「再利用」を選ぶ。** `Reuse this distribution certificate?` で出る
+> `5HJ3PY728Y` は `📲 Used by: @keisato848/daidoko,@keisato848/saien-techo` ＝**2 アプリ共用**。
+> Apple は配布証明書の本数に上限があり、新規作成すると枠を食ううえ、さいえん手帳側の
+> ビルドにも影響しうる。新規作成が要るのは**プロファイルだけ**。
+>
+> **App Group は EAS が自動で面倒を見る。** ウィジェットのターゲットを通すと
+> `Synced capabilities: Enabled: App Groups` / `Linked: group.com.daidoko.app` が出て、
+> 本体とウィジェットの App Group が Apple 側で紐づく（手で Portal を触る必要はない）。
+>
+> **新しい extension ターゲットを足す PR を見たら、リリース前にこの一手が要ると思うこと。**
+
 ## 4. TestFlight → 提出（外向きアクション — ユーザー承認を確認）
 
+**審査提出まで全部 Windows の API で通る**（2026-09-03 の 1.13.0 で実証。ASC の画面は不要）:
+
+```bash
+node scripts/release/create-appstore-version.mjs --version <x.y.z> [--rename]  # 器（編集中があれば付け替え）
+node scripts/release/update-appstore-listing.mjs --lang ja --version <x.y.z>   # 掲載文＋whatsNew
+node scripts/release/update-appstore-listing.mjs --lang en --version <x.y.z>
+node scripts/release/submit-appstore-version.mjs --version <x.y.z> --build-number <NNNNN> [--dry-run]
+```
+
+最後のスクリプトがビルド紐づけ → reviewSubmission 作成 → submitted:true まで行う。
+
+**審査の状態確認（「却下された？」に API で即答する）** — 見る場所は 2 つ:
+
+- `listVersions`（`lib/asc-api.mjs`）で `appStoreState`。審査待ち = `WAITING_FOR_REVIEW`、
+  却下は `REJECTED` / `METADATA_REJECTED` / `DEVELOPER_REJECTED`
+- `GET /v1/reviewSubmissions?filter[app]=<id>&limit=5` と `GET /v1/reviewSubmissions/<id>/items`。
+  過去分も並ぶので履歴ごと分かる（APPROVED / REMOVED など）。
+  却下理由の本文（Resolution Center のメッセージ）だけは API に無い — ASC の画面かメールで読む
+
+> **新しいロケールを足した直後の提出は `STATE_ERROR.ENTITY_STATE_INVALID` で落ちる**
+> （2026-09-03・en-US 追加直後に 2 連発）。`update-appstore-listing.mjs` が新規作成する
+> ロケールには **`privacyPolicyUrl`（appInfoLocalizations 側）と `supportUrl`
+> （appStoreVersionLocalizations 側）が入っていない**が、この 2 つは提出の必須属性。
+> エラー本文の `associatedErrors` に欠けた属性名がそのまま出るので、ja から値を PATCH で
+> 写して再実行すれば通る。掲載スクリプト側の恒久修正は今後の宿題（このときは手で埋めた）。
+
 1. `pnpm exec eas submit -p ios --profile production --latest`（または App Store Connect にアップロード）。
+   **アップロードが届いたかの裏どりは ASC API が確実**（eas-cli 16.x に `submit:list` は無く、
+   `build:view --json` にも submissions フィールドが無い — 2026-09-03 実測）。
+   `GET /v1/builds?filter[app]=6800964382&sort=-uploadedDate`（JWT は §3 の要領）で
+   該当 build number が `processingState: VALID` で並べば成功。
 2. **TestFlight** で実機インストールし、写真レシピ・ローカル機能を最終確認。
 3. App Store Connect でメタデータを設定:
    - **App Privacy（栄養ラベル）**: AI 機能利用時に写真・食材名をサーバー送信する旨を申告（Play のデータセーフティ相当）。
