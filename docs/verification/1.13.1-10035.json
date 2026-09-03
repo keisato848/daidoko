@@ -1,0 +1,19 @@
+{
+  "version": "1.13.1",
+  "versionCode": 10035,
+  "verifiedAt": "2026-09-03T03:21:08.180Z",
+  "device": {
+    "serialHash": "a21c401427d6",
+    "model": "SH-RM19s",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10035,
+  "checked": [
+    "FCM設定後の初回起動で FirebaseApp 初期化エラーが出ない (logcat)",
+    "共有グループ作成→トークン登録→別端末役スクリプトの push で通知『家族の共有データが更新されました』を実機受信 (dumpsys notification で確認)",
+    "1.13.1/10035 release ビルドの -r 上書きインストールで既存データ・通知許可が維持される"
+  ],
+  "screenshot": "screenshots/1.13.1-10035-2026-09-03T03-21-08-180Z.png",
+  "headCommit": "b38150aee85a3d995a677fa7d9ab8649efd316f4"
+}

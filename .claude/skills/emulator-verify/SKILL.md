@@ -54,6 +54,12 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 ログの中身を見るまで成功と思い込まないこと。判定するなら
 `cmd > log 2>&1 || echo BUILD_FAILED` のように**失敗を本文へ出す**。
 
+**リダイレクト先のログが 0 バイトのままでも、ビルドが固まっているとは限らない。**
+`build-android.mjs > log 2>&1` の形で流すと、スクリプトが出力をバッファするため
+gradle が数分走っていてもログは空のまま（2026-09-03 に「ハングか？」と誤読しかけた）。
+生死は ログではなく `Get-CimInstance Win32_Process` で `gradlew`/`build-android` の
+プロセスが居るかで判定する。
+
 **インストールできて起動もするのに画面が真っ黒なら、APK に JS バンドルが入っていない。**
 `build-android.mjs` は `EXPO_PUBLIC_*` が変わると JS バンドルの出力を消して作り直させるが、
 このとき `intermediates/assets` まで消すため **`mergeReleaseAssets` の差分状態と食い違う**。
