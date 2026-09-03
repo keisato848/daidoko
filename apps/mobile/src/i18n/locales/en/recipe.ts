@@ -97,11 +97,11 @@ const recipe: typeof ja = {
     webShare: {
       attestTitle: 'Is this your own recipe?',
       attestBody:
-        'Web sharing is only for content you created yourself. Recipes copied from other sites or books cannot be shared.\n\nAnyone with the link can view this recipe (no app needed). You can stop sharing at any time.',
+        'Sharing by link is only for content you created yourself. Recipes copied from other sites or books cannot be shared.\n\nAnyone with the link can view this recipe (no app needed). You can stop sharing at any time.',
       attestOk: 'Share',
-      failedTitle: 'Web share',
+      failedTitle: 'Send a link',
       publishFailedBody: 'Could not create the share page. Check your connection and try again.',
-      stopTitle: 'Stop web sharing',
+      stopTitle: 'Stop sharing the link',
       stopConfirm:
         'This stops sharing. People with the link will no longer be able to see it. Continue?',
       stopAction: 'Stop sharing',
