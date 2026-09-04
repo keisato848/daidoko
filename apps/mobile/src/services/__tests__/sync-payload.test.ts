@@ -18,9 +18,11 @@ import {
   hasNaturalKey,
   incomingChangeWins,
   isSyncEntityType,
+  isTypeAllowedForScope,
   parseSyncPayload,
   planPushFanout,
   resolveCurrentGroupId,
+  resolveDefaultGroupForType,
   serializeSyncPayload,
   shouldAssignDefaultGroup,
   syncCursorStorageKey,
@@ -562,5 +564,136 @@ describe('多グループ: カーソル鍵と現在グループ（§12-4）', ()
     expect(resolveCurrentGroupId(null, 'g-main', ['g-main'])).toBe('g-main');
     expect(resolveCurrentGroupId('g-gone', 'g-main', ['g-main'])).toBe('g-main');
     expect(resolveCurrentGroupId('g-sub', 'g-main', ['g-main', 'g-sub'])).toBe('g-sub');
+  });
+});
+
+/**
+ * scope（グループの範囲 — §12-1）。守りたいこと:
+ * - RECIPES_SCOPE_TYPES はサーバー sync-store.ts と一致（recipe / recipe_book のみ）
+ * - 既定所属（G2）は scope が許すグループへ倒れ、どこも許さなければ null（=自分だけ）
+ * - ファンアウトは scope が許さない種別をそのグループから除外する（400 の一括拒否で
+ *   バッチが詰まらない）— scope 不明のグループは従来どおり送る
+ * - 単一グループ（scope='all'）の挙動は 1 ビットも変わらない
+ */
+describe('多グループ: scope の門番（クライアント側 — isTypeAllowedForScope）', () => {
+  it("scope='all' は全種別を許す", () => {
+    for (const type of [
+      SYNC_ENTITY_RECIPE,
+      SYNC_ENTITY_RECIPE_BOOK,
+      SYNC_ENTITY_SHOPPING_ITEM,
+      SYNC_ENTITY_PANTRY_ITEM,
+      SYNC_ENTITY_NAME_ALIAS,
+      'pantry_quantity',
+    ]) {
+      expect(isTypeAllowedForScope('all', type)).toBe(true);
+    }
+  });
+
+  it("scope='recipes' はレシピ・帖だけを許す", () => {
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_RECIPE)).toBe(true);
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_RECIPE_BOOK)).toBe(true);
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_SHOPPING_ITEM)).toBe(false);
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_PANTRY_ITEM)).toBe(false);
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_NAME_ALIAS)).toBe(false);
+  });
+
+  it('在庫数量の持ち分は親品目（pantry_item）として判定される', () => {
+    expect(isTypeAllowedForScope('recipes', 'pantry_quantity')).toBe(false);
+  });
+});
+
+describe('多グループ: scope 対応の既定所属（resolveDefaultGroupForType）', () => {
+  const groups = [
+    { groupId: 'g-main', scope: 'all' as const },
+    { groupId: 'g-recipes', scope: 'recipes' as const },
+  ];
+
+  it('現在のグループが許す種別はそのまま現在のグループ', () => {
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_RECIPE, 'g-recipes', groups)).toBe('g-recipes');
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_SHOPPING_ITEM, 'g-main', groups)).toBe('g-main');
+  });
+
+  it('現在のグループがレシピ限定のとき、買い物・在庫は許すグループへ倒す', () => {
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_SHOPPING_ITEM, 'g-recipes', groups)).toBe(
+      'g-main',
+    );
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_PANTRY_ITEM, 'g-recipes', groups)).toBe('g-main');
+    expect(resolveDefaultGroupForType('pantry_quantity', 'g-recipes', groups)).toBe('g-main');
+  });
+
+  it('どのグループも許さなければ null（=自分だけ・G9 と同義）', () => {
+    const recipesOnly = [{ groupId: 'g-recipes', scope: 'recipes' as const }];
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_SHOPPING_ITEM, 'g-recipes', recipesOnly)).toBe(
+      null,
+    );
+  });
+
+  it('控えが空（scope 不明）なら従来どおり現在のグループ — 単一グループの挙動を変えない', () => {
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_SHOPPING_ITEM, 'g-main', [])).toBe('g-main');
+  });
+});
+
+describe('多グループ: scope によるファンアウト除外（planPushFanout — 後から絞られた防御）', () => {
+  const shoppingKey = entityGroupMapKey({
+    entityType: SYNC_ENTITY_SHOPPING_ITEM,
+    entityId: 's1',
+  });
+  const recipeKey = entityGroupMapKey({ entityType: SYNC_ENTITY_RECIPE, entityId: 'r1' });
+
+  it('scope が許さない種別はそのグループの送信から除外される（所属は消さない — 送らないだけ）', () => {
+    const plan = planPushFanout(
+      [
+        { entityType: SYNC_ENTITY_RECIPE, entityId: 'r1' },
+        { entityType: SYNC_ENTITY_SHOPPING_ITEM, entityId: 's1' },
+      ],
+      new Map([
+        [recipeKey, ['g-main', 'g-recipes']],
+        [shoppingKey, ['g-main', 'g-recipes']],
+      ]),
+      'g-main',
+      new Map([
+        ['g-main', 'all'],
+        ['g-recipes', 'recipes'],
+      ]),
+    );
+
+    expect(plan.groups).toEqual([
+      { groupId: 'g-main', indices: [0, 1] },
+      { groupId: 'g-recipes', indices: [0] }, // 買い物はレシピ限定グループへは送らない
+    ]);
+    expect(plan.selfOnlyIndices).toEqual([]);
+  });
+
+  it('所属先の scope がすべて許さない実体は送り先なし（待ち行列の扱いは selfOnly と同じ）', () => {
+    const plan = planPushFanout(
+      [{ entityType: SYNC_ENTITY_SHOPPING_ITEM, entityId: 's1' }],
+      new Map([[shoppingKey, ['g-recipes']]]),
+      'g-main',
+      new Map([['g-recipes', 'recipes']]),
+    );
+
+    expect(plan.groups).toEqual([]);
+    expect(plan.selfOnlyIndices).toEqual([0]);
+  });
+
+  it('scope 不明のグループは従来どおり送る（サーバーが最終的な門番）', () => {
+    const plan = planPushFanout(
+      [{ entityType: SYNC_ENTITY_SHOPPING_ITEM, entityId: 's1' }],
+      new Map([[shoppingKey, ['g-unknown']]]),
+      'g-main',
+      new Map(),
+    );
+
+    expect(plan.groups).toEqual([{ groupId: 'g-unknown', indices: [0] }]);
+  });
+
+  it('groupScopes を渡さない従来の呼び出しは挙動不変', () => {
+    const plan = planPushFanout(
+      [{ entityType: SYNC_ENTITY_SHOPPING_ITEM, entityId: 's1' }],
+      new Map([[shoppingKey, ['g-main']]]),
+      'g-main',
+    );
+
+    expect(plan.groups).toEqual([{ groupId: 'g-main', indices: [0] }]);
   });
 });

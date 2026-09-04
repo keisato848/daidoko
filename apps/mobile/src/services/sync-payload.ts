@@ -610,6 +610,60 @@ export function shouldAssignDefaultGroup(input: {
   return input.shared !== 0;
 }
 
+// ── グループの範囲（scope — §12-1） ─────────────────────────────────────────
+
+/** グループの範囲。サーバーの sync_groups.scope と同じ語彙 */
+export type SyncGroupScope = 'all' | 'recipes';
+
+/**
+ * `scope = 'recipes'` のグループで同期を許す entity_type。
+ *
+ * **サーバー `apps/server/src/lib/sync-store.ts` の `RECIPES_SCOPE_TYPES` と一致必須**
+ * （サーバーが門番で、scope 外の push は 400・pull には現れない — §12-1）。
+ * ここでずれると、クライアントが「送ってよい」と判断した種別がサーバーで一括拒否され、
+ * **そのバッチ全体が送れず同期が詰まる**。共有パッケージへ寄せるのは今後の課題
+ * （packages/shared とサーバーは import 構成（ESM/.js 拡張子）が異なり、いま寄せるには
+ * ビルド設定ごと触ることになるため、コメントでの相互参照に留める）。
+ */
+export const RECIPES_SCOPE_TYPES: readonly string[] = [SYNC_ENTITY_RECIPE, SYNC_ENTITY_RECIPE_BOOK];
+
+/**
+ * この種別をその scope のグループへ流してよいか。
+ * 在庫数量の持ち分（pantry_quantity）は親品目（pantry_item）として判定する —
+ * `entityGroupKeyOf` と同じ写像（品目が流れない scope へ持ち分だけ流さない）。
+ */
+export function isTypeAllowedForScope(scope: SyncGroupScope, entityType: string): boolean {
+  if (scope === 'all') return true;
+  const effectiveType =
+    entityType === SYNC_ENTITY_PANTRY_QUANTITY ? SYNC_ENTITY_PANTRY_ITEM : entityType;
+  return RECIPES_SCOPE_TYPES.includes(effectiveType);
+}
+
+/**
+ * 既定所属（G2「いま見ているグループ」）の **scope 対応版**の解決。
+ *
+ * 「現在のグループ」がレシピ限定（scope='recipes'）のとき、買い物・在庫の新規品目を
+ * そのままそのグループへ所属させると、push がサーバーの門番（400）に当たって
+ * **同期が詰まる**。この種別を許さないグループには既定所属を付けず、
+ * 参加グループの先頭（＝主グループ側）から「許すグループ」へ倒す。
+ * どのグループも許さなければ null ＝ 所属を付けない（「自分だけ」— G9 と同義）。
+ *
+ * 単一グループ（scope='all' のみ — 現行の全利用者）では常に currentGroupId を返す。
+ * 控えが空（読めていない）ときも currentGroupId — scope 不明を理由に既定所属を
+ * 止めると、単一グループの現行挙動が変わってしまう。
+ */
+export function resolveDefaultGroupForType(
+  entityType: string,
+  currentGroupId: string,
+  knownGroups: readonly { groupId: string; scope: SyncGroupScope }[],
+): string | null {
+  if (knownGroups.length === 0) return currentGroupId;
+  const current = knownGroups.find((group) => group.groupId === currentGroupId);
+  if (current && isTypeAllowedForScope(current.scope, entityType)) return current.groupId;
+  const fallback = knownGroups.find((group) => isTypeAllowedForScope(group.scope, entityType));
+  return fallback?.groupId ?? null;
+}
+
 /** push のファンアウト計画。indices は入力 `entities` の添字 */
 export interface PushFanoutPlan {
   /** グループごとの送信対象。**主グループが先頭**、以降は groupId 昇順（決定的） */
@@ -628,18 +682,30 @@ export interface PushFanoutPlan {
  * （entity-groups.service）が **参加中のグループとの交わりを取った後**の所属を渡す
  * （他人のバックアップ復元などで残った、参加していないグループへは送らない —
  * 送ると 401 で同期全体が止まる）。
+ *
+ * `groupScopes`（任意）: グループの scope が分かっているとき、**scope が許さない種別は
+ * そのグループの送信から除外する**。所属が付いた後にサーバー側で scope が絞られた
+ * （PATCH /group）場合でも、400 の一括拒否でバッチ全体が詰まらないための防御。
+ * 除外しても所属（entity_groups）は消さない — 送らないだけ。scope 不明のグループは
+ * 従来どおり送る（サーバーが最終的な門番）。
  */
 export function planPushFanout(
   entities: readonly EntityGroupKey[],
   memberships: ReadonlyMap<string, readonly string[]>,
   primaryGroupId: string,
+  groupScopes?: ReadonlyMap<string, SyncGroupScope>,
 ): PushFanoutPlan {
   const byGroup = new Map<string, number[]>();
   const selfOnlyIndices: number[] = [];
   entities.forEach((entity, index) => {
     const key = entityGroupMapKey(entityGroupKeyOf(entity.entityType, entity.entityId));
-    const groups = memberships.get(key) ?? [];
+    const groups = (memberships.get(key) ?? []).filter((groupId) => {
+      const scope = groupScopes?.get(groupId);
+      return scope === undefined || isTypeAllowedForScope(scope, entity.entityType);
+    });
     if (groups.length === 0) {
+      // 所属ゼロ（G9: 自分だけ）に加え、所属先の scope がすべてこの種別を許さない場合も
+      // ここに落ちる — 送り先が無い点で同じで、待ち行列の扱いも現行ルール（消す）のまま
       selfOnlyIndices.push(index);
       return;
     }

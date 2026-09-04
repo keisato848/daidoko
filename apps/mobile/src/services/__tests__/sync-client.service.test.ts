@@ -22,13 +22,16 @@ jest.mock('expo-secure-store', () => ({
 
 import {
   SyncError,
+  createAdditionalSyncGroup,
   createSyncGroup,
   deleteSyncGroup,
   fetchSyncMe,
   getStoredCredentials,
   getSyncState,
   inviteLinkUrl,
+  joinAdditionalSyncGroup,
   joinSyncGroup,
+  leaveAdditionalSyncGroup,
   leaveSyncGroup,
   listSyncGroups,
   pullSyncChanges,
@@ -227,6 +230,100 @@ describe('多グループ（G-2a — 設計 §12-2）', () => {
 
   it('未参加で一覧を求めたら AUTH_INVALID（サーバーを叩かない）', async () => {
     await expectSyncError(listSyncGroups(), 'AUTH_INVALID');
+    expect(global.fetch as jest.Mock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 既存端末の追加グループ（G-2b — §12-2）。固定したいこと:
+ * - 作成/参加は Authorization つき・**端末の鍵（secure-store）は書き換えない**
+ * - 古いサーバーが新端末を作ってしまったら（deviceSecret が返る）即離脱して
+ *   SYNC_UNAVAILABLE — 誰からも消せない幽霊端末を残さない
+ * - 追加グループからの離脱は x-sync-group つき。401（もう外されている）は成功扱い
+ */
+describe('追加グループの作成・参加・離脱（G-2b）', () => {
+  beforeEach(() => {
+    mockMemory.set('sync_credentials_v1', JSON.stringify(CREDS));
+  });
+
+  it('作成は Authorization つき POST /groups。鍵は変えない', async () => {
+    mockFetchOnce(201, {
+      ok: true,
+      data: {
+        groupId: 'g2',
+        deviceId: 'd1',
+        deviceSecret: '',
+        inviteCode: 'CODE1234',
+        inviteExpiresAt: '2026-09-05T00:00:00.000Z',
+      },
+    });
+
+    const created = await createAdditionalSyncGroup('娘と', 'recipes');
+
+    expect(created.groupId).toBe('g2');
+    expect(created.inviteCode).toBe('CODE1234');
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toContain('/sync/groups');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer d1.s1');
+    expect(JSON.parse(String(init.body))).toEqual({ name: '娘と', scope: 'recipes' });
+    expect(await getStoredCredentials()).toEqual(CREDS); // 鍵はそのまま
+  });
+
+  it('参加は開示情報（groupName/scope/memberCount）を返し、鍵は変えない', async () => {
+    mockFetchOnce(200, {
+      ok: true,
+      data: {
+        groupId: 'g2',
+        deviceId: 'd1',
+        deviceSecret: '',
+        memberCount: 2,
+        groupName: '娘と',
+        scope: 'recipes',
+      },
+    });
+
+    const joined = await joinAdditionalSyncGroup('CODE1234');
+
+    expect(joined).toMatchObject({
+      groupId: 'g2',
+      memberCount: 2,
+      groupName: '娘と',
+      scope: 'recipes',
+    });
+    expect(await getStoredCredentials()).toEqual(CREDS);
+  });
+
+  it('**古いサーバーが新端末を作ってしまったら**その鍵で即離脱し SYNC_UNAVAILABLE', async () => {
+    mockFetchOnce(200, {
+      ok: true,
+      data: { groupId: 'g9', deviceId: 'd-ghost', deviceSecret: 's-ghost', memberCount: 2 },
+    });
+    mockFetchOnce(200, { ok: true }); // 幽霊端末の DELETE /devices/me
+
+    await expectSyncError(joinAdditionalSyncGroup('CODE1234'), 'SYNC_UNAVAILABLE');
+
+    const calls = (global.fetch as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(2);
+    const [url, init] = calls[1] as [string, RequestInit];
+    expect(String(url)).toContain('/sync/devices/me');
+    expect(init.method).toBe('DELETE');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer d-ghost.s-ghost');
+    expect(await getStoredCredentials()).toEqual(CREDS); // 自分の鍵は無傷
+  });
+
+  it('追加グループからの離脱は x-sync-group つき。401 でも鍵を破棄しない', async () => {
+    mockFetchOnce(401, { ok: false, error: 'AUTH_INVALID' });
+
+    await leaveAdditionalSyncGroup('g2'); // 投げない（もう外されている＝目的は達成）
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)['x-sync-group']).toBe('g2');
+    expect(await getStoredCredentials()).toEqual(CREDS);
+  });
+
+  it('未参加からの追加作成は AUTH_INVALID（サーバーを叩かない）', async () => {
+    mockMemory.clear();
+    await expectSyncError(createAdditionalSyncGroup('x', 'all'), 'AUTH_INVALID');
     expect(global.fetch as jest.Mock).not.toHaveBeenCalled();
   });
 });

@@ -13,11 +13,17 @@
  *   `sync_entity_groups_migrated`。**完了するまで push のファンアウトは使わない**
  *   （所属が空なだけの実体を「自分だけ」と誤読して送信待ちを捨てないため）
  */
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
 import { getAppMeta, setAppMeta } from './app-meta.service';
+import {
+  parseKnownGroupSummaries,
+  sortPrimaryFirst,
+  type GroupShareCounts,
+  type KnownGroupSummary,
+} from './share-groups';
 import { listAllSyncableEntities } from './sync-entities.service';
 import { getStoredCredentials, listSyncGroups } from './sync-client.service';
 import {
@@ -32,6 +38,7 @@ import {
   entityGroupKeyOf,
   entityGroupMapKey,
   resolveCurrentGroupId,
+  resolveDefaultGroupForType,
   shouldAssignDefaultGroup,
   type EntityGroupKey,
 } from './sync-payload';
@@ -41,7 +48,14 @@ import { listSyncQueue } from './sync-queue.service';
 const ENTITY_GROUPS_MIGRATED_KEY = 'sync_entity_groups_migrated';
 /** 「現在のグループ」（G2 の既定所属先）。未設定なら主グループ */
 const CURRENT_GROUP_KEY = 'sync_current_group';
-/** 参加グループ一覧のローカル控え（JSON 配列）。正はサーバーの GET /sync/me/groups */
+/**
+ * 参加グループ一覧のローカル控え（JSON 配列）。正はサーバーの GET /sync/me/groups。
+ *
+ * G-2a では文字列 id の配列だったが、G-2b で `{groupId, name, scope, …}` の配列へ拡張
+ * （**scope を控えないと、レシピ限定グループへ買い物・在庫の既定所属を付けてしまい、
+ * push がサーバーの門番 400 で詰まる**）。読み取りは旧形式も受ける
+ * （`parseKnownGroupSummaries` — scope 不明は 'all' 扱い）。
+ */
 const KNOWN_GROUPS_KEY = 'sync_known_groups';
 
 /** バックフィルの INSERT をまとめる単位（SQLite の変数上限 999 に収まる幅） */
@@ -61,20 +75,15 @@ export async function getKnownSyncGroupIds(primaryGroupId: string): Promise<stri
   if (!isNativePlatform) return [primaryGroupId];
   try {
     const raw = await getAppMeta(KNOWN_GROUPS_KEY);
-    if (!raw) return [primaryGroupId];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [primaryGroupId];
-    const others = parsed.filter(
-      (id): id is string => typeof id === 'string' && id !== '' && id !== primaryGroupId,
-    );
-    return [primaryGroupId, ...others];
+    return parseKnownGroupSummaries(raw || null, primaryGroupId).map((group) => group.groupId);
   } catch {
     return [primaryGroupId];
   }
 }
 
-export async function setKnownSyncGroupIds(groupIds: readonly string[]): Promise<void> {
-  await setAppMeta(KNOWN_GROUPS_KEY, JSON.stringify([...new Set(groupIds)])).catch(() => undefined);
+/** 控えを丸ごと書き換える（主グループが先頭であることは呼び出し側が保証する） */
+async function setKnownSyncGroups(groups: readonly KnownGroupSummary[]): Promise<void> {
+  await setAppMeta(KNOWN_GROUPS_KEY, JSON.stringify(groups)).catch(() => undefined);
 }
 
 /** グループから外された（401）とき、控えから 1 件だけ落とす */
@@ -83,8 +92,8 @@ export async function removeKnownSyncGroup(groupId: string): Promise<void> {
   try {
     const credentials = await getStoredCredentials();
     if (!credentials) return;
-    const known = await getKnownSyncGroupIds(credentials.groupId);
-    await setKnownSyncGroupIds(known.filter((id) => id !== groupId));
+    const known = await getKnownSyncGroupSummaries();
+    await setKnownSyncGroups(known.filter((group) => group.groupId !== groupId));
   } catch {
     // 控えが古いだけ。次の pull の 401 でまた落とす機会がある
   }
@@ -93,15 +102,39 @@ export async function removeKnownSyncGroup(groupId: string): Promise<void> {
 /**
  * サーバーの membership 一覧で控えを更新する（G-2b の UI・共有の管理から呼ぶ）。
  * 古いサーバー（404）やオフラインでは何もしない — 同期を止める理由にしない。
+ *
+ * 戻り値は取得できた一覧（主グループが先頭）。**null = サーバーが多グループ未対応か
+ * オフライン**。呼び出し側の UI はこれで「2 つ目のグループを作れるサーバーか」を判断する
+ * （古いサーバーへ作成/参加を投げると、端末がもう 1 つ登録される事故になる — §12-2）。
  */
-export async function refreshKnownSyncGroups(): Promise<void> {
-  if (!isNativePlatform) return;
+export async function refreshKnownSyncGroups(): Promise<KnownGroupSummary[] | null> {
+  if (!isNativePlatform) return null;
   try {
+    const credentials = await getStoredCredentials();
+    if (!credentials) return null;
     const groups = await listSyncGroups();
-    if (groups.length > 0) await setKnownSyncGroupIds(groups.map((group) => group.groupId));
+    if (groups.length === 0) return null;
+    const ordered = sortPrimaryFirst(groups, credentials.groupId);
+    await setKnownSyncGroups(ordered);
+    return ordered;
   } catch {
     // 控えは前のまま。主グループだけでも同期は成立する
+    return null;
   }
+}
+
+/**
+ * 参加グループの控え（名前・scope・メンバー数込み）を読む。
+ * オフラインでも一覧・切替・バッジが出せるようにするための控えで、
+ * 正はサーバー（`refreshKnownSyncGroups` が更新する）。控えが無ければ
+ * 主グループのスタブ 1 件（＝現行の単一グループ表示）。未参加なら空配列。
+ */
+export async function getKnownSyncGroupSummaries(): Promise<KnownGroupSummary[]> {
+  if (!isNativePlatform) return [];
+  const credentials = await getStoredCredentials();
+  if (!credentials) return [];
+  const raw = await getAppMeta(KNOWN_GROUPS_KEY).catch(() => null);
+  return parseKnownGroupSummaries(raw || null, credentials.groupId);
 }
 
 /**
@@ -265,23 +298,143 @@ export async function resolveMembershipsForPush(
     }
   }
 
+  // 既定所属（G2）は scope を見て決める（`resolveDefaultGroupForType`）。
+  // 「現在のグループ」がレシピ限定のとき、買い物・在庫をそこへ所属させると
+  // push がサーバーの門番（400）に当たって同期が詰まる — 許すグループへ倒す
+  const knownGroups = (await getKnownSyncGroupSummaries()).filter((group) =>
+    knownGroupIds.includes(group.groupId),
+  );
   for (const [mapKey, key] of keys) {
     if (memberships.has(mapKey)) continue;
     const info = await describeEntityForGrouping(key);
-    if (
-      shouldAssignDefaultGroup({
-        hasMemberships: false,
-        rowExists: info.rowExists,
-        shared: info.shared,
-      })
-    ) {
-      await insertMemberships([key], currentGroupId);
-      memberships.set(mapKey, [currentGroupId]);
+    const targetGroupId = shouldAssignDefaultGroup({
+      hasMemberships: false,
+      rowExists: info.rowExists,
+      shared: info.shared,
+    })
+      ? resolveDefaultGroupForType(key.entityType, currentGroupId, knownGroups)
+      : null;
+    if (targetGroupId) {
+      await insertMemberships([key], targetGroupId);
+      memberships.set(mapKey, [targetGroupId]);
     } else {
       memberships.set(mapKey, []);
     }
   }
   return memberships;
+}
+
+// ── 集計と参照（G-2b: 共有の管理・状態バッジ） ─────────────────────────────
+
+/**
+ * この実体が入っているグループ id（レシピ詳細の状態バッジ用 — U4）。
+ * 失敗したら空配列（バッジが出ないだけで、画面は成立する）。
+ */
+export async function listEntityGroupIds(entityType: string, entityId: string): Promise<string[]> {
+  if (!isNativePlatform) return [];
+  try {
+    const key = entityGroupKeyOf(entityType, entityId);
+    const rows = await getDb()
+      .select({ groupId: schema.entityGroups.groupId })
+      .from(schema.entityGroups)
+      .where(
+        and(
+          eq(schema.entityGroups.entityType, key.entityType),
+          eq(schema.entityGroups.entityId, key.entityId),
+        ),
+      );
+    return rows.map((row) => row.groupId);
+  } catch {
+    return [];
+  }
+}
+
+/** 所属バックフィル（§12-4）が完了しているか（読むだけ。走らせはしない） */
+export async function isEntityGroupsBackfillDone(): Promise<boolean> {
+  if (!isNativePlatform) return false;
+  try {
+    return (await getAppMeta(ENTITY_GROUPS_MIGRATED_KEY)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * グループごとに「共有されているもの」の実数を数える（G5/U3 —
+ * 「参加中・自分だけ 0 件」の間接情報から逆読みさせない）。
+ *
+ * entity_groups の行数を素朴に数えては**いけない**。所属は消さない設計
+ * （削除は tombstone、共有をやめた品目の所属も残る — §12-3）なので、
+ * **生きている行との交わり**だけを数える:
+ * - レシピ: `status = 'active'`（削除 ＝ archived）
+ * - 買い物・在庫: `shared != 0`（「自分だけ」へ倒した品目は他端末では消えている）
+ * 失敗したら空 Map（呼び出し側は件数無しの従来表示に倒す）。
+ */
+export async function countSharedEntitiesByGroup(): Promise<Map<string, GroupShareCounts>> {
+  const result = new Map<string, GroupShareCounts>();
+  if (!isNativePlatform) return result;
+  const ensure = (groupId: string): GroupShareCounts => {
+    const existing = result.get(groupId);
+    if (existing) return existing;
+    const created: GroupShareCounts = { recipes: 0, books: 0, shopping: 0, pantry: 0 };
+    result.set(groupId, created);
+    return created;
+  };
+  try {
+    const db = getDb();
+    const countExpr = sql<number>`count(*)`;
+
+    const recipeRows = await db
+      .select({ groupId: schema.entityGroups.groupId, count: countExpr })
+      .from(schema.entityGroups)
+      .innerJoin(schema.recipes, eq(schema.entityGroups.entityId, schema.recipes.id))
+      .where(
+        and(
+          eq(schema.entityGroups.entityType, SYNC_ENTITY_RECIPE),
+          eq(schema.recipes.status, 'active'),
+        ),
+      )
+      .groupBy(schema.entityGroups.groupId);
+    for (const row of recipeRows) ensure(row.groupId).recipes = row.count;
+
+    const bookRows = await db
+      .select({ groupId: schema.entityGroups.groupId, count: countExpr })
+      .from(schema.entityGroups)
+      .innerJoin(schema.recipeBooks, eq(schema.entityGroups.entityId, schema.recipeBooks.id))
+      .where(eq(schema.entityGroups.entityType, SYNC_ENTITY_RECIPE_BOOK))
+      .groupBy(schema.entityGroups.groupId);
+    for (const row of bookRows) ensure(row.groupId).books = row.count;
+
+    const shoppingRows = await db
+      .select({ groupId: schema.entityGroups.groupId, count: countExpr })
+      .from(schema.entityGroups)
+      .innerJoin(schema.shoppingItems, eq(schema.entityGroups.entityId, schema.shoppingItems.id))
+      .where(
+        and(
+          eq(schema.entityGroups.entityType, SYNC_ENTITY_SHOPPING_ITEM),
+          or(isNull(schema.shoppingItems.shared), ne(schema.shoppingItems.shared, 0)),
+        ),
+      )
+      .groupBy(schema.entityGroups.groupId);
+    for (const row of shoppingRows) ensure(row.groupId).shopping = row.count;
+
+    const pantryRows = await db
+      .select({ groupId: schema.entityGroups.groupId, count: countExpr })
+      .from(schema.entityGroups)
+      .innerJoin(schema.pantryItems, eq(schema.entityGroups.entityId, schema.pantryItems.id))
+      .where(
+        and(
+          eq(schema.entityGroups.entityType, SYNC_ENTITY_PANTRY_ITEM),
+          or(isNull(schema.pantryItems.shared), ne(schema.pantryItems.shared, 0)),
+        ),
+      )
+      .groupBy(schema.entityGroups.groupId);
+    for (const row of pantryRows) ensure(row.groupId).pantry = row.count;
+
+    return result;
+  } catch {
+    return new Map();
+  }
 }
 
 // ── 移行（§12-4 G7: 挙動不変） ──────────────────────────────────────────────
@@ -339,4 +492,17 @@ export async function resetEntityGroupsForLeave(): Promise<void> {
   await setAppMeta(ENTITY_GROUPS_MIGRATED_KEY, '').catch(() => undefined);
   await setAppMeta(CURRENT_GROUP_KEY, '').catch(() => undefined);
   await setAppMeta(KNOWN_GROUPS_KEY, '').catch(() => undefined);
+}
+
+/**
+ * 「現在のグループ」の切替（G1/G2 — グループ一覧 UI から呼ぶ）。
+ *
+ * **順序が要件**（§12-7）: 先に控え（known groups）を最新化してから current を書く。
+ * 逆にすると、控えにまだ無いグループ id を書いた場合に `resolveCurrentGroupId` が
+ * 主グループへ黙って倒し、**切り替えたつもりの新規データが主グループへ入る**。
+ * オフライン（refresh が no-op）でも、一覧に出ている行は控え由来なので id は必ず控えにある。
+ */
+export async function switchCurrentSyncGroup(groupId: string): Promise<void> {
+  await refreshKnownSyncGroups();
+  await setCurrentSyncGroupId(groupId);
 }
