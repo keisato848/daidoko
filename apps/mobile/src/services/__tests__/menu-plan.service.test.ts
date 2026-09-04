@@ -26,10 +26,24 @@ jest.mock('../shopping-list.service', () => ({
 jest.mock('../sync-runner.service', () => ({ runSyncAndAwaitPull: jest.fn() }));
 jest.mock('../widget-snapshot.service', () => ({ refreshWidgetSnapshot: jest.fn() }));
 
-import { getMenuAutoNotifyTime, isMenuAutoEnabled } from '../app-meta.service';
-import { refreshMenuNotificationSchedule } from '../menu-plan.service';
+import {
+  getAppMeta,
+  getMenuAutoNotifyTime,
+  isMenuAutoEnabled,
+  setAppMeta,
+} from '../app-meta.service';
+import {
+  readStoredMenuPlan,
+  refreshMenuNotificationSchedule,
+  undoMenuAutoAddedItems,
+} from '../menu-plan.service';
 import { cancelAllMenuNotifications, scheduleMenuNotification } from '../notification.service';
+import { getShoppingItems, removeShoppingItem } from '../shopping-list.service';
 
+const mockGetAppMeta = getAppMeta as jest.MockedFunction<typeof getAppMeta>;
+const mockSetAppMeta = setAppMeta as jest.MockedFunction<typeof setAppMeta>;
+const mockGetShoppingItems = getShoppingItems as jest.MockedFunction<typeof getShoppingItems>;
+const mockRemoveShoppingItem = removeShoppingItem as jest.MockedFunction<typeof removeShoppingItem>;
 const mockIsMenuAutoEnabled = isMenuAutoEnabled as jest.MockedFunction<typeof isMenuAutoEnabled>;
 const mockGetMenuAutoNotifyTime = getMenuAutoNotifyTime as jest.MockedFunction<
   typeof getMenuAutoNotifyTime
@@ -94,5 +108,75 @@ describe('refreshMenuNotificationSchedule', () => {
 
     expect(mockCancelAll).toHaveBeenCalledTimes(2);
     expect(mockSchedule).toHaveBeenCalledTimes(1); // 1 回目は cancel で落ちて到達しない
+  });
+});
+
+/**
+ * `requestedDays`（§10.7 の結果フィードバック・W2 不足行用）の保存互換。
+ * 生成側（generateMenuPlan）は DB の動的 import で jest では実行できないため、
+ * DB を触らない読み口（readStoredMenuPlan）と書き直し経路（undoMenuAutoAddedItems の
+ * スプレッド保存）で「旧データに無い・壊れた値・保持される」を固定する。
+ */
+describe('readStoredMenuPlan — requestedDays の互換', () => {
+  const basePlan = {
+    version: 1,
+    generatedAt: '2026-09-05T00:00:00.000Z',
+    source: 'coverage',
+    pantrySignature: 'sig',
+    days: [],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('保存されていれば読める', async () => {
+    mockGetAppMeta.mockResolvedValue(JSON.stringify({ ...basePlan, requestedDays: 3 }));
+    const plan = await readStoredMenuPlan();
+    expect(plan?.requestedDays).toBe(3);
+  });
+
+  it('旧データ（requestedDays 無し）はプロパティ無しのまま読める（不足の表示は出ない）', async () => {
+    mockGetAppMeta.mockResolvedValue(JSON.stringify(basePlan));
+    const plan = await readStoredMenuPlan();
+    expect(plan).not.toBeNull();
+    expect(plan && 'requestedDays' in plan).toBe(false);
+  });
+
+  it.each(['3', 0, -1, 2.5, null])('壊れた値（%p）は落として読む', async (bad) => {
+    mockGetAppMeta.mockResolvedValue(JSON.stringify({ ...basePlan, requestedDays: bad }));
+    const plan = await readStoredMenuPlan();
+    expect(plan).not.toBeNull();
+    expect(plan?.requestedDays).toBeUndefined();
+  });
+});
+
+describe('undoMenuAutoAddedItems — requestedDays を保持したまま書き直す', () => {
+  it('取り消しの保存で requestedDays が落ちない', async () => {
+    mockGetAppMeta.mockResolvedValue(
+      JSON.stringify({
+        version: 1,
+        generatedAt: '2026-09-05T00:00:00.000Z',
+        source: 'coverage',
+        pantrySignature: 'sig',
+        requestedDays: 5,
+        autoAddedItemIds: ['a'],
+        days: [],
+      }),
+    );
+    mockGetShoppingItems.mockResolvedValue([{ id: 'a', checked: false }] as Awaited<
+      ReturnType<typeof getShoppingItems>
+    >);
+    mockRemoveShoppingItem.mockResolvedValue(undefined as never);
+
+    const removed = await undoMenuAutoAddedItems();
+
+    expect(removed).toBe(1);
+    const written = JSON.parse(mockSetAppMeta.mock.calls.at(-1)?.[1] as string) as {
+      requestedDays?: number;
+      autoAddedItemIds?: string[];
+    };
+    expect(written.requestedDays).toBe(5);
+    expect(written.autoAddedItemIds).toEqual([]);
   });
 });

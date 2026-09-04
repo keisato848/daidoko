@@ -52,6 +52,8 @@ const MENU_DICT = {
     // 献立がまだ無い/未定。タップで献立画面へ
     noMenu: '献立はまだありません',
     noSnapshot: 'アプリを開くと表示されます',
+    // 週間（大）の末尾に 1 行。要求日数に組めた日数が満たないとき（由紀の案）
+    shortfall: (count: number) => `残り${count}日分はレシピが足りません`,
   },
   en: {
     today: "Today's dish",
@@ -61,6 +63,10 @@ const MENU_DICT = {
     undecided: 'TBD',
     noMenu: 'No menu yet',
     noSnapshot: 'Open the app to see your menu',
+    shortfall: (count: number) =>
+      count === 1
+        ? 'Not enough recipes for 1 more day'
+        : `Not enough recipes for ${count} more days`,
   },
 } as const;
 
@@ -102,6 +108,11 @@ export interface MenuWidgetWeekContent {
   rows: MenuWidgetWeekRow[];
   /** 献立が 1 件も無いときの案内。無ければ null */
   emptyMessage: string | null;
+  /**
+   * 要求日数に組めた日数が満たないときの末尾 1 行（「残り◯日分はレシピが足りません」）。
+   * 満ちている・要求日数が分からない（旧データ）・献立自体が無いときは null。
+   */
+  shortfallMessage: string | null;
   timeLabel: string | null;
   /** ウィジェット全体（見出し等）のタップ先。各行は行ごとの uri を持つ */
   uri: string;
@@ -129,6 +140,7 @@ export function buildMenuWidgetContent(
         heading: dict.week,
         rows: [],
         emptyMessage: dict.noSnapshot,
+        shortfallMessage: null,
         timeLabel: null,
         uri: MENU_URI,
       };
@@ -159,13 +171,19 @@ export function buildMenuWidgetContent(
         uri: day.recipeId ? recipeUri(day.recipeId) : MENU_URI,
       };
     });
+    // 要求日数に満たない分の末尾 1 行。要求日数が無い（旧アプリ・旧プラン）なら出さない。
+    // 実の献立が 1 つも無いときも出さない — その場合は noMenu の案内に一本化する
+    const requested = snapshot.menu.requestedDays;
+    const hasAnyDish = rows.some((r) => !r.isUndecided);
+    const shortfall = typeof requested === 'number' ? requested - week.length : 0;
     return {
       mode: 'week',
       locale: snapshot.locale,
       heading: dict.week,
       rows,
       // 実の献立が 1 つも無い（全部未定 or 空）なら案内を出す
-      emptyMessage: rows.some((r) => !r.isUndecided) ? null : dict.noMenu,
+      emptyMessage: hasAnyDish ? null : dict.noMenu,
+      shortfallMessage: hasAnyDish && shortfall > 0 ? dict.shortfall(shortfall) : null,
       timeLabel,
       uri: MENU_URI,
     };

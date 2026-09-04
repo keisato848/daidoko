@@ -101,6 +101,15 @@ export function MenuWidget({ snapshot, size }: MenuWidgetProps) {
           />
         ))}
 
+        {/* 要求日数に満たないとき末尾に 1 行（省略可の requestedDays が無ければ出ない） */}
+        {content.shortfallMessage ? (
+          <TextWidget
+            text={content.shortfallMessage}
+            style={{ color: COLORS.undecided, fontSize: 11, marginTop: 4 }}
+            maxLines={1}
+          />
+        ) : null}
+
         {timeLabel}
       </FlexWidget>
     );

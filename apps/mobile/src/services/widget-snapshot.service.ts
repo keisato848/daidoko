@@ -63,6 +63,8 @@ async function collect(): Promise<WidgetSnapshot | null> {
     // 自動モード（§10.11）で組まれたプランだけが anchorDate を持つ。
     // 手動プランは null のまま = 「次の一品」（ホームカードと同じ規約・§2）
     anchorDate: menu?.plan.anchorDate ?? null,
+    // 要求日数（不足行用・§2）。旧プランには保存されていない → null（不足行は出ない）
+    requestedDays: menu?.plan.requestedDays ?? null,
     locale: getLocale(),
     now: new Date(),
   });

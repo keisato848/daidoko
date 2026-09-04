@@ -162,6 +162,53 @@ describe('buildMenuWidgetContent — 週間一覧（大）', () => {
   });
 });
 
+describe('buildMenuWidgetContent — 不足行（要求日数に満たない・大）', () => {
+  const oneDay = [{ title: '肉じゃが', doneAt: null, recipeId: 'r1', day: 1 }];
+
+  it('組めた日数が要求に満たないとき末尾 1 行を出す', () => {
+    const snap = snapshot({ menuDays: oneDay, requestedDays: 3 });
+    const content = asWeek(buildMenuWidgetContent(snap, 'large'));
+    expect(content.shortfallMessage).toBe('残り2日分はレシピが足りません');
+  });
+
+  it('要求どおり組めていれば出さない', () => {
+    const snap = snapshot({ menuDays: oneDay, requestedDays: 1 });
+    expect(asWeek(buildMenuWidgetContent(snap, 'large')).shortfallMessage).toBeNull();
+  });
+
+  it('requestedDays が無い（旧アプリ・旧プラン）なら出さない', () => {
+    const snap = snapshot({ menuDays: oneDay });
+    expect(asWeek(buildMenuWidgetContent(snap, 'large')).shortfallMessage).toBeNull();
+  });
+
+  it('実の献立が 1 つも無いときは出さない（noMenu の案内に一本化）', () => {
+    const snap = snapshot({
+      menuDays: [{ title: '消えた', doneAt: null, missing: true, recipeId: 'r9', day: 1 }],
+      requestedDays: 3,
+    });
+    const content = asWeek(buildMenuWidgetContent(snap, 'large'));
+    expect(content.shortfallMessage).toBeNull();
+    expect(content.emptyMessage).toBe('献立はまだありません');
+  });
+
+  it('en は単複を分ける', () => {
+    const one = snapshot({ locale: 'en', menuDays: oneDay, requestedDays: 2 });
+    expect(asWeek(buildMenuWidgetContent(one, 'large')).shortfallMessage).toBe(
+      'Not enough recipes for 1 more day',
+    );
+    const two = snapshot({ locale: 'en', menuDays: oneDay, requestedDays: 3 });
+    expect(asWeek(buildMenuWidgetContent(two, 'large')).shortfallMessage).toBe(
+      'Not enough recipes for 2 more days',
+    );
+  });
+
+  it('小/中（今日の一品）には出さない（不足行は週間だけ）', () => {
+    const snap = snapshot({ menuDays: oneDay, requestedDays: 3 });
+    const content = asToday(buildMenuWidgetContent(snap, 'medium'));
+    expect('shortfallMessage' in content).toBe(false);
+  });
+});
+
 describe('buildMenuWidgetContent — en ロケール', () => {
   it('今日の一品を英語の文言で組む', () => {
     const snap = snapshot({
