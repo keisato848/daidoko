@@ -32,7 +32,10 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 // v15: 買い物・在庫の同期（LWW の基準となる updated_at と、個人/家族の shared フラグ）
 // v17: AI が中身を推定したレシピの印（#266）。レシピ単位・一度立てたら消さない
 // v18: 実体のグループ所属 entity_groups（多グループ G-2a — docs/クラウド同期設計.md §12-3）
-export const CURRENT_SCHEMA_VERSION = 18;
+// v19: 献立のテーブル化 menu_plans / menu_plan_days（時間帯ごとに 1 プラン —
+//      docs/買い物リスト・在庫設計.md §10.6。旧 app_meta 'menu_plan' JSON は
+//      menu-plan.service.ts が読み側でレイジーに取り込む）
+export const CURRENT_SCHEMA_VERSION = 19;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -387,6 +390,33 @@ const CREATE_TABLES_SQL = `
     entity_id TEXT NOT NULL,
     group_id TEXT NOT NULL,
     PRIMARY KEY (entity_type, entity_id, group_id)
+  );
+
+  -- v19: menu plans as tables, one plan per meal time (breakfast/lunch/dinner).
+  -- Design: shopping/pantry design doc section 10.6. Legacy app_meta 'menu_plan'
+  -- JSON is imported lazily by menu-plan.service.ts (also covers old-backup restores).
+  CREATE TABLE IF NOT EXISTS menu_plans (
+    id TEXT PRIMARY KEY,
+    meal_time TEXT NOT NULL UNIQUE DEFAULT 'dinner',
+    generated_at TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'coverage',
+    pantry_signature TEXT NOT NULL,
+    anchor_date TEXT,
+    requested_days INTEGER,
+    ai_note TEXT,
+    auto_added_item_ids TEXT
+  );
+
+  -- recipe_id is a weak reference (no REFERENCES on purpose): deleting a recipe must
+  -- neither cascade-delete menu days nor be blocked by them (title copy shows "gone").
+  CREATE TABLE IF NOT EXISTS menu_plan_days (
+    plan_id TEXT NOT NULL REFERENCES menu_plans(id),
+    day INTEGER NOT NULL,
+    recipe_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    done_at TEXT,
+    PRIMARY KEY (plan_id, day)
   );
 `;
 

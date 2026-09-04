@@ -263,6 +263,30 @@ export const BACKUP_TABLES = [
     columns: ['book_id', 'recipe_id', 'position'],
     optional: true,
   },
+  // ─── 献立（v19・時間帯ごとに 1 プラン — 設計 §10.6）─────────────────────────
+  // optional: 旧ファイルにはテーブルが無い（当時の献立は app_meta の menu_plan JSON で、
+  // それは app_meta ごと復元される → menu-plan.service のレイジー移行が拾う）。
+  // 親（menu_plans）→ 子（menu_plan_days）の順に置く — 復元の INSERT はこの並び順
+  {
+    name: 'menu_plans',
+    columns: [
+      'id',
+      'meal_time',
+      'generated_at',
+      'source',
+      'pantry_signature',
+      'anchor_date',
+      'requested_days',
+      'ai_note',
+      'auto_added_item_ids',
+    ],
+    optional: true,
+  },
+  {
+    name: 'menu_plan_days',
+    columns: ['plan_id', 'day', 'recipe_id', 'title', 'reason', 'done_at'],
+    optional: true,
+  },
 ] as const;
 
 type BackupTableName = (typeof BACKUP_TABLES)[number]['name'];
@@ -416,6 +440,8 @@ function createEmptyBackupTables(): BackupTables {
     name_aliases: [],
     recipe_books: [],
     recipe_book_items: [],
+    menu_plans: [],
+    menu_plan_days: [],
   };
 }
 

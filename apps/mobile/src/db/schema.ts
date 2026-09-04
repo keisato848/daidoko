@@ -607,6 +607,64 @@ export const recipeBookItems = sqliteTable(
   }),
 );
 
+// ─── MenuPlan（献立, v19 — docs/買い物リスト・在庫設計.md §10.6）────────────
+/**
+ * 献立プラン（v19）。**時間帯（朝/昼/夕）ごとに 1 本**で、`meal_time` が UNIQUE。
+ *
+ * v18 までは `app_meta` の `menu_plan` キーに JSON 1 本だった（§10.6 旧設計）。
+ * 時間帯の共存（夕を保ったまま休日昼を組む）と、次版の 1 日複数品（主菜＋副菜の
+ * 行分割）はどちらも「1 キー 1 JSON」では成立しないため、テーブルへ移した
+ * （オーナー決定・2026-09-05）。旧 JSON は**読み側でレイジーに取り込む**
+ * （`menu-plan.service.ts` — 旧バックアップの復元後も同じ経路で移行される）。
+ *
+ * 献立は**ローカル専用**（同期対象外）。バックアップには入れる（`backup.service.ts`）。
+ */
+export const menuPlans = sqliteTable('menu_plans', {
+  id: text('id').primaryKey(),
+  /** 'breakfast' | 'lunch' | 'dinner'。UNIQUE — 1 時間帯 1 プラン（1.13.1 の固定仕様） */
+  mealTime: text('meal_time').notNull().default('dinner').unique(),
+  generatedAt: text('generated_at').notNull(),
+  /** 'coverage'（M1 の決定的な並び）| 'ai'（M2）。どちらの経路で出たかを残す（§10.6） */
+  source: text('source').notNull().default('coverage'),
+  pantrySignature: text('pantry_signature').notNull(),
+  /** 自動モード（§10.11・夕のみ）の起点日 `YYYY-MM-DD`。null = 手動プラン */
+  anchorDate: text('anchor_date'),
+  /** 「組む」で要求した日数（§10.7-a）。null = 旧データ（不足の表示を出さない） */
+  requestedDays: integer('requested_days'),
+  /** M2 の AI が返した献立全体への一言。null = 無し */
+  aiNote: text('ai_note'),
+  /** 直近の自動追加バッチの `shopping_items.id` の JSON 配列文字列（§10.11.2）。null = 無し */
+  autoAddedItemIds: text('auto_added_item_ids'),
+});
+
+/**
+ * 献立の 1 日分（v19）。プラン置換時に親と一緒に消す（サービス層が days → plan の順で消す）。
+ *
+ * `recipe_id` は**弱参照**（REFERENCES を張らない）。レシピが削除・アーカイブされても
+ * 日は残り、`title` の写しで「このレシピは無くなりました」を出す（§10.6 の挙動を維持）。
+ * FK を張って CASCADE にすると、レシピ削除で献立の日が黙って消える。
+ */
+export const menuPlanDays = sqliteTable(
+  'menu_plan_days',
+  {
+    planId: text('plan_id')
+      .notNull()
+      .references(() => menuPlans.id),
+    /** 1 始まりの日番号 */
+    day: integer('day').notNull(),
+    /** 弱参照（意図的に .references() しない — 上のコメント） */
+    recipeId: text('recipe_id').notNull(),
+    /** 表示用の写し。レシピが消えたときに「無くなりました」を出せる */
+    title: text('title').notNull(),
+    reason: text('reason').notNull().default(''),
+    /** 作り終わった日（調理記録から埋める）。null = まだ */
+    doneAt: text('done_at'),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.planId, table.day] }),
+  }),
+);
+
 // ─── EntityGroups（多グループの所属, v18 — docs/クラウド同期設計.md §12-3）────
 /**
  * 「この実体はどの同期グループに属するか」。ローカル行は 1 つのまま、

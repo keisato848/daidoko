@@ -1,12 +1,15 @@
 /**
  * 献立サービス（#215 M1）— DB から材料つきレシピと在庫を読み、`utils/menuPlan` に渡す。
  *
- * 判断は全部 `utils/menuPlan.ts` の純関数側にある。ここは**読み書きだけ**。
- * 動的 import は他サービスと同じ理由（web で expo-sqlite を読み込ませない）で、
- * その代わり **jest では実行できない**（`docs/品質基準.md` §2.3）。
+ * 判断は全部 `utils/menuPlan.ts` / `utils/menuPlanStorage.ts` の純関数側にある。
+ * ここは**読み書きだけ**。動的 import は他サービスと同じ理由（web で expo-sqlite を
+ * 読み込ませない）で、その代わり **jest では実行できない**（`docs/品質基準.md` §2.3）。
  * だから分岐をここに置かない — 置くとテストできない場所に判断が漏れる。
  *
- * 保存は `app_meta` に 1 本（テーブルを増やさない・設計 §10.6）。
+ * 保存は v19 から `menu_plans` / `menu_plan_days` テーブル（**時間帯ごとに 1 プラン** —
+ * 設計 §10.6。夕を保ったまま昼を組める）。v18 までの `app_meta` の `menu_plan` JSON は
+ * **読み側でレイジーに取り込む**（`ensureLegacyMenuPlanMigrated`）— 旧バックアップの
+ * 復元は `app_meta` を丸ごと書き戻すので、復元後も同じ経路で自然に移行される。
  * 引き当てグラフと食い合いの印は**保存しない**。開くたびに再計算する —
  * 保存すると古い警告が残り、古いことが利用者に見えない。
  */
@@ -45,59 +48,25 @@ import {
   type MenuRecipe,
   type RollableMenuDay,
 } from '../utils/menuPlan';
+import {
+  menuPlanRowToStored,
+  parseLegacyMenuPlanJson,
+  sanitizeMenuMealTime,
+  storedMenuPlanToRows,
+  MENU_MEAL_TIMES,
+  type MenuMealTime,
+  type StoredMenuDay,
+  type StoredMenuPlan,
+} from '../utils/menuPlanStorage';
 import { buildShoppingPlan, type ShoppingPlanRow } from '../utils/shoppingPlan';
 
-const MENU_PLAN_KEY = 'menu_plan';
+/** v18 までの保存先（`app_meta`）。レイジー移行の読み元としてだけ残る */
+const LEGACY_MENU_PLAN_KEY = 'menu_plan';
 
-/** 保存する献立。`version` は将来の互換用（省略可フィールドで増やす・§10.6） */
-export interface StoredMenuPlan {
-  version: 1;
-  generatedAt: string;
-  /** どちらの経路で出たか。M2 の AI が効いたかを後から確かめられる */
-  source: 'coverage' | 'ai';
-  days: StoredMenuDay[];
-  /** 在庫の件数 + 最終更新時刻。変わっていたら「作り直す」を静かに出す */
-  pantrySignature: string;
-  /**
-   * M2 の AI が返した献立全体への一言（無ければ省略）。省略可フィールドで
-   * 足すだけなので `version` は上げない（バックアップ manifest の recipePhotos と同じ互換手法・§10.10.4）。
-   */
-  aiNote?: string;
-  /**
-   * 毎日の自動献立モード（A1・設計 §10.11）の起点日（`YYYY-MM-DD`・Day1 の暦日）。
-   * **自動モードのプランだけが持つ**。手動プラン（`generateMenuPlan` を自動モード
-   * オフで呼んだとき）には付かない——付けないことでローリング（`rollMenuPlan`）が
-   * 「anchorDate が無ければ触らない」で手動プランを一切いじらずに済む。
-   * 省略可フィールドなので `version` は上げない（§10.6 と同じ互換手法）。
-   */
-  anchorDate?: string;
-  /**
-   * 「組む」で要求した日数（§10.7 の結果フィードバック・W2 の不足行用）。
-   * 組めた日数は `days.length` — 両方持つことで「あと◯日分足りない」を
-   * 画面とウィジェットのどちらでも言える。献立はローカル専用（同期対象外）なので
-   * フィールド追加は安全。省略可なので `version` は上げない（§10.6 と同じ互換手法）。
-   * **旧データには無い** — 読む側（`readStoredMenuPlan`）は無ければ無いまま返し、
-   * 不足の表示を出さない。
-   */
-  requestedDays?: number;
-  /**
-   * 直近の自動追加で買い物リストへ入れた `shopping_items.id`（§10.11.2）。
-   * 「自動で追加した◯件を取り消す」用。**チェック済みは消さない**——取り消しの
-   * 対象抽出は shopping-list 側で `checked` を見て弾く。次にまた自動追加が走ると
-   * このバッチは丸ごと置き換わる（積み上げない）。
-   */
-  autoAddedItemIds?: string[];
-}
-
-export interface StoredMenuDay {
-  day: number;
-  recipeId: string;
-  /** 表示用。レシピが消えたときに「無くなりました」を出せるよう写す */
-  title: string;
-  reason: string;
-  /** 作り終わった日（調理記録から埋める）。null = まだ */
-  doneAt: string | null;
-}
+// 保存形（StoredMenuPlan / StoredMenuDay）と時間帯の型は `utils/menuPlanStorage.ts` が正
+// （純関数側に置くことで jest で互換を固定できる・§2.3）。公開 API は従来どおりここから
+export { MENU_MEAL_TIMES };
+export type { MenuMealTime, StoredMenuDay, StoredMenuPlan };
 
 /** 画面に出す 1 日分（保存値＋開くたびに再計算した分） */
 export interface MenuDayView extends StoredMenuDay {
@@ -227,15 +196,110 @@ function toStoredDays(days: readonly MenuDay[]): StoredMenuDay[] {
   return toRollableDays(days);
 }
 
+// ─── 保存の読み書き（v19: menu_plans / menu_plan_days・設計 §10.6）──────────────
+// 形の変換は `utils/menuPlanStorage.ts` の純関数。ここは SQL の発行だけ。
+
+/** 1 プランを保存する。**同じ時間帯の既存プランは丸ごと置き換える**（1 時間帯 1 プラン） */
+async function writeStoredMenuPlan(plan: StoredMenuPlan): Promise<void> {
+  const { eq, inArray } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const { generateId } = await import('../utils/id');
+  const db = getDb();
+
+  const existing = await db
+    .select({ id: schema.menuPlans.id })
+    .from(schema.menuPlans)
+    .where(eq(schema.menuPlans.mealTime, plan.mealTime));
+  const ids = existing.map((r) => r.id);
+  if (ids.length > 0) {
+    // days → plan の順で消す（親を先に消すと外部キー有効時に落ちる）
+    await db.delete(schema.menuPlanDays).where(inArray(schema.menuPlanDays.planId, ids));
+    await db.delete(schema.menuPlans).where(inArray(schema.menuPlans.id, ids));
+  }
+
+  const { row, days } = storedMenuPlanToRows(plan, generateId());
+  await db.insert(schema.menuPlans).values(row);
+  if (days.length > 0) {
+    await db.insert(schema.menuPlanDays).values(days.map((d) => ({ ...d, planId: row.id })));
+  }
+}
+
+/** 1 時間帯のプランを読む。無ければ null（レイジー移行は呼び出し側で済ませておく） */
+async function readStoredMenuPlanRows(mealTime: MenuMealTime): Promise<StoredMenuPlan | null> {
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+
+  const rows = await db
+    .select()
+    .from(schema.menuPlans)
+    .where(eq(schema.menuPlans.mealTime, mealTime))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  const dayRows = await db
+    .select({
+      day: schema.menuPlanDays.day,
+      recipeId: schema.menuPlanDays.recipeId,
+      title: schema.menuPlanDays.title,
+      reason: schema.menuPlanDays.reason,
+      doneAt: schema.menuPlanDays.doneAt,
+    })
+    .from(schema.menuPlanDays)
+    .where(eq(schema.menuPlanDays.planId, row.id));
+  return menuPlanRowToStored(row, dayRows);
+}
+
+/**
+ * v18 までの `app_meta` の `menu_plan` JSON をテーブルへ取り込む（レイジー移行）。
+ *
+ * **毎回の読みの前に呼ぶ**（メモしない）— 旧バックアップの復元は `app_meta` を
+ * 丸ごと書き戻すので、アプリを再起動しなくても次の読みで自然に移行される。
+ * コストは `app_meta` の 1 行読みだけ。二重取り込み（UNIQUE 制約違反）を防ぐため、
+ * `refreshMenuNotificationSchedule` と同じ待ち行列方式で直列化する。
+ *
+ * 旧 JSON は時間帯を持たない = **夕として取り込む**。夕のプランが既にテーブルに
+ * あるときは取り込まない（テーブルが正）。どちらの場合もキーは空にする。
+ */
+let legacyMenuPlanChain: Promise<void> = Promise.resolve();
+
+function ensureLegacyMenuPlanMigrated(): Promise<void> {
+  const run = legacyMenuPlanChain.then(() => doMigrateLegacyMenuPlan());
+  // 失敗しても待ち行列は止めない。読み自体は空プランとして進める（次の読みで再挑戦）
+  legacyMenuPlanChain = run.catch(() => undefined);
+  return run.catch(() => undefined);
+}
+
+async function doMigrateLegacyMenuPlan(): Promise<void> {
+  const raw = await getAppMeta(LEGACY_MENU_PLAN_KEY);
+  if (!raw) return;
+  const legacy = parseLegacyMenuPlanJson(raw);
+  if (legacy) {
+    const existing = await readStoredMenuPlanRows('dinner');
+    if (!existing) await writeStoredMenuPlan(legacy);
+  }
+  // 壊れた JSON・テーブル優先で取り込まなかった場合もキーは空にする（再解釈しない）
+  await setAppMeta(LEGACY_MENU_PLAN_KEY, '');
+}
+
 /**
  * X 日分を組んで保存する。**AI は呼ばない**（M1）。
  *
- * 自動モード（A1・§10.11）がオンなら `anchorDate` を今日で立てる——手動の「組む」で
- * 作ったプランも、以後は起動時のローリング対象になる。オフなら付けない（手動プランに
- * `rollMenuPlan` は一切触らない・§10.11.1）。
+ * `mealTime`（既定は夕）ごとに独立したプランを持つ（設計 §10.6）——**置き換えるのは
+ * 同じ時間帯のプランだけ**。夕の献立を保ったまま休日の昼を組める。
+ *
+ * 自動モード（A1・§10.11）は**夕の献立の機能**なので、オンでも `anchorDate` を
+ * 立てるのは夕だけ——朝/昼の手動プランがローリング対象に紛れ込まない。
+ * オフなら付けない（手動プランに `rollMenuPlan` は一切触らない・§10.11.1）。
  */
-export async function generateMenuPlan(days: number): Promise<MenuPlanView | null> {
+export async function generateMenuPlan(
+  days: number,
+  mealTime: MenuMealTime = 'dinner',
+): Promise<MenuPlanView | null> {
   if (!isNativePlatform) return null;
+  await ensureLegacyMenuPlanMigrated();
   const { getAliasMap } = await import('./name-alias.service');
   const [recipes, pantry, aliases, autoOn] = await Promise.all([
     loadMenuRecipes(),
@@ -248,47 +312,51 @@ export async function generateMenuPlan(days: number): Promise<MenuPlanView | nul
   const built = buildMenu(recipes, pantry.items, days, today, aliases);
   const plan: StoredMenuPlan = {
     version: 1,
+    mealTime,
     generatedAt: today.toISOString(),
     source: 'coverage',
     pantrySignature: pantry.signature,
     // 要求日数を残す（§10.7）。組めた日数（days.length）と比べて
     // 「あと◯日分足りない」を画面・ウィジェットの両方で言えるようにする
     requestedDays: days,
-    ...(autoOn ? { anchorDate: menuDateKey(today) } : {}),
+    ...(autoOn && mealTime === 'dinner' ? { anchorDate: menuDateKey(today) } : {}),
     days: toStoredDays(built.days),
   };
-  await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  await writeStoredMenuPlan(plan);
   refreshWidgetSnapshot();
   return hydrate(plan, recipes, pantry, aliases);
 }
 
 /**
- * 保存済みの生の献立を読む。壊れていたら null（作り直せば直る）。JSON 解釈だけ。
- * `requestedDays` は**旧データに無い**省略可フィールド — 無ければ無いまま返す
- * （不足の表示は出ない）。壊れた値（0 以下・非整数・数でない）は落として読む。
- * export はこの互換（旧データ・壊れた値）をテストで固定するため（DB を触らないので
- * jest で実行できる数少ない入口 — `docs/品質基準.md` §2.3）。
+ * 保存済みの生の献立を読む（既定は夕）。無ければ null。
+ * 旧 `app_meta` JSON のレイジー移行を必ず先に通す（§10.6）。互換の判断
+ * （旧データに無い `requestedDays`・壊れた値・未知の時間帯）は
+ * `utils/menuPlanStorage.ts` の純関数側にあり、そちらのテストで固定している
+ * （この関数自体は DB を触るので jest では実行できない — `docs/品質基準.md` §2.3）。
  */
-export async function readStoredMenuPlan(): Promise<StoredMenuPlan | null> {
-  const raw = await getAppMeta(MENU_PLAN_KEY);
-  if (!raw) return null;
-  try {
-    const plan = JSON.parse(raw) as StoredMenuPlan;
-    if (!Array.isArray(plan.days)) return null;
-    const rd = plan.requestedDays;
-    if (rd !== undefined && (typeof rd !== 'number' || !Number.isInteger(rd) || rd <= 0)) {
-      delete plan.requestedDays;
-    }
-    return plan;
-  } catch {
-    return null;
-  }
+export async function readStoredMenuPlan(
+  mealTime: MenuMealTime = 'dinner',
+): Promise<StoredMenuPlan | null> {
+  if (!isNativePlatform) return null;
+  await ensureLegacyMenuPlanMigrated();
+  return readStoredMenuPlanRows(mealTime);
 }
 
-/** 保存済みの献立を読む。無ければ null（勝手に組まない・§10.7） */
-export async function getMenuPlan(): Promise<MenuPlanView | null> {
+/** 保存済みの時間帯の一覧（チップの「他にもある」印用）。朝→昼→夕の順で返す */
+export async function getStoredMealTimes(): Promise<MenuMealTime[]> {
+  if (!isNativePlatform) return [];
+  await ensureLegacyMenuPlanMigrated();
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const rows = await getDb().select({ mealTime: schema.menuPlans.mealTime }).from(schema.menuPlans);
+  const found = new Set(rows.map((r) => sanitizeMenuMealTime(r.mealTime)));
+  return MENU_MEAL_TIMES.filter((mt) => found.has(mt));
+}
+
+/** 保存済みの献立を読む（既定は夕）。無ければ null（勝手に組まない・§10.7） */
+export async function getMenuPlan(mealTime: MenuMealTime = 'dinner'): Promise<MenuPlanView | null> {
   if (!isNativePlatform) return null;
-  const plan = await readStoredMenuPlan();
+  const plan = await readStoredMenuPlan(mealTime);
   if (!plan) return null;
 
   const { getAliasMap } = await import('./name-alias.service');
@@ -339,9 +407,42 @@ export async function markDone(plan: StoredMenuPlan): Promise<StoredMenuPlan> {
         : day,
     ),
   };
-  await setAppMeta(MENU_PLAN_KEY, JSON.stringify(next));
+  await writeStoredMenuPlan(next);
   refreshWidgetSnapshot();
   return next;
+}
+
+/**
+ * ホームカード・ウィジェットの「今日/次の一品」に出すプラン。**夕を優先**し、
+ * 夕が無ければ朝/昼のうち直近に組まれた方を返す（表記は呼び出し側が
+ * 「（昼）」等を付ける — 夕は無印のまま 1 文字も変えない・設計 §10.13）。
+ */
+export interface TodayMenuPlan {
+  view: MenuPlanView;
+  mealTime: MenuMealTime;
+}
+
+export async function getMenuPlanForToday(): Promise<TodayMenuPlan | null> {
+  if (!isNativePlatform) return null;
+  const stored = await getStoredMealTimes();
+  if (stored.length === 0) return null;
+
+  let pick: MenuMealTime | null = stored.includes('dinner') ? 'dinner' : null;
+  if (!pick) {
+    // 朝/昼しか無い。直近に組まれた方（利用者がいま触っている方）を出す
+    const plans = await Promise.all(stored.map((mt) => readStoredMenuPlanRows(mt)));
+    let latest = '';
+    for (let i = 0; i < stored.length; i += 1) {
+      const plan = plans[i];
+      if (plan && (pick === null || plan.generatedAt > latest)) {
+        pick = stored[i];
+        latest = plan.generatedAt;
+      }
+    }
+  }
+  if (!pick) return null;
+  const view = await getMenuPlan(pick);
+  return view ? { view, mealTime: pick } : null;
 }
 
 function hydrate(
@@ -368,9 +469,12 @@ function hydrate(
 }
 
 /** その日だけ次点に差し替える。**AI は呼ばない**（即時・¥0・オフライン可・§10.7） */
-export async function replaceMenuDay(day: number): Promise<MenuPlanView | null> {
+export async function replaceMenuDay(
+  day: number,
+  mealTime: MenuMealTime = 'dinner',
+): Promise<MenuPlanView | null> {
   if (!isNativePlatform) return null;
-  const current = await getMenuPlan();
+  const current = await getMenuPlan(mealTime);
   if (!current) return null;
 
   const { getAliasMap } = await import('./name-alias.service');
@@ -401,7 +505,7 @@ export async function replaceMenuDay(day: number): Promise<MenuPlanView | null> 
         : d,
     ),
   };
-  await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  await writeStoredMenuPlan(plan);
   refreshWidgetSnapshot();
   return hydrate(plan, recipes, pantry, aliases);
 }
@@ -460,12 +564,15 @@ export async function buildMenuArrangeContext(): Promise<MenuArrangeContext | nu
  * （結果を受け取って保存するだけ・§10.7 の「AI はボタン 1 本に閉じ込める」）。
  * 保存済みの献立が無ければ何もしない（AI ボタンは M1 の献立がある前提で押される・§10.7）。
  */
-export async function applyMenuArrangement(arrangement: {
-  days: ArrangeDayPick[];
-  note?: string;
-}): Promise<MenuPlanView | null> {
+export async function applyMenuArrangement(
+  arrangement: {
+    days: ArrangeDayPick[];
+    note?: string;
+  },
+  mealTime: MenuMealTime = 'dinner',
+): Promise<MenuPlanView | null> {
   if (!isNativePlatform) return null;
-  const current = await getMenuPlan();
+  const current = await getMenuPlan(mealTime);
   if (!current) return null;
 
   const { getAliasMap } = await import('./name-alias.service');
@@ -482,6 +589,8 @@ export async function applyMenuArrangement(arrangement: {
   );
   const plan: StoredMenuPlan = {
     version: current.plan.version,
+    // 並べ替えは時間帯を変えない（同じプランの置き換え）
+    mealTime: current.plan.mealTime,
     // 新しい献立になった扱い（§10.10.4）。doneAt の突合起点（markDone）もここから動く
     generatedAt: new Date().toISOString(),
     source: 'ai',
@@ -499,15 +608,17 @@ export async function applyMenuArrangement(arrangement: {
     // 残り続けてしまう（exactOptionalPropertyTypes のため undefined を明示代入できない）
     ...(arrangement.note ? { aiNote: arrangement.note } : {}),
   };
-  await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  await writeStoredMenuPlan(plan);
   refreshWidgetSnapshot();
   return hydrate(plan, recipes, pantry, aliases);
 }
 
 /** 献立の全日ぶんの不足材料。§5.3-a の選択シートへ渡す前に 1 行へまとめる（§10.4） */
-export async function getMenuShortages(): Promise<{ name: string; amounts: string[] }[]> {
+export async function getMenuShortages(
+  mealTime: MenuMealTime = 'dinner',
+): Promise<{ name: string; amounts: string[] }[]> {
   if (!isNativePlatform) return [];
-  const current = await getMenuPlan();
+  const current = await getMenuPlan(mealTime);
   if (!current) return [];
 
   const { getAliasMap } = await import('./name-alias.service');
@@ -555,15 +666,16 @@ export async function buildMenuBulkContext(): Promise<MenuBulkContext | null> {
  */
 export async function fillMenuPlanShortfall(
   additions: readonly { recipeId: string; title: string }[],
+  mealTime: MenuMealTime = 'dinner',
 ): Promise<MenuPlanView | null> {
   if (!isNativePlatform) return null;
-  const stored = await readStoredMenuPlan();
+  const stored = await readStoredMenuPlan(mealTime);
   if (!stored || additions.length === 0) return null;
 
   const requested = stored.requestedDays ?? stored.days.length + additions.length;
   const nextDays = appendShortfallDays(stored.days as RollableMenuDay[], requested, additions);
   const plan: StoredMenuPlan = { ...stored, days: nextDays };
-  await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  await writeStoredMenuPlan(plan);
   refreshWidgetSnapshot();
 
   const { getAliasMap } = await import('./name-alias.service');
@@ -591,9 +703,11 @@ export interface MenuShoppingPlan {
  * まとめる（§10.4 — まとめずに足すと `addShoppingItem` が 2 件目を黙って捨てる）。
  * ここでも名寄せ辞書を育てる（buildRecipeShoppingPlan と同じ理由・§6）。
  */
-export async function buildMenuShoppingPlan(): Promise<MenuShoppingPlan | null> {
+export async function buildMenuShoppingPlan(
+  mealTime: MenuMealTime = 'dinner',
+): Promise<MenuShoppingPlan | null> {
   if (!isNativePlatform) return null;
-  const stored = await readStoredMenuPlan();
+  const stored = await readStoredMenuPlan(mealTime);
   if (!stored) return null;
 
   const { getInStockForMatching } = await import('./pantry.service');
@@ -661,10 +775,19 @@ export async function addMenuShoppingRows(
   return added;
 }
 
-/** 献立を捨てる（設定からの「消す」用） */
+/**
+ * 献立を捨てる（設定からの「消す」用）。**全時間帯まとめて消す** — 設定は
+ * プラン単位ではなく献立機能全体の入口なので、部分的に残すと「消したのに残っている」
+ * に見える。旧 `app_meta` キーも空にする（レイジー移行で復活しないように）。
+ */
 export async function clearMenuPlan(): Promise<void> {
   if (!isNativePlatform) return;
-  await setAppMeta(MENU_PLAN_KEY, '');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const db = getDb();
+  await db.delete(schema.menuPlanDays);
+  await db.delete(schema.menuPlans);
+  await setAppMeta(LEGACY_MENU_PLAN_KEY, '');
 }
 
 // ─── A1: 毎日の自動献立モード（#215・設計 §10.11）──────────────────────────
@@ -758,6 +881,7 @@ export async function runDailyMenuMaintenance(): Promise<void> {
       ? { ...stored, anchorDate: init.anchorDate } // 既存プランは破棄しない。中身はそのまま
       : {
           version: 1,
+          mealTime: 'dinner', // 自動モードは夕の献立の機能（S21・§10.11）。朝/昼には触らない
           generatedAt: today.toISOString(),
           source: 'coverage',
           pantrySignature: pantry.signature,
@@ -794,7 +918,7 @@ export async function runDailyMenuMaintenance(): Promise<void> {
     }
   }
 
-  await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  await writeStoredMenuPlan(plan);
   refreshWidgetSnapshot();
 
   plan = await markDone(plan); // 3. doneAt 突合（内部で変化があれば保存する）
@@ -817,7 +941,7 @@ export async function runDailyMenuMaintenance(): Promise<void> {
       // このバッチで置き換える（積み上げない・§10.11.2）。0 件でも「前回の取り消しの
       // 対象が今回は無い」を正しく表すため上書きする
       plan = { ...plan, autoAddedItemIds: addedIds };
-      await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+      await writeStoredMenuPlan(plan);
       refreshWidgetSnapshot();
     }
     // pull 失敗（オフライン）はここで無言でスキップ。次のオンライン起動で追いつく
@@ -829,10 +953,11 @@ export async function runDailyMenuMaintenance(): Promise<void> {
 /**
  * 直近の自動追加を取り消す（§10.11.2）。**チェック済みは消さない**——
  * 自動で消すことは一切しない。実際に取り消せた件数を返す。
+ * 自動追加は夕プランだけが行う（§10.11 は夕の機能）ので、対象も夕プラン。
  */
 export async function undoMenuAutoAddedItems(): Promise<number> {
   if (!isNativePlatform) return 0;
-  const stored = await readStoredMenuPlan();
+  const stored = await readStoredMenuPlan('dinner');
   const ids = stored?.autoAddedItemIds;
   if (!ids || ids.length === 0) return 0;
 
@@ -844,7 +969,7 @@ export async function undoMenuAutoAddedItems(): Promise<number> {
   // 取り消し終わり。このバッチはもう取り消せないので空にする
   // （`ids.length === 0` を上のガードが見るので、空配列は「無い」と同じ扱い）
   const plan: StoredMenuPlan = { ...(stored as StoredMenuPlan), autoAddedItemIds: [] };
-  await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  await writeStoredMenuPlan(plan);
   refreshWidgetSnapshot();
   return toRemove.length;
 }
