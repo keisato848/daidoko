@@ -64,6 +64,10 @@ export interface SyncMe {
   deviceId: string;
   isOwner: boolean;
   memberCount: number;
+  /** グループの表示名（§12・無名なら null）。古いサーバーは返さない */
+  groupName?: string | null;
+  /** グループの範囲（§12-1）。古いサーバーは返さない（＝'all' 相当） */
+  scope?: 'all' | 'recipes';
   /**
    * グループの端末（#209）。id・役割・最終同期時刻だけで、名前も内容も無い（§0-2）。
    * 古いサーバーは返さないので省略可
@@ -252,16 +256,28 @@ export async function createSyncGroup(displayName: string | null): Promise<SyncG
   return data;
 }
 
+/**
+ * 参加応答に含まれるグループの開示情報（G6 — §12-2）。
+ * 古いサーバーは返さない（省略時、呼び出し側は開示ダイアログを出せない）。
+ */
+export interface SyncGroupDisclosure {
+  groupName?: string | null;
+  scope?: 'all' | 'recipes';
+}
+
 /** 招待コードで参加 */
 export async function joinSyncGroup(
   inviteCode: string,
   displayName: string | null,
-): Promise<SyncCredentials & { memberCount: number }> {
+): Promise<SyncCredentials & { memberCount: number } & SyncGroupDisclosure> {
   if ((await getStoredCredentials()) !== null) throw new SyncError('ALREADY_JOINED');
-  const data = await request<SyncCredentials & { memberCount: number }>('/groups/join', {
-    method: 'POST',
-    body: displayName ? { inviteCode, displayName } : { inviteCode },
-  });
+  const data = await request<SyncCredentials & { memberCount: number } & SyncGroupDisclosure>(
+    '/groups/join',
+    {
+      method: 'POST',
+      body: displayName ? { inviteCode, displayName } : { inviteCode },
+    },
+  );
   await storeCredentials({
     groupId: data.groupId,
     deviceId: data.deviceId,
@@ -302,11 +318,22 @@ export async function evictSyncDevice(
   );
 }
 
-/** 招待コードの再発行（オーナーのみ）。期限切れ・漏えい時のやり直し */
-export async function rotateSyncInvite(): Promise<{ inviteCode: string; inviteExpiresAt: string }> {
+/**
+ * 招待コードの再発行（オーナーのみ）。期限切れ・漏えい時のやり直し。
+ * `groupId` を渡すとそのグループのコードを回す（§12-2 の `x-sync-group`。
+ * 省略時は従来どおり主グループ — 1.13.0 以前と同一リクエスト）。
+ */
+export async function rotateSyncInvite(
+  groupId?: string,
+): Promise<{ inviteCode: string; inviteExpiresAt: string }> {
   const credentials = await getStoredCredentials();
   if (!credentials) throw new SyncError('AUTH_INVALID');
-  return request('/invite/rotate', { method: 'POST', body: {}, auth: credentials });
+  return request('/invite/rotate', {
+    method: 'POST',
+    body: {},
+    auth: credentials,
+    ...(groupId ? { groupId } : {}),
+  });
 }
 
 /**
@@ -453,6 +480,79 @@ export async function listSyncGroups(): Promise<SyncGroupSummary[]> {
     credentials,
   );
   return data.groups;
+}
+
+/**
+ * **既存端末が** 2 つ目以降のグループを新設する（G8 — §12-2）。
+ * Authorization つきの POST /groups。新しい端末は発行されず、応答の deviceSecret は
+ * 空なので**保存しない**（端末の鍵は 1 つのまま — 保存すると主グループの鍵を潰す）。
+ *
+ * 呼び出し側の約束: **多グループ対応サーバーだと確認してから呼ぶ**
+ * （`listSyncGroups()` が通ること）。古いサーバーは Authorization を無視して
+ * 新しい端末を作ってしまい、誰からも消せない幽霊端末が残る。
+ */
+export async function createAdditionalSyncGroup(
+  name: string,
+  scope: 'all' | 'recipes',
+): Promise<{ groupId: string; inviteCode: string; inviteExpiresAt: string }> {
+  const credentials = await getStoredCredentials();
+  if (!credentials) throw new SyncError('AUTH_INVALID');
+  return authedRequest('/groups', { method: 'POST', body: { name, scope } }, credentials);
+}
+
+/**
+ * **既存端末が**招待コードで追加参加する（§12-2）。deviceSecret は保存しない（上記と同じ）。
+ *
+ * 防御: 古いサーバーは Authorization を無視して**新しい端末を作って**しまう
+ * （deviceSecret が空でないことで分かる）。そのまま捨てると誰からも消せない
+ * 幽霊端末が残るので、返ってきた鍵で即座に離脱してから SYNC_UNAVAILABLE を投げる。
+ */
+export async function joinAdditionalSyncGroup(
+  inviteCode: string,
+): Promise<{ groupId: string; memberCount: number } & SyncGroupDisclosure> {
+  const credentials = await getStoredCredentials();
+  if (!credentials) throw new SyncError('AUTH_INVALID');
+  const data = await authedRequest<SyncCredentials & { memberCount: number } & SyncGroupDisclosure>(
+    '/groups/join',
+    { method: 'POST', body: { inviteCode } },
+    credentials,
+  );
+  if (data.deviceSecret) {
+    // 古いサーバーが新端末として参加させてしまった。幽霊端末を残さず取り消す
+    await request('/devices/me', {
+      method: 'DELETE',
+      auth: { groupId: data.groupId, deviceId: data.deviceId, deviceSecret: data.deviceSecret },
+    }).catch(() => undefined);
+    throw new SyncError('SYNC_UNAVAILABLE');
+  }
+  return data;
+}
+
+/**
+ * 追加参加したグループ 1 つから抜ける（主グループの鍵はそのまま）。
+ * G6 の開示で「やめる」を選んだときの取り消しに使う。既に外されていた
+ * （AUTH_INVALID）なら黙って成功扱い — 目的（そのグループに居ないこと）は達している。
+ */
+export async function leaveAdditionalSyncGroup(groupId: string): Promise<void> {
+  const credentials = await getStoredCredentials();
+  if (!credentials) return;
+  try {
+    await authedRequest('/devices/me', { method: 'DELETE' }, credentials, groupId);
+  } catch (err) {
+    if (err instanceof SyncError && err.code === 'AUTH_INVALID') return;
+    throw err;
+  }
+}
+
+/**
+ * 指定グループの自分の状態（§12-2 の `x-sync-group`）。追加グループの招待コードを
+ * 取り出すのに使う（オーナーにだけ inviteCode が返る）。401 でも鍵は破棄されない
+ * （そのグループの membership が無いだけ — `authedRequest` の約束）。
+ */
+export async function fetchSyncMeForGroup(groupId: string): Promise<SyncMe> {
+  const credentials = await getStoredCredentials();
+  if (!credentials) throw new SyncError('AUTH_INVALID');
+  return authedRequest<SyncMe>('/me', { method: 'GET' }, credentials, groupId);
 }
 
 /**

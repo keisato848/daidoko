@@ -91,6 +91,17 @@ const recipe = {
       revisions: '版履歴',
     },
 
+    /**
+     * 共有状態バッジ（U4 — docs/reviews/persona-ui-share-2026-09-04.md）。
+     * 「今このレシピが誰に見えているか」をヘッダ付近で常時示す。用語は §3-4
+     * （公開中/自分だけ）。groups の {{names}} はグループ名を「・」で連結した文字列
+     */
+    shareState: {
+      groups: '共有中: {{names}}',
+      private: '自分だけ',
+      link: 'リンク公開中',
+    },
+
     // 統一共有シート（docs/共有設計.md §3-2）。可視範囲の 1 行は省略不可
     shareSheet: {
       title: 'このレシピを共有',

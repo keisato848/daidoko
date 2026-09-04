@@ -174,8 +174,34 @@ const settings = {
       other: '共有中のレシピ帖 {{count}}冊',
     } satisfies PluralMessage,
     sharedBooksNote: 'リンクの送付・停止はレシピ帖の管理から',
-    privateSection: '自分だけの品目',
-    privateScope: '「自分だけ」にした品目は家族グループに共有されません。切替は各品目から。',
+    /**
+     * グループ別の実数表示（G5/U3 — docs/共有設計.md §5-4）。
+     * 「0 件」と「そもそも見えない」を区別する — 否定側（recipes スコープの
+     * グループに買い物・在庫が流れないこと）は必ず文で明示する（隆の懸念への回答）。
+     */
+    groupCountRecipes: {
+      one: 'レシピ {{count}}品',
+      other: 'レシピ {{count}}品',
+    } satisfies PluralMessage,
+    groupCountBooks: {
+      one: 'レシピ帖 {{count}}冊',
+      other: 'レシピ帖 {{count}}冊',
+    } satisfies PluralMessage,
+    groupCountShopping: {
+      one: '買い物リスト {{count}}件',
+      other: '買い物リスト {{count}}件',
+    } satisfies PluralMessage,
+    groupCountPantry: {
+      one: '在庫 {{count}}件',
+      other: '在庫 {{count}}件',
+    } satisfies PluralMessage,
+    groupSharedLabel: 'このグループで共有されているもの',
+    groupNotVisible: '買い物リスト・在庫はこのグループには見えません。',
+    groupsNotShared: '調理記録・写真・献立は、どのグループにも共有されません。',
+    groupCurrentMark: 'いま見ているグループ',
+    privateSection: '自分だけ',
+    privateScope:
+      'どのグループにも入れていない品目です。この端末の外には出ません。切替は各品目から。',
     privateShopping: {
       one: '買い物リスト {{count}}件',
       other: '買い物リスト {{count}}件',

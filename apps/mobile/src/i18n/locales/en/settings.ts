@@ -164,9 +164,29 @@ const settings: typeof ja = {
       other: '{{count}} shared recipe books',
     },
     sharedBooksNote: 'Send or stop links from the recipe book manager',
-    privateSection: 'Only-me items',
+    groupCountRecipes: {
+      one: '{{count}} recipe',
+      other: '{{count}} recipes',
+    },
+    groupCountBooks: {
+      one: '{{count}} recipe book',
+      other: '{{count}} recipe books',
+    },
+    groupCountShopping: {
+      one: '{{count}} shopping list item',
+      other: '{{count}} shopping list items',
+    },
+    groupCountPantry: {
+      one: '{{count}} pantry item',
+      other: '{{count}} pantry items',
+    },
+    groupSharedLabel: 'Shared in this group',
+    groupNotVisible: 'The shopping list and pantry are not visible to this group.',
+    groupsNotShared: 'Cooking logs, photos and menu plans are never shared with any group.',
+    groupCurrentMark: 'Current group',
+    privateSection: 'Only me',
     privateScope:
-      'Items marked “only me” are not shared with your family group. Change this on each item.',
+      'Items not placed in any group. They never leave this device. Change this on each item.',
     privateShopping: {
       one: '{{count}} shopping list item',
       other: '{{count}} shopping list items',

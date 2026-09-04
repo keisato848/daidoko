@@ -21,6 +21,7 @@ import {
   ensureEntityGroupsBackfilled,
   getCurrentSyncGroupId,
   getKnownSyncGroupIds,
+  getKnownSyncGroupSummaries,
   registerEntityGroup,
   removeKnownSyncGroup,
   resetEntityGroupsForLeave,
@@ -47,6 +48,7 @@ import {
   SYNC_PAYLOAD_SCHEMA_VERSION,
   planPushFanout,
   syncCursorStorageKey,
+  type SyncGroupScope,
 } from './sync-payload';
 import {
   SYNC_PUSH_BATCH_SIZE,
@@ -164,6 +166,12 @@ interface GroupContext {
   currentGroupId: string;
   /** 参加中と分かっているグループ（主グループが先頭）。pull はこの数だけ回る */
   knownGroupIds: string[];
+  /**
+   * グループの scope（分かっているぶんだけ — 控えが旧形式なら空 Map）。
+   * push のファンアウトで scope が許さない種別をそのグループから除外する
+   * （後から scope が絞られたグループへ送って 400 の一括拒否で詰まらないため）
+   */
+  groupScopes: Map<string, SyncGroupScope>;
 }
 
 /**
@@ -176,11 +184,21 @@ async function prepareGroupContext(credentials: SyncCredentials): Promise<GroupC
     const fanoutReady = (await ensureEntityGroupsBackfilled(primaryGroupId)) === true;
     const knownGroupIds = (await getKnownSyncGroupIds(primaryGroupId)) ?? [primaryGroupId];
     const currentGroupId = (await getCurrentSyncGroupId()) ?? primaryGroupId;
+    // scope は控えから分かるぶんだけ（読めなくても同期は止めない — 空 Map ＝ 除外なし）
+    const groupScopes = new Map<string, SyncGroupScope>();
+    try {
+      for (const summary of (await getKnownSyncGroupSummaries()) ?? []) {
+        groupScopes.set(summary.groupId, summary.scope);
+      }
+    } catch {
+      // scope 不明のまま進む。サーバーが最終的な門番
+    }
     return {
       fanoutReady,
       primaryGroupId,
       currentGroupId: knownGroupIds.includes(currentGroupId) ? currentGroupId : primaryGroupId,
       knownGroupIds,
+      groupScopes,
     };
   } catch {
     return {
@@ -188,6 +206,7 @@ async function prepareGroupContext(credentials: SyncCredentials): Promise<GroupC
       primaryGroupId,
       currentGroupId: primaryGroupId,
       knownGroupIds: [primaryGroupId],
+      groupScopes: new Map(),
     };
   }
 }
@@ -354,7 +373,7 @@ async function pushPending(ctx: GroupContext): Promise<void> {
       await sendPreparedToGroup(prepared, null, true);
       continue;
     }
-    const plan = planPushFanout(prepared.changes, memberships, ctx.primaryGroupId);
+    const plan = planPushFanout(prepared.changes, memberships, ctx.primaryGroupId, ctx.groupScopes);
 
     // G9: どのグループにも属さない実体は送らない ＝ 送信済み扱いで待ち行列から消す
     if (plan.selfOnlyIndices.length > 0) {

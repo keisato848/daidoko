@@ -7,7 +7,7 @@
  * docs/クラウド同期設計.md §2。参加/作成の確認ダイアログが同意の瞬間（§5-2）。
  */
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Copy, LogOut, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
+import { Check, Copy, LogOut, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,20 +21,32 @@ import {
 
 import { HeaderBackButton } from '../src/components/HeaderBackButton';
 import { Avatar } from '../src/components/Avatar';
+import { BottomSheet } from '../src/components/BottomSheet';
 import { KeyboardAwareScroll } from '../src/components/KeyboardAwareScroll';
 import { Toast } from '../src/components/Toast';
 import { Colors } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { dialog } from '../src/services/dialog.service';
 import {
+  getCurrentSyncGroupId,
+  getKnownSyncGroupSummaries,
+  refreshKnownSyncGroups,
+  switchCurrentSyncGroup,
+} from '../src/services/entity-groups.service';
+import { type KnownGroupSummary, type SyncGroupScope } from '../src/services/share-groups';
+import {
   SyncError,
+  createAdditionalSyncGroup,
   createSyncGroup,
   deleteSyncGroup,
   evictSyncDevice,
   fetchSyncMe,
+  fetchSyncMeForGroup,
   getSyncState,
   inviteLinkUrl,
+  joinAdditionalSyncGroup,
   joinSyncGroup,
+  leaveAdditionalSyncGroup,
   leaveSyncGroup,
   rotateSyncInvite,
   type SyncErrorCode,
@@ -50,7 +62,7 @@ import {
   revertUndecidedShoppingItemsShared,
   setUndecidedShoppingItemsShared,
 } from '../src/services/shopping-list.service';
-import { onSyncGroupJoined, onSyncGroupLeft } from '../src/services/sync-runner.service';
+import { onSyncGroupJoined, onSyncGroupLeft, runSync } from '../src/services/sync-runner.service';
 import {
   addFamilyMember,
   getCurrentFamily,
@@ -142,6 +154,17 @@ export default function FamilyScreen() {
   const [cloud, setCloud] = useState<CloudPhase>({ kind: 'loading' });
   const [syncBusy, setSyncBusy] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // ── 多グループ（G-2b） ────────────────────────────────────────────────────
+  /** 参加グループ一覧（主グループが先頭）。空 = 未参加 or まだ読めていない */
+  const [groups, setGroups] = useState<KnownGroupSummary[]>([]);
+  /** サーバーが多グループ対応か（/me/groups が通ったか）。作成/追加参加の導線をこれで守る */
+  const [multiGroupReady, setMultiGroupReady] = useState(false);
+  /** 「いま見ているグループ」（G1/G2 — 新規データの既定所属先） */
+  const [currentGroupId, setCurrentGroupId] = useState<string | null>(null);
+  const [createSheetOpen, setCreateSheetOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupScope, setNewGroupScope] = useState<SyncGroupScope>('all');
+  const [extraJoinCode, setExtraJoinCode] = useState('');
 
   const refresh = useCallback(async () => {
     const [nextUser, nextFamily, nextMembers] = await Promise.all([
@@ -156,6 +179,20 @@ export default function FamilyScreen() {
     setFamilyName(nextFamily.name);
   }, []);
 
+  /**
+   * 参加グループ一覧（G1）を読み直す。サーバーの /me/groups が通れば控えも更新され、
+   * 通らない（古いサーバー・オフライン）ときは手元の控えで表示する。
+   * **cloud を 'joined' にする前に await する** — 招待リンクの受け取り（下の effect）が
+   * cloud.kind を見て「追加参加できるか」を判断するので、順序が入れ替わると
+   * 多グループ対応サーバーでも「すでに参加しています」に倒れてしまう。
+   */
+  const loadGroups = useCallback(async () => {
+    const fresh = await refreshKnownSyncGroups();
+    setMultiGroupReady(fresh != null);
+    setGroups(fresh ?? (await getKnownSyncGroupSummaries()));
+    setCurrentGroupId(await getCurrentSyncGroupId());
+  }, []);
+
   const loadCloud = useCallback(async () => {
     const state = await getSyncState();
     if (state.kind === 'unavailable') {
@@ -163,17 +200,24 @@ export default function FamilyScreen() {
       return;
     }
     if (state.kind === 'none') {
+      setGroups([]);
+      setMultiGroupReady(false);
       setCloud({ kind: 'none' });
       return;
     }
     try {
-      setCloud({ kind: 'joined', me: await fetchSyncMe() });
+      const me = await fetchSyncMe();
+      await loadGroups().catch(() => undefined);
+      setCloud({ kind: 'joined', me });
     } catch (err) {
       // AUTH_INVALID = グループ側で消された。鍵は破棄済みなので未参加へ自己修復
       if (err instanceof SyncError && err.code === 'AUTH_INVALID') setCloud({ kind: 'none' });
-      else setCloud({ kind: 'offline-joined' });
+      else {
+        await loadGroups().catch(() => undefined); // オフラインでも控えの一覧・切替は使える
+        setCloud({ kind: 'offline-joined' });
+      }
     }
-  }, []);
+  }, [loadGroups]);
 
   useFocusEffect(
     useCallback(() => {
@@ -299,6 +343,32 @@ export default function FamilyScreen() {
     return applyChoice(share).catch(() => noop);
   }, []);
 
+  /**
+   * 参加の確認（G6 — §12-2）。join 応答で分かったグループ名・範囲・人数を見せてから
+   * 確定する。**「やめる」（背景タップ・戻るキーもここへ倒れる）が取り消し側** —
+   * まだ何も共有されていない段階なので、迷ったら参加しない方へ倒すのが安全。
+   */
+  const confirmGroupDisclosure = useCallback(
+    (name: string, scope: SyncGroupScope, memberCount: number) =>
+      dialog.confirm({
+        title: t('family.sync.groups.joinConfirmTitle', { name }),
+        message: `${t(
+          scope === 'recipes'
+            ? 'family.sync.groups.joinConfirmBodyRecipes'
+            : 'family.sync.groups.joinConfirmBodyAll',
+        )}\n${tCount('family.sync.groups.memberCount', memberCount)}`,
+        cancelLabel: t('family.sync.groups.joinCancel'),
+        confirmLabel: t('family.sync.groups.joinKeep'),
+      }),
+    [],
+  );
+
+  /** グループ名の表示（無名の主グループ＝既存の家族グループ — §12-4 の読み替え） */
+  const groupDisplayName = useCallback((group: KnownGroupSummary, isPrimary: boolean): string => {
+    if (group.name) return group.name;
+    return isPrimary ? t('family.sync.groups.primaryName') : t('family.sync.groups.unnamedName');
+  }, []);
+
   /** グループ作成。確認ダイアログが「何が共有されるか」への同意の瞬間（§5-2） */
   const handleCreateGroup = async () => {
     const agreed = await dialog.confirm({
@@ -341,17 +411,122 @@ export default function FamilyScreen() {
     if (!agreed) return;
     await runSyncAction(async () => {
       const revertShareChoice = await askShareExistingItems();
+      let joined: Awaited<ReturnType<typeof joinSyncGroup>>;
       try {
-        await joinSyncGroup(code, null);
+        joined = await joinSyncGroup(code, null);
       } catch (err) {
         await revertShareChoice(); // 招待コードの打ち間違い等。決定だけ残さない
         throw err;
+      }
+      // G6: 参加の確認（多グループ対応サーバーだけが開示情報を返す。旧サーバーは
+      // 何も返さないので従来どおり確認なしで進む — 出せない情報で二重確認しない）。
+      // 「やめる」なら**まだ何も共有していないうちに**離脱して取り消す
+      // （共有が始まるのは下の onSyncGroupJoined から）
+      if (joined.scope !== undefined || joined.groupName !== undefined) {
+        const name = joined.groupName ?? t('family.sync.groups.primaryName');
+        const agreed = await confirmGroupDisclosure(
+          name,
+          joined.scope ?? 'all',
+          joined.memberCount,
+        );
+        if (!agreed) {
+          await leaveSyncGroup().catch(() => undefined);
+          await revertShareChoice();
+          await loadCloud();
+          setToastMessage(t('family.sync.groups.joinCanceled'));
+          return;
+        }
       }
       setJoinCode('');
       await onSyncGroupJoined();
       await loadCloud();
       // 画面に留まる純粋な成功なのでトースト（docs/画面設計.md §7-1）
       setToastMessage(t('family.sync.joinedBody'));
+    });
+  };
+
+  /**
+   * **参加中の端末**が別のグループへ追加参加する（G-2b — §12-2）。
+   * 開示（G6）で「やめる」なら即座にそのグループから抜ける — 追加グループは
+   * 控え（known groups）に載るまで pull されないので、この時点では何も共有されていない。
+   */
+  const handleJoinAdditionalGroup = async (codeArg?: string) => {
+    const code = normalizeJoinCode((codeArg ?? extraJoinCode).trim()).replace(/[\s-]/g, '');
+    if (!code) return;
+    // シート（RN Modal）を先に閉じる — DialogHost はルート描画なので、Modal が開いたままだと
+    // この後の確認ダイアログが Modal の裏に隠れて操作不能になる
+    setCreateSheetOpen(false);
+    await runSyncAction(async () => {
+      const joined = await joinAdditionalSyncGroup(code);
+      const name = joined.groupName ?? t('family.sync.groups.unnamedName');
+      const agreed = await confirmGroupDisclosure(name, joined.scope ?? 'all', joined.memberCount);
+      if (!agreed) {
+        await leaveAdditionalSyncGroup(joined.groupId).catch(() => undefined);
+        setToastMessage(t('family.sync.groups.joinCanceled'));
+        return;
+      }
+      setExtraJoinCode('');
+      // 控えに載せてから同期（§12-7 の順序）。onSyncGroupJoined は**呼ばない** —
+      // あれは初回参加用で、entity_groups とバックフィル完了フラグを白紙に戻してしまう
+      await loadGroups();
+      void runSync();
+      setToastMessage(t('family.sync.groups.joinedAdditional', { name }));
+    });
+  };
+
+  /** 2 つ目以降のグループ作成（G8）。名前と範囲は作成シートで決めてある */
+  const handleCreateAdditionalGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    // シートを先に閉じる（上の handleJoinAdditionalGroup と同じ理由）。
+    // 失敗しても入力（名前・範囲）は state に残るので、開き直せば続きから
+    setCreateSheetOpen(false);
+    await runSyncAction(async () => {
+      const created = await createAdditionalSyncGroup(name, newGroupScope);
+      setNewGroupName('');
+      setNewGroupScope('all');
+      // 新しいグループは**現在のグループにしない**（G2: 既定の所属先が黙って変わるのが
+      // いちばん怖い — 由紀の懸念）。一覧に出るので、使うときに自分で切り替える
+      await loadGroups();
+      void runSync();
+      await dialog.alert({
+        title: t('family.sync.groups.createdTitle'),
+        message: t('family.sync.groups.createdBody', { name, code: created.inviteCode }),
+      });
+    });
+  };
+
+  /** 「現在のグループ」の切替（G1/G2）。控えの更新 → current の順（§12-7） */
+  const handleSelectGroup = async (group: KnownGroupSummary, isPrimary: boolean) => {
+    if (group.groupId === currentGroupId || syncBusy) return;
+    await switchCurrentSyncGroup(group.groupId);
+    const resolved = await getCurrentSyncGroupId();
+    setCurrentGroupId(resolved);
+    if (resolved === group.groupId) {
+      setToastMessage(
+        t('family.sync.groups.switched', { name: groupDisplayName(group, isPrimary) }),
+      );
+    }
+  };
+
+  /**
+   * 追加グループの招待（オーナーのみ）。招待コードは /me（x-sync-group つき）から取り、
+   * 期限切れなら回してから送る。主グループの招待は従来の招待コード欄のまま。
+   */
+  const handleShareGroupInvite = async (group: KnownGroupSummary) => {
+    await runSyncAction(async () => {
+      const me = await fetchSyncMeForGroup(group.groupId);
+      let code = me.inviteCode;
+      if (
+        code &&
+        me.inviteExpiresAt &&
+        Number.isFinite(Date.parse(me.inviteExpiresAt)) &&
+        Date.parse(me.inviteExpiresAt) <= Date.now()
+      ) {
+        code = (await rotateSyncInvite(group.groupId)).inviteCode;
+      }
+      if (!code) throw new SyncError('OWNER_ONLY');
+      handleShareInvite(code);
     });
   };
 
@@ -387,6 +562,13 @@ export default function FamilyScreen() {
       void handleJoinGroup(inviteFromLink);
       return;
     }
+    // 参加中の端末が招待リンクを開いた ＝ 別のグループへの追加参加（G-2b）。
+    // 多グループ対応サーバーと確認できているときだけ（古いサーバーへ投げると
+    // 端末がもう 1 つ登録される事故になる — §12-2）
+    if (cloud.kind === 'joined' && multiGroupReady) {
+      void handleJoinAdditionalGroup(inviteFromLink);
+      return;
+    }
     // 既に参加中（またはサーバーに届かない・同期が使えない環境）。
     // 黙って捨てると「タップしたのに何も起きない」になるので一言出す
     void dialog.alert({
@@ -397,7 +579,9 @@ export default function FamilyScreen() {
           : 'family.sync.inviteLinkAlreadyJoined',
       ),
     });
-    // handleJoinGroup は毎描画で作り直されるので依存に入れない（入れると無限に再実行する）
+    // handleJoinGroup / handleJoinAdditionalGroup は毎描画で作り直されるので依存に入れない
+    // （入れると無限に再実行する）。multiGroupReady は cloud.kind と同時に確定する
+    // （loadCloud が loadGroups を await してから 'joined' を立てる）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inviteFromLink, cloud.kind, router]);
 
@@ -608,6 +792,71 @@ export default function FamilyScreen() {
 
           {cloud.kind === 'joined' && (
             <>
+              {/* ── グループ一覧と切替（G1/G2）。多グループ対応サーバー（または控えに
+                    複数残っている）ときだけ出す — 旧サーバーの単一グループ表示は従来のまま ── */}
+              {(multiGroupReady || groups.length > 1) && groups.length > 0 && (
+                <View style={styles.groupList}>
+                  <Text style={styles.syncInviteLabel}>{t('family.sync.groups.section')}</Text>
+                  {groups.map((group, index) => {
+                    const isPrimary = index === 0;
+                    const isCurrent = group.groupId === currentGroupId;
+                    return (
+                      <Pressable
+                        key={group.groupId}
+                        style={styles.groupRow}
+                        onPress={() => void handleSelectGroup(group, isPrimary)}
+                        disabled={syncBusy}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isCurrent }}
+                      >
+                        <View style={styles.groupCheck}>
+                          {isCurrent && <Check size={16} color={Colors.gold} />}
+                        </View>
+                        <View style={styles.groupRowBody}>
+                          <Text style={styles.groupRowName} numberOfLines={1}>
+                            {groupDisplayName(group, isPrimary)}
+                          </Text>
+                          <Text style={styles.groupRowMeta} numberOfLines={2}>
+                            {t(
+                              group.scope === 'recipes'
+                                ? 'family.sync.groups.scopeRecipes'
+                                : 'family.sync.groups.scopeAll',
+                            )}
+                            {group.memberCount > 0
+                              ? `${t('common.listSeparator')}${tCount('family.sync.groups.memberCount', group.memberCount)}`
+                              : ''}
+                            {isCurrent ? ` — ${t('family.sync.groups.currentMark')}` : ''}
+                          </Text>
+                        </View>
+                        {/* 追加グループの招待（オーナーのみ）。主グループは従来の招待欄が担う */}
+                        {group.isOwner && !isPrimary && (
+                          <Pressable
+                            onPress={() => void handleShareGroupInvite(group)}
+                            hitSlop={10}
+                            disabled={syncBusy}
+                            accessibilityLabel={t('family.sync.groups.invite')}
+                          >
+                            <Text style={styles.groupInviteLink}>
+                              {t('family.sync.groups.invite')}
+                            </Text>
+                          </Pressable>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                  {/* 控えめな作成導線（G8: 作りすぎを誘導しない — テキストリンク 1 本） */}
+                  {multiGroupReady && (
+                    <Pressable
+                      onPress={() => setCreateSheetOpen(true)}
+                      disabled={syncBusy}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.groupCreateLink}>{t('family.sync.groups.create')}</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
               <Text style={styles.syncMemberCount}>
                 {tCount('family.sync.memberCountLabel', cloud.me.memberCount)}
               </Text>
@@ -697,6 +946,87 @@ export default function FamilyScreen() {
           )}
         </View>
       </KeyboardAwareScroll>
+
+      {/* ── 新しいグループの作成シート（G8）。範囲の説明に「誰に何が見えるか」を必ず 1 行 ── */}
+      <BottomSheet
+        visible={createSheetOpen}
+        onClose={() => setCreateSheetOpen(false)}
+        title={t('family.sync.groups.createTitle')}
+      >
+        <Text style={styles.sheetNote}>{t('family.sync.groups.createNote')}</Text>
+        <TextInput
+          style={styles.input}
+          value={newGroupName}
+          onChangeText={setNewGroupName}
+          placeholder={t('family.sync.groups.namePlaceholder')}
+          placeholderTextColor={Colors.muted}
+          maxLength={30}
+        />
+        <Text style={styles.sheetScopeLabel}>{t('family.sync.groups.scopeLabel')}</Text>
+        {(['all', 'recipes'] as const).map((scope) => (
+          <Pressable
+            key={scope}
+            style={[styles.scopeOption, newGroupScope === scope && styles.scopeOptionActive]}
+            onPress={() => setNewGroupScope(scope)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: newGroupScope === scope }}
+          >
+            <View style={styles.groupCheck}>
+              {newGroupScope === scope && <Check size={16} color={Colors.gold} />}
+            </View>
+            <View style={styles.groupRowBody}>
+              <Text style={styles.groupRowName}>
+                {t(
+                  scope === 'all'
+                    ? 'family.sync.groups.scopeAllTitle'
+                    : 'family.sync.groups.scopeRecipesTitle',
+                )}
+              </Text>
+              <Text style={styles.groupRowMeta}>
+                {t(
+                  scope === 'all'
+                    ? 'family.sync.groups.scopeAllDesc'
+                    : 'family.sync.groups.scopeRecipesDesc',
+                )}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+        <Pressable
+          style={[
+            styles.primaryButton,
+            (newGroupName.trim().length === 0 || syncBusy) && styles.buttonDisabled,
+          ]}
+          onPress={() => void handleCreateAdditionalGroup()}
+          disabled={newGroupName.trim().length === 0 || syncBusy}
+        >
+          <Text style={styles.primaryButtonText}>{t('family.sync.groups.createSubmit')}</Text>
+        </Pressable>
+        {/* 招待コードで別のグループに参加（追加参加の手入力の逃げ道 — リンクが開けない相手用） */}
+        <View style={styles.inlineForm}>
+          <TextInput
+            style={[styles.input, styles.inlineInput]}
+            value={extraJoinCode}
+            onChangeText={(value) => setExtraJoinCode(normalizeJoinCode(value))}
+            placeholder={t('family.sync.groups.joinPlaceholder')}
+            placeholderTextColor={Colors.muted}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={12}
+          />
+          <Pressable
+            style={[
+              styles.iconButton,
+              (extraJoinCode.trim().length === 0 || syncBusy) && styles.buttonDisabled,
+            ]}
+            onPress={() => void handleJoinAdditionalGroup()}
+            disabled={extraJoinCode.trim().length === 0 || syncBusy}
+            accessibilityLabel={t('family.sync.join')}
+          >
+            <UserPlus size={17} color={Colors.bg} />
+          </Pressable>
+        </View>
+      </BottomSheet>
 
       <Toast
         message={toastMessage ?? ''}
@@ -946,4 +1276,44 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FF6B6B',
   },
+  // ── 多グループ（G-2b） ─────────────────────────────────────────────────────
+  groupList: { marginBottom: 14, gap: 2 },
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 52,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  groupCheck: { width: 20, alignItems: 'center' },
+  groupRowBody: { flex: 1, gap: 2 },
+  groupRowName: { fontSize: 15, fontWeight: '500', color: Colors.paper },
+  groupRowMeta: { fontSize: 12, color: Colors.paperDim, lineHeight: 17 },
+  groupInviteLink: { fontSize: 13, fontWeight: '500', color: Colors.gold, padding: 4 },
+  // 作成導線はテキストリンク 1 本（G8: グループは少数で足りる前提 — ボタンで誘導しない）
+  groupCreateLink: {
+    fontSize: 13,
+    color: Colors.goldDim,
+    paddingVertical: 10,
+  },
+  sheetNote: { fontSize: 13, lineHeight: 19, color: Colors.paperDim, marginBottom: 12 },
+  sheetScopeLabel: {
+    fontSize: 12,
+    color: Colors.muted,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  scopeOption: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+  },
+  scopeOptionActive: { borderColor: Colors.goldDim, backgroundColor: '#1A1108' },
 });
