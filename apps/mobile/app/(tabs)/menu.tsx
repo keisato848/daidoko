@@ -23,14 +23,26 @@ import {
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { MenuRecipeProposalSheet } from '../../src/components/MenuRecipeProposalSheet';
+import { ShoppingPickSheet } from '../../src/components/ShoppingPickSheet';
 import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
 import { MENU_AI_ENABLED } from '../../src/config';
 import { t, tCount } from '../../src/i18n';
+import { getMenuTasteMemo } from '../../src/services/app-meta.service';
 import { arrangeMenu, MenuArrangeError } from '../../src/services/menu-arrange.provider';
 import {
+  generateMenuRecipes,
+  MenuRecipesError,
+  type MenuRecipeDraft,
+} from '../../src/services/menu-recipes.provider';
+import {
+  addMenuShoppingRows,
   applyMenuArrangement,
   buildMenuArrangeContext,
+  buildMenuBulkContext,
+  buildMenuShoppingPlan,
+  fillMenuPlanShortfall,
   generateMenuPlan,
   getMenuPlan,
   replaceMenuDay,
@@ -38,9 +50,11 @@ import {
   type MenuDayView,
   type MenuPlanView,
 } from '../../src/services/menu-plan.service';
+import { createRecipe } from '../../src/services/recipe.service';
 import { ensureInferenceCredit } from '../../src/services/inference-gate.service';
 import { FREE_MONTHLY_LIMIT, recordCloudInference } from '../../src/services/usage.service';
 import { decodeReason } from '../../src/utils/menuPlan';
+import type { ShoppingPlanRow } from '../../src/utils/shoppingPlan';
 import { formatSnapshotTime } from '../../src/utils/widgetSnapshot';
 
 /** 日数の選択肢（設計 §10.7） */
@@ -55,6 +69,8 @@ function reasonText(reason: string): string {
   if (kind === 'few-missing') return t('menu.reason.fewMissing', { count: subject });
   // AI（M2）の理由はここでは翻訳しない — subject が AI 出力そのもの（ai-output-locale の世界）
   if (kind === 'ai') return subject;
+  // M3: 一括生成で新しく作って組み込んだ日
+  if (kind === 'ai-new') return t('menu.reason.aiNew');
   return '';
 }
 
@@ -70,6 +86,15 @@ export default function MenuScreen() {
   const [aiError, setAiError] = useState<string | null>(null);
   // A1: 直近の自動追加を取り消す（§10.11.2）。取り消し中もほかの操作は塞がない
   const [undoing, setUndoing] = useState(false);
+  // M3（一括生成・§10.12）。plan には成功して確定するまで一切触らない（M2 と同じ倒し方）
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  /** 提案レビューシート（M3-1）。null = 閉じている */
+  const [proposals, setProposals] = useState<MenuRecipeDraft[] | null>(null);
+  /** #214 の選択シート（M3-5）。null = 閉じている */
+  const [pickRows, setPickRows] = useState<ShoppingPlanRow[] | null>(null);
+  const [pickRecipeIds, setPickRecipeIds] = useState<Record<string, string>>({});
   // 「組む」直後の結果トースト。レシピが少ないと結果が前回と同じ = 再レンダー差分ゼロで
   // 「壊れた」ように見える（実機 Pixel で確認）ので、組めた/不足を必ず言う
   const [toastMessage, setToastMessage] = useState('');
@@ -167,6 +192,111 @@ export default function MenuScreen() {
       setAiRunning(false);
     }
   }, [days, router]);
+
+  // M3-5: 献立の不足材料を #214 の選択シートへ（在庫突合・自動では入れない）。
+  // 一括生成の確定後と、既存の「足りない材料をまとめて追加」ボタンの両方から入る
+  const openShoppingPick = useCallback(async (): Promise<boolean> => {
+    const plan = await buildMenuShoppingPlan();
+    if (!plan || plan.rows.length === 0) {
+      setToastMessage(t('menu.shopping.none'));
+      setToastVisible(true);
+      return false;
+    }
+    setPickRecipeIds(plan.recipeIdByName);
+    setPickRows(plan.rows);
+    return true;
+  }, []);
+
+  const commitShoppingPick = useCallback(
+    async (selected: ShoppingPlanRow[]) => {
+      setPickRows(null);
+      const added = await addMenuShoppingRows(selected, pickRecipeIds).catch(() => 0);
+      setToastMessage(
+        added > 0
+          ? tCount('recipe.detail.shoppingAdded', added)
+          : t('recipe.detail.shoppingAllOnList'),
+      );
+      setToastVisible(true);
+    },
+    [pickRecipeIds],
+  );
+
+  // M3: 不足分レシピの一括生成。1 操作 = LLM 呼び出し 1 回 = 無料枠 1 消費（M3-3）。
+  // 失敗・空結果はエラー文言だけ出し、プランには一切触らない（M2 と同じ倒し方）
+  const runBulkGenerate = useCallback(async () => {
+    const requested = view?.plan.requestedDays;
+    const missingDays =
+      view && typeof requested === 'number' ? Math.max(0, requested - view.days.length) : 0;
+    if (missingDays <= 0 || bulkRunning) return;
+
+    setBulkError(null);
+    const gate = await ensureInferenceCredit();
+    if (gate === 'paywall') {
+      router.push('/recipes/paywall');
+      return;
+    }
+    if (gate !== 'ready') return; // cancelled — 何も変えない
+
+    setBulkRunning(true);
+    try {
+      const [context, memo] = await Promise.all([buildMenuBulkContext(), getMenuTasteMemo()]);
+      if (!context) throw new MenuRecipesError(t('menu.bulk.failed'), true);
+      const drafts = await generateMenuRecipes({
+        days: missingDays,
+        existingTitles: context.existingTitles,
+        pantry: context.pantryNames,
+        ...(memo ? { preferences: memo } : {}),
+      });
+      if (drafts.length === 0) throw new MenuRecipesError(t('menu.bulk.emptyResult'), true);
+      // 成功時だけ枠を消費。一括で 1 回分（M3-3）。BYOK・プレミアムは内部で no-op
+      void recordCloudInference().catch(() => undefined);
+      setProposals(drafts); // 提案レビューへ（M3-1・自動確定にしない）
+    } catch (err) {
+      setBulkError(err instanceof MenuRecipesError ? err.message : t('menu.bulk.failed'));
+    } finally {
+      setBulkRunning(false);
+    }
+  }, [view, bulkRunning, router]);
+
+  // M3-1 の確定: 採用分だけを aiGenerated=true で保存（M3-2・#266 の印を流用）→
+  // 献立の空き日に組み込み → #214 の選択シートへ接続（M3-5・自動では入れない）
+  const confirmProposals = useCallback(
+    async (selected: MenuRecipeDraft[]) => {
+      if (selected.length === 0) return;
+      setBulkSaving(true);
+      try {
+        const additions: { recipeId: string; title: string }[] = [];
+        for (const draft of selected) {
+          const recipeId = await createRecipe({
+            title: draft.title,
+            ...(draft.description !== undefined && { description: draft.description }),
+            ...(draft.servings !== undefined && { servings: draft.servings }),
+            ...(draft.cookTimeMin !== undefined && { cookTimeMin: draft.cookTimeMin }),
+            ingredients: draft.ingredients.map((ing) => ({
+              name: ing.name,
+              ...(ing.amount !== undefined && { amount: ing.amount }),
+            })),
+            steps: draft.steps.map((step) => ({ body: step.body })),
+            tags: draft.tags ?? [],
+            aiGenerated: true,
+          });
+          additions.push({ recipeId, title: draft.title });
+        }
+        setProposals(null);
+        const next = await fillMenuPlanShortfall(additions);
+        if (next) setView(next);
+        setToastMessage(tCount('menu.bulk.done', additions.length));
+        setToastVisible(true);
+        // 買い物リストへは確認ステップ経由（M3-5）。シートが開けば toast はその背後に出る
+        await openShoppingPick().catch(() => undefined);
+      } catch {
+        setBulkError(t('menu.bulk.saveFailed'));
+      } finally {
+        setBulkSaving(false);
+      }
+    },
+    [openShoppingPick],
+  );
 
   if (!loaded) {
     return (
@@ -325,20 +455,35 @@ export default function MenuScreen() {
             ))}
 
             {/* 要求日数に届かなかったときのバナー（一覧の末尾に 1 つ・空カードは並べない）。
-              次の一手を 2 つ添える: AI 相談（0 件時と同じ導線の再利用）とレシピ追加 */}
+              主ボタンは M3 の一括生成（§10.12 — 「AI に相談して作る」はここへ吸収）。
+              「レシピを追加」は残す（M3 はあくまで提案。手で選びたい人の道を塞がない） */}
             {shortfall > 0 ? (
               <View style={styles.shortfallBanner}>
                 <Text style={styles.shortfallText}>
                   {tCount('menu.shortfall.banner', shortfall)}
                 </Text>
                 <Pressable
-                  style={styles.secondary}
-                  onPress={() => router.push('/recipes/consult')}
+                  style={[styles.bulkButton, (bulkRunning || busy) && styles.disabled]}
+                  onPress={() => void runBulkGenerate()}
+                  disabled={bulkRunning || busy}
                   accessibilityRole="button"
                 >
-                  <ChefHat size={16} color={Colors.gold} />
-                  <Text style={styles.secondaryText}>{t('menu.emptyDays.toConsult')}</Text>
+                  {bulkRunning ? (
+                    <ActivityIndicator size="small" color={Colors.bg} />
+                  ) : (
+                    <Wand2 size={16} color={Colors.bg} />
+                  )}
+                  <Text style={styles.bulkButtonText}>
+                    {bulkRunning
+                      ? t('menu.bulk.generating')
+                      : tCount('menu.shortfall.bulkGenerate', shortfall)}
+                  </Text>
                 </Pressable>
+                {/* 残数は出さない。上限の静的表示だけ（§10.10.4 と同じ判断） */}
+                <Text style={styles.aiLimitNote}>
+                  {tCount('menu.ai.limitNote', FREE_MONTHLY_LIMIT)}
+                </Text>
+                {bulkError ? <Text style={styles.bulkErrorText}>{bulkError}</Text> : null}
                 <Pressable
                   style={styles.secondary}
                   onPress={() => router.push('/(tabs)/add')}
@@ -350,9 +495,11 @@ export default function MenuScreen() {
               </View>
             ) : null}
 
+            {/* M3-5: #214 の選択シートへ（在庫突合・自動では入れない）。以前は /shopping へ
+              遷移するだけで実際には何も追加していなかった — ラベルどおりの挙動に接続 */}
             <Pressable
               style={styles.secondary}
-              onPress={() => router.push('/shopping')}
+              onPress={() => void openShoppingPick()}
               accessibilityRole="button"
             >
               <ShoppingCart size={16} color={Colors.gold} />
@@ -374,6 +521,23 @@ export default function MenuScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* M3-1: 提案レビュー。1 品ずつ採用/却下・既定は全採用・ワンタップ確定 */}
+      <MenuRecipeProposalSheet
+        visible={proposals !== null}
+        drafts={proposals ?? []}
+        busy={bulkSaving}
+        onCancel={() => setProposals(null)}
+        onConfirm={(selected) => void confirmProposals(selected)}
+      />
+
+      {/* M3-5: #214 の選択シート（在庫突合）。確定後・「まとめて追加」ボタンの両方から */}
+      <ShoppingPickSheet
+        visible={pickRows !== null}
+        rows={pickRows ?? []}
+        onCancel={() => setPickRows(null)}
+        onConfirm={(selected) => void commitShoppingPick(selected)}
+      />
 
       {/* 「組む」直後の結果トースト（数秒で消える）。ScrollView の外 = 画面に対して固定 */}
       <Toast
@@ -530,6 +694,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   shortfallText: { fontSize: 14, color: Colors.muted },
+  // M3: 一括生成の主ボタン（バナー内。塗りは「組む」と同じ gold = 主導線であることを示す）
+  bulkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.gold,
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  bulkButtonText: { fontSize: 14, color: Colors.bg, fontWeight: '600' },
+  bulkErrorText: { fontSize: 13, color: Colors.muted, marginTop: 6 },
   empty: { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyTitle: { fontSize: 15, color: Colors.paper },
   emptyBody: { fontSize: 14, color: Colors.muted, textAlign: 'center', lineHeight: 22 },

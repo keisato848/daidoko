@@ -32,6 +32,31 @@ const menu = {
       other: 'Not enough recipes for {{count}} more days',
     },
     addRecipe: 'Add a recipe',
+    bulkGenerate: {
+      one: 'Create {{count}} missing day in one go',
+      other: 'Create the missing {{count}} days in one go',
+    },
+  },
+  bulk: {
+    generating: 'Thinking up recipes…',
+    failed: "We couldn't create the recipes. Your meal plan is unchanged.",
+    emptyResult: "We couldn't use the AI suggestions. Your meal plan is unchanged.",
+    saveFailed: "We couldn't save the recipes. Please try again.",
+    sheetTitle: 'AI recipe suggestions',
+    sheetBody: 'Pick the ones you want. Saved recipes fill the empty days of your plan.',
+    ingredientCount: {
+      one: '{{count}} ingredient',
+      other: '{{count}} ingredients',
+    },
+    confirm: {
+      one: 'Keep this {{count}} recipe',
+      other: 'Keep these {{count}} recipes',
+    },
+    confirmNone: 'Pick at least one',
+    done: {
+      one: 'Created {{count}} recipe and added it to your plan',
+      other: 'Created {{count}} recipes and added them to your plan',
+    },
   },
   day: {
     label: 'Day {{day}}',
@@ -47,6 +72,7 @@ const menu = {
     coverage: 'You already have {{count}} of the ingredients',
     pinned: "It's on your want-to-cook list",
     fewMissing: 'Only {{count}} things to buy',
+    aiNew: 'Newly created by AI',
   },
   claim: {
     contested: 'Used on {{count}} days',
@@ -93,6 +119,10 @@ const menu = {
     childLabel: 'Add missing ingredients automatically',
     childSubtitle:
       "One person in your family turning this on is enough. If two people turn it on, each person's missing ingredients go to the same list. It also goes to the shopping list shared with your family. Items you already have may be added sometimes — undo it with a tap from the meal plan screen.",
+    tasteLabel: "Family's likes and dislikes",
+    tasteSubtitle:
+      'Used when AI creates recipes in one go (e.g. "no seafood", "mild spice only"). Stored only on this device — never shared with your family.',
+    tastePlaceholder: 'e.g. No raw fish. Our staples are onions and carrots',
     clearAction: 'Clear meal plan',
     clearConfirmTitle: 'Clear this meal plan?',
     clearConfirmBody: "Your pantry and shopping list won't change. This can't be undone.",

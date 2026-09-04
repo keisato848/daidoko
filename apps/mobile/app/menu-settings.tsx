@@ -9,21 +9,25 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Trash2 } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { HeaderBackButton } from '../src/components/HeaderBackButton';
+import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { NumberStepper } from '../src/components/NumberStepper';
 import { Colors } from '../src/constants/theme';
 import { t } from '../src/i18n';
 import {
   getMenuAutoDays,
   getMenuAutoNotifyTime,
+  getMenuTasteMemo,
   isMenuAutoAddEnabled,
   isMenuAutoEnabled,
+  MENU_TASTE_MEMO_MAX_LENGTH,
   setMenuAutoAddEnabled,
   setMenuAutoDays,
   setMenuAutoEnabled,
   setMenuAutoNotifyTime,
+  setMenuTasteMemo,
 } from '../src/services/app-meta.service';
 import { dialog } from '../src/services/dialog.service';
 import {
@@ -55,6 +59,8 @@ export default function MenuSettingsScreen() {
   const [childOn, setChildOn] = useState(false);
   const [days, setDays] = useState(3);
   const [notifyTime, setNotifyTime] = useState<MenuAutoNotifyTime>({ hour: 7, minute: 0 });
+  // M3-4: 家族の嗜好メモ（ローカル保存・同期しない）。一括生成にだけ渡す
+  const [tasteMemo, setTasteMemo] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -63,11 +69,13 @@ export default function MenuSettingsScreen() {
         isMenuAutoAddEnabled(),
         getMenuAutoDays(),
         getMenuAutoNotifyTime(),
-      ]).then(([auto, add, x, time]) => {
+        getMenuTasteMemo(),
+      ]).then(([auto, add, x, time, memo]) => {
         setParentOn(auto);
         setChildOn(add);
         setDays(x);
         setNotifyTime(time);
+        setTasteMemo(memo);
         setLoaded(true);
       });
     }, []),
@@ -126,7 +134,8 @@ export default function MenuSettingsScreen() {
   if (!loaded) return null;
 
   return (
-    <View style={styles.container}>
+    // 嗜好メモ（M3-4）の TextInput があるので KeyboardAvoider で包む（S21 全体）
+    <KeyboardAvoider style={styles.container}>
       <View style={styles.header}>
         <HeaderBackButton />
         <Text style={styles.headerTitle}>{t('menu.settings.title')}</Text>
@@ -191,6 +200,25 @@ export default function MenuSettingsScreen() {
           />
         </View>
 
+        {/* M3-4: 家族の嗜好・定番食材は事前登録して毎回聞かない（§10.12）。
+          親トグルとは独立 — 一括生成（M3）は自動モードがオフでも使える。
+          保存は編集を終えたとき（onEndEditing/onBlur）。1 文字ごとに DB へ書かない */}
+        <View style={styles.tasteSection}>
+          <Text style={styles.rowLabel}>{t('menu.settings.tasteLabel')}</Text>
+          <Text style={styles.rowSubtitle}>{t('menu.settings.tasteSubtitle')}</Text>
+          <TextInput
+            style={styles.tasteInput}
+            value={tasteMemo}
+            onChangeText={setTasteMemo}
+            onEndEditing={() => void setMenuTasteMemo(tasteMemo).catch(() => undefined)}
+            onBlur={() => void setMenuTasteMemo(tasteMemo).catch(() => undefined)}
+            placeholder={t('menu.settings.tastePlaceholder')}
+            placeholderTextColor={Colors.muted}
+            multiline
+            maxLength={MENU_TASTE_MEMO_MAX_LENGTH}
+          />
+        </View>
+
         <Pressable
           style={styles.clearButton}
           onPress={() => void handleClearPlan()}
@@ -200,7 +228,7 @@ export default function MenuSettingsScreen() {
           <Text style={styles.clearButtonText}>{t('menu.settings.clearAction')}</Text>
         </Pressable>
       </ScrollView>
-    </View>
+    </KeyboardAvoider>
   );
 }
 
@@ -245,6 +273,19 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
   chipText: { fontSize: 14, color: Colors.paper },
   chipTextActive: { color: Colors.bg },
+  tasteSection: { gap: 6, paddingTop: 4 },
+  tasteInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: '#130E08',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: Colors.paper,
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
   clearButton: {
     flexDirection: 'row',
     alignItems: 'center',

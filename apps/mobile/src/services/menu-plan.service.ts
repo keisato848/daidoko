@@ -28,12 +28,14 @@ import { shouldHideSeedRecipe } from '../db/sampleData';
 import { secondsUntilNextMenuNotifyTime } from '../utils/menuAuto';
 import {
   adoptOrBuildMenuPlan,
+  appendShortfallDays,
   applyArrangement,
   buildArrangeCandidates,
   buildClaims,
   buildMenu,
   encodeReason,
   menuDateKey,
+  mergeMenuIngredients,
   mergeMissingIngredients,
   rollMenuPlan,
   toRollableDays,
@@ -43,6 +45,7 @@ import {
   type MenuRecipe,
   type RollableMenuDay,
 } from '../utils/menuPlan';
+import { buildShoppingPlan, type ShoppingPlanRow } from '../utils/shoppingPlan';
 
 const MENU_PLAN_KEY = 'menu_plan';
 
@@ -515,6 +518,147 @@ export async function getMenuShortages(): Promise<{ name: string; amounts: strin
   ]);
   const activeDays = current.plan.days.filter((d) => d.doneAt === null);
   return mergeMissingIngredients(activeDays, recipes, pantry.items, aliases);
+}
+
+// ─── M3: 不足分レシピの一括生成（§10.12）────────────────────────────────────
+
+/** 一括生成（M3）に渡す入力。読むだけで保存はしない（`menu-recipes.provider.ts` へそのまま渡せる形）。 */
+export interface MenuBulkContext {
+  /** 手持ちレシピのタイトル（重複回避用・≤30 は provider 側が最終保証） */
+  existingTitles: string[];
+  /** 在庫の品名だけ（≤50 は provider 側が最終保証） */
+  pantryNames: string[];
+}
+
+/**
+ * 一括生成（M3）に渡す手持ちタイトル・在庫名を組み立てる。**DB を読むだけ**
+ * （保存・AI 呼び出しはしない）。上限（30/50）はここでも切っておく —
+ * 蔵書が育った端末で全タイトルを base64 でもないのに延々送らないため。
+ */
+export async function buildMenuBulkContext(): Promise<MenuBulkContext | null> {
+  if (!isNativePlatform) return null;
+  const [recipes, pantry] = await Promise.all([loadMenuRecipes(), loadPantry()]);
+  return {
+    existingTitles: recipes.map((r) => r.title).slice(0, 30),
+    pantryNames: pantry.items.map((p) => p.name).slice(0, 50),
+  };
+}
+
+/**
+ * 一括生成で保存したレシピを、献立の**空き日（末尾）**へ組み込んで保存する（M3・§10.12）。
+ * 判断は `utils/menuPlan.ts` の `appendShortfallDays`（純関数）にあり、ここは読み書きだけ。
+ *
+ * - `requestedDays` は維持する（超えては積まない）
+ * - `generatedAt` は**動かさない** — `markDone` の突合起点で、動かすと既存の日の
+ *   「作った」検出が巻き戻る。追加レシピは今作ったばかりで古い調理記録は無い
+ * - `anchorDate`・`autoAddedItemIds`・`aiNote` もそのまま（既存の日は一切触らない）
+ */
+export async function fillMenuPlanShortfall(
+  additions: readonly { recipeId: string; title: string }[],
+): Promise<MenuPlanView | null> {
+  if (!isNativePlatform) return null;
+  const stored = await readStoredMenuPlan();
+  if (!stored || additions.length === 0) return null;
+
+  const requested = stored.requestedDays ?? stored.days.length + additions.length;
+  const nextDays = appendShortfallDays(stored.days as RollableMenuDay[], requested, additions);
+  const plan: StoredMenuPlan = { ...stored, days: nextDays };
+  await setAppMeta(MENU_PLAN_KEY, JSON.stringify(plan));
+  refreshWidgetSnapshot();
+
+  const { getAliasMap } = await import('./name-alias.service');
+  const [recipes, pantry, aliases] = await Promise.all([
+    loadMenuRecipes(),
+    loadPantry(),
+    getAliasMap(),
+  ]);
+  return hydrate(plan, recipes, pantry, aliases);
+}
+
+/** `buildMenuShoppingPlan` の戻り値。行と、追加時に由来を印すためのレシピ対応表。 */
+export interface MenuShoppingPlan {
+  rows: ShoppingPlanRow[];
+  /** 材料名 → 由来レシピ id（買い物リスト行の「献立から」バッジのタップ先・M3-6） */
+  recipeIdByName: Record<string, string>;
+}
+
+/**
+ * 献立の全日ぶんの材料を #214 の選択シートに渡す形へ組み立てる（M3-5・**書き込まない**）。
+ *
+ * `shopping-list.service.buildRecipeShoppingPlan`（レシピ 1 品版）の献立版。
+ * 在庫にある材料も**消さずに**理由付きで見せ、選ぶのは利用者
+ * （`docs/買い物リスト・在庫設計.md` §5.3-a）。複数日の同じ材料は先に 1 行へ
+ * まとめる（§10.4 — まとめずに足すと `addShoppingItem` が 2 件目を黙って捨てる）。
+ * ここでも名寄せ辞書を育てる（buildRecipeShoppingPlan と同じ理由・§6）。
+ */
+export async function buildMenuShoppingPlan(): Promise<MenuShoppingPlan | null> {
+  if (!isNativePlatform) return null;
+  const stored = await readStoredMenuPlan();
+  if (!stored) return null;
+
+  const { getInStockForMatching } = await import('./pantry.service');
+  const { getAliasMap } = await import('./name-alias.service');
+  const { isInStock } = await import('../utils/itemMatch');
+  const { normalizeItemName } = await import('../utils/itemName');
+
+  const recipes = await loadMenuRecipes();
+  const activeDays = stored.days.filter((d) => d.doneAt === null);
+  const ingredients = mergeMenuIngredients(activeDays, recipes);
+  if (ingredients.length === 0) return { rows: [], recipeIdByName: {} };
+
+  const [stocks, currentAliases, listed] = await Promise.all([
+    getInStockForMatching(),
+    getAliasMap(),
+    getShoppingItems(),
+  ]);
+  let aliases = currentAliases;
+
+  const stockNames = stocks.map((stock) => stock.nameNormalized);
+  const unresolved = ingredients
+    .map((ingredient) => normalizeItemName(ingredient.name))
+    .filter((name) => name && !isInStock(name, stockNames, aliases));
+  if (unresolved.length > 0) {
+    const { resolveNames } = await import('./name-resolve.service');
+    const resolved = await resolveNames(unresolved).catch(() => null);
+    if (resolved && resolved.resolved > 0) aliases = await getAliasMap();
+  }
+
+  const pending = listed.filter((item) => !item.checked).map((item) => item.name);
+  const rows = buildShoppingPlan(
+    ingredients.map((ingredient) => ({ name: ingredient.name, amount: ingredient.amount })),
+    stocks,
+    pending,
+    aliases,
+  );
+  const recipeIdByName = Object.fromEntries(
+    ingredients.map((ingredient) => [ingredient.name, ingredient.recipeId]),
+  );
+  return { rows, recipeIdByName };
+}
+
+/**
+ * #214 シートで選んだ行だけを買い物リストへ入れる（M3-5/M3-6）。
+ * source は `menu_auto` — 買い物リスト側に「献立から」の印が付き、タップで
+ * 由来レシピが開く（§10.11.2 の表示を流用）。**`autoAddedItemIds` には積まない** —
+ * あれは自動追加バッチの取り消し台帳で、利用者がシートで確認して入れた行を
+ * 「自動で追加した◯件を取り消す」の対象にすると文言が嘘になる。
+ * 返すのは実際に足せた数（同名が未購入で並んでいるときは足さない）。
+ */
+export async function addMenuShoppingRows(
+  rows: readonly ShoppingPlanRow[],
+  recipeIdByName: Record<string, string>,
+): Promise<number> {
+  if (!isNativePlatform) return 0;
+  let added = 0;
+  for (const row of rows) {
+    const recipeId = recipeIdByName[row.name];
+    const inserted = await addShoppingItem(row.name, row.amount ?? undefined, {
+      source: 'menu_auto',
+      ...(recipeId !== undefined && { recipeId }),
+    });
+    if (inserted) added += 1;
+  }
+  return added;
 }
 
 /** 献立を捨てる（設定からの「消す」用） */

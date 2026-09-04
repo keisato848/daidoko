@@ -52,6 +52,36 @@ const menu = {
       other: 'あと{{count}}日分のレシピが足りません',
     } satisfies PluralMessage,
     addRecipe: 'レシピを追加',
+    /** M3（§10.12）: 不足分を AI で一括生成する主ボタン。「AI に相談して作る」はここへ吸収 */
+    bulkGenerate: {
+      one: '足りない{{count}}日分をまとめて作る',
+      other: '足りない{{count}}日分をまとめて作る',
+    } satisfies PluralMessage,
+  },
+  /**
+   * M3: 不足分レシピの一括生成（§10.12）。生成は提案であって自動確定にしない（M3-1）。
+   * 失敗文言は M2 と同じ倒し方 — 「献立はそのままです」を必ず言う（押し損の不安を消す）。
+   */
+  bulk: {
+    generating: 'レシピを考えています…',
+    failed: 'レシピの一括生成に失敗しました。献立はそのままです。',
+    emptyResult: 'AIからの提案を使えませんでした。献立はそのままです。',
+    saveFailed: 'レシピの保存に失敗しました。もう一度お試しください。',
+    sheetTitle: 'AIのレシピ提案',
+    sheetBody: '採用する提案を選んでください。保存したレシピは献立の空き日に入ります。',
+    ingredientCount: {
+      one: '材料{{count}}品',
+      other: '材料{{count}}品',
+    } satisfies PluralMessage,
+    confirm: {
+      one: 'この{{count}}品で確定',
+      other: 'この{{count}}品で確定',
+    } satisfies PluralMessage,
+    confirmNone: '選んでください',
+    done: {
+      one: '{{count}}品を作成して献立に組み込みました',
+      other: '{{count}}品を作成して献立に組み込みました',
+    } satisfies PluralMessage,
   },
   /** 各日のカード */
   day: {
@@ -73,6 +103,8 @@ const menu = {
     coverage: 'いまある{{count}}品で作れるから',
     pinned: '作りたいリストにあるから',
     fewMissing: '買い足しが{{count}}品で済むから',
+    /** M3: 一括生成で新しく作って組み込んだ日（AI バッジはレシピ側 #266 が担う） */
+    aiNew: 'AIが新しく作ったレシピ',
   },
   /** 在庫の食い合い。足りるかどうかは言わない（言えないから・§10.9） */
   claim: {
@@ -140,6 +172,11 @@ const menu = {
     childLabel: '足りない材料を自動で追加',
     childSubtitle:
       '家族で1人がオンにすれば足ります。2人がオンにすると、それぞれの献立の不足分が同じリストに入ります。家族と共有中の買い物リストにも入ります。在庫にある物が入ることがあります。献立画面からタップで取り消せます。',
+    /** M3-4: 家族の嗜好メモ。ローカル保存・同期しない。一括生成にだけ渡す */
+    tasteLabel: '家族の好み・避けたいもの',
+    tasteSubtitle:
+      'AIでレシピをまとめて作るときに考慮します（例:「義母は洋食を食べない」「辛いものは控えめに」）。この端末にだけ保存され、家族には共有されません。',
+    tastePlaceholder: '例: 義母は洋食を食べない。定番野菜は玉ねぎ・にんじん',
     /** 破壊的操作。押すと確認ダイアログを挟む（dialog.confirm）。在庫・買い物リストは変わらない */
     clearAction: '献立を消す',
     clearConfirmTitle: '献立を消しますか？',
