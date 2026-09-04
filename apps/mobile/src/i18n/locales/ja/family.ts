@@ -108,6 +108,53 @@ const family = {
       evictBody:
         '最終同期が{{when}}の端末を共有から外します。外した端末のデータは残りますが、同期は止まります。招待コードは新しく発行されます（外した端末は同じコードで戻れません）。',
     },
+    /**
+     * 多グループ（G-2b — docs/共有設計.md §5-4）。用語は「グループを作る/参加/切替」。
+     * 範囲の説明には**誰に何が見えるかを必ず 1 行**入れる（§3-2 の流儀）。
+     */
+    groups: {
+      section: '共有グループ',
+      /** 既存の（無名の）主グループの表示名。§12-4: 既存グループはそのまま「家族」になる */
+      primaryName: '家族グループ',
+      unnamedName: '名前のないグループ',
+      currentMark: 'いま見ているグループ',
+      scopeAll: '全部を共有',
+      scopeRecipes: 'レシピだけ共有',
+      memberCount: {
+        one: 'メンバー {{count}}人',
+        other: 'メンバー {{count}}人',
+      } satisfies PluralMessage,
+      switched: '「{{name}}」に切り替えました。新しく作るレシピや品目はこのグループに入ります。',
+      invite: '招待',
+      create: '新しいグループを作る',
+      createTitle: '新しいグループ',
+      createNote:
+        '相手ごとに共有の範囲を分けたいときに作ります。ふだんは今のグループのままで足ります。',
+      namePlaceholder: 'グループ名（例: 娘と）',
+      scopeLabel: '共有する範囲',
+      scopeAllTitle: '全部',
+      scopeAllDesc: 'レシピ・レシピ帖・買い物リスト・在庫が、このグループのメンバーに見えます。',
+      scopeRecipesTitle: 'レシピだけ',
+      scopeRecipesDesc:
+        'レシピとレシピ帖だけがメンバーに見えます。買い物リストと在庫は見えません。',
+      createSubmit: '作る',
+      createdTitle: 'グループを作りました',
+      createdBody:
+        '「{{name}}」を作りました。招待コード: {{code}}\n参加した人に見えるのは、これからこのグループに入れたものだけです。',
+      joinPlaceholder: '招待コードで別のグループに参加',
+      /**
+       * 参加の確認（G6）。参加リクエストの応答で分かったグループ名・範囲・人数を
+       * 見せてから確定する。「やめる」で即座に取り消される（まだ何も共有されていない）
+       */
+      joinConfirmTitle: '「{{name}}」に参加しますか？',
+      joinConfirmBodyAll: 'このグループでは レシピ・レシピ帖・買い物リスト・在庫 が共有されます。',
+      joinConfirmBodyRecipes:
+        'このグループでは レシピ・レシピ帖だけ が共有されます。買い物リストと在庫は共有されません。',
+      joinKeep: '参加する',
+      joinCancel: 'やめる',
+      joinCanceled: '参加を取り消しました。',
+      joinedAdditional: '「{{name}}」に参加しました。',
+    },
     leave: 'このグループから離脱',
     leaveConfirmTitle: 'グループから離脱しますか？',
     leaveConfirmBody:

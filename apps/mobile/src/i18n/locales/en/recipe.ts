@@ -78,6 +78,12 @@ const recipe: typeof ja = {
       revisions: 'Version history',
     },
 
+    shareState: {
+      groups: 'Shared: {{names}}',
+      private: 'Only me',
+      link: 'Public link',
+    },
+
     shareSheet: {
       title: 'Share this recipe',
       familyJoined: 'Share with family',

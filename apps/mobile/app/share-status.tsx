@@ -16,12 +16,25 @@ import { HeaderBackButton } from '../src/components/HeaderBackButton';
 import { Colors } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { dialog } from '../src/services/dialog.service';
-import { getShareStatus, type ShareStatus } from '../src/services/share-status.service';
+import { refreshKnownSyncGroups } from '../src/services/entity-groups.service';
+import {
+  getShareStatus,
+  type GroupShareSection,
+  type ShareStatus,
+} from '../src/services/share-status.service';
 import {
   renewWebShare,
   revokeWebShare,
   type WebShareRecipeListItem,
 } from '../src/services/web-share.service';
+
+/** グループ名の表示（無名の主グループは「家族グループ」— §12-4 G7 の読み替え） */
+function groupDisplayName(group: GroupShareSection): string {
+  if (group.name) return group.name;
+  return group.isPrimary
+    ? t('family.sync.groups.primaryName')
+    : t('family.sync.groups.unnamedName');
+}
 
 export default function ShareStatusScreen() {
   const router = useRouter();
@@ -33,7 +46,12 @@ export default function ShareStatusScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void load();
+      void (async () => {
+        // まず手元の控えで即表示し、サーバーの membership 一覧が取れたら
+        // （グループ名・メンバー数が変わりうるので）静かに出し直す。オフラインなら前者のまま
+        await load();
+        if ((await refreshKnownSyncGroups()) != null) await load();
+      })();
     }, [load]),
   );
 
@@ -77,25 +95,87 @@ export default function ShareStatusScreen() {
       </View>
       {status && (
         <ScrollView contentContainerStyle={styles.list}>
-          {/* ── 家族グループ ── */}
-          <Text style={styles.sectionLabel}>{t('settings.shareStatus.familySection')}</Text>
-          <Pressable style={styles.card} onPress={() => router.push('/family')}>
-            <Users size={18} color={Colors.gold} />
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>
-                {status.familyJoined
-                  ? t('settings.shareStatus.familyJoined')
-                  : t('settings.shareStatus.familyNotJoined')}
-              </Text>
-              <Text style={styles.cardMeta}>
-                {status.familyJoined
-                  ? t('settings.shareStatus.familyJoinedNote')
-                  : t('settings.shareStatus.familyNotJoinedNote')}
-              </Text>
-            </View>
-            <ChevronRight size={16} color={Colors.muted} />
-          </Pressable>
-          <Text style={styles.scopeNote}>{t('settings.shareStatus.familyScope')}</Text>
+          {/* ── 共有グループ（G5/U3: グループごとに実数と否定側を出す） ── */}
+          {status.groups.length > 0 ? (
+            <>
+              <Text style={styles.sectionLabel}>{t('family.sync.groups.section')}</Text>
+              {status.groups.map((group) => {
+                const countParts = [
+                  tCount('settings.shareStatus.groupCountRecipes', group.recipes),
+                  tCount('settings.shareStatus.groupCountBooks', group.books),
+                  ...(group.shopping != null
+                    ? [tCount('settings.shareStatus.groupCountShopping', group.shopping)]
+                    : []),
+                  ...(group.pantry != null
+                    ? [tCount('settings.shareStatus.groupCountPantry', group.pantry)]
+                    : []),
+                ];
+                return (
+                  <Pressable
+                    key={group.groupId}
+                    style={styles.card}
+                    onPress={() => router.push('/family')}
+                  >
+                    <Users size={18} color={Colors.gold} />
+                    <View style={styles.cardBody}>
+                      <Text style={styles.cardTitle} numberOfLines={1}>
+                        {groupDisplayName(group)}
+                        {group.isCurrent && (
+                          <Text style={styles.currentMark}>
+                            {'  '}
+                            {t('settings.shareStatus.groupCurrentMark')}
+                          </Text>
+                        )}
+                      </Text>
+                      <Text style={styles.cardMeta}>
+                        {t(
+                          group.scope === 'recipes'
+                            ? 'family.sync.groups.scopeRecipes'
+                            : 'family.sync.groups.scopeAll',
+                        )}
+                        {group.memberCount > 0
+                          ? `${t('common.listSeparator')}${tCount('family.sync.groups.memberCount', group.memberCount)}`
+                          : ''}
+                      </Text>
+                      <Text style={styles.cardMeta}>
+                        {t('settings.shareStatus.groupSharedLabel')}:{' '}
+                        {countParts.join(t('common.listSeparator'))}
+                      </Text>
+                      {/* 否定側の明示（G5）。0 件表示では「見えていない」ことの確認にならない */}
+                      {group.showsRecipesOnlyNote && (
+                        <Text style={styles.notVisibleNote}>
+                          {t('settings.shareStatus.groupNotVisible')}
+                        </Text>
+                      )}
+                    </View>
+                    <ChevronRight size={16} color={Colors.muted} />
+                  </Pressable>
+                );
+              })}
+              <Text style={styles.scopeNote}>{t('settings.shareStatus.groupsNotShared')}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.sectionLabel}>{t('settings.shareStatus.familySection')}</Text>
+              <Pressable style={styles.card} onPress={() => router.push('/family')}>
+                <Users size={18} color={Colors.gold} />
+                <View style={styles.cardBody}>
+                  <Text style={styles.cardTitle}>
+                    {status.familyJoined
+                      ? t('settings.shareStatus.familyJoined')
+                      : t('settings.shareStatus.familyNotJoined')}
+                  </Text>
+                  <Text style={styles.cardMeta}>
+                    {status.familyJoined
+                      ? t('settings.shareStatus.familyJoinedNote')
+                      : t('settings.shareStatus.familyNotJoinedNote')}
+                  </Text>
+                </View>
+                <ChevronRight size={16} color={Colors.muted} />
+              </Pressable>
+              <Text style={styles.scopeNote}>{t('settings.shareStatus.familyScope')}</Text>
+            </>
+          )}
 
           {/* ── リンクで公開中 ── */}
           <Text style={styles.sectionLabel}>{t('settings.shareStatus.linkSection')}</Text>
@@ -195,6 +275,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   scopeNote: { fontSize: 12, color: Colors.paperDim, lineHeight: 18 },
+  currentMark: { fontSize: 11, fontWeight: '400', color: Colors.goldDim },
+  // 否定側の明示（G5）。地の文よりわずかに立てる — 隆の「見えていないことを確認したい」への回答
+  notVisibleNote: { fontSize: 12, color: Colors.paperDim, fontStyle: 'italic' },
   emptyBody: { fontSize: 13, color: Colors.muted, paddingVertical: 6 },
   card: {
     flexDirection: 'row',
