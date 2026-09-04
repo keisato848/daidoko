@@ -172,6 +172,19 @@ describe('buildWidgetSnapshot — 献立の recipeId と週間（W2）', () => {
     }));
     expect(buildWidgetSnapshot(input({ menuDays: many })).menu.week).toHaveLength(7);
   });
+
+  it('requestedDays（不足行用）を写す', () => {
+    const snapshot = buildWidgetSnapshot(
+      input({ menuDays: [{ title: 'a', doneAt: null, day: 1 }], requestedDays: 3 }),
+    );
+    expect(snapshot.menu.requestedDays).toBe(3);
+  });
+
+  it('requestedDays が無い（旧プラン）・壊れた値なら載せない', () => {
+    expect('requestedDays' in buildWidgetSnapshot(input()).menu).toBe(false);
+    expect('requestedDays' in buildWidgetSnapshot(input({ requestedDays: null })).menu).toBe(false);
+    expect('requestedDays' in buildWidgetSnapshot(input({ requestedDays: 0 })).menu).toBe(false);
+  });
 });
 
 describe('parseWidgetSnapshot — 読む側の防御', () => {
@@ -221,6 +234,21 @@ describe('parseWidgetSnapshot — 読む側の防御', () => {
     const round = parseWidgetSnapshot(JSON.stringify(withMenu));
     expect(round?.menu.recipeId).toBe('r1');
     expect(round?.menu.week).toEqual(withMenu.menu.week);
+  });
+
+  it('requestedDays（不足行用）を往復する', () => {
+    const withRequested = buildWidgetSnapshot(
+      input({ menuDays: [{ title: 'a', doneAt: null, day: 1 }], requestedDays: 5 }),
+    );
+    expect(parseWidgetSnapshot(JSON.stringify(withRequested))?.menu.requestedDays).toBe(5);
+  });
+
+  it('requestedDays が無い（旧アプリが書いた）・壊れた値は「無い」として読む', () => {
+    const round = parseWidgetSnapshot(JSON.stringify(valid));
+    expect(round && 'requestedDays' in round.menu).toBe(false);
+    const dirty = { ...valid, menu: { ...valid.menu, requestedDays: '5' } };
+    const dirtyRound = parseWidgetSnapshot(JSON.stringify(dirty));
+    expect(dirtyRound && 'requestedDays' in dirtyRound.menu).toBe(false);
   });
 
   it('週間が無い（旧アプリが書いた）スナップショットは空配列で読む', () => {

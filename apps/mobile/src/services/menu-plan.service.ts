@@ -69,6 +69,15 @@ export interface StoredMenuPlan {
    */
   anchorDate?: string;
   /**
+   * 「組む」で要求した日数（§10.7 の結果フィードバック・W2 の不足行用）。
+   * 組めた日数は `days.length` — 両方持つことで「あと◯日分足りない」を
+   * 画面とウィジェットのどちらでも言える。献立はローカル専用（同期対象外）なので
+   * フィールド追加は安全。省略可なので `version` は上げない（§10.6 と同じ互換手法）。
+   * **旧データには無い** — 読む側（`readStoredMenuPlan`）は無ければ無いまま返し、
+   * 不足の表示を出さない。
+   */
+  requestedDays?: number;
+  /**
    * 直近の自動追加で買い物リストへ入れた `shopping_items.id`（§10.11.2）。
    * 「自動で追加した◯件を取り消す」用。**チェック済みは消さない**——取り消しの
    * 対象抽出は shopping-list 側で `checked` を見て弾く。次にまた自動追加が走ると
@@ -239,6 +248,9 @@ export async function generateMenuPlan(days: number): Promise<MenuPlanView | nul
     generatedAt: today.toISOString(),
     source: 'coverage',
     pantrySignature: pantry.signature,
+    // 要求日数を残す（§10.7）。組めた日数（days.length）と比べて
+    // 「あと◯日分足りない」を画面・ウィジェットの両方で言えるようにする
+    requestedDays: days,
     ...(autoOn ? { anchorDate: menuDateKey(today) } : {}),
     days: toStoredDays(built.days),
   };
@@ -247,13 +259,24 @@ export async function generateMenuPlan(days: number): Promise<MenuPlanView | nul
   return hydrate(plan, recipes, pantry, aliases);
 }
 
-/** 保存済みの生の献立を読む。壊れていたら null（作り直せば直る）。JSON 解釈だけ */
-async function readStoredPlan(): Promise<StoredMenuPlan | null> {
+/**
+ * 保存済みの生の献立を読む。壊れていたら null（作り直せば直る）。JSON 解釈だけ。
+ * `requestedDays` は**旧データに無い**省略可フィールド — 無ければ無いまま返す
+ * （不足の表示は出ない）。壊れた値（0 以下・非整数・数でない）は落として読む。
+ * export はこの互換（旧データ・壊れた値）をテストで固定するため（DB を触らないので
+ * jest で実行できる数少ない入口 — `docs/品質基準.md` §2.3）。
+ */
+export async function readStoredMenuPlan(): Promise<StoredMenuPlan | null> {
   const raw = await getAppMeta(MENU_PLAN_KEY);
   if (!raw) return null;
   try {
     const plan = JSON.parse(raw) as StoredMenuPlan;
-    return Array.isArray(plan.days) ? plan : null;
+    if (!Array.isArray(plan.days)) return null;
+    const rd = plan.requestedDays;
+    if (rd !== undefined && (typeof rd !== 'number' || !Number.isInteger(rd) || rd <= 0)) {
+      delete plan.requestedDays;
+    }
+    return plan;
   } catch {
     return null;
   }
@@ -262,7 +285,7 @@ async function readStoredPlan(): Promise<StoredMenuPlan | null> {
 /** 保存済みの献立を読む。無ければ null（勝手に組まない・§10.7） */
 export async function getMenuPlan(): Promise<MenuPlanView | null> {
   if (!isNativePlatform) return null;
-  const plan = await readStoredPlan();
+  const plan = await readStoredMenuPlan();
   if (!plan) return null;
 
   const { getAliasMap } = await import('./name-alias.service');
@@ -465,6 +488,10 @@ export async function applyMenuArrangement(arrangement: {
     // あることまでは変えない）。autoAddedItemIds は引き継がない — 直前の自動追加バッチが
     // どの日から出たか分からなくなる置き換えなので、取り消しの前提が崩れる
     ...(current.plan.anchorDate ? { anchorDate: current.plan.anchorDate } : {}),
+    // requestedDays も引き継ぐ（並べ替えは日数を変えない — 不足の表示を消さない）
+    ...(current.plan.requestedDays !== undefined
+      ? { requestedDays: current.plan.requestedDays }
+      : {}),
     // 前回の aiNote は引き継がない（スプレッドしない）——今回の結果に無ければ古い一言が
     // 残り続けてしまう（exactOptionalPropertyTypes のため undefined を明示代入できない）
     ...(arrangement.note ? { aiNote: arrangement.note } : {}),
@@ -564,7 +591,7 @@ export async function runDailyMenuMaintenance(): Promise<void> {
   const today = new Date();
   const { getAliasMap } = await import('./name-alias.service');
   const [stored, recipes, pantry, aliases, days] = await Promise.all([
-    readStoredPlan(),
+    readStoredMenuPlan(),
     loadMenuRecipes(),
     loadPantry(),
     getAliasMap(),
@@ -590,6 +617,8 @@ export async function runDailyMenuMaintenance(): Promise<void> {
           generatedAt: today.toISOString(),
           source: 'coverage',
           pantrySignature: pantry.signature,
+          // 自動モードの要求日数は設定値（§10.11）。不足の表示の基準もこれ
+          requestedDays: days,
           anchorDate: init.anchorDate,
           days: init.days,
         };
@@ -610,6 +639,8 @@ export async function runDailyMenuMaintenance(): Promise<void> {
         days: rolled.days,
         generatedAt: today.toISOString(),
         pantrySignature: pantry.signature,
+        // ローリング後の要求日数は現在の設定値（targetDays と同じ根拠）
+        requestedDays: days,
       };
       addedDays = rolled.addedDays;
     } else {
@@ -657,7 +688,7 @@ export async function runDailyMenuMaintenance(): Promise<void> {
  */
 export async function undoMenuAutoAddedItems(): Promise<number> {
   if (!isNativePlatform) return 0;
-  const stored = await readStoredPlan();
+  const stored = await readStoredMenuPlan();
   const ids = stored?.autoAddedItemIds;
   if (!ids || ids.length === 0) return 0;
 

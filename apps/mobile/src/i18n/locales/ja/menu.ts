@@ -27,6 +27,32 @@ const menu = {
     label: '何日分',
     option: '{{count}}日分',
   },
+  /**
+   * 「組む」直後の結果トースト。**必ずどちらかを言う**（ペルソナ 5 人の一致点 —
+   * レシピが少ないと結果が前回と同じで「壊れた」ように見えるため・実機 Pixel で確認）。
+   */
+  buildResult: {
+    built: {
+      one: '{{count}}日分の献立を組みました',
+      other: '{{count}}日分の献立を組みました',
+    } satisfies PluralMessage,
+    partial: {
+      one: 'レシピが足りないため{{count}}日分だけ組みました',
+      other: 'レシピが足りないため{{count}}日分だけ組みました',
+    } satisfies PluralMessage,
+  },
+  /**
+   * 要求日数に満たないとき、プラン末尾に出すバナー（由紀の案）。
+   * 空カードを日数分並べるのは不可（健太: イラつく）— バナー 1 つに集約し、
+   * 次の一手（AI 相談・レシピ追加）を並べる。相談の文言は emptyDays.toConsult を再利用。
+   */
+  shortfall: {
+    banner: {
+      one: 'あと{{count}}日分のレシピが足りません',
+      other: 'あと{{count}}日分のレシピが足りません',
+    } satisfies PluralMessage,
+    addRecipe: 'レシピを追加',
+  },
   /** 各日のカード */
   day: {
     label: '{{day}}日目',

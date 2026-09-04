@@ -16,6 +16,23 @@ const menu = {
     label: 'How many days',
     option: '{{count}} days',
   },
+  buildResult: {
+    built: {
+      one: 'Planned meals for {{count}} day',
+      other: 'Planned meals for {{count}} days',
+    },
+    partial: {
+      one: 'Not enough recipes — planned only {{count}} day',
+      other: 'Not enough recipes — planned only {{count}} days',
+    },
+  },
+  shortfall: {
+    banner: {
+      one: 'Not enough recipes for {{count}} more day',
+      other: 'Not enough recipes for {{count}} more days',
+    },
+    addRecipe: 'Add a recipe',
+  },
   day: {
     label: 'Day {{day}}',
     openRecipe: 'Open recipe',

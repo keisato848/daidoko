@@ -66,6 +66,13 @@ export interface WidgetSnapshot {
      * 旧アプリが書いた（この欄が無い）スナップショットも読める。
      */
     week?: WidgetMenuWeekDay[];
+    /**
+     * 「組む」で要求した日数（`StoredMenuPlan.requestedDays`）。**省略可フィールドで
+     * 足したもの**（版は上げない・§1）。週間表示（大）で `week.length` がこれに
+     * 満たないとき「残り◯日分はレシピが足りません」を末尾に出す。
+     * 旧アプリ・旧プラン（要求日数を保存していない）には無い — 無ければ不足行を出さない。
+     */
+    requestedDays?: number;
   };
 }
 
@@ -86,6 +93,8 @@ export interface SnapshotInput {
   }[];
   /** 自動モードの起点日。**あるときだけ「今日」と言える**（§10.11 で入る） */
   anchorDate: string | null;
+  /** 「組む」で要求した日数。省略可 — 旧プランには保存されていない */
+  requestedDays?: number | null;
   locale: 'ja' | 'en';
   now: Date;
 }
@@ -147,6 +156,12 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot {
       title: nextDay ? nextDay.title : null,
       recipeId: nextDay ? (nextDay.recipeId ?? null) : null,
       week,
+      // 要求日数（不足行用）。無い・壊れた値は載せない（旧プランと同じ「出さない」へ倒す）
+      ...(typeof input.requestedDays === 'number' &&
+      Number.isInteger(input.requestedDays) &&
+      input.requestedDays > 0
+        ? { requestedDays: input.requestedDays }
+        : {}),
     },
   };
 }
@@ -199,6 +214,12 @@ export function parseWidgetSnapshot(raw: string): WidgetSnapshot | null {
       week: Array.isArray(menu.week)
         ? menu.week.map(sanitizeWeekDay).filter((d): d is WidgetMenuWeekDay => d !== null)
         : [],
+      // 要求日数（不足行用・省略可）。無い・壊れた値は「無い」として読む
+      ...(typeof menu.requestedDays === 'number' &&
+      Number.isInteger(menu.requestedDays) &&
+      menu.requestedDays > 0
+        ? { requestedDays: menu.requestedDays }
+        : {}),
     },
   };
 }
