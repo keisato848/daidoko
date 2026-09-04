@@ -815,6 +815,9 @@ inferRouter.post('/menu', zValidator('json', inferMenuSchema), async (c) => {
  */
 const inferMenuRecipesSchema = z.object({
   days: z.number().int().min(1).max(MAX_MENU_RECIPES_DAYS),
+  // 献立の時間帯（v19・§10.13）。**省略 = 夕（旧クライアント互換）**。
+  // プロンプトの出し分けは lib/menu-recipes.ts の buildMenuRecipesSystemPrompt
+  mealTime: z.enum(['breakfast', 'lunch', 'dinner']).optional(),
   existingTitles: z.array(z.string().min(1).max(100)).max(MAX_MENU_RECIPES_TITLES),
   pantry: z.array(z.string().min(1).max(50)).max(MAX_MENU_RECIPES_PANTRY),
   preferences: z.string().max(MAX_MENU_RECIPES_PREFERENCES).optional(),
@@ -893,7 +896,8 @@ inferRouter.post('/menu-recipes', zValidator('json', inferMenuRecipesSchema), as
     throw err;
   }
 
-  const { days, existingTitles, pantry, preferences, locale, unitSystem } = c.req.valid('json');
+  const { days, mealTime, existingTitles, pantry, preferences, locale, unitSystem } =
+    c.req.valid('json');
 
   const result = await runMenuRecipesAgent(
     {
@@ -902,6 +906,8 @@ inferRouter.post('/menu-recipes', zValidator('json', inferMenuRecipesSchema), as
       pantry,
       // exactOptionalPropertyTypes: 省略可フィールドはスプレッドで組み立てる（リポジトリの既定）
       ...(preferences !== undefined && { preferences }),
+      // 時間帯（省略 = 夕）。プロンプトの出し分けは provider 側
+      ...(mealTime !== undefined && { mealTime }),
       outputLocale: parseOutputLocale(locale),
       unitSystem: parseUnitSystem(unitSystem),
     },

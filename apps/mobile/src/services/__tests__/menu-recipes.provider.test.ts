@@ -16,6 +16,7 @@ const mockResolveQuotaSource = jest.fn<Promise<'token' | 'premium' | undefined>,
 jest.mock('../usage.service', () => ({ resolveQuotaSource: () => mockResolveQuotaSource() }));
 
 import {
+  buildMenuRecipesSystemPrompt,
   generateMenuRecipes,
   MenuRecipesError,
   validateMenuRecipeDrafts,
@@ -30,6 +31,21 @@ function rawDraft(title: string) {
     steps: [{ body: '焼く' }],
   };
 }
+
+describe('buildMenuRecipesSystemPrompt — 時間帯の出し分け（サーバーの写し・BYOK 経路用）', () => {
+  it('省略・夕は従来のプロンプトのまま（朝/昼の指示が混ざらない）', () => {
+    const dinner = buildMenuRecipesSystemPrompt('dinner');
+    expect(buildMenuRecipesSystemPrompt()).toBe(dinner);
+    expect(dinner).toContain('夕食を考える');
+    expect(dinner).not.toContain('主食中心');
+    expect(dinner).not.toContain('軽め');
+  });
+
+  it('朝は手早く作れる主食中心・昼は軽めの指示が入る', () => {
+    expect(buildMenuRecipesSystemPrompt('breakfast')).toContain('主食中心');
+    expect(buildMenuRecipesSystemPrompt('lunch')).toContain('軽め');
+  });
+});
 
 describe('validateMenuRecipeDrafts — サーバー sanitizeMenuRecipeDrafts の写し', () => {
   it('材料か手順が空の品は捨てる（半端な下書きは保存できない）', () => {
@@ -176,6 +192,16 @@ describe('generateMenuRecipes — managed サーバー経由', () => {
   it('嗜好メモが空なら preferences を載せない', async () => {
     await generateMenuRecipes({ ...args, preferences: '   ' });
     expect(lastBody()).not.toHaveProperty('preferences');
+  });
+
+  it('mealTime を指定すると送る（§10.13）', async () => {
+    await generateMenuRecipes({ ...args, mealTime: 'lunch' });
+    expect(lastBody()['mealTime']).toBe('lunch');
+  });
+
+  it('mealTime 省略時は載せない（旧クライアントと同じリクエスト形 = サーバー既定の夕）', async () => {
+    await generateMenuRecipes(args);
+    expect(lastBody()).not.toHaveProperty('mealTime');
   });
 
   it('手持ち 31 件・在庫 51 件は上限へ切り詰めて送る', async () => {

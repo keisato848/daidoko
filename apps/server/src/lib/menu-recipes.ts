@@ -28,6 +28,9 @@ export const MAX_MENU_RECIPES_PANTRY = 50;
 /** 嗜好メモの上限（shared の写し）。 */
 export const MAX_MENU_RECIPES_PREFERENCES = 400;
 
+/** 献立の時間帯（shared `menuRecipesMealTimeSchema` の写し）。省略 = 夕。 */
+export type MenuRecipesMealTime = 'breakfast' | 'lunch' | 'dinner';
+
 export interface MenuRecipesInput {
   /** 不足日数 = 生成する品数（1〜7） */
   days: number;
@@ -37,6 +40,11 @@ export interface MenuRecipesInput {
   pantry: string[];
   /** 家族の嗜好メモ（S21・任意） */
   preferences?: string;
+  /**
+   * 献立の時間帯（v19・§10.13）。**省略 = 夕（旧クライアント互換）** —
+   * プロンプトが朝/昼向けに出し分けられる。夕のプロンプトは従来と 1 文字も変えない。
+   */
+  mealTime?: MenuRecipesMealTime;
   outputLocale?: OutputLocale;
   unitSystem?: OutputUnitSystem;
 }
@@ -74,36 +82,63 @@ export class MenuRecipesRequestError extends Error {}
 /** 上流（Gemini）の利用枠切れ。再試行しても当面回復しない（recipe-consult.ts と同じ扱い）。 */
 export class MenuRecipesQuotaError extends MenuRecipesRequestError {}
 
-const SYSTEM_PROMPT = [
-  'あなたは、家庭の平日の夕食を考える日本語の料理人です。',
-  '利用者の献立に足りない品数ぶんのレシピを、指定の品数だけまとめて作ります。',
-  '',
-  '## 前提',
-  '- 作るのは**平日の家庭料理**。特別な道具・技法・長時間の仕込みを要求しない。',
-  '- 材料は**日本の一般的なスーパーで揃うもの**だけを使う。取り寄せ・専門店の材料を出さない。',
-  '- 渡された「手持ちのレシピ」と**同じ料理・よく似た料理は作らない**。',
-  '  タイトルが違っても中身が同じ（例: 肉じゃがとじゃがいもと牛肉の煮物）は重複とみなす。',
-  '- 渡された在庫の品を**活かす**。ただし在庫だけで無理に作らない。',
-  '  足りない材料は足りないものとして材料に書く。隠さない。',
-  '- 生成する品同士も系統を散らす（主菜の食材・和洋中が偏らないようにする）。',
-  '',
-  '## 家族の好みが渡されたとき',
-  '- 避けたいと書かれた食材・系統は使わない。好みと書かれたものへ寄せてよい。',
-  '- 渡されていないときは、好みの話をしない。勝手に想定しない。',
-  '',
-  '## 各レシピの書き方',
-  '- title は料理名だけ（「〜のレシピ」と書かない）。',
-  '- description は 1〜2 文。どんな料理か・どんな日に向くかだけ。',
-  '- 分量は具体値で書く（「少々」で済ませない。ただし塩・こしょうは「少々」でよい）。',
-  '- 手順は家庭の台所でそのまま実行できる粒度で、1 手順 1 文を目安にする。',
-  '- servings は 2 を基本にする。cookTimeMin は現実的な調理時間（分）。',
-  '',
-  '## してはならないこと',
-  '- 指定より多い・少ない品数を返す。',
-  '- **アレルゲンの有無を保証する。**「ナッツ不使用です」のような断定はしない。',
-  '- 栄養素・カロリーの数値を出す（このアプリの扱う範囲ではない）。',
-  '- 在庫に無い品名を「ある」と書く。値段・節約に触れる。',
-].join('\n');
+/** 時間帯ごとの冒頭 1 行（役割）。夕は従来の文そのもの。 */
+const MEAL_TIME_ROLE: Record<MenuRecipesMealTime, string> = {
+  breakfast: 'あなたは、家庭の平日の朝食を考える日本語の料理人です。',
+  lunch: 'あなたは、家庭の平日の昼食を考える日本語の料理人です。',
+  dinner: 'あなたは、家庭の平日の夕食を考える日本語の料理人です。',
+};
+
+/**
+ * 時間帯ごとの追加ガイド（§10.13: 朝 = 手早く作れる主食中心・昼 = 軽め・
+ * **夕 = 空 = 従来のプロンプトを 1 文字も変えない**）。
+ */
+const MEAL_TIME_GUIDE: Record<MenuRecipesMealTime, readonly string[]> = {
+  breakfast: [
+    '- 朝食向けにする。**手早く作れる主食中心**（ごはん・パン・卵などを軸に、調理 15 分以内を目安）。',
+    '- 朝から重い料理（揚げ物・長時間の煮込み）は出さない。',
+  ],
+  lunch: ['- 昼食向けにする。**軽めで手早く作れる一品**（丼・麺・ワンプレートなど）を基本にする。'],
+  dinner: [],
+};
+
+/**
+ * 時間帯で出し分けたシステムプロンプト（正典 — モバイルは写しを持つ。片方だけ直さないこと）。
+ * 省略 = 夕（旧クライアント互換）。テストから分岐を固定するために公開する。
+ */
+export function buildMenuRecipesSystemPrompt(mealTime: MenuRecipesMealTime = 'dinner'): string {
+  return [
+    MEAL_TIME_ROLE[mealTime],
+    '利用者の献立に足りない品数ぶんのレシピを、指定の品数だけまとめて作ります。',
+    '',
+    '## 前提',
+    ...MEAL_TIME_GUIDE[mealTime],
+    '- 作るのは**平日の家庭料理**。特別な道具・技法・長時間の仕込みを要求しない。',
+    '- 材料は**日本の一般的なスーパーで揃うもの**だけを使う。取り寄せ・専門店の材料を出さない。',
+    '- 渡された「手持ちのレシピ」と**同じ料理・よく似た料理は作らない**。',
+    '  タイトルが違っても中身が同じ（例: 肉じゃがとじゃがいもと牛肉の煮物）は重複とみなす。',
+    '- 渡された在庫の品を**活かす**。ただし在庫だけで無理に作らない。',
+    '  足りない材料は足りないものとして材料に書く。隠さない。',
+    '- 生成する品同士も系統を散らす（主菜の食材・和洋中が偏らないようにする）。',
+    '',
+    '## 家族の好みが渡されたとき',
+    '- 避けたいと書かれた食材・系統は使わない。好みと書かれたものへ寄せてよい。',
+    '- 渡されていないときは、好みの話をしない。勝手に想定しない。',
+    '',
+    '## 各レシピの書き方',
+    '- title は料理名だけ（「〜のレシピ」と書かない）。',
+    '- description は 1〜2 文。どんな料理か・どんな日に向くかだけ。',
+    '- 分量は具体値で書く（「少々」で済ませない。ただし塩・こしょうは「少々」でよい）。',
+    '- 手順は家庭の台所でそのまま実行できる粒度で、1 手順 1 文を目安にする。',
+    '- servings は 2 を基本にする。cookTimeMin は現実的な調理時間（分）。',
+    '',
+    '## してはならないこと',
+    '- 指定より多い・少ない品数を返す。',
+    '- **アレルゲンの有無を保証する。**「ナッツ不使用です」のような断定はしない。',
+    '- 栄養素・カロリーの数値を出す（このアプリの扱う範囲ではない）。',
+    '- 在庫に無い品名を「ある」と書く。値段・節約に触れる。',
+  ].join('\n');
+}
 
 const GEMINI_RESPONSE_SCHEMA = {
   type: 'OBJECT',
@@ -300,7 +335,10 @@ export class GeminiMenuRecipesProvider implements MenuRecipesProvider {
         parts: [
           {
             text: withUnitSystem(
-              withOutputLanguage(SYSTEM_PROMPT, input.outputLocale ?? DEFAULT_OUTPUT_LOCALE),
+              withOutputLanguage(
+                buildMenuRecipesSystemPrompt(input.mealTime),
+                input.outputLocale ?? DEFAULT_OUTPUT_LOCALE,
+              ),
               input.unitSystem ?? DEFAULT_UNIT_SYSTEM,
             ),
           },

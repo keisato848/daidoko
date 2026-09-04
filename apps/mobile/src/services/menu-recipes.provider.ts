@@ -18,6 +18,7 @@ import {
   MAX_MENU_RECIPES_PREFERENCES,
   MAX_MENU_RECIPES_TITLES,
   type MenuRecipeDraft,
+  type MenuRecipesMealTime,
 } from '@daidoko/shared';
 
 import { API_V1, GEMINI_MODEL } from '../config';
@@ -47,6 +48,13 @@ export interface MenuRecipesArgs {
   pantry: string[];
   /** 家族の嗜好メモ（S21・任意・≤400 字は同上） */
   preferences?: string;
+  /**
+   * 献立の時間帯（v19・§10.13）。**省略 = 夕** — サーバー・BYOK のどちらも
+   * 省略時は従来どおり夕のプロンプトになる。夕のとき呼び出し側（menu.tsx）は
+   * 省略する — 旧クライアントと同じリクエスト形を保つ（旧サーバーの zod は
+   * strict でないので送っても無視されるだけだが、形を揃えておく）。
+   */
+  mealTime?: MenuRecipesMealTime;
 }
 
 /** MenuArrangeError と同形（retryable のみ。文言は throw 側で `t()` により焼き込む）。 */
@@ -61,36 +69,57 @@ export class MenuRecipesError extends Error {
 
 // ─── プロンプト・responseSchema（サーバー側の写し。片方だけ直さないこと） ──────────
 
-const SYSTEM_PROMPT = [
-  'あなたは、家庭の平日の夕食を考える日本語の料理人です。',
-  '利用者の献立に足りない品数ぶんのレシピを、指定の品数だけまとめて作ります。',
-  '',
-  '## 前提',
-  '- 作るのは**平日の家庭料理**。特別な道具・技法・長時間の仕込みを要求しない。',
-  '- 材料は**日本の一般的なスーパーで揃うもの**だけを使う。取り寄せ・専門店の材料を出さない。',
-  '- 渡された「手持ちのレシピ」と**同じ料理・よく似た料理は作らない**。',
-  '  タイトルが違っても中身が同じ（例: 肉じゃがとじゃがいもと牛肉の煮物）は重複とみなす。',
-  '- 渡された在庫の品を**活かす**。ただし在庫だけで無理に作らない。',
-  '  足りない材料は足りないものとして材料に書く。隠さない。',
-  '- 生成する品同士も系統を散らす（主菜の食材・和洋中が偏らないようにする）。',
-  '',
-  '## 家族の好みが渡されたとき',
-  '- 避けたいと書かれた食材・系統は使わない。好みと書かれたものへ寄せてよい。',
-  '- 渡されていないときは、好みの話をしない。勝手に想定しない。',
-  '',
-  '## 各レシピの書き方',
-  '- title は料理名だけ（「〜のレシピ」と書かない）。',
-  '- description は 1〜2 文。どんな料理か・どんな日に向くかだけ。',
-  '- 分量は具体値で書く（「少々」で済ませない。ただし塩・こしょうは「少々」でよい）。',
-  '- 手順は家庭の台所でそのまま実行できる粒度で、1 手順 1 文を目安にする。',
-  '- servings は 2 を基本にする。cookTimeMin は現実的な調理時間（分）。',
-  '',
-  '## してはならないこと',
-  '- 指定より多い・少ない品数を返す。',
-  '- **アレルゲンの有無を保証する。**「ナッツ不使用です」のような断定はしない。',
-  '- 栄養素・カロリーの数値を出す（このアプリの扱う範囲ではない）。',
-  '- 在庫に無い品名を「ある」と書く。値段・節約に触れる。',
-].join('\n');
+/** 時間帯ごとの冒頭 1 行（サーバー `MEAL_TIME_ROLE` の写し）。夕は従来の文そのもの。 */
+const MEAL_TIME_ROLE: Record<MenuRecipesMealTime, string> = {
+  breakfast: 'あなたは、家庭の平日の朝食を考える日本語の料理人です。',
+  lunch: 'あなたは、家庭の平日の昼食を考える日本語の料理人です。',
+  dinner: 'あなたは、家庭の平日の夕食を考える日本語の料理人です。',
+};
+
+/** 時間帯ごとの追加ガイド（サーバーの写し。**夕 = 空 = 従来のプロンプトのまま**）。 */
+const MEAL_TIME_GUIDE: Record<MenuRecipesMealTime, readonly string[]> = {
+  breakfast: [
+    '- 朝食向けにする。**手早く作れる主食中心**（ごはん・パン・卵などを軸に、調理 15 分以内を目安）。',
+    '- 朝から重い料理（揚げ物・長時間の煮込み）は出さない。',
+  ],
+  lunch: ['- 昼食向けにする。**軽めで手早く作れる一品**（丼・麺・ワンプレートなど）を基本にする。'],
+  dinner: [],
+};
+
+/** サーバー `buildMenuRecipesSystemPrompt` の写し（BYOK 経路用）。省略 = 夕。 */
+export function buildMenuRecipesSystemPrompt(mealTime: MenuRecipesMealTime = 'dinner'): string {
+  return [
+    MEAL_TIME_ROLE[mealTime],
+    '利用者の献立に足りない品数ぶんのレシピを、指定の品数だけまとめて作ります。',
+    '',
+    '## 前提',
+    ...MEAL_TIME_GUIDE[mealTime],
+    '- 作るのは**平日の家庭料理**。特別な道具・技法・長時間の仕込みを要求しない。',
+    '- 材料は**日本の一般的なスーパーで揃うもの**だけを使う。取り寄せ・専門店の材料を出さない。',
+    '- 渡された「手持ちのレシピ」と**同じ料理・よく似た料理は作らない**。',
+    '  タイトルが違っても中身が同じ（例: 肉じゃがとじゃがいもと牛肉の煮物）は重複とみなす。',
+    '- 渡された在庫の品を**活かす**。ただし在庫だけで無理に作らない。',
+    '  足りない材料は足りないものとして材料に書く。隠さない。',
+    '- 生成する品同士も系統を散らす（主菜の食材・和洋中が偏らないようにする）。',
+    '',
+    '## 家族の好みが渡されたとき',
+    '- 避けたいと書かれた食材・系統は使わない。好みと書かれたものへ寄せてよい。',
+    '- 渡されていないときは、好みの話をしない。勝手に想定しない。',
+    '',
+    '## 各レシピの書き方',
+    '- title は料理名だけ（「〜のレシピ」と書かない）。',
+    '- description は 1〜2 文。どんな料理か・どんな日に向くかだけ。',
+    '- 分量は具体値で書く（「少々」で済ませない。ただし塩・こしょうは「少々」でよい）。',
+    '- 手順は家庭の台所でそのまま実行できる粒度で、1 手順 1 文を目安にする。',
+    '- servings は 2 を基本にする。cookTimeMin は現実的な調理時間（分）。',
+    '',
+    '## してはならないこと',
+    '- 指定より多い・少ない品数を返す。',
+    '- **アレルゲンの有無を保証する。**「ナッツ不使用です」のような断定はしない。',
+    '- 栄養素・カロリーの数値を出す（このアプリの扱う範囲ではない）。',
+    '- 在庫に無い品名を「ある」と書く。値段・節約に触れる。',
+  ].join('\n');
+}
 
 const GEMINI_RESPONSE_SCHEMA = {
   type: 'OBJECT',
@@ -290,7 +319,13 @@ async function generateViaByok(args: MenuRecipesArgs, apiKey: string): Promise<M
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         // 分量を書かせる推論なので consult と同様に単位系も指示する（menu-arrange との差分）
-        systemInstruction: { parts: [{ text: withUnitSystem(withOutputLanguage(SYSTEM_PROMPT)) }] },
+        systemInstruction: {
+          parts: [
+            {
+              text: withUnitSystem(withOutputLanguage(buildMenuRecipesSystemPrompt(args.mealTime))),
+            },
+          ],
+        },
         contents: [{ role: 'user', parts: [{ text: buildMenuRecipesContext(args) }] }],
         generationConfig: {
           temperature: 0.6,
@@ -353,6 +388,8 @@ async function generateViaServer(args: MenuRecipesArgs): Promise<MenuRecipeDraft
         existingTitles: args.existingTitles,
         pantry: args.pantry,
         ...(args.preferences ? { preferences: args.preferences } : {}),
+        // 時間帯（§10.13）。夕は呼び出し側が省略する = 旧クライアントと同じリクエスト形
+        ...(args.mealTime ? { mealTime: args.mealTime } : {}),
         locale: requestLocale(),
         unitSystem: requestUnitSystem(),
       }),
@@ -407,6 +444,7 @@ export async function generateMenuRecipes(args: MenuRecipesArgs): Promise<MenuRe
     ...(args.preferences?.trim()
       ? { preferences: args.preferences.trim().slice(0, MAX_MENU_RECIPES_PREFERENCES) }
       : {}),
+    ...(args.mealTime ? { mealTime: args.mealTime } : {}),
   };
   const userKey = await getUserApiKey();
   return userKey ? generateViaByok(bounded, userKey) : generateViaServer(bounded);
