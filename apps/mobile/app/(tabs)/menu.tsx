@@ -45,9 +45,12 @@ import {
   fillMenuPlanShortfall,
   generateMenuPlan,
   getMenuPlan,
+  getStoredMealTimes,
+  MENU_MEAL_TIMES,
   replaceMenuDay,
   undoMenuAutoAddedItems,
   type MenuDayView,
+  type MenuMealTime,
   type MenuPlanView,
 } from '../../src/services/menu-plan.service';
 import { createRecipe } from '../../src/services/recipe.service';
@@ -59,6 +62,22 @@ import { formatSnapshotTime } from '../../src/utils/widgetSnapshot';
 
 /** 日数の選択肢（設計 §10.7） */
 const DAY_OPTIONS = [2, 3, 5, 7] as const;
+
+/**
+ * 時間帯チップの文言（設計 §10.13）。`t()` はキーをリテラル型で受けるため、
+ * 実行時に決まる時間帯はこの対応表で引く。
+ */
+const MEAL_TIME_LABEL_KEY = {
+  breakfast: 'menu.mealTime.breakfast',
+  lunch: 'menu.mealTime.lunch',
+  dinner: 'menu.mealTime.dinner',
+} as const satisfies Record<MenuMealTime, string>;
+
+/** ヘッダ近くの控えめな表記。**夕は無印**（朝/昼のときだけ出す・§10.13） */
+const MEAL_TIME_PLAN_LABEL_KEY = {
+  breakfast: 'menu.mealTime.planLabel.breakfast',
+  lunch: 'menu.mealTime.planLabel.lunch',
+} as const;
 
 /** 保存された `reason` を文言に戻す。往復は `decodeReason` 側でテストしてある */
 function reasonText(reason: string): string {
@@ -78,6 +97,14 @@ export default function MenuScreen() {
   const router = useRouter();
   const [view, setView] = useState<MenuPlanView | null>(null);
   const [days, setDays] = useState<number>(3);
+  /**
+   * 選択中の時間帯（v19・§10.13）。**既定は夕 — 選ばなければ従来と完全に同じ操作**。
+   * 時間帯ごとに独立したプランを持ち、チップは表示の切り替えも兼ねる
+   * （夕のプランを保ったまま昼を組める）。
+   */
+  const [mealTime, setMealTime] = useState<MenuMealTime>('dinner');
+  /** プランが保存されている時間帯（チップの「他にもある」ドット用） */
+  const [plannedMealTimes, setPlannedMealTimes] = useState<MenuMealTime[]>([]);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   // M2（AI 並べ替え）の状態。plan は常に M1/M2 どちらの並びも表示し続け、
@@ -101,10 +128,11 @@ export default function MenuScreen() {
   const [toastVisible, setToastVisible] = useState(false);
 
   const load = useCallback(async () => {
-    const next = await getMenuPlan();
+    const [next, planned] = await Promise.all([getMenuPlan(mealTime), getStoredMealTimes()]);
     setView(next);
+    setPlannedMealTimes(planned);
     setLoaded(true);
-  }, []);
+  }, [mealTime]);
 
   const handleUndoAutoAdd = useCallback(async () => {
     setUndoing(true);
@@ -126,8 +154,10 @@ export default function MenuScreen() {
     setBusy(true);
     setAiError(null);
     try {
-      const next = await generateMenuPlan(days);
+      // 置き換わるのは**選択中の時間帯のプランだけ**（§10.13 — 夕を保ったまま昼を組める）
+      const next = await generateMenuPlan(days, mealTime);
       setView(next);
+      setPlannedMealTimes(await getStoredMealTimes().catch((): MenuMealTime[] => []));
       // 結果を必ず言う（要求どおり組めた / 足りず短くなった）。0 日のときはトーストを
       // 出さない — 画面が「組めませんでした」の空状態に切り替わり、それ自体が答えになる
       if (next && next.days.length > 0) {
@@ -143,17 +173,20 @@ export default function MenuScreen() {
     } finally {
       setBusy(false);
     }
-  }, [days]);
+  }, [days, mealTime]);
 
-  const swap = useCallback(async (day: number) => {
-    setBusy(true);
-    try {
-      const next = await replaceMenuDay(day);
-      if (next) setView(next);
-    } finally {
-      setBusy(false);
-    }
-  }, []);
+  const swap = useCallback(
+    async (day: number) => {
+      setBusy(true);
+      try {
+        const next = await replaceMenuDay(day, mealTime);
+        if (next) setView(next);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [mealTime],
+  );
 
   // 「AIに並べ替えてもらう」。呼ぶのは「組む」1 操作につき 1 回 — 差し替えでは絶対に
   // 呼ばない（§10.5）。失敗・枠切れ・空の結果はすべて M1 の並びへそのまま落とす（§10.7）。
@@ -181,7 +214,7 @@ export default function MenuScreen() {
       if (result.days.length === 0) {
         throw new MenuArrangeError(t('menu.ai.emptyResult'), true);
       }
-      const next = await applyMenuArrangement(result);
+      const next = await applyMenuArrangement(result, mealTime);
       if (next) setView(next);
       // 成功時だけ枠を消費（BYOK・プレミアムは内部で no-op・consult と同じ倒し方）
       void recordCloudInference().catch(() => undefined);
@@ -191,12 +224,14 @@ export default function MenuScreen() {
     } finally {
       setAiRunning(false);
     }
-  }, [days, router]);
+  }, [days, mealTime, router]);
 
   // M3-5: 献立の不足材料を #214 の選択シートへ（在庫突合・自動では入れない）。
   // 一括生成の確定後と、既存の「足りない材料をまとめて追加」ボタンの両方から入る
   const openShoppingPick = useCallback(async (): Promise<boolean> => {
-    const plan = await buildMenuShoppingPlan();
+    // 突合は**表示中のプランだけ**（§10.13 — 複数プラン横断の合算は次版 Issue。
+    // 朝の卵＋夜の卵の重複排除にテストが揃うまで踏み込まない）
+    const plan = await buildMenuShoppingPlan(mealTime);
     if (!plan || plan.rows.length === 0) {
       setToastMessage(t('menu.shopping.none'));
       setToastVisible(true);
@@ -205,7 +240,7 @@ export default function MenuScreen() {
     setPickRecipeIds(plan.recipeIdByName);
     setPickRows(plan.rows);
     return true;
-  }, []);
+  }, [mealTime]);
 
   const commitShoppingPick = useCallback(
     async (selected: ShoppingPlanRow[]) => {
@@ -246,6 +281,9 @@ export default function MenuScreen() {
         existingTitles: context.existingTitles,
         pantry: context.pantryNames,
         ...(memo ? { preferences: memo } : {}),
+        // 時間帯をプロンプトの出し分けに渡す（§10.13）。夕は省略 = サーバー既定
+        // （旧クライアントと同じリクエスト形のまま）
+        ...(mealTime !== 'dinner' ? { mealTime } : {}),
       });
       if (drafts.length === 0) throw new MenuRecipesError(t('menu.bulk.emptyResult'), true);
       // 成功時だけ枠を消費。一括で 1 回分（M3-3）。BYOK・プレミアムは内部で no-op
@@ -256,7 +294,7 @@ export default function MenuScreen() {
     } finally {
       setBulkRunning(false);
     }
-  }, [view, bulkRunning, router]);
+  }, [view, bulkRunning, mealTime, router]);
 
   // M3-1 の確定: 採用分だけを aiGenerated=true で保存（M3-2・#266 の印を流用）→
   // 献立の空き日に組み込み → #214 の選択シートへ接続（M3-5・自動では入れない）
@@ -283,7 +321,7 @@ export default function MenuScreen() {
           additions.push({ recipeId, title: draft.title });
         }
         setProposals(null);
-        const next = await fillMenuPlanShortfall(additions);
+        const next = await fillMenuPlanShortfall(additions, mealTime);
         if (next) setView(next);
         setToastMessage(tCount('menu.bulk.done', additions.length));
         setToastVisible(true);
@@ -295,7 +333,7 @@ export default function MenuScreen() {
         setBulkSaving(false);
       }
     },
-    [openShoppingPick],
+    [mealTime, openShoppingPick],
   );
 
   if (!loaded) {
@@ -346,6 +384,11 @@ export default function MenuScreen() {
           </Pressable>
         </View>
 
+        {/* 表示中のプランの時間帯（§10.13）。**夕は無印・朝/昼のときだけ表記**（3 対 1 の多数派決定） */}
+        {hasPlan && view.plan.mealTime !== 'dinner' ? (
+          <Text style={styles.mealTimeNote}>{t(MEAL_TIME_PLAN_LABEL_KEY[view.plan.mealTime])}</Text>
+        ) : null}
+
         {/* 自動モードの出所（§10.11.1）。予約後の在庫変化で嘘にならないよう料理名は載せない */}
         {isAuto && view ? (
           <Text style={styles.autoNote}>
@@ -365,6 +408,31 @@ export default function MenuScreen() {
             <Text style={styles.secondaryText}>{tCount('menu.auto.undo', autoAddedCount)}</Text>
           </Pressable>
         ) : null}
+
+        {/* 時間帯の選択（§10.13）。既定は夕 — 選ばなければ従来と完全に同じ操作。
+          チップは表示の切り替えも兼ねる（時間帯ごとに独立したプラン）。他の時間帯に
+          プランがあるチップには控えめなドットを付ける */}
+        <Text style={styles.sectionLabel}>{t('menu.mealTime.label')}</Text>
+        <View style={styles.dayRow}>
+          {MENU_MEAL_TIMES.map((option) => (
+            <Pressable
+              key={option}
+              style={[styles.dayChip, mealTime === option && styles.dayChipActive]}
+              onPress={() => setMealTime(option)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: mealTime === option }}
+            >
+              <View style={styles.mealTimeChipInner}>
+                <Text style={[styles.dayChipText, mealTime === option && styles.dayChipTextActive]}>
+                  {t(MEAL_TIME_LABEL_KEY[option])}
+                </Text>
+                {mealTime !== option && plannedMealTimes.includes(option) ? (
+                  <View style={styles.mealTimeDot} />
+                ) : null}
+              </View>
+            </Pressable>
+          ))}
+        </View>
 
         {/* 日数の選択と「組む」。組み直しはいつでもできる */}
         <Text style={styles.sectionLabel}>{t('menu.days.label')}</Text>
@@ -600,6 +668,11 @@ const styles = StyleSheet.create({
   headerSpacer: { flex: 1 },
   gearButton: { padding: 4 },
   autoNote: { fontSize: 12, color: Colors.muted, marginBottom: 16 },
+  // 朝/昼のときだけ出す控えめな表記（§10.13。夕は無印）
+  mealTimeNote: { fontSize: 13, color: Colors.goldDim, marginBottom: 8 },
+  mealTimeChipInner: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  // 他の時間帯にプランがあることを示す控えめなドット
+  mealTimeDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.gold },
   sectionLabel: { fontSize: 13, color: Colors.muted, marginBottom: 8 },
   dayRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   dayChip: {
