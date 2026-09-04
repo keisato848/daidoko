@@ -121,12 +121,24 @@ async function pushToAndroidWidget(snapshot: WidgetSnapshot): Promise<void> {
     const { requestWidgetUpdate } = await import('react-native-android-widget');
     const { ShoppingListWidget } = await import('../widgets/ShoppingListWidget');
     const { widgetSizeFromWidth } = await import('../widgets/shoppingWidgetContent');
+    const { MenuWidget } = await import('../widgets/MenuWidget');
+    const { menuWidgetSize } = await import('../widgets/menuWidgetContent');
     await requestWidgetUpdate({
       widgetName: 'ShoppingList',
       renderWidget: (info) =>
         React.createElement(ShoppingListWidget, {
           snapshot,
           size: widgetSizeFromWidth(info.width),
+        }),
+    });
+    // 献立ウィジェット（W2）も同じスナップショットで即時反映する。
+    // ホーム画面に未追加なら対象 0 件で無害。
+    await requestWidgetUpdate({
+      widgetName: 'Menu',
+      renderWidget: (info) =>
+        React.createElement(MenuWidget, {
+          snapshot,
+          size: menuWidgetSize(info.width, info.height),
         }),
     });
   } catch {

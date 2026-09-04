@@ -103,6 +103,77 @@ describe('buildWidgetSnapshot — 献立の見出し規約', () => {
   });
 });
 
+describe('buildWidgetSnapshot — 献立の recipeId と週間（W2）', () => {
+  it('出す 1 品の recipeId を写す（タップ先）', () => {
+    const snapshot = buildWidgetSnapshot(
+      input({
+        menuDays: [
+          { title: '済み', doneAt: '2026-08-27T10:00:00.000Z', recipeId: 'r0' },
+          { title: '肉じゃが', doneAt: null, recipeId: 'r1' },
+        ],
+      }),
+    );
+    expect(snapshot.menu.title).toBe('肉じゃが');
+    expect(snapshot.menu.recipeId).toBe('r1');
+  });
+
+  it('recipeId が無い（旧データ）なら null', () => {
+    const snapshot = buildWidgetSnapshot(input({ menuDays: [{ title: 'a', doneAt: null }] }));
+    expect(snapshot.menu.recipeId).toBeNull();
+  });
+
+  it('週間は先頭 7 日分。anchorDate + day で「今日」を立てる', () => {
+    const snapshot = buildWidgetSnapshot(
+      input({
+        anchorDate: '2026-08-28', // NOW と同じ暦日
+        menuDays: [
+          { title: '今日', doneAt: null, recipeId: 'r1', day: 1 },
+          { title: '明日', doneAt: null, recipeId: 'r2', day: 2 },
+        ],
+      }),
+    );
+    expect(snapshot.menu.week).toHaveLength(2);
+    expect(snapshot.menu.week?.[0]).toEqual({
+      title: '今日',
+      recipeId: 'r1',
+      doneAt: null,
+      isToday: true,
+    });
+    expect(snapshot.menu.week?.[1].isToday).toBe(false);
+  });
+
+  it('anchorDate が無い手動プランは「今日」を立てない', () => {
+    const snapshot = buildWidgetSnapshot(
+      input({ menuDays: [{ title: 'a', doneAt: null, recipeId: 'r1', day: 1 }] }),
+    );
+    expect(snapshot.menu.week?.[0].isToday).toBe(false);
+  });
+
+  it('削除済みの日は title/recipeId を null にして週間へ残す（—で描くため）', () => {
+    const snapshot = buildWidgetSnapshot(
+      input({
+        menuDays: [{ title: '消えた', doneAt: null, missing: true, recipeId: 'r1', day: 1 }],
+      }),
+    );
+    expect(snapshot.menu.week?.[0]).toEqual({
+      title: null,
+      recipeId: null,
+      doneAt: null,
+      isToday: false,
+    });
+  });
+
+  it('週間は 8 日以上でも 7 日で打ち切る', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({
+      title: `d${i}`,
+      doneAt: null,
+      recipeId: `r${i}`,
+      day: i + 1,
+    }));
+    expect(buildWidgetSnapshot(input({ menuDays: many })).menu.week).toHaveLength(7);
+  });
+});
+
 describe('parseWidgetSnapshot — 読む側の防御', () => {
   const valid = buildWidgetSnapshot(
     input({
@@ -138,6 +209,39 @@ describe('parseWidgetSnapshot — 読む側の防御', () => {
   it('品名に文字列でないものが混ざっても落ちない', () => {
     const dirty = { ...valid, shopping: { remaining: 2, names: ['卵', 42, null] } };
     expect(parseWidgetSnapshot(JSON.stringify(dirty))?.shopping.names).toEqual(['卵']);
+  });
+
+  it('献立の recipeId と週間（W2）を往復する', () => {
+    const withMenu = buildWidgetSnapshot(
+      input({
+        anchorDate: '2026-08-28',
+        menuDays: [{ title: '肉じゃが', doneAt: null, recipeId: 'r1', day: 1 }],
+      }),
+    );
+    const round = parseWidgetSnapshot(JSON.stringify(withMenu));
+    expect(round?.menu.recipeId).toBe('r1');
+    expect(round?.menu.week).toEqual(withMenu.menu.week);
+  });
+
+  it('週間が無い（旧アプリが書いた）スナップショットは空配列で読む', () => {
+    const legacy = { ...valid, menu: { kind: 'next', title: '肉じゃが' } };
+    const round = parseWidgetSnapshot(JSON.stringify(legacy));
+    expect(round?.menu.recipeId).toBeNull();
+    expect(round?.menu.week).toEqual([]);
+  });
+
+  it('週間に壊れた行が混ざっても落ちない（その行は正規化する）', () => {
+    const dirty = {
+      ...valid,
+      menu: {
+        kind: 'today',
+        title: 'a',
+        recipeId: 'r1',
+        week: [{ title: 'a', recipeId: 'r1', doneAt: null, isToday: true }, 42, null],
+      },
+    };
+    const round = parseWidgetSnapshot(JSON.stringify(dirty));
+    expect(round?.menu.week).toEqual([{ title: 'a', recipeId: 'r1', doneAt: null, isToday: true }]);
   });
 });
 

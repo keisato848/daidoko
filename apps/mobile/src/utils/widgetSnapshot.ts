@@ -16,6 +16,24 @@ export const WIDGET_SNAPSHOT_VERSION = 1;
 /** 小サイズで出す上限。中サイズは 6 行＋「ほか n 品」（設計 §2） */
 export const WIDGET_SHOPPING_PREVIEW = 6;
 
+/** 週間表示（W2 大サイズ）で出す上限。7 日分（設計 §2・ペルソナ確定） */
+export const WIDGET_MENU_WEEK_MAX = 7;
+
+/**
+ * 週間表示（大サイズ）の 1 日分。**省略可フィールドで足したもの**（版は上げない・§1）。
+ * `title`/`recipeId` が null の日は「未定」（—）として描く。`isToday` は
+ * `anchorDate` を持つ自動モードのときだけ true になりうる（手動プランは日付が無い）。
+ */
+export interface WidgetMenuWeekDay {
+  title: string | null;
+  /** タップ先。無ければ null（未定・削除済みは献立画面へ） */
+  recipeId: string | null;
+  /** 作り終わった日（ISO）。null = まだ。薄く描くのに使う */
+  doneAt: string | null;
+  /** 今日の行。金色で強調するのに使う */
+  isToday: boolean;
+}
+
 export interface WidgetSnapshot {
   version: number;
   /** 書き出した時刻（ISO）。ウィジェットは「HH:mm 時点」として**必ず表示する** */
@@ -38,17 +56,55 @@ export interface WidgetSnapshot {
     kind: 'today' | 'next' | null;
     /** 出す 1 品。無ければ null */
     title: string | null;
+    /**
+     * 出す 1 品のレシピ ID（タップ先 `daidoko://recipes/<id>`）。無ければ null。
+     * **省略可フィールドで足したもの**（旧ウィジェットは無視する・§1）。
+     */
+    recipeId?: string | null;
+    /**
+     * 週間表示（W2 大サイズ）用の 7 日分。**省略可フィールド**。
+     * 旧アプリが書いた（この欄が無い）スナップショットも読める。
+     */
+    week?: WidgetMenuWeekDay[];
   };
 }
 
 export interface SnapshotInput {
   shoppingItems: readonly { name: string; checked: boolean }[];
-  /** 献立の日。`doneAt` が null の最初の日を出す */
-  menuDays: readonly { title: string; doneAt: string | null; missing?: boolean }[];
+  /**
+   * 献立の日。`doneAt` が null の最初の日を「今日/次の一品」に出す。
+   * `recipeId`（タップ先）・`day`（自動モードの日番号・1 始まり）は省略可 —
+   * 手動プランや旧データには無い。`day` と `anchorDate` が揃うと週間表示の
+   * 「今日」判定ができる。
+   */
+  menuDays: readonly {
+    title: string;
+    doneAt: string | null;
+    missing?: boolean;
+    recipeId?: string;
+    day?: number;
+  }[];
   /** 自動モードの起点日。**あるときだけ「今日」と言える**（§10.11 で入る） */
   anchorDate: string | null;
   locale: 'ja' | 'en';
   now: Date;
+}
+
+/** ローカル暦日のキー（`YYYY-MM-DD`）。`menuDateKey`（menuPlan）と同じ規約 */
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** `YYYY-MM-DD` に `add` 日足したキー。壊れた anchor なら null */
+function addDaysToDateKey(anchor: string, add: number): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(anchor);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  d.setDate(d.getDate() + add);
+  return localDateKey(d);
 }
 
 /**
@@ -59,6 +115,24 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot {
   const unchecked = input.shoppingItems.filter((item) => !item.checked);
   // 削除されたレシピの日は飛ばす（ウィジェットに「無くなりました」は出せない）
   const nextDay = input.menuDays.find((day) => day.doneAt === null && !day.missing) ?? null;
+
+  // 週間表示（大サイズ）用に先頭 7 日分を写す。「今日」は anchorDate（自動モード）が
+  // あるときだけ日番号から暦日を割り当てて判定する（手動プランは日付が無い・§2）。
+  const todayKey = localDateKey(input.now);
+  const week: WidgetMenuWeekDay[] = input.menuDays.slice(0, WIDGET_MENU_WEEK_MAX).map((day) => {
+    const missing = day.missing === true;
+    let isToday = false;
+    if (input.anchorDate && typeof day.day === 'number') {
+      const key = addDaysToDateKey(input.anchorDate, day.day - 1);
+      isToday = key !== null && key === todayKey;
+    }
+    return {
+      title: missing ? null : day.title,
+      recipeId: missing ? null : (day.recipeId ?? null),
+      doneAt: day.doneAt,
+      isToday,
+    };
+  });
 
   return {
     version: WIDGET_SNAPSHOT_VERSION,
@@ -71,6 +145,8 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot {
     menu: {
       kind: nextDay ? (input.anchorDate ? 'today' : 'next') : null,
       title: nextDay ? nextDay.title : null,
+      recipeId: nextDay ? (nextDay.recipeId ?? null) : null,
+      week,
     },
   };
 }
@@ -118,7 +194,24 @@ export function parseWidgetSnapshot(raw: string): WidgetSnapshot | null {
     menu: {
       kind: menu.kind ?? null,
       title: typeof menu.title === 'string' ? menu.title : null,
+      recipeId: typeof menu.recipeId === 'string' ? menu.recipeId : null,
+      // 旧アプリが書いた（week の無い）スナップショットも読める。壊れた行は捨てる
+      week: Array.isArray(menu.week)
+        ? menu.week.map(sanitizeWeekDay).filter((d): d is WidgetMenuWeekDay => d !== null)
+        : [],
     },
+  };
+}
+
+/** 週間表示の 1 日分を読む側で正規化する。オブジェクトでなければ null（その行は捨てる） */
+function sanitizeWeekDay(value: unknown): WidgetMenuWeekDay | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const day = value as Record<string, unknown>;
+  return {
+    title: typeof day.title === 'string' ? day.title : null,
+    recipeId: typeof day.recipeId === 'string' ? day.recipeId : null,
+    doneAt: typeof day.doneAt === 'string' ? day.doneAt : null,
+    isToday: day.isToday === true,
   };
 }
 
