@@ -57,6 +57,16 @@ import {
   type MenuArrangeProvider,
 } from '../lib/menu-arrange.js';
 import { runMenuArrangeAgent } from '../agents/menu-arrange.agent.js';
+import {
+  GeminiMenuRecipesProvider,
+  MAX_MENU_RECIPES_DAYS,
+  MAX_MENU_RECIPES_PANTRY,
+  MAX_MENU_RECIPES_PREFERENCES,
+  MAX_MENU_RECIPES_TITLES,
+  MenuRecipesConfigError,
+  type MenuRecipesProvider,
+} from '../lib/menu-recipes.js';
+import { runMenuRecipesAgent } from '../agents/menu-recipes.agent.js';
 import { peekMonthlyQuota, recordMonthlyUse } from '../lib/quota-store.js';
 import {
   CoverImageConfigError,
@@ -785,6 +795,116 @@ inferRouter.post('/menu', zValidator('json', inferMenuSchema), async (c) => {
       outputLocale: parseOutputLocale(locale),
     },
     candidateIds,
+    provider,
+  );
+
+  // 消費は provider 成功時のみ。枠を飛ばした場合（token/premium）は記録しない
+  if (result.ok && !bypassMonthlyQuota) {
+    recordMonthlyUse(deviceId, QUOTA_CATEGORY);
+  }
+
+  // Always 200 — errors are in the response body (AgentResult pattern).
+  return c.json(result);
+});
+
+// ─── 献立の不足分レシピの一括生成（M3・docs/買い物リスト・在庫設計.md §10.12） ──
+
+/**
+ * 契約の正は `packages/shared/src/types/menu-recipes.ts`（サーバーは実行時に
+ * shared を取り込まない方針のため、ここは同じ形の写し。片方だけ直さないこと）。
+ */
+const inferMenuRecipesSchema = z.object({
+  days: z.number().int().min(1).max(MAX_MENU_RECIPES_DAYS),
+  existingTitles: z.array(z.string().min(1).max(100)).max(MAX_MENU_RECIPES_TITLES),
+  pantry: z.array(z.string().min(1).max(50)).max(MAX_MENU_RECIPES_PANTRY),
+  preferences: z.string().max(MAX_MENU_RECIPES_PREFERENCES).optional(),
+  locale: z.enum(['ja', 'en']).optional(),
+  // 分量を書かせる推論なので consult と同様 unitSystem を受ける（/menu との意図的な差分）
+  unitSystem: z.enum(['metric', 'imperial']).optional(),
+});
+
+let menuRecipesProviderOverride: MenuRecipesProvider | null = null;
+
+export function setMenuRecipesProviderForTesting(provider: MenuRecipesProvider | null): void {
+  menuRecipesProviderOverride = provider;
+}
+
+function resolveMenuRecipesProvider(): MenuRecipesProvider {
+  return menuRecipesProviderOverride ?? new GeminiMenuRecipesProvider();
+}
+
+inferRouter.post('/menu-recipes', zValidator('json', inferMenuRecipesSchema), async (c) => {
+  // /infer/menu と同じ認可・枠の作法（§10.10.1 の順序が本質）。
+  const deviceId = c.req.header('x-device-id');
+  if (!deviceId || !DEVICE_ID_PATTERN.test(deviceId)) {
+    return c.json({
+      ok: false,
+      error: { code: 'UNKNOWN', message: '端末IDが不正です', retryable: false },
+    });
+  }
+
+  const quotaSource = c.req.header('x-quota-source');
+  const bypassMonthlyQuota = quotaSource === 'token' || quotaSource === 'premium';
+
+  // 月次枠（無料のローカル読み）が先。checkRateLimit は許可時に即カウンタを
+  // 増やすため、枠切れの連打が共有プールを消費してしまう（/menu と同じ順序）
+  if (!bypassMonthlyQuota && !peekMonthlyQuota(deviceId, QUOTA_CATEGORY, monthlyFreeLimit())) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'FREE_QUOTA_EXCEEDED',
+        message: '今月の無料枠を使い切りました。',
+        retryable: false,
+      },
+    });
+  }
+
+  const clientId =
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous';
+  // 専用プールは作らない。RECIPE_POOL（INFER_*）を共有する（§10.10.6-a と同じ判断 —
+  // n 品でも呼び出しは 1 回なので、テキスト推論 1 回ぶんとして数えてよい）
+  const rate = checkRateLimit(clientId);
+  if (!rate.allowed) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'RATE_LIMITED',
+        message:
+          rate.scope === 'global'
+            ? '本日の利用上限に達しました。時間をおいてお試しください。'
+            : '本日の利用上限に達しました。',
+        retryable: false,
+      },
+    });
+  }
+
+  let provider: MenuRecipesProvider;
+  try {
+    provider = resolveMenuRecipesProvider();
+  } catch (err) {
+    if (err instanceof MenuRecipesConfigError) {
+      return c.json({
+        ok: false,
+        error: { code: 'AI_API_UNAVAILABLE', message: 'AI 推論が利用できません', retryable: false },
+      });
+    }
+    throw err;
+  }
+
+  const { days, existingTitles, pantry, preferences, locale, unitSystem } = c.req.valid('json');
+
+  const result = await runMenuRecipesAgent(
+    {
+      days,
+      existingTitles,
+      pantry,
+      // exactOptionalPropertyTypes: 省略可フィールドはスプレッドで組み立てる（リポジトリの既定）
+      ...(preferences !== undefined && { preferences }),
+      outputLocale: parseOutputLocale(locale),
+      unitSystem: parseUnitSystem(unitSystem),
+    },
     provider,
   );
 
