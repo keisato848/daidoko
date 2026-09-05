@@ -112,7 +112,7 @@ interface EncodedImage {
  * カメラ原寸（quality 1）で、そのままだと冷蔵庫写真と同じ 400 になる。
  * target（保存済み写真）は既に圧縮されているが、同じ経路に乗せて害はない。
  */
-async function encodePhotos(photos: RefinePhoto[]): Promise<EncodedImage[]> {
+export async function encodePhotos(photos: RefinePhoto[]): Promise<EncodedImage[]> {
   const encoded: EncodedImage[] = [];
   for (const photo of photos) {
     try {
