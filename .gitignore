@@ -92,3 +92,6 @@ apps/mobile/credentials.json
 # FCM の設定ファイル（API キーを含む）。C:/secure/ に置く — docs/fcm-setup.md
 google-services.json
 **/google-services.json
+
+# Play Console / AdMob のエクスポート（収益・国別データ。growth-analyst が読む。コミットしない）
+analytics/

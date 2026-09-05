@@ -74,6 +74,14 @@ export const ROUTES = [
     ],
   },
   {
+    agent: 'growth-analyst',
+    ask: 'アナリティクス・継続率・広告効果・収益化の判断',
+    patterns: [
+      /継続率|リテンション|アンインストール|DAU|MAU|広告(の|は)?(効果|収益|成果)|eCPM|収益化(は|が|の)|アナリティクス|数字(は|を|で)(どう|見)|インストール数/i,
+      /\b(retention|ecpm|ad revenue|analytics|installs?)\b/i,
+    ],
+  },
+  {
     agent: 'eval-inference',
     ask: '推論品質の測定・プロンプト変更の評価',
     patterns: [
