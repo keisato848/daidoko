@@ -13,7 +13,7 @@ Stop フック（`scripts/agent/hook-stop-docs-guard.mjs`）が督促するの�
 **どこに・どう書くか**はこのエージェントが引き受ける。
 
 作法の正典は `.claude/skills/record-finding`。索引の機械側は `scripts/agent/lib/knowledge-map.mjs`
-（`KNOWLEDGE_TARGETS` は 4 種で、Skill の決定表 8 種より狭い。**決定表を正**とする）。
+（SessionStart 表示用の写し。**決定表を正**とし、ずれていたら決定表に合わせる。数は書かない — 写すと腐る）。
 
 ## 禁止事項
 

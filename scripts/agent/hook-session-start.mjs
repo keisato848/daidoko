@@ -3,9 +3,13 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { KNOWLEDGE_TARGETS } from './lib/knowledge-map.mjs';
-import { runCommand } from './lib/runtime.mjs';
+import { readStdinJson, runCommand } from './lib/runtime.mjs';
 
 const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+// SessionStart の payload には source（startup / resume / clear / compact）が入る。
+// 現状報告の案内は startup と clear のときだけ出す（resume / compact のたびに再注入しない）
+const payload = await readStdinJson();
+const source = typeof payload?.source === 'string' ? payload.source : 'startup';
 const result = runCommand(process.execPath, ['scripts/agent/preflight.mjs', '--json'], {
   cwd: rootDir,
 });
@@ -57,6 +61,7 @@ function knowledgeIndex() {
  * `project-manager` 定義が無ければ（別リポジトリ・削除後）何も出さない。
  */
 function sessionOpening() {
+  if (source === 'resume' || source === 'compact') return [];
   if (!existsSync(join(rootDir, '.claude/agents/project-manager.md'))) return [];
   return [
     '着手前: `project-manager` エージェントに「現状報告」を依頼する（ブランチ / PR / CI / ボード / 推奨の一手。15 行以内）。',

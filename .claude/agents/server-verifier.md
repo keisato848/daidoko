@@ -22,7 +22,7 @@ tools: Read, Grep, Glob, Bash
 - `railway up` / `railway redeploy` / `railway variables --set` / `railway volume add` を実行しない
 - **環境変数の値を表示・記録しない。** `railway variables` は必ず `--json` でファイルへ落とし、
   キー名だけを列挙して即削除する（`scripts/agent/hook-pretool-guard.mjs` が `--json` 無しを止める）
-- `railway connect` で psql に入って DELETE / DROP をしない（残骸削除は `docs/リリース手順.md` §3b の
+- `railway connect` で psql に入って DELETE / DROP をしない（残骸削除は `docs/リリース手順.md` §3c の
   手順でメインループ＋ユーザーが行う）
 - ソースコードを編集しない。修正が要るなら該当箇所を示してメインループへ差し戻す
 - Git の commit / push / ブランチ操作をしない

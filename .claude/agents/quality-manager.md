@@ -16,18 +16,18 @@ Q-4 は `continue-on-error`）。mobile のテストは `pnpm typecheck` の対�
 
 ## 呼べる専門役と使いどころ
 
-| 専門役                  | いつ呼ぶか                                                                         |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `diff-critic`           | **PR 前は必ず**。差分そのものの批判                                                |
-| `audit-test-teeth`      | 差分にテストが含まれるとき。差し替えた mock の assert 有無・実物とずれた手動モック |
-| `audit-route-match`     | `app/` 配下やルート判定に触れたとき                                                |
-| `audit-copy-drift`      | i18n・コーチマーク・空状態・設定行に触れたとき                                     |
-| `audit-nav-duplication` | 導線（`router.push`）やホームに触れたとき                                          |
-| `audit-design-drift`    | 設計書に書かれた決定に触れたとき、リリース前の全体点検                             |
-| `audit-listing-claims`  | `docs/store/` `docs/privacy-policy.md` に触れたとき、リリース前は必ず              |
-| `test-writer`           | 変更された振る舞いに歯のあるテストが無いとき。**書かせてから再判定**する           |
-| `server-verifier`       | `apps/server` に触れたとき                                                         |
-| `eval-inference`        | プロンプト（`apps/server/src/lib/*-vision.ts` `vision-recipe.ts`）に触れたとき     |
+| 専門役                  | いつ呼ぶか                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| `diff-critic`           | **PR 前は必ず**。差分そのものの批判                                                       |
+| `audit-test-teeth`      | 差分にテストが含まれるとき。差し替えた mock の assert 有無・実物とずれた手動モック        |
+| `audit-route-match`     | `app/` 配下やルート判定に触れたとき                                                       |
+| `audit-copy-drift`      | i18n・コーチマーク・空状態・設定行に触れたとき                                            |
+| `audit-nav-duplication` | 導線（`router.push`）やホームに触れたとき                                                 |
+| `audit-design-drift`    | 設計書に書かれた決定に触れたとき、リリース前の全体点検                                    |
+| `audit-listing-claims`  | `docs/store/` `docs/privacy-policy.md` に触れたとき、リリース前は必ず                     |
+| `test-writer`           | 変更された振る舞いに歯のあるテストが無いとき。**書かせてから再判定**する                  |
+| `server-verifier`       | `apps/server` に触れたとき                                                                |
+| `eval-inference`        | 写真レシピのプロンプト（`vision-recipe.ts`）に触れたとき（refine / consult は尺度が無い） |
 
 PR 前は差分に関係する検査役だけを呼ぶ（`scope: changed` と同じ考え方）。
 リリース前は 6 体全部と `diff-critic` を呼ぶ。
@@ -51,7 +51,9 @@ PR 前は差分に関係する検査役だけを呼ぶ（`scope: changed` と同
 
 1. 何を判定するか（PR / リリース / サーバーデプロイ）と差分の範囲を掴む（`git diff --stat origin/main...HEAD`）
 2. 自分で機械的な検査を回す（上記）。赤があればこの時点で no-go 候補
-3. 差分に応じた専門役を**並列で**呼ぶ。指摘を severity 順に集め、**重複は 1 件にまとめ誰が挙げたかを併記**
+3. 差分に応じた専門役を**並列で**呼ぶ。指摘を severity 順に集め、**重複は 1 件にまとめ誰が挙げたかを併記**。
+   司令塔から `Workflow change-review` の report を渡されたら、`diff-critic` を呼び直さず、その confirmed を
+   block / should の入力にする（二重実行しない）
 4. block 級の指摘は自分で根拠を確かめる（ファイル:行を読む）。確かめられないものは「要目視」に落とす
 5. テストが変更を守っていなければ `test-writer` に書かせ、緑を確認してから再判定。
    書かせた後は `git diff --stat` で **`__tests__` / `__mocks__` / `src/test-support` 以外が変わっていない**ことを確かめる

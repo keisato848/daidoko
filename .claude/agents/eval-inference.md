@@ -24,7 +24,7 @@ tools: Read, Grep, Glob, Bash, Write
 - 評価セット（写真＋`manifest.json`）が**ローカルに**あること。写真も manifest もコミットしない
   （個人の行動データ）。雛形は `apps/server/scripts/vision-eval-manifest.example.json`。
   リモート環境には無いので、その場合は「実行できない」と即座に返す
-- 対象は**写真からレシピ（A〜D）**と端末内 OCR（設計 §10 の T/I/S/N）だけ。
+- 対象は**写真からレシピ（A〜D）**と端末内 OCR（設計の「端末内 OCR」節の T/I/S/N。見出し番号 §10 が重複しているので節名で引く）だけ。
   `refine`（`recipe-refine.ts`）と `consult`（`recipe-consult.ts`）には数値の合格ラインが無い。
   頼まれても尺度を発明せず「未計測・尺度が設計に無い」と返す
 

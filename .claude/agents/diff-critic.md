@@ -50,9 +50,10 @@ drift 監査（`audit-*`）は**出荷物と説明の食い違い**を見る。�
    - 疑わしければ変異検証を提案する: 「`X` を外して `pnpm --filter <pkg> test -- <file>` が赤くなること」。
      実行してよいのは対象パッケージの個別テストまで（フルビルド・E2E は回さない）
 
-5. **リポジトリの規約（`CLAUDE.md` §5）**
+5. **リポジトリの規約（`CLAUDE.md` §5 と設計書）**
    - `any` / 文字列結合 SQL / HS256 / AgentBridge を経由しないエージェント呼び出し
-   - ルート判定は `apps/mobile/src/utils/routeMatch.ts` の `pathHasSegment` を使う（`includes` 禁止）
+   - ルート判定を文字列の部分一致（`includes`）で書かない。`/` 区切りのセグメント一致で書く。
+     共通関数は**まだ無い**（#285。`CookingResumeBar.tsx:30` / `app-open-ad.service.ts:76` が `includes` のまま）
    - `scripts/agent/lib/docs-map.mjs` の対応表に載るファイルを触ったら、**同じブランチで対応文書が更新されているか**
    - 掲載文・ポリシー（`docs/store/`・`docs/privacy-policy.md`）に触れる変更なら、
      `audit-listing-claims` を回すよう促す

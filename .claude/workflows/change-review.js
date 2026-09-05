@@ -129,25 +129,37 @@ const reviews = await parallel(
         schema: FINDINGS,
         ...(r.agentType ? { agentType: r.agentType } : {}),
         ...(r.model ? { model: r.model } : {}),
-      }).then((res) => ({ reviewer: r.label, ...res })),
+      }).then((res) => (res ? { reviewer: r.label, ...res } : null)),
   ),
 );
 const ok = reviews.filter(Boolean);
-log(`${ok.length}/${REVIEWERS.length} の目を回収`);
+// agent() はスキップ・終端エラー時に null を**返す**（throw ではない）ので、落ちた目を明示的に数える
+const lost = REVIEWERS.filter((_r, i) => !reviews[i]).map((r) => r.label);
+log(
+  `${ok.length}/${REVIEWERS.length} の目を回収${lost.length ? `（回収できず: ${lost.join('・')}）` : ''}`,
+);
 
 // 重複排除（同じファイル・似た見出し）。ここは全指摘が揃ってから行う必要があるので barrier の後
 const seen = new Map();
 for (const r of ok) {
   for (const f of r.findings ?? []) {
-    const key = `${(f.file ?? '').split(':')[0]}|${(f.title ?? '').replace(/\s+/g, '').slice(0, 24)}`;
-    const prev = seen.get(key);
+    // 同じファイル・似た見出しは同一候補。ただし「壊れ方」が違えば別の指摘として残す
+    // （見出しだけで束ねると、2 件目以降の failure_scenario / fix が黙って消える）
+    const baseKey = `${(f.file ?? '').split(':')[0]}|${(f.title ?? '').replace(/\s+/g, '').slice(0, 24)}`;
+    const scenarioSig = (f.failure_scenario ?? '').replace(/\s+/g, '').slice(0, 40);
+    let key = baseKey;
+    let prev = seen.get(key);
+    if (prev && prev.scenarioSig !== scenarioSig) {
+      key = `${baseKey}#${scenarioSig}`;
+      prev = seen.get(key);
+    }
     if (prev) {
-      prev.reviewers.push(r.reviewer);
+      if (!prev.reviewers.includes(r.reviewer)) prev.reviewers.push(r.reviewer);
       if ((SEVERITY_ORDER[f.severity] ?? 9) < (SEVERITY_ORDER[prev.severity] ?? 9)) {
         prev.severity = f.severity;
       }
     } else {
-      seen.set(key, { ...f, reviewers: [r.reviewer] });
+      seen.set(key, { ...f, scenarioSig, reviewers: [r.reviewer] });
     }
   }
 }
@@ -173,7 +185,8 @@ if (toVerify.length === 0) {
     confirmed: [],
     refuted: [],
     dropped,
-    report: `## 判定: go\n\n4 つの目（${ok.map((r) => r.reviewer).join('・')}）のいずれも指摘なし。\n\n### PR コメント用\n\`\`\`\nchange-review: go（指摘 0 件・反証なし）\n\`\`\``,
+    lost,
+    report: `## 判定: ${lost.length ? '条件付き go' : 'go'}\n\n${ok.length} つの目（${ok.map((r) => r.reviewer).join('・')}）のいずれも指摘なし。${lost.length ? `\n\n**回収できなかった目**: ${lost.join('・')}（この目の観点は未検査。再実行を推奨）` : ''}\n\n### PR コメント用\n\`\`\`\nchange-review: ${lost.length ? '条件付き go' : 'go'}（指摘 0 件・反証なし${lost.length ? `・未回収の目 ${lost.length}` : ''}）\n\`\`\``,
   };
 }
 
@@ -222,6 +235,9 @@ ${JSON.stringify(
   2,
 )}
 
+## 回収できなかった目（あれば「未検査の観点」として明記する）
+${JSON.stringify(lost)}
+
 ## 反証に回せず落とした指摘
 ${JSON.stringify(
   dropped.map((f) => ({ severity: f.severity, title: f.title, file: f.file })),
@@ -246,4 +262,4 @@ const verdict = confirmed.some((f) => f.severity === 'block')
     ? 'conditional-go'
     : 'go';
 
-return { verdict, confirmed, refuted, dropped, report };
+return { verdict, confirmed, refuted, dropped, lost, report };

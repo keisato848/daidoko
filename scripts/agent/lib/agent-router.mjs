@@ -82,7 +82,17 @@ export const ROUTES = [
   },
 ];
 
-const AGENT_NAMES = ROUTES.map((r) => r.agent);
+/** 名指し判定に使う名前。ROUTES に無い役（作業役・audit-*・persona-*）も名指しなら黙る */
+const AGENT_NAMES = [
+  ...ROUTES.map((r) => r.agent),
+  'android-verifier',
+  'ios-release-mac',
+  'store-ops',
+  'diff-critic',
+  'test-writer',
+  'audit-',
+  'persona-',
+];
 const MAX_SUGGESTIONS = 2;
 
 /**
