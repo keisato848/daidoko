@@ -56,9 +56,9 @@ describe('sanitizeFridgeItems — サーバー側の写し（捨てる方向の�
       ],
     });
     expect(items).toEqual([
-      { name: '牛乳', confidence: 1 },
-      { name: '卵', confidence: 0 },
-      { name: '味噌', confidence: 0 },
+      { name: '牛乳', confidence: 1, quantity: null },
+      { name: '卵', confidence: 0, quantity: null },
+      { name: '味噌', confidence: 0, quantity: null },
     ]);
   });
 
@@ -69,7 +69,7 @@ describe('sanitizeFridgeItems — サーバー側の写し（捨てる方向の�
         { name: 'ﾄｳﾌ', confidence: 0.9 },
       ],
     });
-    expect(items).toEqual([{ name: 'ﾄｳﾌ', confidence: 0.9 }]);
+    expect(items).toEqual([{ name: 'ﾄｳﾌ', confidence: 0.9, quantity: null }]);
   });
 
   it('上限（60 品）を超えたぶんは捨てる', () => {
@@ -84,6 +84,24 @@ describe('sanitizeFridgeItems — サーバー側の写し（捨てる方向の�
     expect(sanitizeFridgeItems(undefined)).toEqual([]);
   });
 
+  it('quantity は trim・30 字切り詰め・空/欠落は null（旧サーバー応答互換）', () => {
+    const items = sanitizeFridgeItems({
+      items: [
+        { name: 'にんじん', confidence: 0.9, quantity: ' 3本 ' },
+        { name: '卵', confidence: 0.9, quantity: '' },
+        // 旧サーバーの応答には quantity フィールド自体が無い — null になって通る
+        { name: '味噌', confidence: 0.9 },
+        { name: '豚肉', confidence: 0.9, quantity: 'あ'.repeat(40) },
+      ],
+    });
+    expect(items).toEqual([
+      { name: 'にんじん', confidence: 0.9, quantity: '3本' },
+      { name: '卵', confidence: 0.9, quantity: null },
+      { name: '味噌', confidence: 0.9, quantity: null },
+      { name: '豚肉', confidence: 0.9, quantity: 'あ'.repeat(30) },
+    ]);
+  });
+
   // ペルソナ検証（2026-09-05）: カテゴリ名は在庫として役に立たない（設計 §9）。
   // サーバー側と同じ網 — BYOK 経路はサーバーを通らないのでこちらにも必須
   it('カテゴリ語は捨てずに confidence 0（要確認）へ落とす', () => {
@@ -95,9 +113,9 @@ describe('sanitizeFridgeItems — サーバー側の写し（捨てる方向の�
       ],
     });
     expect(items).toEqual([
-      { name: '調味料', confidence: 0 },
-      { name: 'Drinks', confidence: 0 },
-      { name: '牛乳', confidence: 0.9 },
+      { name: '調味料', confidence: 0, quantity: null },
+      { name: 'Drinks', confidence: 0, quantity: null },
+      { name: '牛乳', confidence: 0.9, quantity: null },
     ]);
   });
 
@@ -105,7 +123,7 @@ describe('sanitizeFridgeItems — サーバー側の写し（捨てる方向の�
     const items = sanitizeFridgeItems({
       items: [{ name: '調味料入れ', confidence: 0.7 }],
     });
-    expect(items).toEqual([{ name: '調味料入れ', confidence: 0.7 }]);
+    expect(items).toEqual([{ name: '調味料入れ', confidence: 0.7, quantity: null }]);
   });
 });
 
@@ -143,7 +161,7 @@ describe('inferFridgeItems — BYOK / managed サーバーの分岐', () => {
     });
 
     expect(result.source).toBe('cloud');
-    expect(result.items).toEqual([{ name: '牛乳', confidence: 0.9 }]);
+    expect(result.items).toEqual([{ name: '牛乳', confidence: 0.9, quantity: null }]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/infer/fridge');
@@ -207,7 +225,7 @@ describe('inferFridgeItems — BYOK / managed サーバーの分岐', () => {
     const result = await inferFridgeItems({
       images: [{ localPath: 'file:///a.jpg', mimeType: 'image/jpeg' }],
     });
-    expect(result.items).toEqual([{ name: 'トウフ', confidence: 1 }]);
+    expect(result.items).toEqual([{ name: 'トウフ', confidence: 1, quantity: null }]);
   });
 
   it('無料枠切れ（FREE_QUOTA_EXCEEDED）は retryable=false の FridgeInferError', async () => {
@@ -253,7 +271,7 @@ describe('inferFridgeItems — BYOK / managed サーバーの分岐', () => {
     });
 
     expect(result.source).toBe('byok');
-    expect(result.items).toEqual([{ name: '卵', confidence: 0.8 }]);
+    expect(result.items).toEqual([{ name: '卵', confidence: 0.8, quantity: null }]);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('generativelanguage.googleapis.com');
     expect(url).toContain('user-key');

@@ -184,7 +184,7 @@ const pantry: typeof ja = {
 
   fridge: {
     title: 'From a fridge photo',
-    lead: 'Take a photo of the inside of your fridge and we’ll read the ingredients and add them to your pantry. Taking two photos — the main compartment and the vegetable drawer — reads more accurately. Quantities are not read (you can enter them when you use an item).',
+    lead: 'Take a photo of the inside of your fridge and we’ll read the ingredients and add them to your pantry. Taking two photos — the main compartment and the vegetable drawer — reads more accurately. Quantities are filled in only where they can be counted from the photo, and you can edit them.',
     reading: 'Reading your fridge photo',
     capture: 'Photograph your fridge',
     disclosure: {
@@ -196,15 +196,18 @@ const pantry: typeof ja = {
         'that data.',
     },
     resultHint: {
-      text: 'Here’s what we read. Fix any wrong names, uncheck what you don’t want, then add. Nothing changes in your pantry until you add here. No quantities are registered (you can enter them when you use an item).',
+      text: 'Here’s what we read. Fix any wrong names or quantities, uncheck what you don’t want, then add. Nothing changes in your pantry until you add here. Quantities are filled in only where they could be counted from the photo (a blank one is fine).',
       intent:
-        'MUST convey ALL THREE: nothing is added to the pantry until the user confirms here, ' +
-        'names are editable (misreads can be fixed, not just excluded), AND no quantities are ' +
-        'registered. Silently auto-confirming or implying quantities breaks trust in the pantry.',
+        'MUST convey ALL FOUR: nothing is added to the pantry until the user confirms here, ' +
+        'names AND quantities are editable, quantities are present ONLY where they could be ' +
+        'counted from the photo (never guessed), and a blank quantity is fine (tracked as ' +
+        '"no quantity"). Implying quantities were guessed breaks trust in the pantry.',
     },
     uncertainBadge: 'maybe',
     uncertainLabel: 'We’re not sure about this one. Check the name',
     alreadyInPantry: 'Already in your pantry',
+    quantityPlaceholder: 'Qty',
+    quantityLabel: 'Quantity (blank = not tracked; e.g. 3, about 200g)',
     exclude: 'Exclude',
     include: 'Include',
     retry: 'Start over',
