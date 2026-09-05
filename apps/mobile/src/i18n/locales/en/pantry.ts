@@ -177,6 +177,48 @@ const pantry: typeof ja = {
     failed: 'Reading failed',
   },
 
+  fridge: {
+    title: 'From a fridge photo',
+    lead: 'Take a photo of the inside of your fridge and we’ll read the ingredients and add them to your pantry. Quantities are not read (you can enter them when you use an item).',
+    reading: 'Reading your fridge photo',
+    capture: 'Photograph your fridge',
+    disclosure: {
+      text: 'Reading uses a cloud AI. The fridge photo is sent only to read the ingredients and is not stored.',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a cloud AI AND that it is not ' +
+        'retained, BEFORE the user takes or picks the photo. A fridge photo shows what a ' +
+        'family eats and how they live; dropping either half misrepresents what happens to ' +
+        'that data.',
+    },
+    resultHint: {
+      text: 'Here’s what we read. Fix any wrong names, uncheck what you don’t want, then add. Nothing changes in your pantry until you add here. No quantities are registered (you can enter them when you use an item).',
+      intent:
+        'MUST convey ALL THREE: nothing is added to the pantry until the user confirms here, ' +
+        'names are editable (misreads can be fixed, not just excluded), AND no quantities are ' +
+        'registered. Silently auto-confirming or implying quantities breaks trust in the pantry.',
+    },
+    uncertainBadge: 'maybe',
+    uncertainLabel: 'We’re not sure about this one. Check the name',
+    alreadyInPantry: 'Already in your pantry',
+    exclude: 'Exclude',
+    include: 'Include',
+    retry: 'Start over',
+    confirm: {
+      one: 'Add to pantry ({{count}})',
+      other: 'Add to pantry ({{count}})',
+    },
+    added: {
+      one: 'Added {{count}} item to your pantry',
+      other: 'Added {{count}} items to your pantry',
+    },
+    cookableCta: 'See recipes you can make with these',
+    consultCta: 'Plan a recipe with AI',
+    noItems:
+      'We couldn’t read any ingredients from that photo. Retake it with the inside well lit, or add items by hand from the pantry screen.',
+    manualFallback: 'Add to pantry by hand',
+    failed: 'Reading failed',
+  },
+
   scan: {
     added: 'Added “{{name}}” to your pantry',
     permissionNeeded: 'Scanning barcodes needs camera access.',

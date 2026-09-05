@@ -211,6 +211,60 @@ const pantry = {
     failed: '読み取りに失敗しました',
   },
 
+  /** 冷蔵庫の写真から在庫へ追加（`docs/冷蔵庫写真設計.md`）。 */
+  fridge: {
+    title: '冷蔵庫の写真から',
+    lead: '冷蔵庫の中を撮影すると、写っている食材を読み取って在庫に追加できます。数量は読み取りません（使うときに入れられます）。',
+    reading: '冷蔵庫の写真を読み取っています',
+    capture: '冷蔵庫を撮影',
+    /**
+     * 送信先の開示。撮影・選択の**前**に見せる（設計 §4-5 — 冷蔵庫は生活そのもの。
+     * **書かないと不当な収集になる**ので A 階層）。
+     */
+    disclosure: {
+      text: '読み取りにはクラウド AI を使用します。冷蔵庫の写真は食材の読み取りのためだけに送信され、保存されません。',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a cloud AI AND that it is not ' +
+        'retained, BEFORE the user takes or picks the photo. A fridge photo shows what a ' +
+        'family eats and how they live; dropping either half misrepresents what happens to ' +
+        'that data.',
+    } satisfies CriticalMessage,
+    /**
+     * 確認シートの説明。**自動確定はしない**前提を含む A 階層 —
+     * 「勝手に登録されない・数量は入らない」が崩れると在庫への信用が壊れる。
+     */
+    resultHint: {
+      text: '読み取った食材です。間違いは名前を直し、不要な行のチェックを外してから追加してください。ここで追加するまで在庫は変わりません。数量は登録されません（使うときに入れられます）。',
+      intent:
+        'MUST convey ALL THREE: nothing is added to the pantry until the user confirms here, ' +
+        'names are editable (misreads can be fixed, not just excluded), AND no quantities are ' +
+        'registered. Silently auto-confirming or implying quantities breaks trust in the pantry.',
+    } satisfies CriticalMessage,
+    /** 読み取り信頼度が低い品目の要確認表示（「たぶん◯◯」）。 */
+    uncertainBadge: 'たぶん',
+    uncertainLabel: '読み取りに自信がありません。名前を確かめてください',
+    /** 既存在庫との重複（名寄せ済み比較）。既定オフ — 上書き・合算はしない */
+    alreadyInPantry: 'すでに在庫にあります',
+    exclude: '除外',
+    include: '含める',
+    retry: 'やり直す',
+    confirm: {
+      one: '在庫に追加（{{count}}）',
+      other: '在庫に追加（{{count}}）',
+    } satisfies PluralMessage,
+    added: {
+      one: '{{count}}品を在庫に追加しました',
+      other: '{{count}}品を在庫に追加しました',
+    } satisfies PluralMessage,
+    /** 在庫追加後の誘導（A: この材料で作れるレシピへ）。 */
+    cookableCta: 'この材料で作れるレシピを見る',
+    consultCta: 'AIに相談してレシピを作る',
+    noItems:
+      '写真から食材を読み取れませんでした。庫内を明るくして撮り直すか、在庫画面から手入力で追加してください。',
+    manualFallback: '手入力で在庫に追加',
+    failed: '読み取りに失敗しました',
+  },
+
   /** バーコードのスキャン。 */
   scan: {
     added: '「{{name}}」を在庫に追加しました',

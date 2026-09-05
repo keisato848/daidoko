@@ -115,6 +115,8 @@ module.exports = [
       'apps/mobile/src/services/menu-recipes.provider.ts',
       // 紙面読み取りのプロンプト。サーバー `lib/recipe-page.ts` の写し（BYOK はサーバーを通らない）
       'apps/mobile/src/services/recipe-page.provider.ts',
+      // 冷蔵庫読み取りのプロンプト。サーバー `lib/fridge-vision.ts` の写し（BYOK はサーバーを通らない）
+      'apps/mobile/src/services/fridge-vision.provider.ts',
       // レシピ「イメージ」の AI 生成プロンプト。サーバー `lib/cover-image.ts` の写し
       'apps/mobile/src/services/cover-image.provider.ts',
       'apps/mobile/src/services/ai-output-locale.ts',

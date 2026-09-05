@@ -25,6 +25,14 @@ import {
   type ReceiptVisionProvider,
 } from '../lib/receipt-vision.js';
 import {
+  FridgeVisionConfigError,
+  FridgeVisionRequestError,
+  GeminiFridgeVisionProvider,
+  MAX_FRIDGE_IMAGES,
+  sanitizeFridgeItems,
+  type FridgeVisionProvider,
+} from '../lib/fridge-vision.js';
+import {
   GeminiRecipeRefineProvider,
   RefineConfigError,
   type RecipeRefineProvider,
@@ -398,6 +406,124 @@ inferRouter.post('/receipt', zValidator('json', inferReceiptSchema), async (c) =
     return c.json({ ok: true, data });
   } catch (err) {
     const retryable = err instanceof ReceiptVisionRequestError;
+    return c.json({
+      ok: false,
+      error: {
+        code: 'AI_INFER_FAILED',
+        message: '読み取りに失敗しました。時間をおいてお試しください。',
+        retryable,
+      },
+    });
+  }
+});
+
+// ─── POST /fridge — fridge photo → ingredient names (docs/冷蔵庫写真設計.md) ────
+
+/**
+ * 契約の正は `packages/shared/src/types/fridge.ts`（サーバーは実行時に shared を
+ * 取り込まない方針のため、ここは同じ形の写し。片方だけ直さないこと）。
+ * 品名と confidence だけを返す — 数量・分量の欄は契約上存在しない。
+ */
+const inferFridgeSchema = z.object({
+  images: z
+    .array(
+      z.object({
+        imageBase64: z
+          .string()
+          .min(1, '画像が空です')
+          .max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
+        mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+      }),
+    )
+    .min(1, '画像がありません')
+    .max(MAX_FRIDGE_IMAGES, `画像は ${MAX_FRIDGE_IMAGES} 枚までです`),
+  locale: z.enum(['ja', 'en']).optional(),
+  // unitSystem は受けない — 分量を出力しない推論への単位系指示は
+  // 「分量を書け」という圧力になるだけ（/menu と同じ意図的な差分）
+});
+
+let fridgeProviderOverride: FridgeVisionProvider | null = null;
+
+export function setFridgeProviderForTesting(provider: FridgeVisionProvider | null): void {
+  fridgeProviderOverride = provider;
+}
+
+function resolveFridgeProvider(): FridgeVisionProvider {
+  return fridgeProviderOverride ?? new GeminiFridgeVisionProvider();
+}
+
+inferRouter.post('/fridge', zValidator('json', inferFridgeSchema), async (c) => {
+  // /infer/menu-recipes と同じ認可・枠の作法（§10.10.1 の順序が本質）。
+  // レシート読み取り（無料・ゲートなし）とは違い、冷蔵庫写真は**月次無料枠を 1 消費する**
+  // （docs/冷蔵庫写真設計.md §5 — レシートは購買の記帳、こちらは能動的な AI 機能）。
+  const deviceId = c.req.header('x-device-id');
+  if (!deviceId || !DEVICE_ID_PATTERN.test(deviceId)) {
+    return c.json({
+      ok: false,
+      error: { code: 'UNKNOWN', message: '端末IDが不正です', retryable: false },
+    });
+  }
+
+  const quotaSource = c.req.header('x-quota-source');
+  const bypassMonthlyQuota = quotaSource === 'token' || quotaSource === 'premium';
+
+  // 月次枠（無料のローカル読み）が先。checkRateLimit は許可時に即カウンタを
+  // 増やすため、枠切れの連打が共有プールを消費してしまう（/menu と同じ順序）
+  if (!bypassMonthlyQuota && !peekMonthlyQuota(deviceId, QUOTA_CATEGORY, monthlyFreeLimit())) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'FREE_QUOTA_EXCEEDED',
+        message: '今月の無料枠を使い切りました。',
+        retryable: false,
+      },
+    });
+  }
+
+  const clientId =
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous';
+  // 専用プールは作らない。RECIPE_POOL（INFER_*）を共有する（視覚推論 1 回ぶん）
+  const rate = checkRateLimit(clientId);
+  if (!rate.allowed) {
+    return c.json({
+      ok: false,
+      error: {
+        code: 'RATE_LIMITED',
+        message:
+          rate.scope === 'global'
+            ? '本日の利用上限に達しました。時間をおいてお試しください。'
+            : '本日の利用上限に達しました。',
+        retryable: false,
+      },
+    });
+  }
+
+  let provider: FridgeVisionProvider;
+  try {
+    provider = resolveFridgeProvider();
+  } catch (err) {
+    if (err instanceof FridgeVisionConfigError) {
+      return c.json({
+        ok: false,
+        error: { code: 'AI_API_UNAVAILABLE', message: 'AI 推論が利用できません', retryable: false },
+      });
+    }
+    throw err;
+  }
+
+  const { images, locale } = c.req.valid('json');
+
+  try {
+    const raw = await provider.infer({ images, outputLocale: parseOutputLocale(locale) });
+    // 消費は provider 成功時のみ。枠を飛ばした場合（token/premium）は記録しない。
+    // 空の items でも消費する — 推論は実行されており、コストは発生している
+    if (!bypassMonthlyQuota) recordMonthlyUse(deviceId, QUOTA_CATEGORY);
+    return c.json({ ok: true, data: { items: sanitizeFridgeItems(raw) } });
+  } catch (err) {
+    const retryable = err instanceof FridgeVisionRequestError;
+    // 画像・生出力はログに書かない（/photo と同じ — 冷蔵庫は生活そのもの）
     return c.json({
       ok: false,
       error: {
