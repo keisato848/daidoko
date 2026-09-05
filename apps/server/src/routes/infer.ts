@@ -16,12 +16,14 @@ import {
   GeminiMealVisionProvider,
   MealVisionConfigError,
   MealVisionRequestError,
+  sanitizeMealRaw,
   type MealVisionProvider,
 } from '../lib/meal-vision.js';
 import {
   GeminiReceiptVisionProvider,
   ReceiptVisionConfigError,
   ReceiptVisionRequestError,
+  sanitizeReceiptRaw,
   type ReceiptVisionProvider,
 } from '../lib/receipt-vision.js';
 import {
@@ -88,7 +90,9 @@ import { runCoverImageAgent } from '../agents/cover-image.agent.js';
 const inferRouter = new Hono();
 
 // base64 of a ~1024px JPEG is well under this; guard against oversized payloads.
-const MAX_IMAGE_BASE64_LENGTH = 8_000_000; // ~6 MB decoded
+// 契約の正は shared `MAX_INFER_IMAGE_BASE64_LENGTH`（同値の写し。突合は
+// __tests__/shared-parity.test.ts — サーバーは実行時に shared を取り込まない方針）
+export const MAX_IMAGE_BASE64_LENGTH = 8_000_000; // ~6 MB decoded
 
 const inferPhotoSchema = z.object({
   imageBase64: z.string().min(1, '画像が空です').max(MAX_IMAGE_BASE64_LENGTH, '画像が大きすぎます'),
@@ -310,7 +314,8 @@ inferRouter.post('/meal', zValidator('json', inferMealSchema), async (c) => {
       mimeType,
       outputLocale: parseOutputLocale(locale),
     });
-    return c.json({ ok: true, data });
+    // 生出力を素通ししない（水平展開規約②）。カテゴリ語の材料はここで落ちる
+    return c.json({ ok: true, data: sanitizeMealRaw(data) });
   } catch (err) {
     const retryable = err instanceof MealVisionRequestError;
     return c.json({
@@ -403,7 +408,8 @@ inferRouter.post('/receipt', zValidator('json', inferReceiptSchema), async (c) =
         ? { ocrText: input.ocrText, outputLocale }
         : { imageBase64: input.imageBase64, mimeType: input.mimeType, outputLocale },
     );
-    return c.json({ ok: true, data });
+    // 生出力を素通ししない（水平展開規約②）。カテゴリ語・売り場名の品目はここで落ちる
+    return c.json({ ok: true, data: sanitizeReceiptRaw(data) });
   } catch (err) {
     const retryable = err instanceof ReceiptVisionRequestError;
     return c.json({

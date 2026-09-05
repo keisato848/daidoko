@@ -61,3 +61,24 @@ describe('POST /api/v1/infer/meal', () => {
     expect(json.error.code).toBe('AI_INFER_FAILED');
   });
 });
+
+describe('POST /api/v1/infer/meal — 語彙防御（水平展開規約②）', () => {
+  it('カテゴリ語の材料はルートを通ると落ちる（生出力を素通ししない）', async () => {
+    setMealProviderForTesting({
+      infer: async () => ({
+        isMeal: true,
+        dish: '肉じゃが',
+        ingredients: [{ name: 'じゃがいも' }, { name: '調味料' }, { name: '牛肉' }],
+        confidence: 'medium',
+      }),
+    } as MealVisionProvider);
+
+    const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+    const json = (await res.json()) as {
+      ok: boolean;
+      data: { ingredients: { name: string }[] };
+    };
+    expect(json.ok).toBe(true);
+    expect(json.data.ingredients.map((i) => i.name)).toEqual(['じゃがいも', '牛肉']);
+  });
+});

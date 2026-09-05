@@ -1,5 +1,6 @@
 import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
 import { thinkingConfigFragment } from './thinking-budget.js';
+import { isCategoryItemName } from './fridge-vision.js';
 /**
  * Meal-consumption Vision — infer which ingredients a meal photo used up, so the
  * pantry can be decremented. Provider abstraction (default Gemini Flash). The
@@ -23,13 +24,30 @@ export interface MealVisionProvider {
   infer(input: MealVisionInput): Promise<MealVisionRaw>;
 }
 
+/**
+ * ルートが返す前の検証（それまで生出力を素通ししていた — 水平展開規約②）。
+ * カテゴリ語（「調味料」等）の材料は在庫の消費対象を特定できないので**除外**する。
+ * 材料行には confidence が無く、fridge のように「要確認へ落とす」形が取れない。
+ */
+export function sanitizeMealRaw(raw: MealVisionRaw): MealVisionRaw {
+  const ingredients = Array.isArray(raw.ingredients)
+    ? raw.ingredients.filter(
+        (item) =>
+          typeof item?.name === 'string' && item.name.trim() && !isCategoryItemName(item.name),
+      )
+    : [];
+  return { ...raw, ingredients };
+}
+
 export class MealVisionConfigError extends Error {}
 export class MealVisionRequestError extends Error {}
 
 const SYSTEM_PROMPT = [
   'あなたは食事の写真から「使われた（消費された）食材」を推定する日本語の専門家です。',
   '写真の料理を特定し、その料理に一般的に使われる主な食材を列挙してください。',
-  '細かい調味料より主要な食材（肉・魚・野菜・卵・主食など）を優先します。',
+  // カテゴリ語の例示は誘い水になる（冷蔵庫写真設計 §9 と同根・2026-09-05）。例は具体品名で
+  '細かい調味料より主要な食材を優先します（例: 鶏もも肉・鮭・玉ねぎ・にんじん・卵・ごはん）。',
+  '「調味料」「野菜」「肉」のようなカテゴリ名は食材として返しません。必ず具体的な品名で挙げます。',
   '分量(amount)は概算で任意。写真だけでは断定できないため confidence を自己申告します。',
   '料理・食品が写っていない場合は isMeal=false を返し、ingredients は空にします。',
   'すべて自然な日本語で、食材名は一般的な総称（例: 卵、玉ねぎ、鶏肉）で出力します。',

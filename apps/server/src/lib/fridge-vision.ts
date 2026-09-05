@@ -99,7 +99,7 @@ function nameKey(name: string): string {
  * **単体一致のみ**（`nameKey` の完全一致）。「調味料入れ」等の複合語は対象外。
  * BYOK 経路（モバイルの写し）と同じ語リスト。片方だけ直さないこと。
  */
-const CATEGORY_NAME_WORDS = [
+export const CATEGORY_NAME_WORDS = [
   '調味料',
   '飲料',
   '飲み物',
@@ -127,6 +127,14 @@ const CATEGORY_NAME_WORDS = [
 ] as const;
 
 const CATEGORY_NAME_KEYS = new Set(CATEGORY_NAME_WORDS.map(nameKey));
+
+/**
+ * 品目名がカテゴリ語（単体一致）か。冷蔵庫だけでなく、読み取り結果を在庫へ流す
+ * 他経路（レシート・食事写真・名寄せ）も**このサーバー内唯一の写し**を使う。
+ */
+export function isCategoryItemName(name: string): boolean {
+  return CATEGORY_NAME_KEYS.has(nameKey(name));
+}
 
 /**
  * モデルの生出力を検証する。**捨てる方向のみ・埋めない**:
