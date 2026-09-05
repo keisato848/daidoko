@@ -3,6 +3,7 @@
 export * from './types/agent';
 export * from './types/recipe';
 export * from './types/menu-recipes';
+export * from './types/fridge';
 export * from './bridge/types';
 export * from './bridge/timestamp';
 export { AgentBridge } from './bridge/AgentBridge';
