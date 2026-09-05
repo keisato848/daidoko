@@ -428,6 +428,8 @@ const inferFridgeSchema = z.object({
   images: z
     .array(
       z.object({
+        // 上限は契約の正（shared `MAX_FRIDGE_IMAGE_BASE64_LENGTH`）と同値。
+        // 実機のカメラ写真は超え得るので、クライアントは送信前に必ず縮小する
         imageBase64: z
           .string()
           .min(1, '画像が空です')
