@@ -499,13 +499,21 @@ export default function FamilyScreen() {
   /** 「現在のグループ」の切替（G1/G2）。控えの更新 → current の順（§12-7） */
   const handleSelectGroup = async (group: KnownGroupSummary, isPrimary: boolean) => {
     if (group.groupId === currentGroupId || syncBusy) return;
-    await switchCurrentSyncGroup(group.groupId);
+    try {
+      await switchCurrentSyncGroup(group.groupId);
+    } catch {
+      // 失敗して黙らない（P5 — 切り替わったつもりで別グループへ書き込む事故を防ぐ）
+      setToastMessage(t('family.sync.groups.switchFailed'));
+      return;
+    }
     const resolved = await getCurrentSyncGroupId();
     setCurrentGroupId(resolved);
     if (resolved === group.groupId) {
       setToastMessage(
         t('family.sync.groups.switched', { name: groupDisplayName(group, isPrimary) }),
       );
+    } else {
+      setToastMessage(t('family.sync.groups.switchFailed'));
     }
   };
 

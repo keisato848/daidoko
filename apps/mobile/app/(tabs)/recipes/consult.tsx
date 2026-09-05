@@ -374,6 +374,9 @@ export default function ConsultScreen() {
           placeholderTextColor={Colors.muted}
           multiline
           editable={!busy}
+          /* サーバー契約は 1 発言 ≤2000 字（inferConsultSchema）。超えて送ると 400 で
+             発言ごと弾かれるので、入力の時点で契約に収める（P4） */
+          maxLength={2000}
         />
         <Pressable
           style={[styles.sendButton, (!input.trim() || busy) && styles.sendButtonDisabled]}

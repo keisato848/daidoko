@@ -108,6 +108,7 @@ const family: typeof ja = {
         other: '{{count}} members',
       },
       switched: 'Switched to “{{name}}”. New recipes and items will go into this group.',
+      switchFailed: "We couldn't switch groups. Check your connection and try again.",
       invite: 'Invite',
       create: 'Create a new group',
       createTitle: 'New group',

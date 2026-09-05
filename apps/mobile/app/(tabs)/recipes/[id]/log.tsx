@@ -11,6 +11,7 @@ import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { t, tCount } from '../../../../src/i18n';
+import { readableErrorMessage } from '../../../../src/services/ai-error';
 import { createCookingLog } from '../../../../src/services/cooking-log.service';
 import { dialog } from '../../../../src/services/dialog.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
@@ -84,7 +85,7 @@ export default function CookingLogScreen() {
         if (shot.length === 0) return; // キャンセル
         setPhotos((current) => [...current, ...shot].slice(0, MAX_COOKING_LOG_PHOTOS));
       } catch (error) {
-        const message = error instanceof Error ? error.message : t('common.photoAddFailed');
+        const message = readableErrorMessage(error, t('common.photoAddFailed'));
         void dialog.alert({ title: t('common.photoAddFailed'), message });
       }
     },
@@ -139,7 +140,7 @@ export default function CookingLogScreen() {
       setTimeout(() => router.push('/(tabs)'), 1500);
     } catch (error) {
       await cleanupStoredCookingPhotos(persistedPhotos);
-      const message = error instanceof Error ? error.message : t('log.form.saveFailedBody');
+      const message = readableErrorMessage(error, t('log.form.saveFailedBody'));
       void dialog.alert({ title: t('log.form.saveFailedTitle'), message });
     } finally {
       setSaving(false);

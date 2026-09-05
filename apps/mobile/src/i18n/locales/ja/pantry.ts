@@ -150,6 +150,12 @@ const pantry = {
       other: '在庫を減らす（{{count}}）',
     } satisfies PluralMessage,
     noMatch: '「{{dish}}」と推定しましたが、在庫に該当する食材がありませんでした。',
+    /** 確定の結果は必ず言う（P5 — 減らせたのか失敗したのか、無言で戻らない） */
+    applied: {
+      one: '在庫を {{count}} 件減らしました',
+      other: '在庫を {{count}} 件減らしました',
+    } satisfies PluralMessage,
+    applyFailed: '在庫を減らせませんでした。時間をおいてお試しください。',
     notRecognized: '料理を認識できませんでした。明るく正面から撮り直してください。',
     failed: '解析に失敗しました',
   },
@@ -256,6 +262,11 @@ const pantry = {
       one: '{{count}}品を在庫に追加しました',
       other: '{{count}}品を在庫に追加しました',
     } satisfies PluralMessage,
+    /** 一部失敗を隠さない（P5 — 全部入ったと思わせない） */
+    addFailed: {
+      one: '{{count}}品は追加できませんでした',
+      other: '{{count}}品は追加できませんでした',
+    } satisfies PluralMessage,
     /**
      * 在庫追加後の誘導（A: 作れるレシピへ）。遷移先は**全在庫**での検索なので
      * 「この材料で」とは書かない — 今回読み取った品だけで探すと期待させる
@@ -265,8 +276,6 @@ const pantry = {
     consultCta: 'AIに相談してレシピを作る',
     noItems:
       '写真から食材を読み取れませんでした。庫内を明るくして撮り直すか、在庫画面から手入力で追加してください。',
-    /** 縮小の保険が破れて 400/413 が返ったとき。「サーバーエラー (400)」では何もできない */
-    tooLarge: '写真が大きすぎて送れませんでした。もう一度撮影してお試しください。',
     manualFallback: '手入力で在庫に追加',
     failed: '読み取りに失敗しました',
   },

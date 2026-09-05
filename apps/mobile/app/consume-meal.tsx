@@ -10,8 +10,10 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Loading } from '../src/components/Loading';
+import { Toast } from '../src/components/Toast';
 import { Colors } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
+import { readableErrorMessage } from '../src/services/ai-error';
 import { ensureInferenceCredit } from '../src/services/inference-gate.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../src/services/expo-photo-capture.adapter';
 import { applyConsumption, inferMealConsumption } from '../src/services/meal-consume.service';
@@ -44,6 +46,7 @@ export default function ConsumeMealScreen() {
   const [dish, setDish] = useState<string | null>(null);
   const [matches, setMatches] = useState<ReviewMatch[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
 
   useFocusEffect(
@@ -98,7 +101,7 @@ export default function ConsumeMealScreen() {
           setPhase('select');
           return;
         }
-        setErrorMsg(error instanceof Error ? error.message : t('pantry.consumeMeal.failed'));
+        setErrorMsg(readableErrorMessage(error, t('pantry.consumeMeal.failed')));
         setPhase('error');
       }
     },
@@ -107,8 +110,14 @@ export default function ConsumeMealScreen() {
 
   const handleApply = useCallback(async () => {
     const ids = matches.filter((m) => m.selected).map((m) => m.id);
-    await applyConsumption(ids).catch(() => undefined);
-    router.back();
+    try {
+      // 握りつぶさない（P5 — 減らせたのか失敗したのか、必ず結果を言う）
+      const applied = await applyConsumption(ids);
+      setToastMessage(tCount('pantry.consumeMeal.applied', applied));
+      setTimeout(() => router.back(), 1200);
+    } catch (error) {
+      setErrorMsg(readableErrorMessage(error, t('pantry.consumeMeal.applyFailed')));
+    }
   }, [matches, router]);
 
   const selectedCount = matches.filter((m) => m.selected).length;
@@ -202,6 +211,12 @@ export default function ConsumeMealScreen() {
           </View>
         </>
       )}
+      <Toast
+        message={toastMessage ?? ''}
+        visible={toastMessage != null}
+        duration={1100}
+        onDismiss={() => setToastMessage(null)}
+      />
     </View>
   );
 }

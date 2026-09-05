@@ -19,6 +19,7 @@ import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { Loading } from '../src/components/Loading';
 import { Colors } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
+import { readableErrorMessage } from '../src/services/ai-error';
 import { recognizeTextOnDevice, isClientOcrAvailable } from '../src/services/client-ocr.provider';
 import { expoImageManipulatorPreprocessAdapter } from '../src/services/expo-image-preprocess.adapter';
 import { expoImagePickerPhotoCaptureAdapter } from '../src/services/expo-photo-capture.adapter';
@@ -181,7 +182,7 @@ export default function ReceiptScreen() {
         setPhase('select');
         return;
       }
-      setErrorMsg(error instanceof Error ? error.message : t('pantry.receipt.failed'));
+      setErrorMsg(readableErrorMessage(error, t('pantry.receipt.failed')));
       setPhase('error');
     }
   }, []);

@@ -468,14 +468,24 @@ function hydrate(
   };
 }
 
+/**
+ * `replaceMenuDay` の結果。「差し替えたのか・差し替えるものが無かったのか」を
+ * 呼び出し側が言い分けられる形にする（P5 — 変化ゼロで黙るのは「押したのに
+ * 何も起きない」体験になる。`docs/品質基準.md` 規約④）。
+ */
+export type ReplaceMenuDayResult =
+  | { outcome: 'swapped'; view: MenuPlanView }
+  | { outcome: 'no-candidates' }
+  | { outcome: 'unavailable' };
+
 /** その日だけ次点に差し替える。**AI は呼ばない**（即時・¥0・オフライン可・§10.7） */
 export async function replaceMenuDay(
   day: number,
   mealTime: MenuMealTime = 'dinner',
-): Promise<MenuPlanView | null> {
-  if (!isNativePlatform) return null;
+): Promise<ReplaceMenuDayResult> {
+  if (!isNativePlatform) return { outcome: 'unavailable' };
   const current = await getMenuPlan(mealTime);
-  if (!current) return null;
+  if (!current) return { outcome: 'unavailable' };
 
   const { getAliasMap } = await import('./name-alias.service');
   const [recipes, pantry, aliases] = await Promise.all([
@@ -485,11 +495,13 @@ export async function replaceMenuDay(
   ]);
   const usedIds = new Set(current.plan.days.map((d) => d.recipeId));
   const candidates = recipes.filter((r) => !usedIds.has(r.id) && r.ingredients.length > 0);
-  if (candidates.length === 0) return current;
+  // 変化ゼロ（current をそのまま返す）と成功が見分けられなかった穴（P5）。
+  // 「差し替えられるレシピが無い」は結果として呼び出し側へ伝える
+  if (candidates.length === 0) return { outcome: 'no-candidates' };
 
   const next = buildMenu(candidates, pantry.items, 1, new Date(), aliases);
   const pick = next.days[0];
-  if (!pick) return current;
+  if (!pick) return { outcome: 'no-candidates' };
 
   const plan: StoredMenuPlan = {
     ...current.plan,
@@ -507,7 +519,7 @@ export async function replaceMenuDay(
   };
   await writeStoredMenuPlan(plan);
   refreshWidgetSnapshot();
-  return hydrate(plan, recipes, pantry, aliases);
+  return { outcome: 'swapped', view: hydrate(plan, recipes, pantry, aliases) };
 }
 
 /** AI 並べ替え（M2）に渡す入力。読むだけで保存はしない（`menu-arrange.provider.ts` へそのまま渡せる形）。 */
