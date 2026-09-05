@@ -22,7 +22,7 @@
 | 02   | repo-shared skills と workspace hooks の追加        | Done        | `.github/skills/*`, `.github/hooks/agent-suite.json`                                                                                         | skill 説明の精緻化、将来の custom agent 追加                                                                  |
 | 03   | Agent 用の core task scripts 整備                   | Done        | `scripts/agent/preflight.mjs`, `validate-changed-slice.mjs`, `triage-e2e-report.mjs`, `scaffold-feature-plan.mjs`, `check-device-health.mjs` | なし（slice-test 精緻化・signing/healthチェック完了）                                                         |
 | 04   | git hooks / VS Code tasks / shared entrypoints 整備 | Done        | `.githooks/*`, `.vscode/tasks.json`, `.vscode/extensions.json`, `package.json` scripts                                                       | なし（hook install・有効化確認完了）                                                                          |
-| 05   | custom agents の追加                                | Done        | `.github/agents/android-verifier.agent.md`, `repo-research.agent.md`, `release-orchestrator.agent.md`                                        | なし（3 agent 追加完了）                                                                                      |
+| 05   | custom agents の追加                                | Done        | `.github/agents/android-verifier.agent.md`（2026-09-05 に `release-orchestrator` を統合、`repo-research` は削除。正典は `.claude/agents/`）  | なし（編成の現在地は `docs/開発ハーネス.md` §7）                                                              |
 | 06   | Android failure signal と自動復旧の強化             | Done        | Android build/install/loop の土台、E2E triage、failure signals / retry policy / recovery executor                                            | なし（構造化 signal・ポリシー・リカバリ実装完了）                                                             |
 | 07   | ドキュメントと step prompt 群の整備                 | Done        | `README.md`（導線・運用例）, この進捗ドキュメント, `.github/prompts/agent-suite-step-*.prompt.md`                                            | なし（README 導線・運用例拡充完了）                                                                           |
 | 08   | rollout と本番運用への有効化                        | In progress | `pnpm agent:init` 実行済み、preflight OK、customizations OK (24 checks)、hook 有効化済み                                                     | authorized real device で base loop 実行（blocker: NO_CONNECTED_DEVICE）                                      |
@@ -41,9 +41,7 @@
 
 ### Custom Agents
 
-- `.github/agents/android-verifier.agent.md`
-- `.github/agents/repo-research.agent.md`
-- `.github/agents/release-orchestrator.agent.md`
+- `.github/agents/android-verifier.agent.md`（Copilot 向けの写し。`repo-research` / `release-orchestrator` は 2026-09-05 に整理 — `docs/開発ハーネス.md` §7-4）
 
 ### Agent scripts
 
