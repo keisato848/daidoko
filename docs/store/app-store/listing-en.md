@@ -1,8 +1,8 @@
 # App Store 掲載情報（EN）
 
 作成日: 2026-08-27
-更新日: 2026-09-02（独立監査で発見した「データは端末の中だけ」の反例を修正。2026-09-01 は開示 5 件を実装と突き合わせて修正。2026-08-29 は決定変更 B — 訴求の主語を「お店の味」→「献立」へ）
-対象ビルド: iOS 1.13.0（予定）（App ID `6800964382`・公開中は 1.12.0 / 10029・ASC の直前作業は 1.12.3 / 10033）
+更新日: 2026-09-05（1.13.1 — 冷蔵庫からレシピ・時間帯別献立・AI 一括生成・グループ別共有を追記し、whatsNew を 1.13.1 へ。2026-09-02 は「データは端末の中だけ」の反例を修正）
+対象ビルド: iOS 1.13.1 / build 10035（App ID `6800964382`・ASC へアップロード済み・**審査提出はスクショ刷新後**。1.13.0 は 2026-09-03 提出→公開済み）
 反映方法: App Store Connect API（`appStoreVersionLocalizations` / `appInfoLocalizations`）
 
 **App Store に英語ロケールを新設するための原稿**（それまで ASC は `ja` のみ）。
@@ -59,6 +59,15 @@ AI 機能・URL 取り込みに加えて、**Web 共有の公開/停止・共有
 冗長な修飾（expiry の言い回し・meal-prep の一文）を数か所削って余白を確保した。
 **3975 字（残り 25 字）**。
 
+**1.13.1 追記（2026-09-05）**: Play 英語版の 1.13.1 改稿（`../google-play/listing-en.md`）と
+同じ訴求で、冷蔵庫からレシピ・朝昼夕・AI 一括生成・グループ別共有を反映した。
+**移植しなかったもの（iOS の実態・根拠は `listing-ja.md` の「1.13.1 追記」）**:
+家族更新のプッシュ通知（iOS は APNs 受信未検証）・ウィジェット（iOS 版検証中）・
+「no amounts read」（2d43567 で数量欄が付き偽になった — Play 側も要修正）。
+4000 字上限は既存方針どおり冗長語の圧縮で確保した（冒頭 2 段落・meal-prep の一文・
+auto-plan の "with a notification"・"from the server" 等を圧縮。削った箇所は git 差分参照）。
+**最終 3987 字（残り 13 字・`**` 剥がし後の実測 = 反映スクリプトと同じ抽出）。\*\*
+
 ## フィールドの上限（App Store Connect）
 
 | 項目                   | 上限     | 審査なしで変更可 |
@@ -93,25 +102,25 @@ cooking,recipe manager,grocery,fridge,meal prep,expiry,leftovers,copycat,menu pl
 
 ## 説明
 
-"What should I cook tonight?" You open the fridge and answer the same question again. DAIDOKO starts from what you already have — a meal plan, then recipes, shopping and pantry, all in one app instead of scattered across screenshots and links.
-
-Cooking has a lot of moving parts: find a recipe, plan the week, shop, put things away, start over.
+"What should I cook tonight?" You open the fridge. DAIDOKO starts from what you already have — a meal plan, then recipes, shopping and pantry, all in one app.
 
 ■ Plan today's meals
 • Build a 2, 3, 5 or 7-day meal plan from what's in your pantry
 • Each day comes with a one-line reason; swap out anything you don't like
+• Plan breakfast, lunch and dinner separately
 • Anything missing goes straight to your shopping list
-• Optional auto-plan mode: today's plan is ready when you wake up, with a notification. Missing ingredients can be added automatically — undo or turn it off any time
+• Short on recipes? AI drafts the missing days in one batch — review each before saving
+• Optional auto-plan mode: today's plan is ready when you wake up; missing items can be auto-added — undo or turn it off any time
 
 ■ Building your recipe collection
 • Search by recipe name, tag or ingredient
 • Import from a recipe URL or pasted text
-• Just photograph a dish and AI drafts the ingredients, amounts and steps; you always review and edit before saving
-• Photograph a cookbook page or food package and AI reads it (front and back merged into one)
-• **AI can generate an image** for the recipe, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance)
-• Recreate a restaurant dish — write how yours turned out and AI narrows the gap, showing exactly what changed
+• Photograph a dish and AI drafts the ingredients, amounts and steps — review and edit before saving
+• Photograph a cookbook page or food package — AI merges front and back into one recipe
+• **AI can generate an image** for the recipe, always labeled "This image was created by AI" (3 free a month, separate allowance)
+• Recreate a restaurant dish — write how yours turned out and AI narrows the gap, showing what changed
 • AI-drafted recipes carry a reminder to check the ingredients, amounts and steps yourself (especially for allergies)
-• Cover photos, per-step photos, and a cooking log of what you made and when
+• Cover and step photos, plus a log of what you cooked and when
 • Cooking mode shows one step at a time, large, with timers and no ads. Leave and resume from a bar or the home screen; add step photos as you cook
 
 ■ Sharing with family and friends
@@ -120,21 +129,23 @@ Cooking has a lot of moving parts: find a recipe, plan the week, shop, put thing
 • You can stop sharing at any time
 
 ■ Shopping and pantry, connected
-• Add what a meal plan or recipe is missing to your shopping list in one tap
+• Add what a plan or recipe is missing to your shopping list in one tap
 • Move what you bought into the pantry — by barcode or by scanning a receipt
 • Track expiry dates if you want — nothing required, no nagging reminders
-• See which recipes you can cook right now, ranked by how much you already have — handy for meal-prep rotations, too
+• Snap your fridge — AI reads what's inside, you confirm, and it becomes pantry stock that feeds your meal plan and shopping list (photos are used only for reading, never stored)
+• See what you can cook right now, ranked by how much you already have
 • Get a reminder when something is running low
 
 ■ Shared with the family, automatically
 • Share an invite code — no account, no email address
-• Recipes, shopping list and pantry arrive on every phone in the family automatically (each phone builds its own meal plan)
+• Recipes, shopping list and pantry arrive on every phone in the family (meal plans stay per-phone)
+• Share by group — everything with family, recipes only with a friend
 • Choose per item whether the shopping list and pantry are shared or private
 
 ■ Where your data lives
 • No account, no sign-up. We never hold your email address or phone number
 • Unless you share with family or publish a recipe page, we do not send your data to our servers
-• Join a family group and only the items you share travel through our server. Delete the group and that synced data is erased from the server
+• Join a family group and only the items you share travel through our server. Delete the group and that synced data is erased
 • A published recipe page is separate — deleting the group does not stop it. Stop a single recipe from its own menu, a recipe book from Settings → Recipe books; nobody can open it after that
 • Backup, restore, a transfer file for a new phone, plus your OS backup (Android/iCloud) or chosen folder if set — your account, not ours
 • AI features include a free monthly allowance (5 a month; AI image generation is separate, 3 a month). Add your own Gemini key for no limit
@@ -147,25 +158,19 @@ Note on AI: an AI feature sends what it needs (photo, ingredients, recipe, notes
 
 DAIDOKO does not detect allergens. Always check the ingredients yourself, especially if you have food allergies.
 
-## バージョンごとの新機能（1.13.0）
+## バージョンごとの新機能（1.13.1）
 
-Meal plans: pick 2–7 days and DAIDOKO suggests dishes from what you already have. Swap any day you don't like.
+Snap your fridge and AI reads what's inside, ready to add to your pantry — you review every item before anything is added, and you can jump straight to what you can cook with it. Photos are used only for reading and are never stored.
 
-New opt-in auto mode: wake up to today's plan, with an optional morning reminder. Missing ingredients can be added to your shopping list automatically — and undone in one tap.
+Sharing, reorganized: choose what each group gets — everything with family, recipes only with a friend. A new Sharing overview screen shows what you are sharing with whom.
 
-Cooking mode: leave mid-recipe and pick up right where you left off from a resume bar or the home screen, even after closing the app. Add step photos as you cook.
+Shared recipe links now have a pick-up window: only people who open the link within 7 days of sending can view it. Anyone who opened it in time keeps access.
 
-Recipes can now get an AI-generated image, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance).
+Meal plans can now be built for breakfast, lunch or dinner. Short on recipes? AI drafts the missing days in one batch — review each one before saving.
 
-Recipes with AI-written ingredients or steps now carry an on-screen reminder to check them yourself (recipe view, cooking mode, and shared previews).
+Take several photos in a row when importing a cookbook page or consulting AI.
 
-The free AI allowance is now 5 uses per month.
-
-Also fixed: kana search breaking after edits, restaurant names being lost, a black cover-photo preview, and overlapping text for long names.
-
-Fixed the labels on the bottom tab bar being cut off at the edge of the screen on some devices.
-
-Made the free-usage note on "Photo to recipe" easier to read, and spelled out what happens when you run out: watch an ad to continue, or use your own AI key for unlimited use. Also removed a field that only made sense in Japanese from the English recipe form.
+Also fixed: photo reads failing with large images, taps that silently did nothing, and other small bugs.
 
 ## URL・その他
 
