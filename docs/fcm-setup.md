@@ -1,5 +1,9 @@
 # FCM を設定して同期の変更通知を動かす（#207）
 
+> **設定完了（2026-09-03）。** Firebase プロジェクト `daidoko-cc8c4`（Analytics 無効・Spark）で
+> 手順 1〜4 を実施し、AQUOS 実機で別端末の変更 → 通知受信まで確認済み。
+> 以下は再設定・iOS 対応・トラブルシュートのための記録。
+
 > **アプリとサーバーのコードは既に完成している。** 足りないのは FCM の設定だけ。
 > 端末が Expo Push トークンを取得できず `sync_devices.expo_push_token` が NULL のまま、
 > という状態を解消する作業。
@@ -86,6 +90,24 @@ pnpm exec eas credentials -p android
 4. 別端末でレシピを変更 → **通知が届くこと**（サーバーはグループ単位で 5 分デバウンス・
    文面は固定＝中身を持たない。§0-2 の通り名前もデータも載せない）
 
+## 検証を軽くやる方法（2026-09-03 に実際に使った手順）
+
+「別端末でレシピを変更 → 通知が届く」の別端末は、**エミュレータを立てなくても
+同期 API を直接叩くスクリプトで代用できる**（受信側 = FCM の検証対象は実機のまま）:
+
+1. 実機の家族グループ画面で共有グループを作り、招待コードを控える
+2. スクリプトで `POST /sync/groups/join` → `POST /sync/push` →
+   `DELETE /devices/me`（参加 → 変更 1 件 → 離脱）。変更は**存在しない ID の
+   トゥームストーン**（`deleted: true, payload: null`）にすると受信側で読み飛ばされる no-op になる
+3. 通知はデバウンス窓の**初回なら即時**に飛ぶ（5 分待ちは不要）。実機側は
+   `dumpsys notification --noredact` で `pkg=com.daidoko.app`・本文
+   「家族の共有データが更新されました」を確認する
+
+認証は `Authorization: Bearer <deviceId>.<deviceSecret>`（`sync-client.service.ts` 参照）。
+なお「クラウド同期に参加済みか」は家族グループ画面の下部で見る —
+**上部の「◯人のメンバー」はローカルの家族管理で、クラウド同期の参加状態ではない**
+（1.13.1 検証時、参加済みと誤読しかけた）。
+
 ## 落とし穴
 
 - **パッケージ名の打ち間違い**で `google-services.json` が別アプリのものになると、
@@ -94,3 +116,10 @@ pnpm exec eas credentials -p android
 - エミュレータは **Google Play イメージ**でないと FCM が動かない
 - 通知の許可は在庫のしきい値設定でしか求めていない（`pantry.tsx`）。
   同期の通知を試すには、先に許可を出しておく必要がある
+- **`googleServicesFile` の絶対パス参照（`C:/secure/…`）は EAS クラウドビルドでは解決できない**。
+  EAS はプロジェクトディレクトリしかアップロードしないため、ローカル prebuild ビルドでは通るのに
+  クラウドビルドだけ `ENOENT` で落ちる（本書の「絶対パスで参照する」と「EAS ビルドも作り直す」は
+  そのままでは両立しない — 2026-09-02 の 1.13.1 準備で発覚）。EAS でビルドする場合は
+  `eas env:create --scope project --name GOOGLE_SERVICES_JSON --type file` で中身を渡し、
+  `googleServicesFile` を `process.env.GOOGLE_SERVICES_JSON ?? "C:/secure/google-services.json"`
+  にする（app.json のままでは env を読めないので app.config.js 化が要る）
