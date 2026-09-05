@@ -46,6 +46,8 @@ function selfTest() {
     ['README のスコープを直して', []],
     ['PR のレビューをして', ['quality-manager']],
     ['推論品質を上げたい', ['eval-inference']],
+    ['広告の効果はどう？継続率も見たい', ['growth-analyst']],
+    ['eCPM が低い気がする', ['growth-analyst']],
   ];
   let failed = 0;
   for (const [text, expected] of cases) {

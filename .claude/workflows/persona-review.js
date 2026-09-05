@@ -1,11 +1,14 @@
 export const meta = {
   name: 'persona-review',
   description:
-    'ストアスクショ列を 5 人のペルソナ（軽量モデル）が初見レビュー — 摩擦・文言・課金導線の定性評価を和集合で返す',
+    'ストアスクショ列を 6 人のペルソナが初見レビュー — 5 人（軽量モデル）が摩擦・文言・課金導線を、1 人（fable）が価値と競合優位を評価し、和集合で返す',
   whenToUse:
     'リリースごと、スクショ確定後・提出前に。「使い勝手が伝わるか」「課金導線のどこで価値が伝わっていないか」を機械的に点検したいとき。課金意向の予測には使わない（それは Play/AdMob の実指標で見る）。',
   phases: [
-    { title: 'Review', detail: '5 ペルソナが並列で初見レビュー' },
+    {
+      title: 'Review',
+      detail: '6 ペルソナが並列で初見レビュー（5 人は使い勝手、1 人は価値と競合）',
+    },
     { title: 'Synthesize', detail: '和集合 → 既知の設計判断と突合 → レポート' },
   ],
 };
@@ -86,6 +89,48 @@ const REVIEW = {
       items: { type: 'string' },
       description: '本当に良いと感じた点だけ。無ければ空配列',
     },
+    value: {
+      type: 'object',
+      description: 'けんじ（価値/競合の目）だけが書く。他のペルソナは省略',
+      required: [
+        'proposition',
+        'differentiators',
+        'competitors',
+        'switch_reason',
+        'biggest_risk',
+        'verdict_one_line',
+      ],
+      properties: {
+        proposition: { type: 'string', description: 'このアプリの価値の一文（自分の言葉で）' },
+        differentiators: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '競合が真似しにくい差（構造で。機能名の列挙にしない）。無ければ空配列',
+        },
+        competitors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['name', 'they_win', 'daidoko_wins'],
+            properties: {
+              name: { type: 'string' },
+              they_win: { type: 'string', description: '向こうが勝つ点' },
+              daidoko_wins: { type: 'string', description: 'だいどこが勝つ点。無ければ「無い」' },
+              source: {
+                type: 'string',
+                description: '出典と日付。記憶なら「記憶（2026 年時点）」',
+              },
+            },
+          },
+        },
+        switch_reason: {
+          type: 'string',
+          description: '乗り換える理由が言えるか。言えないなら何が足りないか',
+        },
+        biggest_risk: { type: 'string', description: '半年後に存在意義を失うとしたら何が原因か' },
+        verdict_one_line: { type: 'string', description: '記事の見出しに使う一文' },
+      },
+    },
   },
 };
 
@@ -96,6 +141,8 @@ const PERSONAS = [
   { agent: 'persona-misa', label: 'みさ(コレクター)', dirKey: 'jaDir' },
   { agent: 'persona-emma', label: 'Emma(English)', dirKey: 'enDir' },
   { agent: 'persona-noriko', label: 'のりこ(63)', dirKey: 'jaDir' },
+  // 価値と競合の目。他の 5 人が「使えるか」を見るのに対し「競合と戦える価値があるか」を見る（model: fable）
+  { agent: 'persona-kenji', label: 'けんじ(価値/競合)', dirKey: 'jaDir', value: true },
 ];
 
 /** Play の掲載順（README と ORDER に一致）。この順で「初見」させる。 */
@@ -134,6 +181,7 @@ const reviews = await parallel(
 ${files}
 
 全部開いてから、構造化出力で答える。指摘の screen にはファイル名を使う。
+${p.value ? '加えて docs/store/google-play/listing-ja.md（掲載文）と docs/要件定義.md §2〜§4 を Read し、value 欄を必ず書け（他の欄も書く）。' : 'value 欄は書かない。'}
 人物設定の「規律」を厳守: 見えるものだけ・支払い判断はしない・埋め草の賞賛をしない。`,
       { label: p.label, phase: 'Review', schema: REVIEW, agentType: p.agent },
     ).then((r) => (r ? { persona: p.label, review: r } : null));
@@ -150,7 +198,7 @@ if (ok.length === 0) {
 
 phase('Synthesize');
 const synthesis = await agent(
-  `だいどこ（レシピアプリ）のストアスクショを 5 人のペルソナがレビューした結果を統合し、
+  `だいどこ（レシピアプリ）のストアスクショを 6 人のペルソナ（5 人は使い勝手、1 人は価値と競合）がレビューした結果を統合し、
 リリース判断に使える Markdown レポートを書け。
 
 ## 入力（各ペルソナの構造化レビュー）
@@ -167,7 +215,10 @@ ${JSON.stringify(ok, null, 2)}
    (a) は「既知」節に落とし、本文は (b) だけにする
 3. **課金導線の節**: 5 人の monetization を並べ、「価値が伝わっていない箇所」だけを抽出。
    支払い予測はしない（レポートにもその旨を明記）
-4. 構成: サマリ（3 行）→ 新規の指摘（severity 順・screen 付き）→ 課金導線 → 既知（1 行ずつ）→
+3b. **価値と競合の節**: けんじの value をそのまま 1 節にする（proposition → 競合ごとの勝ち負け表 →
+   乗り換え理由 → 最大のリスク → 見出しの一文）。他のペルソナの first_impression と食い違う点があれば併記する。
+   出典の無い競合の事実は「記憶」と明記されているかを確かめ、無ければ「未確認」と書く
+4. 構成: サマリ（3 行）→ 新規の指摘（severity 順・screen 付き）→ 課金導線 → 価値と競合 → 既知（1 行ずつ）→
    ペルソナ別の第一印象と離脱リスク（表）→ 良かった点
 5. 淡々と書く。改善の実施判断は読み手（人間）に委ねる
 
