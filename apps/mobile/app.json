@@ -30,6 +30,7 @@
     "android": {
       "package": "com.daidoko.app",
       "versionCode": 10035,
+      "googleServicesFile": "C:/secure/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"
