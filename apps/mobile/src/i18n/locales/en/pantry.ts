@@ -179,7 +179,7 @@ const pantry: typeof ja = {
 
   fridge: {
     title: 'From a fridge photo',
-    lead: 'Take a photo of the inside of your fridge and we’ll read the ingredients and add them to your pantry. Quantities are not read (you can enter them when you use an item).',
+    lead: 'Take a photo of the inside of your fridge and we’ll read the ingredients and add them to your pantry. Taking two photos — the main compartment and the vegetable drawer — reads more accurately. Quantities are not read (you can enter them when you use an item).',
     reading: 'Reading your fridge photo',
     capture: 'Photograph your fridge',
     disclosure: {
@@ -211,7 +211,7 @@ const pantry: typeof ja = {
       one: 'Added {{count}} item to your pantry',
       other: 'Added {{count}} items to your pantry',
     },
-    cookableCta: 'See recipes you can make with these',
+    cookableCta: 'See recipes you can make with your current pantry',
     consultCta: 'Plan a recipe with AI',
     noItems:
       'We couldn’t read any ingredients from that photo. Retake it with the inside well lit, or add items by hand from the pantry screen.',

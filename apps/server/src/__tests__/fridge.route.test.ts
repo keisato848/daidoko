@@ -18,6 +18,7 @@ import { setFridgeProviderForTesting } from '../routes/infer.js';
 import { resetRateLimitForTesting } from '../lib/rate-limit.js';
 import { resetQuotaStoreForTesting } from '../lib/quota-store.js';
 import {
+  FRIDGE_SYSTEM_PROMPT,
   FridgeVisionRequestError,
   sanitizeFridgeItems,
   type FridgeVisionInput,
@@ -99,6 +100,46 @@ describe('sanitizeFridgeItems — 捨てる方向のみ・埋めない', () => {
   it('raw が null/undefined でも落ちない（空扱い）', () => {
     expect(sanitizeFridgeItems(null)).toEqual([]);
     expect(sanitizeFridgeItems(undefined)).toEqual([]);
+  });
+
+  // ペルソナ検証（2026-09-05）: 実写真 11 品中 3 品が「調味料」「飲料」等の
+  // カテゴリ名で、5 人全員が「在庫として役に立たない」と一致（設計 §9）
+  it('カテゴリ語は捨てずに confidence 0（要確認）へ落とす', () => {
+    const items = sanitizeFridgeItems({
+      items: [
+        { name: '調味料', confidence: 0.9 },
+        { name: '飲料', confidence: 0.85 },
+        { name: 'Condiments', confidence: 0.9 },
+        { name: '牛乳', confidence: 0.9 },
+      ],
+    });
+    expect(items).toEqual([
+      { name: '調味料', confidence: 0 },
+      { name: '飲料', confidence: 0 },
+      { name: 'Condiments', confidence: 0 },
+      { name: '牛乳', confidence: 0.9 },
+    ]);
+  });
+
+  it('カテゴリ語は単体一致のみ — 複合語（調味料入れ 等）は対象外', () => {
+    const items = sanitizeFridgeItems({
+      items: [
+        { name: '調味料入れ', confidence: 0.7 },
+        { name: '野菜ジュース', confidence: 0.8 },
+      ],
+    });
+    expect(items).toEqual([
+      { name: '調味料入れ', confidence: 0.7 },
+      { name: '野菜ジュース', confidence: 0.8 },
+    ]);
+  });
+});
+
+describe('FRIDGE_SYSTEM_PROMPT — カテゴリ名の禁止（ペルソナ検証 2026-09-05）', () => {
+  it('カテゴリ名を返さない指示と具体名への言い換え例を含む', () => {
+    expect(FRIDGE_SYSTEM_PROMPT).toContain('カテゴリ名は品目として返しません');
+    expect(FRIDGE_SYSTEM_PROMPT).toContain('×調味料 → ○醤油・みりん');
+    expect(FRIDGE_SYSTEM_PROMPT).toContain('×飲料 → ○麦茶・牛乳');
   });
 });
 

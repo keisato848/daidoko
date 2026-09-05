@@ -83,6 +83,30 @@ describe('sanitizeFridgeItems — サーバー側の写し（捨てる方向の�
     expect(sanitizeFridgeItems(null)).toEqual([]);
     expect(sanitizeFridgeItems(undefined)).toEqual([]);
   });
+
+  // ペルソナ検証（2026-09-05）: カテゴリ名は在庫として役に立たない（設計 §9）。
+  // サーバー側と同じ網 — BYOK 経路はサーバーを通らないのでこちらにも必須
+  it('カテゴリ語は捨てずに confidence 0（要確認）へ落とす', () => {
+    const items = sanitizeFridgeItems({
+      items: [
+        { name: '調味料', confidence: 0.9 },
+        { name: 'Drinks', confidence: 0.85 },
+        { name: '牛乳', confidence: 0.9 },
+      ],
+    });
+    expect(items).toEqual([
+      { name: '調味料', confidence: 0 },
+      { name: 'Drinks', confidence: 0 },
+      { name: '牛乳', confidence: 0.9 },
+    ]);
+  });
+
+  it('カテゴリ語は単体一致のみ — 複合語（調味料入れ 等）は対象外', () => {
+    const items = sanitizeFridgeItems({
+      items: [{ name: '調味料入れ', confidence: 0.7 }],
+    });
+    expect(items).toEqual([{ name: '調味料入れ', confidence: 0.7 }]);
+  });
 });
 
 describe('inferFridgeItems — BYOK / managed サーバーの分岐', () => {
