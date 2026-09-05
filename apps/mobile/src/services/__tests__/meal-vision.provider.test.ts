@@ -28,3 +28,14 @@ describe('normalizeMealRaw', () => {
     });
   });
 });
+
+describe('normalizeMealRaw — 語彙防御（水平展開規約②・サーバー sanitizeMealRaw と対）', () => {
+  it('カテゴリ語の材料は除外する（具体名は残す）', () => {
+    const r = normalizeMealRaw({
+      isMeal: true,
+      dish: '肉じゃが',
+      ingredients: [{ name: 'じゃがいも' }, { name: '調味料' }, { name: '牛肉' }],
+    });
+    expect(r.ingredients.map((i) => i.name)).toEqual(['じゃがいも', '牛肉']);
+  });
+});

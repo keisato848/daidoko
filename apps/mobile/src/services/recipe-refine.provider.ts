@@ -11,7 +11,8 @@
  * エラー種別は写真レシピと共通（VisionInferenceError / VisionErrorKind）。
  * 「つながらない」と「上限に達した」を分ける方針は Issue #120 と同じ。
  */
-import * as FileSystem from 'expo-file-system/legacy';
+import { serverErrorFor } from './ai-error';
+import { toInferImagePayload } from './image-payload';
 
 import { API_V1, GEMINI_MODEL } from '../config';
 import { getUserApiKey } from './byok.service';
@@ -105,15 +106,21 @@ interface EncodedImage {
   role: RefineImageRole;
 }
 
-/** 読めなかった写真は黙って落とす（写真は任意入力なので、失敗させない）。 */
+/**
+ * 読めなかった写真は黙って落とす（写真は任意入力なので、失敗させない）。
+ * 送信前の縮小は共通ヘルパー（image-payload.ts・規約①）— cooked 写真は
+ * カメラ原寸（quality 1）で、そのままだと冷蔵庫写真と同じ 400 になる。
+ * target（保存済み写真）は既に圧縮されているが、同じ経路に乗せて害はない。
+ */
 async function encodePhotos(photos: RefinePhoto[]): Promise<EncodedImage[]> {
   const encoded: EncodedImage[] = [];
   for (const photo of photos) {
     try {
-      const imageBase64 = await FileSystem.readAsStringAsync(photo.uri, {
-        encoding: FileSystem.EncodingType.Base64,
+      const payload = await toInferImagePayload({
+        localPath: photo.uri,
+        mimeType: mimeTypeFor(photo.uri),
       });
-      encoded.push({ imageBase64, mimeType: mimeTypeFor(photo.uri), role: photo.role });
+      encoded.push({ ...payload, role: photo.role });
     } catch {
       // この写真は添えずに続ける
     }
@@ -450,10 +457,8 @@ async function refineViaServer(
     });
 
     if (!res.ok) {
-      throw new VisionInferenceError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new VisionInferenceError(info.message, info.retryable);
     }
 
     const result = (await res.json()) as ServerAgentResult;
@@ -487,10 +492,18 @@ export async function refineRecipe(args: {
   feedback: string;
   photos?: RefinePhoto[];
 }): Promise<RefineResult> {
+  // サーバー契約（タグ ≤10 個・各 ≤30 字）に**送信側で**収める。編集画面で契約超の
+  // タグを持つ既存レシピでも、調整だけは通るようにする（契約ズレの実害箇所・P4）
+  const recipe: RefineRecipeSnapshot = {
+    ...args.recipe,
+    ...(args.recipe.tags !== undefined && {
+      tags: args.recipe.tags.slice(0, 10).map((tag) => tag.slice(0, 30)),
+    }),
+  };
   const images = await encodePhotos(args.photos ?? []);
   const userKey = await getUserApiKey();
   if (userKey) {
-    return refineViaByok(args.recipe, args.feedback, images, userKey);
+    return refineViaByok(recipe, args.feedback, images, userKey);
   }
-  return refineViaServer(args.recipe, args.feedback, images);
+  return refineViaServer(recipe, args.feedback, images);
 }

@@ -8,6 +8,19 @@ import { getAppMeta, setAppMeta } from './app-meta.service';
 import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
 import { t } from '../i18n';
 
+/**
+ * t() 済みの文言だけを持つバックアップエラー（画面は message をそのまま出してよい）。
+ * fs 由来の生例外（英語スタック）と見分けるための印 — `ai-error.ts` の
+ * `readableErrorMessage` が userVisible を見る（水平展開規約②・2026-09-05）。
+ */
+export class BackupError extends Error {
+  readonly userVisible = true;
+  constructor(message: string) {
+    super(message);
+    this.name = 'BackupError';
+  }
+}
+
 const BACKUP_FORMAT = 'daidoko.local-backup';
 const BACKUP_SCHEMA_VERSION = 1;
 const BACKUP_DIRECTORY_NAME = 'backups';
@@ -354,13 +367,13 @@ export interface MigrationBackupRestoreResult extends BackupOperationResult {
 
 function assertNative(): void {
   if (!isNativePlatform) {
-    throw new Error(t('backup.invalid.notNative'));
+    throw new BackupError(t('backup.invalid.notNative'));
   }
 }
 
 function getBackupDirectory(): string {
   if (!FileSystem.documentDirectory) {
-    throw new Error(t('backup.invalid.noStorage'));
+    throw new BackupError(t('backup.invalid.noStorage'));
   }
   return `${FileSystem.documentDirectory}${BACKUP_DIRECTORY_NAME}/`;
 }
@@ -473,21 +486,21 @@ function isBackupRow(value: unknown): value is BackupRow {
 function parseJsonObject(text: string): Record<string, unknown> {
   const parsed: unknown = JSON.parse(text);
   if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(t('backup.invalid.format'));
+    throw new BackupError(t('backup.invalid.format'));
   }
   return parsed as Record<string, unknown>;
 }
 
 function parseLocalBackupPayloadObject(parsed: Record<string, unknown>): LocalBackupPayload {
   if (parsed.format !== BACKUP_FORMAT || parsed.schemaVersion !== BACKUP_SCHEMA_VERSION) {
-    throw new Error(t('backup.invalid.unsupportedFormat'));
+    throw new BackupError(t('backup.invalid.unsupportedFormat'));
   }
   if (typeof parsed.exportedAt !== 'string') {
-    throw new Error(t('backup.invalid.exportedAt'));
+    throw new BackupError(t('backup.invalid.exportedAt'));
   }
   const rawTables = parsed.tables;
   if (rawTables == null || typeof rawTables !== 'object' || Array.isArray(rawTables)) {
-    throw new Error(t('backup.invalid.tables'));
+    throw new BackupError(t('backup.invalid.tables'));
   }
 
   const tables = createEmptyBackupTables();
@@ -497,7 +510,7 @@ function parseLocalBackupPayloadObject(parsed: Record<string, unknown>): LocalBa
     // 省略可のテーブルはキーが無ければ 0 件（旧アプリが書き出したファイルの復元）
     if (rows === undefined && isOptionalTable(table)) continue;
     if (!Array.isArray(rows) || !rows.every(isBackupRow)) {
-      throw new Error(t('backup.invalid.tableRows', { table: table.name }));
+      throw new BackupError(t('backup.invalid.tableRows', { table: table.name }));
     }
     tables[table.name] = rows;
   }
@@ -516,14 +529,15 @@ export function parseLocalBackupPayload(text: string): LocalBackupPayload {
 
 function assertString(value: unknown, message: string): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(message);
+    // message は呼び出し元で t() 済み（backup.invalid.*）
+    throw new BackupError(message);
   }
   return value;
 }
 
 function parseMigrationPhotoEntry(value: unknown): MigrationPhotoManifestEntry {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(t('backup.invalid.photoEntry'));
+    throw new BackupError(t('backup.invalid.photoEntry'));
   }
   const entry = value as Record<string, unknown>;
   const archivePath = assertString(entry.archivePath, t('backup.invalid.photoPath'));
@@ -532,7 +546,7 @@ function parseMigrationPhotoEntry(value: unknown): MigrationPhotoManifestEntry {
     archivePath.includes('..') ||
     archivePath.includes('\\')
   ) {
-    throw new Error(t('backup.invalid.photoPath'));
+    throw new BackupError(t('backup.invalid.photoPath'));
   }
 
   return {
@@ -545,12 +559,12 @@ function parseMigrationPhotoEntry(value: unknown): MigrationPhotoManifestEntry {
 
 function parseMigrationRecipePhotoEntry(value: unknown): MigrationRecipePhotoManifestEntry {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(t('backup.invalid.recipePhotoEntry'));
+    throw new BackupError(t('backup.invalid.recipePhotoEntry'));
   }
   const entry = value as Record<string, unknown>;
   const ownerType = entry.ownerType;
   if (ownerType !== 'recipe-cover' && ownerType !== 'step') {
-    throw new Error(t('backup.invalid.recipePhotoKind'));
+    throw new BackupError(t('backup.invalid.recipePhotoKind'));
   }
   const archivePath = assertString(entry.archivePath, t('backup.invalid.recipePhotoPath'));
   if (
@@ -558,7 +572,7 @@ function parseMigrationRecipePhotoEntry(value: unknown): MigrationRecipePhotoMan
     archivePath.includes('..') ||
     archivePath.includes('\\')
   ) {
-    throw new Error(t('backup.invalid.recipePhotoPath'));
+    throw new BackupError(t('backup.invalid.recipePhotoPath'));
   }
 
   return {
@@ -579,21 +593,21 @@ export function parseMigrationBackupManifest(text: string): MigrationBackupManif
     parsed.format !== MIGRATION_BACKUP_FORMAT ||
     parsed.schemaVersion !== MIGRATION_BACKUP_SCHEMA_VERSION
   ) {
-    throw new Error(t('backup.invalid.migrationFormat'));
+    throw new BackupError(t('backup.invalid.migrationFormat'));
   }
   const exportedAt = assertString(parsed.exportedAt, t('backup.invalid.migrationExportedAt'));
   const rawBackup = parsed.backup;
   if (rawBackup == null || typeof rawBackup !== 'object' || Array.isArray(rawBackup)) {
-    throw new Error(t('backup.invalid.migrationData'));
+    throw new BackupError(t('backup.invalid.migrationData'));
   }
   const rawPhotos = parsed.photos;
   if (!Array.isArray(rawPhotos)) {
-    throw new Error(t('backup.invalid.photoList'));
+    throw new BackupError(t('backup.invalid.photoList'));
   }
   // recipePhotos は省略可（旧形式 ZIP との互換）
   const rawRecipePhotos = parsed.recipePhotos;
   if (rawRecipePhotos != null && !Array.isArray(rawRecipePhotos)) {
-    throw new Error(t('backup.invalid.recipePhotoList'));
+    throw new BackupError(t('backup.invalid.recipePhotoList'));
   }
 
   return {
@@ -617,7 +631,7 @@ export function pickLatestBackup(files: BackupFileSummary[]): BackupFileSummary 
 function base64CharToValue(character: string): number {
   const value = BASE64_ALPHABET.indexOf(character);
   if (value < 0) {
-    throw new Error(t('backup.invalid.base64'));
+    throw new BackupError(t('backup.invalid.base64'));
   }
   return value;
 }
@@ -626,7 +640,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
   const normalized = base64.replace(/\s/g, '');
   if (normalized.length === 0) return new Uint8Array();
   if (normalized.length % 4 === 1) {
-    throw new Error(t('backup.invalid.base64'));
+    throw new BackupError(t('backup.invalid.base64'));
   }
   const padding = normalized.endsWith('==') ? 2 : normalized.endsWith('=') ? 1 : 0;
   const bytes = new Uint8Array(Math.floor((normalized.length * 3) / 4) - padding);
@@ -704,7 +718,7 @@ export function createMigrationRecipePhotoArchivePath(
 
 function getRequiredDocumentDirectory(): string {
   if (!FileSystem.documentDirectory) {
-    throw new Error(t('backup.invalid.noStorage'));
+    throw new BackupError(t('backup.invalid.noStorage'));
   }
   return FileSystem.documentDirectory;
 }
@@ -1081,7 +1095,7 @@ export async function restoreMigrationBackupPackage(
   const entries = unzipSync(base64ToUint8Array(raw));
   const manifestEntry = entries[MIGRATION_MANIFEST_FILE_NAME];
   if (!manifestEntry) {
-    throw new Error(t('backup.invalid.manifestMissing'));
+    throw new BackupError(t('backup.invalid.manifestMissing'));
   }
 
   const manifest = parseMigrationBackupManifest(strFromU8(manifestEntry));
@@ -1155,7 +1169,7 @@ export async function restoreMigrationBackupPackage(
 export async function restoreLatestLocalBackup(): Promise<BackupOperationResult> {
   const latest = pickLatestBackup(await listLocalBackups());
   if (!latest) {
-    throw new Error(t('backup.invalid.nothingToRestore'));
+    throw new BackupError(t('backup.invalid.nothingToRestore'));
   }
   return restoreLocalBackup(latest.uri);
 }

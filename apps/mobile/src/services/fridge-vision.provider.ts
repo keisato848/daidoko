@@ -10,17 +10,20 @@
  * `apps/server/src/lib/fridge-vision.ts` の写し。契約の正は
  * `packages/shared/src/types/fridge.ts`。**片方だけ直さないこと。**
  */
-import * as FileSystem from 'expo-file-system/legacy';
-
-import { MAX_FRIDGE_IMAGES, MAX_FRIDGE_ITEMS, type FridgeItem } from '@daidoko/shared';
+import {
+  isCategoryName,
+  MAX_FRIDGE_IMAGES,
+  MAX_FRIDGE_ITEMS,
+  type FridgeItem,
+} from '@daidoko/shared';
 
 import { API_V1, GEMINI_MODEL } from '../config';
 import { t } from '../i18n';
+import { serverErrorFor } from './ai-error';
 import { requestLocale, withOutputLanguage } from './ai-output-locale';
 import { getInstallationId } from './app-meta.service';
 import { getUserApiKey } from './byok.service';
-import { expoImageManipulatorPreprocessAdapter } from './expo-image-preprocess.adapter';
-import { preprocessImageForOcr } from './image-preprocess.service';
+import { toInferImagePayload, type InferImagePayload } from './image-payload';
 import { resolveQuotaSource } from './usage.service';
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -30,6 +33,8 @@ export type { FridgeItem };
 
 /** MenuRecipesError と同形（retryable のみ。文言は throw 側で `t()` により焼き込む）。 */
 export class FridgeInferError extends Error {
+  /** t() 済みの文言を持つ印（ai-error.ts の readableErrorMessage が見る） */
+  readonly userVisible = true;
   readonly retryable: boolean;
   constructor(message: string, retryable: boolean) {
     super(message);
@@ -100,38 +105,9 @@ function nameKey(name: string): string {
     .replace(/\s+/g, '');
 }
 
-/**
- * カテゴリ語のブラックリスト（サーバー `CATEGORY_NAME_WORDS` の写し・設計 §9）。
- * 単体一致のみ（「調味料入れ」等の複合語は対象外）。当たったら confidence 0
- * （要確認・「たぶん」表示）に落とす — 捨てない。片方だけ直さないこと。
- */
-const CATEGORY_NAME_WORDS = [
-  '調味料',
-  '飲料',
-  '飲み物',
-  '食品',
-  '食材',
-  '惣菜',
-  '総菜',
-  'その他',
-  'condiment',
-  'condiments',
-  'seasoning',
-  'seasonings',
-  'beverage',
-  'beverages',
-  'drink',
-  'drinks',
-  'food',
-  'foods',
-  'grocery',
-  'groceries',
-  'other',
-  'others',
-  'miscellaneous',
-] as const;
-
-const CATEGORY_NAME_KEYS = new Set(CATEGORY_NAME_WORDS.map(nameKey));
+// カテゴリ語のブラックリストは shared `CATEGORY_NAME_WORDS` / `isCategoryName` が正
+//（三重同期の解消・2026-09-05）。サーバー側の写しとの突合はサーバーの
+// shared-parity.test.ts が担う。
 
 /**
  * モデルの生出力を検証する。BYOK 経路はサーバーを通らないので必須で、managed 応答にも
@@ -154,7 +130,7 @@ export function sanitizeFridgeItems(raw: FridgeVisionRaw | null | undefined): Fr
     if (!name) continue;
     const key = nameKey(name);
     // カテゴリ語は confidence 0（要確認・「たぶん」表示）に落とす。捨てない
-    const confidence = CATEGORY_NAME_KEYS.has(key)
+    const confidence = isCategoryName(name)
       ? 0
       : typeof item?.confidence === 'number' && Number.isFinite(item.confidence)
         ? Math.min(1, Math.max(0, item.confidence))
@@ -173,16 +149,9 @@ export function sanitizeFridgeItems(raw: FridgeVisionRaw | null | undefined): Fr
   return items;
 }
 
-// ─── 入出力 ──────────────────────────────────────────────────────────────────
-
-interface FridgeImagePayload {
-  imageBase64: string;
-  mimeType: string;
-}
-
 // ─── BYOK（自分のキーで直接） ────────────────────────────────────────────────
 
-async function inferViaByok(images: FridgeImagePayload[], apiKey: string): Promise<FridgeItem[]> {
+async function inferViaByok(images: InferImagePayload[], apiKey: string): Promise<FridgeItem[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -212,10 +181,8 @@ async function inferViaByok(images: FridgeImagePayload[], apiKey: string): Promi
     });
     if (res.status === 429) throw new FridgeInferError(t('ai.error.byokQuota'), false);
     if (!res.ok) {
-      throw new FridgeInferError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new FridgeInferError(info.message, info.retryable);
     }
     const json = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -242,7 +209,7 @@ interface ServerResult {
   error?: { code?: string; message?: string; retryable?: boolean };
 }
 
-async function inferViaServer(images: FridgeImagePayload[]): Promise<FridgeItem[]> {
+async function inferViaServer(images: InferImagePayload[]): Promise<FridgeItem[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -261,17 +228,12 @@ async function inferViaServer(images: FridgeImagePayload[]): Promise<FridgeItem[
     });
     // 保険: 前処理をすり抜けた巨大画像がサーバーの Zod 上限（8,000,000 字）や
     // ボディ上限に当たると 400/413 が返る。「サーバーエラー (400)」では利用者に
-    // 何もできないので、撮り直しを促す文言に倒す（実機 AQUOS 6.5MB JPEG で実際に出た）
-    if (res.status === 400 || res.status === 413) {
-      throw new FridgeInferError(t('pantry.fridge.tooLarge'), true);
-    }
-    // /infer/fridge 未デプロイの 404 も含め、想定外の HTTP ステータスは例外にして
-    // 呼び出し側が文言だけ出す（在庫には触らない・[client-must-survive-server-skew]）
+    // 何もできない（実機 AQUOS 6.5MB JPEG で実際に出た）。/infer/fridge 未デプロイの
+    // 404 も含め、変換は共通マッパー（ai-error.ts）に任せ、呼び出し側は文言だけ出す
+    // （在庫には触らない・[client-must-survive-server-skew]）
     if (!res.ok) {
-      throw new FridgeInferError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new FridgeInferError(info.message, info.retryable);
     }
     const result = (await res.json()) as ServerResult;
     if (!result.ok || !result.data) {
@@ -298,36 +260,6 @@ async function inferViaServer(images: FridgeImagePayload[]): Promise<FridgeItem[
 }
 
 /**
- * 送信前に**必ず**縮小を試す（写真からレシピと同じ既定 = 長辺 1200・JPEG 圧縮 0.9）。
- *
- * 実機のカメラ写真（AQUOS・6.5MB JPEG → base64 8.6MB）は、そのまま送ると
- * サーバーの Zod 上限（8,000,000 字）に当たって 400 になる（2026-09-05 実機 E2E）。
- * 縮小に失敗しても止めない — 元画像で続け、それでも大きすぎる場合はサーバーの
- * 400/413 を `tooLarge` の文言へ変換する（上の保険）。縮小後は JPEG で書き出される
- * （`expo-image-preprocess.adapter` の SaveFormat）ので mimeType も揃える。
- */
-async function toPayload(image: {
-  localPath: string;
-  mimeType: string;
-}): Promise<FridgeImagePayload> {
-  let uri = image.localPath;
-  let mimeType = image.mimeType;
-  try {
-    const processed = await preprocessImageForOcr(uri, expoImageManipulatorPreprocessAdapter);
-    uri = processed.imageUri;
-    mimeType = 'image/jpeg';
-  } catch {
-    // 前処理が転んでも元画像で続ける（十分小さい写真ならそのまま通る）
-  }
-  return {
-    imageBase64: await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    }),
-    mimeType,
-  };
-}
-
-/**
  * 冷蔵庫写真（1〜2 枚のローカルパス）から品目を読み取る。BYOK があれば自分のキーで
  * 直接、無ければサーバー経由。1 操作 = 1 呼び出し（枚数が増えても呼び出しは 1 回）。
  * 空の items は「読み取れなかった」— エラーにせず、文言と手入力への誘導は呼び出し側の責務。
@@ -336,7 +268,8 @@ export async function inferFridgeItems(args: {
   images: { localPath: string; mimeType: string }[];
 }): Promise<FridgeInference> {
   const bounded = args.images.slice(0, MAX_FRIDGE_IMAGES);
-  const payloads: FridgeImagePayload[] = await Promise.all(bounded.map(toPayload));
+  // 送信前の縮小は共通ヘルパー（image-payload.ts）に一本化されている（規約①）
+  const payloads: InferImagePayload[] = await Promise.all(bounded.map(toInferImagePayload));
   const userKey = await getUserApiKey();
   if (userKey) {
     return { items: await inferViaByok(payloads, userKey), source: 'byok' };

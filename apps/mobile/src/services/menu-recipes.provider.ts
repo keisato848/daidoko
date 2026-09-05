@@ -23,6 +23,7 @@ import {
 
 import { API_V1, GEMINI_MODEL } from '../config';
 import { t } from '../i18n';
+import { serverErrorFor } from './ai-error';
 import {
   requestLocale,
   requestUnitSystem,
@@ -59,6 +60,8 @@ export interface MenuRecipesArgs {
 
 /** MenuArrangeError と同形（retryable のみ。文言は throw 側で `t()` により焼き込む）。 */
 export class MenuRecipesError extends Error {
+  /** t() 済みの文言を持つ印（ai-error.ts） */
+  readonly userVisible = true;
   readonly retryable: boolean;
   constructor(message: string, retryable: boolean) {
     super(message);
@@ -337,10 +340,8 @@ async function generateViaByok(args: MenuRecipesArgs, apiKey: string): Promise<M
     });
     if (res.status === 429) throw new MenuRecipesError(t('ai.error.byokQuota'), false);
     if (!res.ok) {
-      throw new MenuRecipesError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new MenuRecipesError(info.message, info.retryable);
     }
     const json = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -398,10 +399,8 @@ async function generateViaServer(args: MenuRecipesArgs): Promise<MenuRecipeDraft
     // /infer/menu-recipes 未デプロイの 404 も含め、想定外の HTTP ステータスは例外にして
     // 呼び出し側がエラー文言だけ出す（プランには触らない・[client-must-survive-server-skew]）
     if (!res.ok) {
-      throw new MenuRecipesError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new MenuRecipesError(info.message, info.retryable);
     }
     const result = (await res.json()) as ServerAgentResult;
     if (!result.ok || !result.data) {

@@ -176,14 +176,14 @@ describe('inferFridgeItems — BYOK / managed サーバーの分岐', () => {
     expect(body.images).toEqual([{ imageBase64: 'B64:file:///a.png', mimeType: 'image/png' }]);
   });
 
-  it('HTTP 400/413（画像が大きすぎる）は撮り直しを促す文言に変換する', async () => {
+  it('HTTP 400/413（画像が大きすぎる）は撮り直しを促す文言に変換する（共通マッパー）', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 400, json: async () => ({}) });
     await expect(
       inferFridgeItems({ images: [{ localPath: 'file:///a.jpg', mimeType: 'image/jpeg' }] }),
     ).rejects.toMatchObject({
       name: 'FridgeInferError',
-      message: t('pantry.fridge.tooLarge'),
-      retryable: true,
+      message: t('ai.error.tooLarge'),
+      retryable: false,
     });
   });
 

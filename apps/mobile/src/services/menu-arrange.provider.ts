@@ -13,6 +13,7 @@
  */
 import { API_V1, GEMINI_MODEL } from '../config';
 import { t } from '../i18n';
+import { serverErrorFor } from './ai-error';
 import { requestLocale, withOutputLanguage } from './ai-output-locale';
 import { getInstallationId } from './app-meta.service';
 import { getUserApiKey } from './byok.service';
@@ -62,6 +63,8 @@ export interface MenuArrangement {
  * throw する側で `t()` によりメッセージへ焼き込む）。
  */
 export class MenuArrangeError extends Error {
+  /** t() 済みの文言を持つ印（ai-error.ts） */
+  readonly userVisible = true;
   readonly retryable: boolean;
   constructor(message: string, retryable: boolean) {
     super(message);
@@ -269,10 +272,8 @@ async function arrangeViaByok(input: MenuArrangeInput, apiKey: string): Promise<
     });
     if (res.status === 429) throw new MenuArrangeError(t('ai.error.byokQuota'), false);
     if (!res.ok) {
-      throw new MenuArrangeError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new MenuArrangeError(info.message, info.retryable);
     }
     const json = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -332,10 +333,8 @@ async function arrangeViaServer(input: MenuArrangeInput): Promise<MenuArrangemen
     // /infer/menu 未デプロイの 404 も含め、想定外の HTTP ステータスは例外を握って
     // 呼び出し側（menu.tsx）が M1 の並びへ落とす（[client-must-survive-server-skew]）
     if (!res.ok) {
-      throw new MenuArrangeError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new MenuArrangeError(info.message, info.retryable);
     }
     const result = (await res.json()) as ServerAgentResult;
     if (!result.ok || !result.data) {

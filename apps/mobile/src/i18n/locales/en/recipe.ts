@@ -10,6 +10,7 @@ const recipe: typeof ja = {
     titleTooLong: 'Use 100 characters or fewer',
     ingredientsRequired: 'Add at least one ingredient',
     stepsRequired: 'Add at least one step',
+    tagTooLong: 'Use 30 characters or fewer for a tag',
   },
 
   form: {

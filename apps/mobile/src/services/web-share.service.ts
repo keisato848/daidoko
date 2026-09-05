@@ -217,7 +217,8 @@ export function buildShareRecipeBody(
       ...(ing.groupLabel ? { groupLabel: ing.groupLabel } : {}),
     })),
     steps: recipe.steps.map((step) => ({ body: step.body })),
-    tags: recipe.tags,
+    // サーバー契約（タグ ≤10 個・各 ≤30 字）に送信側で収める（P4）
+    tags: recipe.tags.slice(0, 10).map((tag) => tag.slice(0, 30)),
     ...(recipe.isCoverAiGenerated ? { coverIsAiGenerated: true } : {}),
     ...(recipe.isAiGenerated ? { aiGenerated: true } : {}),
   };
