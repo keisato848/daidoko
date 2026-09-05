@@ -1,11 +1,11 @@
 export const meta = {
   name: 'change-review',
   description:
-    'ブランチの差分を 4 つの別の目（批判役・初見・セキュリティ・約束の整合）で読み、指摘を 1 件ずつ反証してから go / no-go を出す（PR 前のセカンドオピニオン）',
+    'ブランチの差分を 5 つの別の目（批判役・初見・セキュリティ・約束の整合・Gemini）で読み、指摘を 1 件ずつ反証してから go / no-go を出す（PR 前のセカンドオピニオン）',
   whenToUse:
-    'PR を出す前。外部の LLM（Copilot / Gemini）に頼らず、スイートの中で「書いた本人と別の目」を作りたいとき。diff-critic 単体より重いが、指摘が反証を通っているので読む価値がある。drift-audit（出荷物と説明の食い違い）とは別物で、両方回す。',
+    'PR を出す前。スイートの中で「書いた本人と別の目」を作る。Gemini の目は .mcp.json の MCP サーバー経由で、ローカルで Gemini CLI がログイン済みのときだけ動く（無ければ「回収できなかった目」として明記される）。diff-critic 単体より重いが、指摘が反証を通っているので読む価値がある。drift-audit（出荷物と説明の食い違い）とは別物で、両方回す。',
   phases: [
-    { title: 'Review', detail: '4 つの目が並列で差分を読む' },
+    { title: 'Review', detail: '5 つの目（Claude 4 + Gemini 1）が並列で差分を読む' },
     { title: 'Verify', detail: '指摘ごとに反証役が「本当か」を確かめる' },
     { title: 'Synthesize', detail: '生き残った指摘から go / no-go と PR コメント用ブロックを作る' },
   ],
@@ -31,6 +31,10 @@ const FINDINGS = {
   required: ['summary', 'findings'],
   properties: {
     summary: { type: 'string', description: '3 文以内。見つからなければ「見つからなかった」' },
+    unavailable: {
+      type: 'boolean',
+      description: 'この目が動けなかった（外部ツール未接続など）とき true。指摘 0 件とは区別する',
+    },
     findings: {
       type: 'array',
       description: '見つからなければ空配列。水増ししない',
@@ -88,7 +92,7 @@ ${contextNote}
 - 各指摘に「どの入力・どの操作で壊れるか」を必ず書く。書けない指摘は出さない
 - 推測は「推測:」と明記し severity を下げる`;
 
-/** 4 つの目。diff-critic はリポジトリの批判役、残りはここで人格を与える */
+/** 5 つの目。diff-critic はリポジトリの批判役、Gemini は MCP 経由の別 LLM、残りはここで人格を与える */
 const REVIEWERS = [
   {
     label: '批判役（diff-critic）',
@@ -117,6 +121,20 @@ const REVIEWERS = [
 ラベル規約・委譲表）、数値（上限・字数・件数）が正典と一致しているか、
 参照先（ファイル・節番号・Issue 番号）が実在するか。\n${common}`,
   },
+  {
+    // 別の LLM の目。Gemini CLI を包んだ MCP サーバー（.mcp.json の "gemini"）経由。
+    // ローカルで Gemini CLI がログイン済みのときだけ答えが返る。無ければ unavailable=true で空を返し、
+    // 「回収できなかった目」として明記する（黙って残りの目だけで go にしない）
+    label: 'Gemini（別の LLM）',
+    model: 'sonnet',
+    prompt: `あなたは中継役。自分では差分を読まず、**MCP ツール \`mcp__gemini__review_diff_with_gemini\`** を
+ToolSearch で見つけて 1 回だけ呼び（引数: base="${base}"${args?.context ? `, context=<今回の変更の意図>` : ''}）、
+返ってきた JSON 配列を FINDINGS の形に写して返せ。severity / title / file / failure_scenario / fix はそのまま、
+summary には「Gemini の指摘 N 件」と書く。
+ツールが見つからない・isError が返る・JSON として読めない場合は、findings を空配列にし、
+summary に理由（例: Gemini CLI 未接続）を書き、**unavailable を true** にせよ。自分の意見を混ぜない。
+${contextNote}`,
+  },
 ];
 
 phase('Review');
@@ -132,9 +150,10 @@ const reviews = await parallel(
       }).then((res) => (res ? { reviewer: r.label, ...res } : null)),
   ),
 );
-const ok = reviews.filter(Boolean);
-// agent() はスキップ・終端エラー時に null を**返す**（throw ではない）ので、落ちた目を明示的に数える
-const lost = REVIEWERS.filter((_r, i) => !reviews[i]).map((r) => r.label);
+// agent() はスキップ・終端エラー時に null を**返す**（throw ではない）ので、落ちた目を明示的に数える。
+// 外部ツール未接続（unavailable=true）も同じ扱い — 指摘 0 件とは区別する
+const ok = reviews.filter((r) => r && !r.unavailable);
+const lost = REVIEWERS.filter((_r, i) => !reviews[i] || reviews[i].unavailable).map((r) => r.label);
 log(
   `${ok.length}/${REVIEWERS.length} の目を回収${lost.length ? `（回収できず: ${lost.join('・')}）` : ''}`,
 );
@@ -223,7 +242,7 @@ log(`反証を通った指摘 ${confirmed.length} 件・落ちた ${refuted.leng
 
 phase('Synthesize');
 const report = await agent(
-  `だいどこの change-review（4 つの目 → 反証）の結果を、日本語 Markdown の短いレポートにせよ。
+  `だいどこの change-review（5 つの目 → 反証）の結果を、日本語 Markdown の短いレポートにせよ。
 
 ## 反証を通った指摘
 ${JSON.stringify(confirmed, null, 2)}

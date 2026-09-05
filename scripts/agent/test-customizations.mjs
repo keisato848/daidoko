@@ -199,6 +199,27 @@ async function validateClaudeAssets() {
     );
   }
 
+  // .mcp.json: パース＋参照スクリプトの実在（外部 LLM の MCP 配線。docs/開発ハーネス.md §7-6）
+  const mcpPath = join(rootDir, '.mcp.json');
+  try {
+    await access(mcpPath, fsConstants.F_OK);
+    const mcp = JSON.parse(await readFile(mcpPath, 'utf8'));
+    for (const [name, def] of Object.entries(mcp.mcpServers ?? {})) {
+      const scriptArg = (def.args ?? []).find((a) => typeof a === 'string' && a.endsWith('.mjs'));
+      if (def.command === 'node' && scriptArg) {
+        await checkExists(scriptArg, `.mcp.json server ${name} script exists`);
+      } else {
+        passes.push(`.mcp.json server ${name} declared`);
+      }
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      failures.push(
+        `.mcp.json failed to parse: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   // skills: SKILL.md の frontmatter（name=フォルダ名・description 必須）
   const skillsDir = join(rootDir, '.claude', 'skills');
   for (const entry of await safeReadDir(skillsDir)) {
