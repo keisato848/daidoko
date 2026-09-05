@@ -19,6 +19,8 @@ import { t } from '../i18n';
 import { requestLocale, withOutputLanguage } from './ai-output-locale';
 import { getInstallationId } from './app-meta.service';
 import { getUserApiKey } from './byok.service';
+import { expoImageManipulatorPreprocessAdapter } from './expo-image-preprocess.adapter';
+import { preprocessImageForOcr } from './image-preprocess.service';
 import { resolveQuotaSource } from './usage.service';
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -219,6 +221,12 @@ async function inferViaServer(images: FridgeImagePayload[]): Promise<FridgeItem[
       body: JSON.stringify({ images, locale: requestLocale() }),
       signal: controller.signal,
     });
+    // 保険: 前処理をすり抜けた巨大画像がサーバーの Zod 上限（8,000,000 字）や
+    // ボディ上限に当たると 400/413 が返る。「サーバーエラー (400)」では利用者に
+    // 何もできないので、撮り直しを促す文言に倒す（実機 AQUOS 6.5MB JPEG で実際に出た）
+    if (res.status === 400 || res.status === 413) {
+      throw new FridgeInferError(t('pantry.fridge.tooLarge'), true);
+    }
     // /infer/fridge 未デプロイの 404 も含め、想定外の HTTP ステータスは例外にして
     // 呼び出し側が文言だけ出す（在庫には触らない・[client-must-survive-server-skew]）
     if (!res.ok) {
@@ -252,6 +260,36 @@ async function inferViaServer(images: FridgeImagePayload[]): Promise<FridgeItem[
 }
 
 /**
+ * 送信前に**必ず**縮小を試す（写真からレシピと同じ既定 = 長辺 1200・JPEG 圧縮 0.9）。
+ *
+ * 実機のカメラ写真（AQUOS・6.5MB JPEG → base64 8.6MB）は、そのまま送ると
+ * サーバーの Zod 上限（8,000,000 字）に当たって 400 になる（2026-09-05 実機 E2E）。
+ * 縮小に失敗しても止めない — 元画像で続け、それでも大きすぎる場合はサーバーの
+ * 400/413 を `tooLarge` の文言へ変換する（上の保険）。縮小後は JPEG で書き出される
+ * （`expo-image-preprocess.adapter` の SaveFormat）ので mimeType も揃える。
+ */
+async function toPayload(image: {
+  localPath: string;
+  mimeType: string;
+}): Promise<FridgeImagePayload> {
+  let uri = image.localPath;
+  let mimeType = image.mimeType;
+  try {
+    const processed = await preprocessImageForOcr(uri, expoImageManipulatorPreprocessAdapter);
+    uri = processed.imageUri;
+    mimeType = 'image/jpeg';
+  } catch {
+    // 前処理が転んでも元画像で続ける（十分小さい写真ならそのまま通る）
+  }
+  return {
+    imageBase64: await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    }),
+    mimeType,
+  };
+}
+
+/**
  * 冷蔵庫写真（1〜2 枚のローカルパス）から品目を読み取る。BYOK があれば自分のキーで
  * 直接、無ければサーバー経由。1 操作 = 1 呼び出し（枚数が増えても呼び出しは 1 回）。
  * 空の items は「読み取れなかった」— エラーにせず、文言と手入力への誘導は呼び出し側の責務。
@@ -260,14 +298,7 @@ export async function inferFridgeItems(args: {
   images: { localPath: string; mimeType: string }[];
 }): Promise<FridgeInference> {
   const bounded = args.images.slice(0, MAX_FRIDGE_IMAGES);
-  const payloads: FridgeImagePayload[] = await Promise.all(
-    bounded.map(async (image) => ({
-      imageBase64: await FileSystem.readAsStringAsync(image.localPath, {
-        encoding: FileSystem.EncodingType.Base64,
-      }),
-      mimeType: image.mimeType,
-    })),
-  );
+  const payloads: FridgeImagePayload[] = await Promise.all(bounded.map(toPayload));
   const userKey = await getUserApiKey();
   if (userKey) {
     return { items: await inferViaByok(payloads, userKey), source: 'byok' };

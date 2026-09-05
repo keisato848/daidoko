@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  MAX_FRIDGE_IMAGE_BASE64_LENGTH,
   MAX_FRIDGE_IMAGES,
   MAX_FRIDGE_ITEMS,
   fridgeInferRequestSchema,
@@ -23,6 +24,22 @@ describe('fridgeInferRequestSchema — 画像は 1〜2 枚', () => {
     expect(fridgeInferRequestSchema.safeParse({ images: [IMAGE, IMAGE, IMAGE] }).success).toBe(
       false,
     );
+  });
+
+  it('imageBase64 の上限はサーバーの写しと同じ 8,000,000 字（境界で固定）', () => {
+    // 実機のカメラ写真（6.5MB JPEG → base64 8.6MB）が本番 400 になった事故の再発防止。
+    // 上限が契約の正に無く写しにだけある状態だと、このズレに契約テストで気づけない
+    expect(MAX_FRIDGE_IMAGE_BASE64_LENGTH).toBe(8_000_000);
+    const atLimit = {
+      imageBase64: 'a'.repeat(MAX_FRIDGE_IMAGE_BASE64_LENGTH),
+      mimeType: 'image/jpeg',
+    };
+    const overLimit = {
+      imageBase64: 'a'.repeat(MAX_FRIDGE_IMAGE_BASE64_LENGTH + 1),
+      mimeType: 'image/jpeg',
+    };
+    expect(fridgeInferRequestSchema.safeParse({ images: [atLimit] }).success).toBe(true);
+    expect(fridgeInferRequestSchema.safeParse({ images: [overLimit] }).success).toBe(false);
   });
 
   it('未対応の mimeType は弾く', () => {

@@ -19,6 +19,14 @@ import { z } from 'zod';
 
 /** 1 回の読み取りに送れる写真の枚数（庫内＋野菜室のような 2 枚まで）。 */
 export const MAX_FRIDGE_IMAGES = 2;
+/**
+ * 画像 1 枚の base64 上限（サーバー `routes/infer.ts` の `MAX_IMAGE_BASE64_LENGTH` と同値）。
+ * **契約の正はここ。** 当初この上限が写し（サーバー）にだけあり、契約に無かったため、
+ * クライアントが前処理（縮小）を省いても契約テストでは気づけず、実機のカメラ写真
+ * （6.5MB JPEG → base64 8.6MB）が本番で 400 になった（2026-09-05 実機 E2E）。
+ * 送信側は `expo-image-preprocess.adapter` の縮小（長辺 1200・JPEG 0.9）を必ず通すこと。
+ */
+export const MAX_FRIDGE_IMAGE_BASE64_LENGTH = 8_000_000;
 /** 1 回の読み取りが返す品目数の上限（家庭の冷蔵庫でこれを超えたら読み違い）。 */
 export const MAX_FRIDGE_ITEMS = 60;
 
@@ -34,7 +42,7 @@ export const fridgeInferRequestSchema = z.object({
   images: z
     .array(
       z.object({
-        imageBase64: z.string().min(1),
+        imageBase64: z.string().min(1).max(MAX_FRIDGE_IMAGE_BASE64_LENGTH),
         mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
       }),
     )

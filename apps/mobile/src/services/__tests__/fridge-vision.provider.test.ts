@@ -16,10 +16,22 @@ const mockResolveQuotaSource = jest.fn<Promise<'token' | 'premium' | undefined>,
 jest.mock('../usage.service', () => ({ resolveQuotaSource: () => mockResolveQuotaSource() }));
 
 jest.mock('expo-file-system/legacy', () => ({
-  readAsStringAsync: async () => 'BASE64BYTES',
+  // どのファイルを base64 化したかをテストで見分けられるよう、パスを埋め込む
+  readAsStringAsync: async (path: string) => `B64:${path}`,
   EncodingType: { Base64: 'base64' },
 }));
 
+// 送信前の縮小（実機のカメラ写真はサーバーの base64 上限 8,000,000 字を超える）。
+// 呼ばれたことと「縮小後の URI が送られること」を固定する
+const mockPreprocess = jest.fn<Promise<{ imageUri: string }>, [string]>();
+jest.mock('../image-preprocess.service', () => ({
+  preprocessImageForOcr: (uri: string) => mockPreprocess(uri),
+}));
+jest.mock('../expo-image-preprocess.adapter', () => ({
+  expoImageManipulatorPreprocessAdapter: {},
+}));
+
+import { t } from '../../i18n';
 import { FridgeInferError, inferFridgeItems, sanitizeFridgeItems } from '../fridge-vision.provider';
 
 describe('sanitizeFridgeItems — サーバー側の写し（捨てる方向のみ・埋めない）', () => {
@@ -83,6 +95,7 @@ describe('inferFridgeItems — BYOK / managed サーバーの分岐', () => {
     mockGetUserApiKey.mockResolvedValue(null);
     mockGetInstallationId.mockResolvedValue('device-test-0001');
     mockResolveQuotaSource.mockResolvedValue(undefined);
+    mockPreprocess.mockImplementation(async (uri) => ({ imageUri: `processed:${uri}` }));
   });
 
   afterEach(() => {
@@ -113,7 +126,41 @@ describe('inferFridgeItems — BYOK / managed サーバーの分岐', () => {
     expect((init.headers as Record<string, string>)['x-device-id']).toBe('device-test-0001');
     expect(init.headers as Record<string, string>).not.toHaveProperty('x-quota-source');
     const body = JSON.parse(String(init.body)) as { images: { imageBase64: string }[] };
-    expect(body.images).toEqual([{ imageBase64: 'BASE64BYTES', mimeType: 'image/jpeg' }]);
+    // 縮小が呼ばれ、**縮小後の URI** が base64 化されて送られる（元画像をそのまま送らない）
+    expect(mockPreprocess).toHaveBeenCalledWith('file:///fridge.jpg');
+    expect(body.images).toEqual([
+      { imageBase64: 'B64:processed:file:///fridge.jpg', mimeType: 'image/jpeg' },
+    ]);
+  });
+
+  it('縮小後は JPEG で書き出されるので mimeType も image/jpeg に揃える', async () => {
+    fetchMock.mockResolvedValue(serverOk([]));
+    await inferFridgeItems({ images: [{ localPath: 'file:///a.png', mimeType: 'image/png' }] });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as { images: { mimeType: string }[] };
+    expect(body.images[0].mimeType).toBe('image/jpeg');
+  });
+
+  it('縮小が失敗しても止めない — 元画像・元 mimeType のまま送る', async () => {
+    mockPreprocess.mockRejectedValue(new Error('manipulator crashed'));
+    fetchMock.mockResolvedValue(serverOk([]));
+    await inferFridgeItems({ images: [{ localPath: 'file:///a.png', mimeType: 'image/png' }] });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as {
+      images: { imageBase64: string; mimeType: string }[];
+    };
+    expect(body.images).toEqual([{ imageBase64: 'B64:file:///a.png', mimeType: 'image/png' }]);
+  });
+
+  it('HTTP 400/413（画像が大きすぎる）は撮り直しを促す文言に変換する', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 400, json: async () => ({}) });
+    await expect(
+      inferFridgeItems({ images: [{ localPath: 'file:///a.jpg', mimeType: 'image/jpeg' }] }),
+    ).rejects.toMatchObject({
+      name: 'FridgeInferError',
+      message: t('pantry.fridge.tooLarge'),
+      retryable: true,
+    });
   });
 
   it('トークン実行時は x-quota-source: token を付ける', async () => {

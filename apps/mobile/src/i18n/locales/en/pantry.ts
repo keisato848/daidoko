@@ -215,6 +215,7 @@ const pantry: typeof ja = {
     consultCta: 'Plan a recipe with AI',
     noItems:
       'We couldn’t read any ingredients from that photo. Retake it with the inside well lit, or add items by hand from the pantry screen.',
+    tooLarge: 'That photo was too large to send. Please take it again and retry.',
     manualFallback: 'Add to pantry by hand',
     failed: 'Reading failed',
   },
