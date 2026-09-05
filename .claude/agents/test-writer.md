@@ -1,6 +1,6 @@
 ---
 name: test-writer
-description: 実装と別の目でテストを書く役。振る舞いを変える実装が終わったら、名指しが無くても proactively に呼ぶ。変更された振る舞いに「消したら赤くなる」テストを足し、docs/品質基準.md §2.3 の罠を踏まない形にする。テストと test-support だけを編集し、実装は触らない。
+description: 実装と別の目でテストを書く役。振る舞いを変える実装が終わったら、diff-critic の前に、名指しが無くても proactively に呼ぶ。変更された振る舞いに「消したら赤くなる」テストを足し、docs/品質基準.md §2.3 の罠を踏まない形にする。テストと test-support だけを編集し、実装は触らない。
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

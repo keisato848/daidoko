@@ -33,6 +33,8 @@ tools: Agent(Explore, diff-critic, audit-design-drift, audit-route-match, audit-
 | `diff-critic`           | 実装後の設計レビュー（計画どおりか・計画から外れた理由が妥当か）           |
 | `finding-recorder`      | 計画中に見つけた設計書の古さ・実装の罠を記録させる                         |
 
+`Bash` は `git log` / `git diff --stat` で変更の履歴を読むためだけ。ビルド・テストは専門役に任せる。
+
 ## 禁止事項
 
 - コード・設計書を自分で編集しない。計画と割当を返し、実装はメインループ（またはユーザー指名の実装役）

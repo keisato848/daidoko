@@ -7,6 +7,28 @@ const rootDir = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const failures = [];
 const passes = [];
 
+// 注意: 下の top-level await より前に置く。関数内から参照する module スコープ const は
+// 宣言より先に関数が呼ばれると TDZ で落ちる（2026-09-05 に実際に踏んだ。check-script-tdz は捕まえない）
+/** Claude Code の組み込みツール名（frontmatter `tools:` に書けるもの）。増えたらここに足す */
+const BUILTIN_TOOLS = new Set([
+  'Read',
+  'Grep',
+  'Glob',
+  'Bash',
+  'PowerShell',
+  'Edit',
+  'Write',
+  'MultiEdit',
+  'NotebookEdit',
+  'WebFetch',
+  'WebSearch',
+  'Agent',
+  'Skill',
+  'TodoWrite',
+]);
+/** `Agent(...)` の許可リストに書ける組み込みエージェント */
+const BUILTIN_AGENTS = new Set(['Explore', 'Plan', 'general-purpose', 'claude-code-guide']);
+
 await checkExists('.github/copilot-instructions.md', 'copilot instructions exist');
 await validateHookFiles();
 await validateSkillFiles();
@@ -204,13 +226,26 @@ async function validateClaudeAssets() {
 
   // agents: frontmatter（name / description 必須）
   const agentsDir = join(rootDir, '.claude', 'agents');
-  for (const entry of await safeReadDir(agentsDir)) {
+  const agentEntries = (await safeReadDir(agentsDir)).filter(
+    (entry) => entry.isFile() && entry.name.endsWith('.md'),
+  );
+  const agentNames = new Set(agentEntries.map((entry) => entry.name.replace(/\.md$/, '')));
+  for (const entry of agentEntries) {
     if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
     const agentPath = join(agentsDir, entry.name);
     try {
       const frontmatter = extractFrontmatter(await readFile(agentPath, 'utf8'));
       if (!frontmatter.name || !frontmatter.description) {
         failures.push(`${relativePath(agentPath)} missing frontmatter name/description`);
+        continue;
+      }
+      if (frontmatter.name !== entry.name.replace(/\.md$/, '')) {
+        failures.push(`${relativePath(agentPath)} frontmatter name must match file name`);
+        continue;
+      }
+      const toolProblems = validateAgentTools(frontmatter.tools, agentNames);
+      if (toolProblems.length > 0) {
+        failures.push(`${relativePath(agentPath)} tools: ${toolProblems.join('; ')}`);
         continue;
       }
       passes.push(`${relativePath(agentPath)} parsed`);
@@ -287,6 +322,41 @@ async function checkExists(relativeTargetPath, successMessage) {
   } catch {
     failures.push(`${relativeTargetPath} does not exist`);
   }
+}
+
+/**
+ * frontmatter `tools:` を検証する。
+ * - 各項目は組み込みツール名か `mcp__` 接頭辞
+ * - `Agent(a, b)` の各名は `.claude/agents/<name>.md` として実在するか組み込みエージェント
+ * 束ねる役の許可リストが改名で静かに断線するのを止める（2026-09-05 の 7 軸監査で指摘）。
+ * @param {string | undefined} tools
+ * @param {Set<string>} agentNames
+ * @returns {string[]} 問題の一覧（空なら OK）
+ */
+function validateAgentTools(tools, agentNames) {
+  if (!tools) return [];
+  const problems = [];
+  // `Agent(a, b)` を先に取り出してからカンマで割る（括弧内のカンマを守る）
+  const rest = tools.replace(/Agent\(([^)]*)\)/g, (_match, inner) => {
+    for (const name of inner
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)) {
+      if (!agentNames.has(name) && !BUILTIN_AGENTS.has(name)) {
+        problems.push(`Agent(${name}) は .claude/agents に無い`);
+      }
+    }
+    return 'Agent';
+  });
+  for (const item of rest
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)) {
+    if (item.startsWith('mcp__')) continue;
+    if (item === '*') continue;
+    if (!BUILTIN_TOOLS.has(item)) problems.push(`未知のツール名 ${item}`);
+  }
+  return problems;
 }
 
 function extractFrontmatter(raw) {

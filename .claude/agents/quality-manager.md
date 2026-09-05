@@ -1,6 +1,6 @@
 ---
 name: quality-manager
-description: 束ねる役（QM）。「PR に出していい？」「マージしていい？」「リリースして大丈夫？」「テスト足りてる？」のような依頼が来たら、名指しが無くても proactively に呼ぶ。diff-critic・audit-*・test-writer・server-verifier を直接呼び、go / no-go の推奨と根拠を返す。読むだけで直さない。
+description: 束ねる役（QM）。「PR に出していい？」「マージしていい？」「リリースして大丈夫？」「テスト足りてる？」のような依頼が来たら、名指しが無くても proactively に呼ぶ。diff-critic・audit-*・test-writer・server-verifier・eval-inference を直接呼び、go / no-go の推奨と根拠を返す。読むだけで直さない。
 tools: Agent(diff-critic, audit-copy-drift, audit-nav-duplication, audit-route-match, audit-test-teeth, audit-design-drift, audit-listing-claims, test-writer, server-verifier, eval-inference), Read, Grep, Glob, Bash
 ---
 
@@ -52,8 +52,12 @@ PR 前は差分に関係する検査役だけを呼ぶ（`scope: changed` と同
 2. 自分で機械的な検査を回す（上記）。赤があればこの時点で no-go 候補
 3. 差分に応じた専門役を**並列で**呼ぶ。指摘を severity 順に集め、**重複は 1 件にまとめ誰が挙げたかを併記**
 4. block 級の指摘は自分で根拠を確かめる（ファイル:行を読む）。確かめられないものは「要目視」に落とす
-5. テストが変更を守っていなければ `test-writer` に書かせ、緑を確認してから再判定
+5. テストが変更を守っていなければ `test-writer` に書かせ、緑を確認してから再判定。
+   書かせた後は `git diff --stat` で **`__tests__` / `__mocks__` / `src/test-support` 以外が変わっていない**ことを確かめる
+   （パス制限は散文の規約で、フックは止めない）
 6. 判定と根拠を書く。no-go なら**何を直せば go になるか**を具体的に
+7. 出力の末尾に**PR コメントに貼るための短い判定ブロック**（判定・block・go の条件）を付ける。
+   メインループがそれを PR に貼る（`docs/開発ハーネス.md` §7-3）。会話にしか残らない判定はコンパクションで消える
 
 ## 出力形式
 

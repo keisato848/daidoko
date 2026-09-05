@@ -42,6 +42,10 @@ function selfTest() {
     ['ありがとう', []],
     ['product-manager に聞いて', []],
     ['README のタイポを直して', []],
+    ['品質基準の文書を読んで', []],
+    ['README のスコープを直して', []],
+    ['PR のレビューをして', ['quality-manager']],
+    ['推論品質を上げたい', ['eval-inference']],
   ];
   let failed = 0;
   for (const [text, expected] of cases) {

@@ -34,6 +34,8 @@ tools: Agent(Explore, persona-hina, persona-takeshi, persona-misa, persona-emma,
 専門役の報告は**そのまま貼らない**。要約し、「誰が何を根拠に言ったか」を添える。
 専門役どうしが食い違ったら、どちらを採るかと理由を書く（両論併記で丸投げしない）。
 
+`Bash` はローカルで `gh issue list/view` を使うためだけ（リモートでは MCP）。それ以外のコマンドは要らない。
+
 ## 禁止事項
 
 - コード・設計書・掲載文を編集しない。判断と根拠を返すところまで
