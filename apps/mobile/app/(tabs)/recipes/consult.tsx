@@ -47,6 +47,7 @@ import {
 } from '../../../src/services/recipe-consult.provider';
 import { dialog } from '../../../src/services/dialog.service';
 import { createRecipe } from '../../../src/services/recipe.service';
+import { maybeRequestStoreReview } from '../../../src/services/review-request.service';
 import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import { recordCloudInference } from '../../../src/services/usage.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
@@ -194,6 +195,8 @@ export default function ConsultScreen() {
     // 会話から AI が全文を書いた下書き（#266）。**ここが最大の無印地帯だった** —
     // 出所行も作らないので、印を立てないと AI 由来だと後から一切分からない
     const recipeId = await createRecipe({ ...data, aiGenerated: true });
+    // 相談から AI の下書きが形になった瞬間にストア評価を打診（条件・頻度はサービス側）
+    void maybeRequestStoreReview('ai-recipe');
     router.replace(`/(tabs)/recipes/${recipeId}`);
   };
 

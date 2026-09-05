@@ -105,6 +105,9 @@ const settings: typeof ja = {
     version: 'Version',
     licenses: 'Licenses',
     licensesSubtitle: 'Open-source licenses used by this app',
+    rateApp: 'Rate this app',
+    rateAppSubtitle: 'Opens the store review page',
+    rateAppFailedBody: 'Could not open the store. Please search for “Daidoko” in the store app.',
   },
 
   coach: {

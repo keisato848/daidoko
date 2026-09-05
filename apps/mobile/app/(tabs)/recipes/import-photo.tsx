@@ -58,6 +58,7 @@ import {
   type FreemiumStatus,
 } from '../../../src/services/usage.service';
 import { createCookingLog } from '../../../src/services/cooking-log.service';
+import { maybeRequestStoreReview } from '../../../src/services/review-request.service';
 import type { CookingLogKind } from '../../../src/services/types';
 import { persistCookingLogPhotos } from '../../../src/services/photo-storage.service';
 import { createPhotoSource } from '../../../src/services/source.service';
@@ -299,6 +300,8 @@ export default function ImportPhotoScreen() {
       setToastMessage(
         logKind === 'eaten_out' ? t('recipe.photo.savedAndPinned') : t('recipe.photo.saved'),
       );
+      // 写真から AI の下書きが初めて形になった瞬間にストア評価を打診（条件・頻度はサービス側）
+      void maybeRequestStoreReview('ai-recipe');
       // 一覧ではなく、いま作ったレシピへ着地する（探させない）
       setTimeout(() => router.replace(`/(tabs)/recipes/${recipeId}`), 1500);
     },

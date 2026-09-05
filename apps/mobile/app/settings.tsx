@@ -25,6 +25,7 @@ import {
 } from '../src/services/user.service';
 import { getAdRewardProvider } from '../src/services/ad-reward.service';
 import { isEntitlementConfigured } from '../src/services/entitlement.service';
+import { openStoreReviewPage } from '../src/services/review-request.service';
 import { isLaunchCameraEnabled, setLaunchCameraEnabled } from '../src/services/app-meta.service';
 import { getFreemiumStatus, type FreemiumStatus } from '../src/services/usage.service';
 import { useUnitSystemStore } from '../src/stores/unitSystem.store';
@@ -335,6 +336,24 @@ export default function SettingsScreen() {
           label: t('settings.app.version'),
           subtitle: APP_VERSION_LABEL,
           enabled: true,
+        },
+        {
+          // ストアの評価ページへの常設リンク。OS の評価ダイアログは回数制限があり、
+          // 出るかどうかを制御できないので、自分から評価しに行ける入口を置く（2026-09-05）
+          id: 'rate-app',
+          label: t('settings.app.rateApp'),
+          subtitle: t('settings.app.rateAppSubtitle'),
+          enabled: true,
+          onPress: () => {
+            void openStoreReviewPage().then((opened) => {
+              if (!opened) {
+                void dialog.alert({
+                  title: t('settings.app.rateApp'),
+                  message: t('settings.app.rateAppFailedBody'),
+                });
+              }
+            });
+          },
         },
         {
           id: 'licenses',
