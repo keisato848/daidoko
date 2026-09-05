@@ -15,8 +15,8 @@ import { createCookingLog } from '../../../../src/services/cooking-log.service';
 import { dialog } from '../../../../src/services/dialog.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
 import {
-  capturePhoto,
-  PhotoCaptureCancelledError,
+  capturePhotoSeries,
+  confirmContinueCapture,
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../../src/services/photo-capture.service';
@@ -76,10 +76,14 @@ export default function CookingLogScreen() {
       }
 
       try {
-        const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-        setPhotos((current) => [...current, photo].slice(0, MAX_COOKING_LOG_PHOTOS));
+        // 連続撮影/複数選択: 残り枠（最大 6 枚）まで続けて取り込める
+        const shot = await capturePhotoSeries(source, expoImagePickerPhotoCaptureAdapter, {
+          maxCount: MAX_COOKING_LOG_PHOTOS - photos.length,
+          confirmMore: confirmContinueCapture,
+        });
+        if (shot.length === 0) return; // キャンセル
+        setPhotos((current) => [...current, ...shot].slice(0, MAX_COOKING_LOG_PHOTOS));
       } catch (error) {
-        if (error instanceof PhotoCaptureCancelledError) return;
         const message = error instanceof Error ? error.message : t('common.photoAddFailed');
         void dialog.alert({ title: t('common.photoAddFailed'), message });
       }

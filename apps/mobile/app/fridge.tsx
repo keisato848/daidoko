@@ -13,6 +13,7 @@
  * - 開示は撮影・選択の**前**（select 画面に常時表示）
  * - 読み取り 1 回 = 無料枠 1 消費（ensureInferenceCredit / recordCloudInference・BYOK は無制限）
  */
+import { MAX_FRIDGE_IMAGES } from '@daidoko/shared';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Camera, Check, ChefHat, ImageIcon, MessagesSquare, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
@@ -28,8 +29,8 @@ import { ensureInferenceCredit } from '../src/services/inference-gate.service';
 import { getAliasMap } from '../src/services/name-alias.service';
 import { addPantryItem, defaultGroupFor, getPantryItems } from '../src/services/pantry.service';
 import {
-  capturePhoto,
-  PhotoCaptureCancelledError,
+  capturePhotoSeries,
+  confirmContinueCapture,
   type PhotoCaptureSource,
 } from '../src/services/photo-capture.service';
 import {
@@ -78,11 +79,20 @@ export default function FridgeScreen() {
       if (gate !== 'ready') return;
 
       try {
-        const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
+        // 連続撮影: 冷蔵室＋野菜室のように 2 枚まで。読み取りは 2 枚まとめて
+        // 1 回の推論（= 無料枠 1 消費のまま。契約 MAX_FRIDGE_IMAGES）
+        const photos = await capturePhotoSeries(source, expoImagePickerPhotoCaptureAdapter, {
+          maxCount: MAX_FRIDGE_IMAGES,
+          confirmMore: confirmContinueCapture,
+        });
+        if (photos.length === 0) return; // キャンセル
         setPhase('processing');
 
         const inference = await inferFridgeItems({
-          images: [{ localPath: photo.localPath, mimeType: mimeTypeFor(photo.localPath) }],
+          images: photos.map((photo) => ({
+            localPath: photo.localPath,
+            mimeType: mimeTypeFor(photo.localPath),
+          })),
         });
         // 消費は managed サーバー経由の成功時だけ（BYOK は自分のキー = 無制限）
         if (inference.source === 'cloud') {
@@ -111,10 +121,6 @@ export default function FridgeScreen() {
         );
         setPhase('review');
       } catch (error) {
-        if (error instanceof PhotoCaptureCancelledError) {
-          setPhase('select');
-          return;
-        }
         setErrorMsg(error instanceof FridgeInferError ? error.message : t('pantry.fridge.failed'));
         setPhase('error');
       }

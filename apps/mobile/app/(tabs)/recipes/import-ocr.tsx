@@ -42,9 +42,9 @@ import { t, tCount } from '../../../src/i18n';
 import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import {
-  capturePhoto,
+  capturePhotoSeries,
   capturePhotosFromGallery,
-  PhotoCaptureCancelledError,
+  confirmContinueCapture,
   UserFacingError,
   type CapturedPhoto,
 } from '../../../src/services/photo-capture.service';
@@ -80,13 +80,17 @@ export default function ImportRecipePageScreen() {
   const addFromCamera = useCallback(async () => {
     setErrorMsg(null);
     try {
-      const photo = await capturePhoto('camera', expoImagePickerPhotoCaptureAdapter);
-      setPages((current) => [...current, photo].slice(0, MAX_RECIPE_PAGE_IMAGES));
+      // 連続撮影: 表→裏のように残り枠まで続けて撮れる（1 枚ごとに続行を確認）
+      const shot = await capturePhotoSeries('camera', expoImagePickerPhotoCaptureAdapter, {
+        maxCount: MAX_RECIPE_PAGE_IMAGES - pages.length,
+        confirmMore: confirmContinueCapture,
+      });
+      if (shot.length === 0) return; // 1 枚目でキャンセル
+      setPages((current) => [...current, ...shot].slice(0, MAX_RECIPE_PAGE_IMAGES));
     } catch (error) {
-      if (error instanceof PhotoCaptureCancelledError) return;
       setErrorMsg(error instanceof UserFacingError ? error.message : t('common.photoAddFailed'));
     }
-  }, []);
+  }, [pages.length]);
 
   const addFromGallery = useCallback(async () => {
     setErrorMsg(null);
