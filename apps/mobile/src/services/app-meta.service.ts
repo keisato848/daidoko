@@ -3,13 +3,35 @@
  * table (survives restarts, no extra dependency). Used for things like the
  * cloud Vision inference opt-in consent.
  */
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
+import { generateId } from '../utils/id';
+import {
+  MENU_AUTO_DEFAULT_DAYS,
+  MENU_AUTO_DEFAULT_NOTIFY_TIME,
+  formatMenuAutoNotifyTime,
+  isValidMenuAutoDays,
+  parseMenuAutoNotifyTime,
+  type MenuAutoNotifyTime,
+} from '../utils/menuAuto';
 
 const CLOUD_INFERENCE_CONSENT_KEY = 'cloud_inference_consent';
 const LAUNCH_CAMERA_KEY = 'launch_camera';
+const INSTALLATION_ID_KEY = 'installation_id';
+const MENU_AUTO_KEY = 'menu_auto_enabled';
+const MENU_AUTO_ADD_KEY = 'menu_auto_add_enabled';
+const MENU_AUTO_DAYS_KEY = 'menu_auto_days';
+const MENU_AUTO_NOTIFY_TIME_KEY = 'menu_auto_notify_time';
+const MENU_TASTE_MEMO_KEY = 'menu_taste_memo';
+
+/**
+ * 家族の嗜好メモ（M3-4・S21）の上限。契約
+ * `packages/shared/src/types/menu-recipes.ts` の MAX_MENU_RECIPES_PREFERENCES と
+ * 揃える（app_meta 側で先に切っておけば、送信時に黙って切られて驚くことがない）。
+ */
+export const MENU_TASTE_MEMO_MAX_LENGTH = 400;
 
 export async function getAppMeta(key: string): Promise<string | null> {
   if (!isNativePlatform) return null;
@@ -19,6 +41,20 @@ export async function getAppMeta(key: string): Promise<string | null> {
     .where(eq(schema.appMeta.key, key))
     .limit(1);
   return rows[0]?.value ?? null;
+}
+
+/**
+ * 前方一致でキーと値を列挙する。呼び出し側はコード内の固定プレフィックスだけを渡すこと
+ * （`%`/`_` を含む動的文字列を渡すと LIKE のワイルドカードとして解釈される）。
+ */
+export async function getAppMetaByPrefix(
+  prefix: string,
+): Promise<Array<{ key: string; value: string }>> {
+  if (!isNativePlatform) return [];
+  return getDb()
+    .select({ key: schema.appMeta.key, value: schema.appMeta.value })
+    .from(schema.appMeta)
+    .where(like(schema.appMeta.key, `${prefix}%`));
 }
 
 export async function setAppMeta(key: string, value: string): Promise<void> {
@@ -51,4 +87,83 @@ export async function isLaunchCameraEnabled(): Promise<boolean> {
 
 export async function setLaunchCameraEnabled(enabled: boolean): Promise<void> {
   await setAppMeta(LAUNCH_CAMERA_KEY, enabled ? 'on' : 'off');
+}
+
+/**
+ * インストールごとの乱数 ID（個人情報ではない・同期 §0-2 と同じ線）。
+ * AI 献立並べ替え（M2）の `x-device-id` ヘッダに使う（設計 §10.10.1/§10.10.7-3）。
+ *
+ * **同期の `deviceId`（sync-client.service.ts）とは別物で、流用しない** —
+ * 同期未設定の端末には同期 deviceId が存在しないため。初回アクセス時に生成して
+ * `app_meta` へ永続化し、以後は同じ値を返す（`generateId()` の UUID v4 は
+ * 36 字・`[0-9a-f-]` で、サーバー側の書式チェック 8..64 字 `[A-Za-z0-9_-]` に収まる）。
+ */
+export async function getInstallationId(): Promise<string> {
+  const existing = await getAppMeta(INSTALLATION_ID_KEY);
+  if (existing) return existing;
+  const next = generateId();
+  await setAppMeta(INSTALLATION_ID_KEY, next);
+  return next;
+}
+
+// ── 毎日の自動献立モード（#215 A1・設計 §10.11）──────────────────────────────
+// 親トグル「毎日の献立」（既定オフ）→ 子トグル「足りない材料を自動で追加」（既定オフ）の
+// 二段オプトイン。既定値・妥当性判定は utils/menuAuto.ts（純関数・jest 対象）に置く。
+
+/** 親トグル。既定オフ（設計 §10.11 冒頭・「決めるのは常に利用者」）。 */
+export async function isMenuAutoEnabled(): Promise<boolean> {
+  return (await getAppMeta(MENU_AUTO_KEY)) === 'on';
+}
+
+export async function setMenuAutoEnabled(enabled: boolean): Promise<void> {
+  await setAppMeta(MENU_AUTO_KEY, enabled ? 'on' : 'off');
+}
+
+/**
+ * 子トグル。既定オフ。**親がオフでも値は保持する**（親を切ってもまた入れたときに
+ * 前回の選択を覚えている方が自然——親のオフは「オフにする」であって「忘れる」ではない）。
+ */
+export async function isMenuAutoAddEnabled(): Promise<boolean> {
+  return (await getAppMeta(MENU_AUTO_ADD_KEY)) === 'on';
+}
+
+export async function setMenuAutoAddEnabled(enabled: boolean): Promise<void> {
+  await setAppMeta(MENU_AUTO_ADD_KEY, enabled ? 'on' : 'off');
+}
+
+/** ローリングの窓幅 X（何日分を保つか）。既定 3。壊れた/範囲外の保存値は既定へ倒す。 */
+export async function getMenuAutoDays(): Promise<number> {
+  const raw = await getAppMeta(MENU_AUTO_DAYS_KEY);
+  const value = raw ? Number(raw) : NaN;
+  return isValidMenuAutoDays(value) ? value : MENU_AUTO_DEFAULT_DAYS;
+}
+
+export async function setMenuAutoDays(days: number): Promise<void> {
+  await setAppMeta(MENU_AUTO_DAYS_KEY, String(days));
+}
+
+/** 通知時刻。既定 7:00。 */
+export async function getMenuAutoNotifyTime(): Promise<MenuAutoNotifyTime> {
+  const raw = await getAppMeta(MENU_AUTO_NOTIFY_TIME_KEY);
+  const parsed = raw ? parseMenuAutoNotifyTime(raw) : null;
+  return parsed ?? MENU_AUTO_DEFAULT_NOTIFY_TIME;
+}
+
+export async function setMenuAutoNotifyTime(time: MenuAutoNotifyTime): Promise<void> {
+  await setAppMeta(MENU_AUTO_NOTIFY_TIME_KEY, formatMenuAutoNotifyTime(time));
+}
+
+/**
+ * 家族の嗜好メモ（M3-4・§10.12）。「義母は洋食を食べない」「うちの定番野菜」のような
+ * 自由テキスト 1 欄で、S21（menu-settings）から編集し、不足分レシピの一括生成に渡す。
+ * **ローカル保存・同期しない**（app_meta は同期対象外）— 家族それぞれの端末で
+ * 自分の言葉で書けばよい。空文字 = 未設定。
+ */
+export async function getMenuTasteMemo(): Promise<string> {
+  const raw = (await getAppMeta(MENU_TASTE_MEMO_KEY)) ?? '';
+  return raw.trim().slice(0, MENU_TASTE_MEMO_MAX_LENGTH);
+}
+
+export async function setMenuTasteMemo(memo: string): Promise<void> {
+  await setAppMeta(MENU_TASTE_MEMO_KEY, memo.trim().slice(0, MENU_TASTE_MEMO_MAX_LENGTH));
 }

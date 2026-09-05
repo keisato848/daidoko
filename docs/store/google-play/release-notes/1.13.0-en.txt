@@ -1,0 +1,25 @@
+# Operator note (delete this line through the next blank line before submitting.
+# update-play-release-notes.mjs sends the file body as-is, so leaving this in
+# would show it to users). 1.12.1 (5 bug fixes: reading/kana search reset on
+# edit, restaurant name lost from "get closer to the taste", restaurant name
+# not saved on hand-typed recipes, black cover-photo preview, overlapping long
+# names), 1.12.2 (tab labels cut off at the screen edge), and 1.12.3 (clearer
+# free-usage note, more readable disclosure text, dropped the Japanese-only
+# reading field from the English form) were all left unsubmitted (no
+# v1.12.2-play-10032 / v1.12.3-play-10033 submit tags). None shipped on its
+# own; all three are folded into 1.13.0 here. The old drafts stay at
+# release-notes/1.12.1-en.txt, 1.12.2-en.txt and 1.12.3-en.txt.
+#
+# #266 (the AI-recipe check-yourself note; merged into release/1.13.0 in 4829584) is not
+# included in the body below: it's 493/500 chars already, no room for a new sentence.
+# Already reflected in the store descriptions and What's New sections (see listing-en.md).
+
+Meal plan (2-7 days from your pantry, swap any day) and an optional auto-plan mode: ready each morning with a notification, off by default.
+
+Resume cooking from a bar or the home screen; add step photos as you cook.
+
+AI recipe images (3 free a month, separate allowance, always labeled AI-made). Shopping list widget (Android).
+
+Free AI use: now 5 a month, up from 1 per install.
+
+Also fixed: tab labels cut off, kana search reset, lost restaurant names, black cover preview, overlapping text.

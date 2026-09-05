@@ -13,15 +13,18 @@ import ads from './ads';
 import backup from './backup';
 import byok from './byok';
 import common from './common';
+import coverImage from './coverImage';
 import error from './error';
 import family from './family';
 import home from './home';
 import log from './log';
 import notification from './notification';
+import menu from './menu';
 import pantry from './pantry';
 import paywall from './paywall';
 import recipe from './recipe';
 import recipeImport from './recipeImport';
+import report from './report';
 import settings from './settings';
 import ui from './ui';
 
@@ -31,15 +34,18 @@ const en: typeof jaDict = {
   backup,
   byok,
   common,
+  coverImage,
   error,
   family,
   home,
   log,
   notification,
+  menu,
   pantry,
   paywall,
   recipe,
   recipeImport,
+  report,
   settings,
   ui,
 };

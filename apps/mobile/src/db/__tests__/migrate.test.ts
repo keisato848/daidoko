@@ -71,6 +71,23 @@ describe('database migrations', () => {
     expect(backfill).toMatch(/WHERE \(place_name IS NULL OR TRIM\(place_name\) = ''\)/);
   });
 
+  it('v19: 献立のテーブル（menu_plans / menu_plan_days）を作る', () => {
+    const statements: string[] = [];
+
+    runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    const createSql = statements[0];
+    expect(createSql).toContain('CREATE TABLE IF NOT EXISTS menu_plans');
+    expect(createSql).toContain('CREATE TABLE IF NOT EXISTS menu_plan_days');
+    // 1 時間帯 1 プラン（UNIQUE）。既定は夕 — 旧データ由来のプランがそのまま夕になる
+    expect(createSql).toMatch(/meal_time TEXT NOT NULL UNIQUE DEFAULT 'dinner'/);
+    // recipe_id は弱参照（REFERENCES を張らない）— レシピ削除で日が消えない・削除を妨げない
+    const dayTable = createSql.slice(
+      createSql.indexOf('CREATE TABLE IF NOT EXISTS menu_plan_days'),
+    );
+    expect(dayTable).not.toMatch(/recipe_id TEXT NOT NULL REFERENCES/);
+  });
+
   it('v13: 在庫・買い物のグループ、賞味期限、誰が の列を足す', () => {
     const statements: string[] = [];
 
@@ -84,6 +101,40 @@ describe('database migrations', () => {
     // 店名 → 買い物グループ の対応表
     expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS store_group_aliases');
     expect(statements[0]).toContain('idx_store_group_aliases_family_store');
+  });
+
+  it('v17: AI 由来の印の列を足し、写真・OCR 由来のレシピに遡って立てる（#266）', () => {
+    const statements: string[] = [];
+
+    const result = runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    // **nullable であること。** NULL は「AI ではない」ではなく「不明」を表す。
+    // NOT NULL にすると、その列を持たない古いバックアップの復元が丸ごと失敗する
+    expect(statements).toContain('ALTER TABLE recipes ADD COLUMN ai_generated INTEGER');
+
+    const backfill = statements.find((st) => st.includes('UPDATE recipes SET ai_generated'));
+    expect(backfill).toBeDefined();
+    // 遡れるのは写真と紙面 OCR だけ。`url` は JSON-LD 抽出で AI を通らないので**入れない**
+    expect(backfill).toContain("s.type IN ('photo', 'ocr')");
+    expect(backfill).not.toContain("'url'");
+    // 現行リビジョンだけでなく全リビジョンを見る（写真から作った後に編集すると出所が変わる）
+    expect(backfill).toContain('FROM recipe_revisions r');
+    // 冪等。既に立っている印を触らない
+    expect(backfill).toContain('WHERE ai_generated IS NULL');
+  });
+
+  it('v18: 実体のグループ所属（entity_groups）を作る（多グループ G-2a — 同期設計 §12-3）', () => {
+    const statements: string[] = [];
+
+    const result = runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    expect(result.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS entity_groups');
+    // 主キーが (entity_type, entity_id, group_id) であることが「1 実体・複数グループ参照
+    // （G3）を重複無しで持てる」の実体。所属の初期化はここではなく sync-runner の
+    // 一度きりのバックフィル（挙動不変の移行 — §12-4）
+    expect(statements[0]).toContain('PRIMARY KEY (entity_type, entity_id, group_id)');
   });
 
   it('v14: クラウド同期の送信待ち（sync_queue）を作る', () => {

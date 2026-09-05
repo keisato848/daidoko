@@ -19,6 +19,8 @@ import {
   deleteGroup,
   evictDevice,
   getGroupInfo,
+  isTypeAllowedForScope,
+  listDeviceGroups,
   reapStaleDevices,
   getOtherDevicePushTargets,
   isSyncEnabled,
@@ -28,6 +30,7 @@ import {
   pushChanges,
   rotateInvite,
   setDevicePushToken,
+  updateGroup,
   type AuthedDevice,
 } from '../lib/sync-store.js';
 
@@ -113,15 +116,35 @@ syncRouter.use('*', async (c, next) => {
   await next();
 });
 
-/** Bearer 認証。失敗理由は区別しない（端末 ID の存在を推測させない） */
+/**
+ * Bearer 認証。失敗理由は区別しない（端末 ID の存在を推測させない）。
+ *
+ * 操作対象グループは `x-sync-group` ヘッダで指定する（§12-2）。省略時は端末の
+ * 主グループ（1.13.0 以前のクライアント — 挙動不変）。membership の無いグループを
+ * 指定しても AUTH_INVALID（グループの存在を漏らさない）。
+ */
 const requireDevice = createMiddleware<SyncEnv>(async (c, next) => {
   const parsed = parseAuthHeader(c.req.header('authorization'));
   if (!parsed) return c.json({ ok: false, error: 'AUTH_REQUIRED' }, 401);
-  const device = await authenticateDevice(parsed.deviceId, parsed.secret);
+  const requestedGroup = c.req.header('x-sync-group')?.trim() || null;
+  const device = await authenticateDevice(parsed.deviceId, parsed.secret, requestedGroup);
   if (!device) return c.json({ ok: false, error: 'AUTH_INVALID' }, 401);
   c.set('device', device);
   await next();
 });
+
+/**
+ * 任意認証（グループ作成/参加用・§12-2）。Authorization が無ければ null、
+ * あるのに無効なら 'invalid'（既存端末のフリをした乗っ取りを黙って通さない）。
+ */
+async function optionalDevice(
+  authHeader: string | undefined,
+): Promise<AuthedDevice | null | 'invalid'> {
+  const parsed = parseAuthHeader(authHeader);
+  if (!parsed) return null;
+  const device = await authenticateDevice(parsed.deviceId, parsed.secret);
+  return device ?? 'invalid';
+}
 
 /**
  * `displayName` は **受け取るが保存しない**。
@@ -132,8 +155,14 @@ const requireDevice = createMiddleware<SyncEnv>(async (c, next) => {
  */
 const ignoredDisplayNameSchema = z.string().trim().max(30);
 
+const groupNameSchema = z.string().trim().min(1).max(30);
+const groupScopeSchema = z.enum(['all', 'recipes']);
+
 const createGroupSchema = z.object({
   displayName: ignoredDisplayNameSchema.optional(),
+  /** グループの表示名（§12・任意）。個人名ではなくグループの呼び名 */
+  name: groupNameSchema.optional(),
+  scope: groupScopeSchema.optional(),
 });
 
 const joinGroupSchema = z.object({
@@ -141,22 +170,35 @@ const joinGroupSchema = z.object({
   displayName: ignoredDisplayNameSchema.optional(),
 });
 
-/** グループ新設 → 端末クレデンシャルと招待コードを返す（シークレットはこの応答限り） */
+/**
+ * グループ新設 → 端末クレデンシャルと招待コードを返す（シークレットはこの応答限り）。
+ * Authorization つきなら**既存端末の 2 つ目以降のグループ**として作る（§12-2 —
+ * 新しい端末は発行されず、deviceSecret は空で返る）。
+ */
 syncRouter.post('/groups', zValidator('json', createGroupSchema), async (c) => {
   if (!takeSyncRateLimit('create', clientKeyOf(c.req.raw.headers))) {
     return c.json({ ok: false, error: 'RATE_LIMITED' }, 429);
   }
-  const created = await createGroup();
+  const authed = await optionalDevice(c.req.header('authorization'));
+  if (authed === 'invalid') return c.json({ ok: false, error: 'AUTH_INVALID' }, 401);
+  const body = c.req.valid('json');
+  const created = await createGroup({
+    name: body.name ?? null,
+    scope: body.scope ?? 'all',
+    ...(authed ? { existingDeviceId: authed.deviceId } : {}),
+  });
   return c.json({ ok: true, data: created }, 201);
 });
 
-/** 招待コードで参加 */
+/** 招待コードで参加。Authorization つきなら既存端末の追加参加（§12-2） */
 syncRouter.post('/groups/join', zValidator('json', joinGroupSchema), async (c) => {
   if (!takeSyncRateLimit('join', clientKeyOf(c.req.raw.headers))) {
     return c.json({ ok: false, error: 'RATE_LIMITED' }, 429);
   }
+  const authed = await optionalDevice(c.req.header('authorization'));
+  if (authed === 'invalid') return c.json({ ok: false, error: 'AUTH_INVALID' }, 401);
   const body = c.req.valid('json');
-  const result = await joinGroup(body.inviteCode);
+  const result = await joinGroup(body.inviteCode, authed ? authed.deviceId : null);
   switch (result.kind) {
     case 'invalid':
       return c.json({ ok: false, error: 'INVITE_INVALID' }, 404);
@@ -164,7 +206,9 @@ syncRouter.post('/groups/join', zValidator('json', joinGroupSchema), async (c) =
       return c.json({ ok: false, error: 'INVITE_EXPIRED' }, 410);
     case 'full':
       return c.json({ ok: false, error: 'GROUP_FULL' }, 409);
-    case 'joined':
+    case 'joined': {
+      // 参加確認ダイアログの開示（G6）: 何のグループに・何が共有されるスコープで入るのか
+      const info = await getGroupInfo(result.groupId);
       return c.json({
         ok: true,
         data: {
@@ -172,9 +216,44 @@ syncRouter.post('/groups/join', zValidator('json', joinGroupSchema), async (c) =
           deviceId: result.deviceId,
           deviceSecret: result.deviceSecret,
           memberCount: result.memberCount,
+          groupName: info?.name ?? null,
+          scope: info?.scope ?? 'all',
         },
       });
+    }
   }
+});
+
+/** 自分が参加しているグループの一覧（§12-2）。x-sync-group に依らない */
+syncRouter.get('/me/groups', requireDevice, async (c) => {
+  const device = c.get('device');
+  const groups = await listDeviceGroups(device.deviceId);
+  return c.json({ ok: true, data: { groups } });
+});
+
+const updateGroupSchema = z
+  .object({
+    name: groupNameSchema.nullable().optional(),
+    scope: groupScopeSchema.optional(),
+  })
+  .refine((body) => body.name !== undefined || body.scope !== undefined, {
+    message: 'name or scope is required',
+  });
+
+/**
+ * グループの名前・スコープ変更（オーナーのみ・§12-2）。
+ * scope の縮小で「何が見えなくなるか」の予告（G4）はアプリ側の責務 —
+ * サーバーは即時適用し、以後 scope 外は pull に現れず push は 400 になる。
+ */
+syncRouter.patch('/group', requireDevice, zValidator('json', updateGroupSchema), async (c) => {
+  const device = c.get('device');
+  if (!device.isOwner) return c.json({ ok: false, error: 'OWNER_ONLY' }, 403);
+  const body = c.req.valid('json');
+  await updateGroup(device.groupId, {
+    ...(body.name !== undefined ? { name: body.name } : {}),
+    ...(body.scope !== undefined ? { scope: body.scope } : {}),
+  });
+  return c.json({ ok: true });
 });
 
 /** 自分の状態（認証の疎通確認を兼ねる）。招待コードはオーナーにだけ返す */
@@ -192,6 +271,8 @@ syncRouter.get('/me', requireDevice, async (c) => {
       groupId: device.groupId,
       deviceId: device.deviceId,
       isOwner,
+      groupName: info.name,
+      scope: info.scope,
       memberCount: info.memberCount,
       // 端末一覧は id・役割・最終同期時刻だけ（名前も内容も無い — §0-2）
       devices: info.devices.map((d) => ({
@@ -400,6 +481,10 @@ syncRouter.post('/push', requireDevice, zValidator('json', pushSchema), async (c
   const totalChars = changes.reduce((sum, change) => sum + (change.payload?.length ?? 0), 0);
   if (totalChars > MAX_PUSH_TOTAL_CHARS) {
     return c.json({ ok: false, error: 'PAYLOAD_TOO_LARGE' }, 413);
+  }
+  // スコープの門番（§12-1）: 'recipes' のグループへレシピ系以外は流させない
+  if (changes.some((change) => !isTypeAllowedForScope(device.scope, change.entityType))) {
+    return c.json({ ok: false, error: 'SCOPE_MISMATCH' }, 400);
   }
   // 端末ごとの日次上限。1 件 = 1 消費なので、ふつうの使い方では当たらない
   if (!takeSyncRateLimit('push', device.deviceId, changes.length)) {

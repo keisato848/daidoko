@@ -24,6 +24,16 @@ const common: typeof ja = {
   deletePhoto: 'Remove photo',
   photoAddFailed: "We couldn't add that photo",
 
+  captureMore: {
+    title: 'Keep shooting?',
+    message: {
+      one: 'You can add {{count}} more photo.',
+      other: 'You can add {{count}} more photos.',
+    },
+    more: 'Take another',
+    done: 'Done',
+  },
+
   listSeparator: ', ',
 
   all: 'All',

@@ -49,8 +49,11 @@ E2E テスト結果のトリアージ。既存の `scripts/agent` 配下のス�
 
 - **adb は PowerShell ツールで実行する**。Git Bash は `/sdcard` パスをホスト側パスに変換して壊す（push 失敗・dump の stale 化）。
 - **スクリーンショットは `pwsh scripts/agent/device-shot.ps1`** を使う（screencap→540px 縮小→パス出力。Claude の Read は約 2000px 超を拒否するため縮小必須）。`EMPTY_SCREENSHOT` が返ったら画面ロック中 — セキュアロックは adb で解除できないので**ユーザーに解錠を依頼**する。
+  - スクリプトは `-s` を渡さないので、**端末が 2 台以上つながっていると `more than one device/emulator` で `EMPTY_SCREENSHOT` に化ける**（無線 adb の Pixel が残っていた 2026-09-03 に被弾）。`$env:ANDROID_SERIAL` を設定してから呼ぶ。
 - **`svc power stayon true` を使ったら作業後に必ず `false` へ戻す**（放置するとユーザーの電池を消耗）。`wm dismiss-keyguard` はセキュアロックには効かない。
 - **リリース APK の install -r 直後に Play Protect の「セキュリティ診断」ダイアログ**が出てフォーカスを奪うことがある →「送信しない」をタップして続行。フォーカス確認は `dumpsys window | grep mCurrentFocus`。
+  - **前の作業が残したダイアログが出たままだと、次の `adb install` は無言でハングする**（3 分待ってタイムアウト。エラーは出ない — 2026-09-03 実測）。インストール前に `mCurrentFocus` が `PlayProtectDialogsActivity` でないか先に見る。
+  - このダイアログは**ボトムシート型で、横向きだとボタン 3 つ（常に送信する/今回は送信する/送信しない）が画面外**。uiautomator dump にも clickable ノードが写らない。シート内を上へスワイプしてから、スクリーンショットで「送信しない」の位置を確認してタップする。
 - **座標タップの前に必ず直前のスクリーンショットで位置を確認**する。UI 変更（ヘッダーへのボタン追加等）で既知座標はずれる。フルサイズ座標 = 縮小画像座標 × 2（1080px 端末 / 540px 縮小時）。
 - **日本語入力**: `adb shell input text` は ASCII のみだが、Gboard の日本語入力中ならローマ字合成が効く（例: `input text "tottogotamago"` → とっとごたまご、`keyevent 66` で確定）。かなはこれで自動化可能。**漢字の確定はユーザーに依頼**する（IME 候補タップは不安定）。
 - **本番構成の検証**では `adb reverse --remove-all` で localhost ブリッジを外す（release ビルドの API 既定は Railway 本番）。逆にローカルサーバー検証時は `adb reverse tcp:3000 tcp:3000`。

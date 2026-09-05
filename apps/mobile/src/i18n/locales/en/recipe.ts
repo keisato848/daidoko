@@ -10,6 +10,7 @@ const recipe: typeof ja = {
     titleTooLong: 'Use 100 characters or fewer',
     ingredientsRequired: 'Add at least one ingredient',
     stepsRequired: 'Add at least one step',
+    tagTooLong: 'Use 30 characters or fewer for a tag',
   },
 
   form: {
@@ -75,24 +76,44 @@ const recipe: typeof ja = {
       refine: 'Get closer to the restaurant taste',
       edit: 'Edit',
       share: 'Share',
-      webShare: 'Share as web page',
-      webShareSend: 'Send web share link',
-      webShareStop: 'Stop web sharing',
       revisions: 'Version history',
+    },
+
+    shareState: {
+      groups: 'Shared: {{names}}',
+      private: 'Only me',
+      link: 'Public link',
+    },
+
+    shareSheet: {
+      title: 'Share this recipe',
+      familyJoined: 'Share with family',
+      familyNotJoined: 'Share with family (create or join a group)',
+      familyNote: 'Visible only to group members. Syncs automatically while you are in a group.',
+      linkTitle: 'Send a link',
+      linkPublish: 'Create a link and send it',
+      linkSend: 'Send the link (public)',
+      linkNote:
+        'Anyone with the link can view it — not just family. New viewers can open it for 7 days after you send it; anyone who opened it in time keeps access.',
+      linkStop: 'Stop sharing the link',
+      linkStopNote: 'People with the link will no longer be able to see it.',
+      linkBlocked: 'Recipes imported from a URL cannot be shared by link (we never host reposts).',
+      textSend: 'Send as text',
+      textNote: 'Sent as plain text. Recipients can import it into the app.',
     },
 
     webShare: {
       attestTitle: 'Is this your own recipe?',
       attestBody:
-        'Web sharing is only for content you created yourself. Recipes copied from other sites or books cannot be shared.\n\nAnyone with the link can view this recipe (no app needed). You can stop sharing at any time.',
+        'Sharing by link is only for content you created yourself. Recipes copied from other sites or books cannot be shared.\n\nAnyone with the link can view this recipe (no app needed). New viewers can open the link for 7 days after you send it, and you can stop sharing at any time.',
       attestOk: 'Share',
-      failedTitle: 'Web share',
+      failedTitle: 'Send a link',
       publishFailedBody: 'Could not create the share page. Check your connection and try again.',
-      stopTitle: 'Stop web sharing',
+      stopTitle: 'Stop sharing the link',
       stopConfirm:
-        'This deletes the share page. People with the link will no longer see it. Continue?',
+        'This stops sharing. People with the link will no longer be able to see it. Continue?',
       stopAction: 'Stop sharing',
-      stopDoneBody: 'The share page has been deleted.',
+      stopDoneBody: 'Sharing has stopped. People with the link can no longer see it.',
       stopFailedBody: 'Could not stop sharing. Check your connection and try again.',
     },
 
@@ -270,6 +291,9 @@ const recipe: typeof ja = {
       textDescription: 'Paste the text and turn it into a draft',
       ocr: 'From an image with text',
       ocrDescription: 'Read text from a cookbook or handwritten note',
+      fridge: 'Recipes from your fridge',
+      fridgeDescription:
+        'Read ingredients from a fridge photo, stock the pantry, then find what you can cook',
       manual: 'By hand',
       manualDescription: 'Type the recipe from scratch',
     },
@@ -355,7 +379,7 @@ const recipe: typeof ja = {
     timerPaused: '{{time}} (paused)',
     startTimer: 'Start timer',
     detectedFromBody: ' (found in the step)',
-    tapHint: 'Tap the screen to see the ingredients',
+    tapHint: 'Tap for ingredients / swipe to move between steps',
     resumeLabel: 'Cooking now',
     resumeStep: 'Step {{step}} of {{total}}',
     resumeAction: 'Resume',
@@ -398,6 +422,14 @@ const recipe: typeof ja = {
 
     noticeNoChange:
       'Nothing in the recipe changed. Being more specific about the taste often helps.',
+
+    disclosure: {
+      text: 'Your whole recipe (ingredients, steps, tags), the notes you write and any attached photo are sent to our server (and the AI provider) to make the adjustment. They are not stored.',
+      intent:
+        'MUST name WHAT leaves the device: the ENTIRE recipe AND the free-text notes the user ' +
+        'typed, not just the photo. MUST also state it goes to a third-party AI provider and is ' +
+        'not retained. Naming only the photo hides that the notes and the whole recipe are sent.',
+    },
 
     feedbackLabel: 'How did it turn out?',
     feedbackPlaceholder: 'Much sweeter than the restaurant’s, and not thick enough…',

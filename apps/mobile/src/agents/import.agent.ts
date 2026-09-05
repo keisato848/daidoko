@@ -4,6 +4,7 @@
  */
 import { API_V1 } from '../config';
 import { t } from '../i18n';
+import { serverErrorFor } from '../services/ai-error';
 
 export interface RecipeDraft {
   title: string;
@@ -66,13 +67,10 @@ export async function runImportAgent(url: string, signal?: AbortSignal): Promise
     });
 
     if (!res.ok) {
+      const info = serverErrorFor(res.status);
       return {
         ok: false,
-        error: {
-          code: 'FETCH_FAILED',
-          message: t('ai.error.serverError', { status: res.status }),
-          retryable: res.status >= 500,
-        },
+        error: { code: 'FETCH_FAILED', message: info.message, retryable: info.retryable },
       };
     }
 

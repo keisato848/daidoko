@@ -1,6 +1,8 @@
 /**
  * Now Cooking バー — 調理中セッションがあるとき、タブバーの直上に常駐する pill。
  * どの画面からも 1 タップで料理中モードの続きに戻れる。
+ * ルート `_layout` に 1 つだけマウントする（1.13.1 のナビ再編で (tabs) の外にも
+ * 画面が増えたため。位置はタブ配下かどうかを自分で見て決める）。
  *
  * 音楽アプリの Now Playing バーが原型。競合調査
  * （docs/reviews/cooking-resume-research-2026-08-28.md）では国内アプリに復帰導線は
@@ -10,24 +12,47 @@
  * - 料理中モード自体（戻る先がここ）
  * - タブバーを隠す全画面（撮影・相談）— タブバー前提の位置に浮くバーだけ残ると邪魔
  */
-import { usePathname, useRouter } from 'expo-router';
+import { usePathname, useRouter, useSegments } from 'expo-router';
 import { ChefHat } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors } from '../constants/theme';
+import { Colors, TAB_BAR_CONTENT_HEIGHT } from '../constants/theme';
 import { t } from '../i18n';
 import { useCookingSessionStore } from '../stores/cooking-session.store';
+import { pathHasAnySegment } from '../utils/routeMatch';
 
-/** タブバーを隠す画面では pill も出さない（(tabs)/_layout の FULLSCREEN_CHILD_ROUTES と対応） */
-const HIDDEN_PATH_PARTS = ['/cook', '/import-photo', '/consult'];
+/**
+ * タブバーを隠す画面では pill も出さない（(tabs)/_layout の FULLSCREEN_CHILD_ROUTES と対応）。
+ * **セグメント一致で見る** — `includes` だと `/cookable`（在庫の作れるレシピ）が
+ * `/cook` に当たって、調理直前のいちばん復帰導線が要る画面で pill が消えていた。
+ */
+const HIDDEN_ROUTE_SEGMENTS = ['/cook', '/import-photo', '/consult'];
 
-export function CookingResumeBar({ bottomOffset }: { bottomOffset: number }) {
+/**
+ * (tabs) の外＝ルート Stack の画面のうち、pill を出すもの。
+ * 1.13.1 のナビ再編（N2）で階層画面がルート Stack へ移り、既定では pill を
+ * 出さない（設定・カメラ・フォーム系は下端に固定 CTA があり、pill が被ると
+ * 押せなくなる）。cookable（作れるレシピ）だけは「調理直前のいちばん
+ * 復帰導線が要る画面」なので明示的に残す（2026-08-31 の実バグの再発防止）。
+ */
+const ROOT_STACK_ALLOWED_PATHS = ['/cookable'];
+
+export function CookingResumeBar() {
   const session = useCookingSessionStore((s) => s.session);
   const router = useRouter();
   const pathname = usePathname();
+  // pathname はグループを含まないので、タブ配下かどうかは segments で見る
+  const segments = useSegments();
+  const insets = useSafeAreaInsets();
+  const inTabs = segments[0] === '(tabs)';
 
   if (!session) return null;
-  if (HIDDEN_PATH_PARTS.some((part) => pathname.includes(part))) return null;
+  if (pathHasAnySegment(pathname, HIDDEN_ROUTE_SEGMENTS)) return null;
+  if (!inTabs && !ROOT_STACK_ALLOWED_PATHS.includes(pathname)) return null;
+
+  // タブ配下ではタブバーの直上、ルート Stack では画面下端（safe-area の上）に浮かせる
+  const bottomOffset = (inTabs ? TAB_BAR_CONTENT_HEIGHT : 0) + insets.bottom;
 
   return (
     <Pressable

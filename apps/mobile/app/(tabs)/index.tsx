@@ -31,6 +31,7 @@ import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
 import { t, tCount } from '../../src/i18n';
+import { getMenuPlanForToday, type MenuMealTime } from '../../src/services/menu-plan.service';
 import { formatMonthDay, formatMonthLabel } from '../../src/i18n/format';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
 import { dialog } from '../../src/services/dialog.service';
@@ -41,6 +42,7 @@ import type { RecipeListItem, TimelineEntry } from '../../src/services/types';
 import { useCookingSessionStore } from '../../src/stores/cooking-session.store';
 import { formatProfileDisplayName } from '../../src/utils/profile';
 import { computeMonthlyStats } from '../../src/utils/timelineStats';
+import { formatSnapshotTime } from '../../src/utils/widgetSnapshot';
 
 type FilterTab = 'week' | 'month' | 'all';
 
@@ -93,22 +95,22 @@ export default function HomeScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // 初回利用ガイド（コーチマーク）
-  const cartRef = useRef<View>(null);
-  const fabRef = useRef<View>(null);
+  const settingsRef = useRef<View>(null);
+  // 追加の入口は下の「追加」タブに一本化（2026-09-03）。右下 FAB は「＋が2つあって迷う」
+  // （ペルソナ点検 P1・監査 B1）ため削除した。タブは Portal の外なので ref で指せず中央吹き出し
   const coach = useCoachMarks(
     'home',
     [
       {
-        key: 'fab',
-        title: t('home.coach.fabTitle'),
-        text: t('home.coach.fabText'),
-        ref: fabRef,
+        key: 'add',
+        title: t('home.coach.addTitle'),
+        text: t('home.coach.addText'),
       },
       {
-        key: 'cart',
-        title: t('home.coach.cartTitle'),
-        text: t('home.coach.cartText'),
-        ref: cartRef,
+        key: 'settings',
+        title: t('home.coach.settingsTitle'),
+        text: t('home.coach.settingsText'),
+        ref: settingsRef,
       },
     ],
     !loading && !selectMode,
@@ -120,16 +122,40 @@ export default function HomeScreen() {
    * 在庫を使っていない人のホームは変えない（0 件のときに出しても押した先が空になるだけ）。
    */
   const [hasStock, setHasStock] = useState(false);
+  /**
+   * 献立の「次の一品」（#215）。まだ作っていない最初の日のレシピ名。
+   * 献立が無ければ null で、カードは組む導線だけを出す。
+   * **`anchorDate` があるときだけ「今日」と言える**（§10.11）——自動モードで
+   * 組まれたプランだけが持つ。手動プランは日付を持たないので「次の一品」のまま
+   */
+  const [nextMenuTitle, setNextMenuTitle] = useState<string | null>(null);
+  const [menuIsToday, setMenuIsToday] = useState(false);
+  /** 自動モードのときだけ出す出所（「今朝 HH:MM に自動で組みました」）。手動プランでは null */
+  const [menuGeneratedAt, setMenuGeneratedAt] = useState<string | null>(null);
+  /**
+   * カードに出しているプランの時間帯（v19・§10.13）。**夕を優先**し、夕が無ければ
+   * 朝/昼を出す。表記は**夕は無印・朝/昼のときだけ**「（昼）」等を見出しに付ける。
+   */
+  const [menuMealTime, setMenuMealTime] = useState<MenuMealTime>('dinner');
 
   const loadTimeline = useCallback(async () => {
-    const [entries, want, inStock] = await Promise.all([
+    const [entries, want, inStock, today] = await Promise.all([
       getTimeline(),
       getWantToCookRecipes(),
       getInStockNormalizedNames().catch((): string[] => []),
+      getMenuPlanForToday().catch(() => null),
     ]);
     setAllEntries(entries);
     setWantList(want);
     setHasStock(inStock.length > 0);
+    // まだ作っていない最初の日。削除されたレシピの日は飛ばす
+    const menu = today?.view ?? null;
+    const next = menu?.days.find((d) => d.doneAt === null && !d.missing) ?? null;
+    setNextMenuTitle(next ? next.title : null);
+    setMenuMealTime(today?.mealTime ?? 'dinner');
+    const isAuto = menu?.plan.anchorDate != null;
+    setMenuIsToday(isAuto);
+    setMenuGeneratedAt(isAuto ? (menu?.plan.generatedAt ?? null) : null);
     setLoading(false);
   }, []);
 
@@ -140,6 +166,17 @@ export default function HomeScreen() {
 
   const monthlyStats = useMemo(() => computeMonthlyStats(allEntries), [allEntries]);
   const monthLabel = formatMonthLabel(new Date());
+
+  let menuCardLabel = t('menu.title');
+  if (nextMenuTitle)
+    menuCardLabel = menuIsToday ? t('menu.card.todayTitle') : t('menu.card.nextTitle');
+  // 時間帯の印は**朝/昼のときだけ**（夕は無印のまま 1 文字も変えない・§10.13）
+  if (nextMenuTitle && menuMealTime !== 'dinner') {
+    menuCardLabel +=
+      menuMealTime === 'breakfast'
+        ? t('menu.mealTime.suffix.breakfast')
+        : t('menu.mealTime.suffix.lunch');
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -307,10 +344,10 @@ export default function HomeScreen() {
             {/* 買い物はボトムタブへ出したので、ここは重複。空いた枠に設定を置く
                 （設定はタブから降ろした — 滅多に開かないのに下端の一等地にあった） */}
             <Pressable
-              ref={cartRef}
+              ref={settingsRef}
               collapsable={false}
               style={styles.headerAction}
-              onPress={() => router.push('/(tabs)/settings')}
+              onPress={() => router.push('/settings')}
               hitSlop={8}
               accessibilityLabel={t('home.action.settings')}
             >
@@ -343,7 +380,10 @@ export default function HomeScreen() {
               <View>
                 {/* 調理中の復帰カード。✕ で閉じてもここから続きへ戻れる
                     （Now Cooking バーと同じセッションを見る二重の入口 —
-                    ホームに戻ってきた人が最初に目にする場所なので独立に置く） */}
+                    ホームに戻ってきた人が最初に目にする場所なので独立に置く）。
+                    **献立カードより上**に置く: 調理中は「いま火にかけている」が最優先で、
+                    献立は次に作るものの話。調理していないときは出ないので、
+                    平常時のホームの主役は下の献立カードのまま変わらない */}
                 {cookingSession && (
                   <PressableScale
                     style={styles.resumeCard}
@@ -367,6 +407,33 @@ export default function HomeScreen() {
                     <Text style={styles.resumeAction}>{t('recipe.cook.resumeAction')} →</Text>
                   </PressableScale>
                 )}
+
+                {/* 献立カード（#215・決定変更 A/B・2026-08-28）。
+                    ここが献立の**主入口**。「献立」は実検索語で、検索で来た人が
+                    4 番目のタブを開かないと気づけないのは #182 の再演になる。
+                    自動モード（§10.11）が入るまでは日付を持たないので「次の一品」と言う。
+                    献立が無いときは組む導線だけを出す（勝手に組まない・§10.7） */}
+                <PressableScale
+                  style={styles.menuCard}
+                  scaleTo={0.98}
+                  onPress={() => router.push('/(tabs)/menu')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('menu.title')}
+                >
+                  <View style={styles.menuCardHead}>
+                    <CalendarDays size={16} color={Colors.gold} />
+                    <Text style={styles.menuCardLabel}>{menuCardLabel}</Text>
+                  </View>
+                  <Text style={styles.menuCardBody}>{nextMenuTitle ?? t('menu.card.empty')}</Text>
+                  {/* 自動モードの出所。予約後の在庫変化で嘘にならないよう料理名は載せない（§10.11.1） */}
+                  {menuIsToday && menuGeneratedAt ? (
+                    <Text style={styles.menuCardMeta}>
+                      {t('menu.card.autoGeneratedAt', {
+                        time: formatSnapshotTime(menuGeneratedAt),
+                      })}
+                    </Text>
+                  ) : null}
+                </PressableScale>
 
                 {/* 主役への直行。FAB（＋ → 追加方法選択）は残すが、写真からレシピだけは
                     1タップで届かせる（`docs/お店の味を再現設計.md` §4.3 問題2） */}
@@ -402,7 +469,7 @@ export default function HomeScreen() {
                   <PressableScale
                     style={styles.consultButton}
                     scaleTo={0.98}
-                    onPress={() => router.push('/(tabs)/cookable')}
+                    onPress={() => router.push('/cookable')}
                     accessibilityRole="button"
                     accessibilityLabel={t('home.cookable')}
                   >
@@ -470,7 +537,7 @@ export default function HomeScreen() {
         />
       )}
 
-      {selectMode ? (
+      {selectMode && (
         <View style={styles.actionBar}>
           <Pressable
             style={[
@@ -489,16 +556,6 @@ export default function HomeScreen() {
             </Text>
           </Pressable>
         </View>
-      ) : (
-        <View ref={fabRef} collapsable={false} style={styles.fabContainer}>
-          <PressableScale
-            style={styles.fab}
-            scaleTo={0.9}
-            onPress={() => router.push('/(tabs)/add')}
-          >
-            <Text style={styles.fabText}>＋</Text>
-          </PressableScale>
-        </View>
       )}
 
       <CoachMarkOverlay
@@ -514,6 +571,18 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  menuCard: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    backgroundColor: Colors.bgCard,
+  },
+  menuCardHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  menuCardLabel: { fontSize: 12, color: Colors.gold, letterSpacing: 0.5 },
+  menuCardBody: { fontSize: 15, color: Colors.paper, lineHeight: 21 },
+  menuCardMeta: { fontSize: 11, color: Colors.muted, marginTop: 4 },
   eatenOutBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -843,27 +912,5 @@ const styles = StyleSheet.create({
   },
   actionBtnTextDisabled: {
     color: Colors.muted,
-  },
-  fabContainer: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-  },
-  fab: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: Colors.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-  },
-  fabText: {
-    fontSize: 24,
-    color: Colors.bg,
   },
 });

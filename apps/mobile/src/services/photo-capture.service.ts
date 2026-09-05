@@ -1,7 +1,9 @@
 /**
  * PhotoCapture service — adapter boundary for camera/gallery image acquisition.
  */
+import { t, tCount } from '../i18n';
 import { markPhotoCaptureEnd, markPhotoCaptureStart } from './app-open-ad.service';
+import { dialog } from './dialog.service';
 
 export type PhotoCaptureSource = 'camera' | 'gallery';
 
@@ -102,6 +104,64 @@ export async function capturePhotosFromGallery(
   } finally {
     markPhotoCaptureEnd();
   }
+}
+
+export interface CapturePhotoSeriesOptions {
+  /** この呼び出しで取り込める上限（画面の残り枠を渡す）。 */
+  maxCount: number;
+  /**
+   * カメラで 1 枚撮れるたびに「続けて撮るか」を聞く。省略時は聞かずに 1 枚で終える。
+   * 画面からは `confirmContinueCapture`（共通ダイアログ）を渡す。テストでは差し替える。
+   */
+  confirmMore?: (taken: number, remaining: number) => Promise<boolean>;
+}
+
+/**
+ * 連続撮影（オーナー要望 2026-09-05）。**ループはここ 1 箇所** — 各画面は上限だけ渡す。
+ *
+ * カメラ（`launchCameraAsync`）は 1 回 1 枚しか撮れないので、撮影成功のたびに
+ * 「続けて撮る（あと n 枚）/ これで完了」を挟んで上限までループする。
+ * - 上限 1 の呼び出しは従来どおり**確認なし**で 1 枚
+ * - 1 枚目のキャンセル → 空配列（呼び出し側はキャンセル扱い）
+ * - 2 枚目以降のキャンセル → **撮った分は生かして**打ち切る
+ * ギャラリーは system Photo Picker の複数選択（`capturePhotosFromGallery`）に委ねる。
+ */
+export async function capturePhotoSeries(
+  source: PhotoCaptureSource,
+  adapter: PhotoCaptureAdapter,
+  options: CapturePhotoSeriesOptions,
+): Promise<CapturedPhoto[]> {
+  const maxCount = Math.max(1, Math.floor(options.maxCount));
+  if (source === 'gallery') return capturePhotosFromGallery(adapter, maxCount);
+
+  const photos: CapturedPhoto[] = [];
+  while (photos.length < maxCount) {
+    try {
+      photos.push(await capturePhoto('camera', adapter));
+    } catch (error) {
+      if (error instanceof PhotoCaptureCancelledError) break;
+      throw error;
+    }
+    if (photos.length >= maxCount) break;
+    const wantsMore = options.confirmMore
+      ? await options.confirmMore(photos.length, maxCount - photos.length)
+      : false;
+    if (!wantsMore) break;
+  }
+  return photos;
+}
+
+/**
+ * 「続けて撮るか」の共通ダイアログ。`DialogHost` が居ないときは false（= これで完了）に
+ * 倒れるので、確認が出せない状況でも撮影が終わらなくなることはない。
+ */
+export function confirmContinueCapture(taken: number, remaining: number): Promise<boolean> {
+  return dialog.confirm({
+    title: t('common.captureMore.title'),
+    message: tCount('common.captureMore.message', remaining),
+    confirmLabel: t('common.captureMore.more'),
+    cancelLabel: t('common.captureMore.done'),
+  });
 }
 
 export async function cleanupTemporaryPhotos(

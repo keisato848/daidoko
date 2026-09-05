@@ -106,6 +106,9 @@ const pantry = {
     },
     buyLabel: '{{name}}を買った（在庫に入れる）',
     uncheckLabel: '{{name}}のチェックを外す',
+    /** 自動献立モードが足した行（§10.11.2）。タップで由来レシピを開く */
+    menuBadge: '献立から',
+    menuBadgeLabel: '献立から追加。タップでレシピを開く',
     coach: {
       linkTitle: '在庫とつながっています',
       linkText:
@@ -121,7 +124,15 @@ const pantry = {
     analyzing: '食事を解析しています',
     lead: '食事の写真を撮ると、使った食材を推定して在庫を減らせます（実験的）。',
     capture: '食事を撮影',
-    // 写真レシピと**同じ生涯枠**（getFreemiumStatus().remaining）を表示している。
+    /** 送信先の開示。**書かないと不当な収集になる**ので A 階層。 */
+    disclosure: {
+      text: '食事の写真は解析のためサーバー（AI 提供元）に送信されます。保存はされません。',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    } satisfies CriticalMessage,
+    // 写真レシピと**同じ月次枠**（getFreemiumStatus().remaining）を表示している。
     // 「今日の」と書くと明日また使えると誤解させるので、期間を示す語は入れない
     quotaRemaining: {
       one: '無料解析: 残り {{count}} 回',
@@ -139,6 +150,12 @@ const pantry = {
       other: '在庫を減らす（{{count}}）',
     } satisfies PluralMessage,
     noMatch: '「{{dish}}」と推定しましたが、在庫に該当する食材がありませんでした。',
+    /** 確定の結果は必ず言う（P5 — 減らせたのか失敗したのか、無言で戻らない） */
+    applied: {
+      one: '在庫を {{count}} 件減らしました',
+      other: '在庫を {{count}} 件減らしました',
+    } satisfies PluralMessage,
+    applyFailed: '在庫を減らせませんでした。時間をおいてお試しください。',
     notRecognized: '料理を認識できませんでした。明るく正面から撮り直してください。',
     failed: '解析に失敗しました',
   },
@@ -197,6 +214,72 @@ const pantry = {
     storeGroupUnset: '未設定',
     notRecognized: 'レシートを認識できませんでした。レシート全体が写るように撮り直してください。',
     noItems: 'レシートから品目を読み取れませんでした。明るく正面から撮り直してください。',
+    failed: '読み取りに失敗しました',
+  },
+
+  /** 冷蔵庫の写真から在庫へ追加（`docs/冷蔵庫写真設計.md`）。 */
+  fridge: {
+    title: '冷蔵庫の写真から',
+    lead: '冷蔵庫の中を撮影すると、写っている食材を読み取って在庫に追加できます。冷蔵室と野菜室の 2 枚を撮ると、より正確に読み取れます。数量は写真から数えられたものだけ入り、あとから直せます。',
+    reading: '冷蔵庫の写真を読み取っています',
+    capture: '冷蔵庫を撮影',
+    /**
+     * 送信先の開示。撮影・選択の**前**に見せる（設計 §4-5 — 冷蔵庫は生活そのもの。
+     * **書かないと不当な収集になる**ので A 階層）。
+     */
+    disclosure: {
+      text: '読み取りにはクラウド AI を使用します。冷蔵庫の写真は食材の読み取りのためだけに送信され、保存されません。',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a cloud AI AND that it is not ' +
+        'retained, BEFORE the user takes or picks the photo. A fridge photo shows what a ' +
+        'family eats and how they live; dropping either half misrepresents what happens to ' +
+        'that data.',
+    } satisfies CriticalMessage,
+    /**
+     * 確認シートの説明。**自動確定はしない**前提を含む A 階層 —
+     * 「勝手に登録されない・数量は入らない」が崩れると在庫への信用が壊れる。
+     */
+    resultHint: {
+      text: '読み取った食材です。間違いは名前や数量を直し、不要な行のチェックを外してから追加してください。ここで追加するまで在庫は変わりません。数量は写真から数えられたものだけ入っています（空欄のままでも追加できます）。',
+      intent:
+        'MUST convey ALL FOUR: nothing is added to the pantry until the user confirms here, ' +
+        'names AND quantities are editable, quantities are present ONLY where they could be ' +
+        'counted from the photo (never guessed), and a blank quantity is fine (tracked as ' +
+        '"no quantity"). Implying quantities were guessed breaks trust in the pantry.',
+    } satisfies CriticalMessage,
+    /** 読み取り信頼度が低い品目の要確認表示（「たぶん◯◯」）。 */
+    uncertainBadge: 'たぶん',
+    uncertainLabel: '読み取りに自信がありません。名前を確かめてください',
+    /** 既存在庫との重複（名寄せ済み比較）。既定オフ — 上書き・合算はしない */
+    alreadyInPantry: 'すでに在庫にあります',
+    quantityPlaceholder: '数量',
+    quantityLabel: '数量（空欄なら数量未管理。例: 3本・約200g）',
+    exclude: '除外',
+    include: '含める',
+    retry: 'やり直す',
+    confirm: {
+      one: '在庫に追加（{{count}}）',
+      other: '在庫に追加（{{count}}）',
+    } satisfies PluralMessage,
+    added: {
+      one: '{{count}}品を在庫に追加しました',
+      other: '{{count}}品を在庫に追加しました',
+    } satisfies PluralMessage,
+    /** 一部失敗を隠さない（P5 — 全部入ったと思わせない） */
+    addFailed: {
+      one: '{{count}}品は追加できませんでした',
+      other: '{{count}}品は追加できませんでした',
+    } satisfies PluralMessage,
+    /**
+     * 在庫追加後の誘導（A: 作れるレシピへ）。遷移先は**全在庫**での検索なので
+     * 「この材料で」とは書かない — 今回読み取った品だけで探すと期待させる
+     * （ペルソナ検証 2026-09-05・美咲）。
+     */
+    cookableCta: '今の在庫で作れるレシピを見る',
+    consultCta: 'AIに相談してレシピを作る',
+    noItems:
+      '写真から食材を読み取れませんでした。庫内を明るくして撮り直すか、在庫画面から手入力で追加してください。',
+    manualFallback: '手入力で在庫に追加',
     failed: '読み取りに失敗しました',
   },
 

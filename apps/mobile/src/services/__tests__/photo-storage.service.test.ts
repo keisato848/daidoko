@@ -4,6 +4,7 @@ import {
   extensionForPhoto,
   MAX_COOKING_LOG_PHOTOS,
   persistCookingLogPhotos,
+  persistGeneratedCoverImage,
   persistRecipePhoto,
 } from '../photo-storage.service';
 import type { CapturedPhoto } from '../photo-capture.service';
@@ -129,5 +130,94 @@ describe('photo-storage.service', () => {
     expect(copied[0].to).toContain('file:///documents/recipe-photos/recipe-photo-');
     expect(path).toMatch(/^recipe-photos[/]recipe-photo-/);
     expect(path).toMatch(/\.jpg$/);
+  });
+
+  it('prefixes the recipe photo file name when filenamePrefix is given (AI generated cover)', async () => {
+    const copied: { from: string; to: string }[] = [];
+    const adapter = {
+      documentDirectory: 'file:///documents/',
+      getInfoAsync: jest.fn(async () => ({ exists: true })),
+      makeDirectoryAsync: jest.fn(async () => undefined),
+      copyAsync: jest.fn(async (options: { from: string; to: string }) => {
+        copied.push(options);
+      }),
+      deleteAsync: jest.fn(async () => undefined),
+    };
+    const photo: CapturedPhoto = {
+      localPath: 'file:///cache/generated.jpg',
+      source: 'gallery',
+      mimeType: 'image/jpeg',
+      takenAt: '2026-08-29T01:02:03.000Z',
+      temporary: true,
+    };
+
+    const path = await persistRecipePhoto(photo, adapter, undefined, {
+      filenamePrefix: 'aigen-',
+    });
+
+    expect(copied[0].to).toContain('file:///documents/recipe-photos/aigen-recipe-photo-');
+    expect(path).toMatch(/^recipe-photos[/]aigen-recipe-photo-/);
+  });
+
+  it('omits the prefix by default (no filenamePrefix option)', async () => {
+    const copied: { from: string; to: string }[] = [];
+    const adapter = {
+      documentDirectory: 'file:///documents/',
+      getInfoAsync: jest.fn(async () => ({ exists: true })),
+      makeDirectoryAsync: jest.fn(async () => undefined),
+      copyAsync: jest.fn(async (options: { from: string; to: string }) => {
+        copied.push(options);
+      }),
+      deleteAsync: jest.fn(async () => undefined),
+    };
+    const photo: CapturedPhoto = {
+      localPath: 'file:///cache/manual.jpg',
+      source: 'gallery',
+      mimeType: 'image/jpeg',
+      takenAt: '2026-08-29T01:02:03.000Z',
+      temporary: true,
+    };
+
+    const path = await persistRecipePhoto(photo, adapter);
+
+    expect(path).not.toMatch(/aigen-/);
+  });
+
+  it('persists an AI-generated cover image via the cache then the aigen- prefixed recipe photo path', async () => {
+    const written: { uri: string; content: string }[] = [];
+    const cacheAdapter = {
+      cacheDirectory: 'file:///cache/',
+      writeAsStringAsync: jest.fn(async (uri: string, content: string) => {
+        written.push({ uri, content });
+      }),
+    };
+    const copied: { from: string; to: string }[] = [];
+    const adapter = {
+      documentDirectory: 'file:///documents/',
+      getInfoAsync: jest.fn(async () => ({ exists: true })),
+      makeDirectoryAsync: jest.fn(async () => undefined),
+      copyAsync: jest.fn(async (options: { from: string; to: string }) => {
+        copied.push(options);
+      }),
+      deleteAsync: jest.fn(async () => undefined),
+    };
+    // 圧縮対象は cache に書いたばかりのファイル。実ファイルが無い環境でも
+    // compressForStorage は失敗を握って原本を使うので、成功する compressAdapter を渡す
+    const compressAdapter = {
+      compress: jest.fn(async (uri: string) => ({ uri: `${uri}-compressed.jpg` })),
+    };
+
+    const path = await persistGeneratedCoverImage(
+      { mimeType: 'image/jpeg', dataBase64: 'ZmFrZS1pbWFnZS1ieXRlcw==' },
+      cacheAdapter,
+      adapter,
+      compressAdapter,
+    );
+
+    expect(written).toHaveLength(1);
+    expect(written[0].uri).toMatch(/^file:\/\/\/cache\/cover-image-.*\.jpg$/);
+    expect(written[0].content).toBe('ZmFrZS1pbWFnZS1ieXRlcw==');
+    expect(copied[0].from).toBe(`${written[0].uri}-compressed.jpg`);
+    expect(path).toMatch(/^recipe-photos[/]aigen-recipe-photo-/);
   });
 });

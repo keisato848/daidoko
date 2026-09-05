@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import {
   renderBookPage,
+  renderExpiredPage,
   renderNotFoundPage,
   renderPasscodePage,
   renderSharePage,
@@ -27,12 +28,17 @@ import {
   exportAllShares,
   getActiveBook,
   getActiveShare,
+  makeAccessCookie,
   makeBookCookie,
+  renewBookShare,
+  renewShare,
   revokeBookShare,
   revokeShare,
   updateBookShare,
+  verifyAccessCookie,
   verifyBookCookie,
   verifyBookPasscode,
+  withinReceiveWindow,
 } from '../lib/share-store.js';
 
 // ── ベース URL（共有 URL の組み立てと OGP の絶対 URL に使う） ────────────────
@@ -97,6 +103,10 @@ const shareRecipeBodySchema = z.object({
   tags: z.array(z.string().trim().min(1).max(30)).max(10),
   photoBase64: z.string().min(1).max(MAX_PHOTO_BASE64_LENGTH).optional(),
   photoMime: z.enum(['image/jpeg', 'image/png', 'image/webp']).optional(),
+  // 表紙が AI 生成イメージか（docs/レシピ表紙AI生成設計.md §4）。省略可（旧アプリ互換）
+  coverIsAiGenerated: z.boolean().optional(),
+  // 中身が AI 由来か（#266）。表紙の AI とは別の意味。省略可（旧アプリは送らない）
+  aiGenerated: z.boolean().optional(),
 });
 
 const shareRecipeSchema = shareRecipeBodySchema.extend({
@@ -119,7 +129,7 @@ const shareBookSchema = z.object({
     .optional(),
   passcode: z
     .string()
-    .regex(/^\d{4}$/)
+    .regex(/^\d{6}$/)
     .nullable()
     .optional(),
 });
@@ -178,6 +188,8 @@ shareApiRouter.post('/recipes', zValidator('json', shareRecipeSchema), (c) => {
     steps: body.steps,
     tags: body.tags,
     photo,
+    coverIsAiGenerated: body.coverIsAiGenerated,
+    aiGenerated: body.aiGenerated,
   });
 
   return c.json({ ok: true, slug, url: `${shareBaseUrl()}/r/${slug}`, deleteToken });
@@ -192,6 +204,46 @@ shareApiRouter.delete('/recipes/:slug', (c) => {
     );
   }
   const result = revokeShare(c.req.param('slug'), token);
+  if (result === 'not-found') {
+    return c.json({ ok: false, error: { code: 'NOT_FOUND', message: '見つかりません' } }, 404);
+  }
+  if (result === 'forbidden') {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'トークンが違います' } }, 403);
+  }
+  return c.json({ ok: true });
+});
+
+/**
+ * 受け取り期限の張り直し（docs/共有設計.md §3-6）。オーナーが「リンクを送る」たびに
+ * アプリが呼ぶ — 期限は常に「最後に送ってから 7 日」になる。
+ */
+shareApiRouter.post('/recipes/:slug/renew', (c) => {
+  const token = c.req.header('x-share-delete-token') ?? '';
+  if (token === '') {
+    return c.json(
+      { ok: false, error: { code: 'FORBIDDEN', message: 'トークンがありません' } },
+      403,
+    );
+  }
+  const result = renewShare(c.req.param('slug'), token);
+  if (result === 'not-found') {
+    return c.json({ ok: false, error: { code: 'NOT_FOUND', message: '見つかりません' } }, 404);
+  }
+  if (result === 'forbidden') {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'トークンが違います' } }, 403);
+  }
+  return c.json({ ok: true });
+});
+
+shareApiRouter.post('/books/:slug/renew', (c) => {
+  const token = c.req.header('x-share-delete-token') ?? '';
+  if (token === '') {
+    return c.json(
+      { ok: false, error: { code: 'FORBIDDEN', message: 'トークンがありません' } },
+      403,
+    );
+  }
+  const result = renewBookShare(c.req.param('slug'), token);
   if (result === 'not-found') {
     return c.json({ ok: false, error: { code: 'NOT_FOUND', message: '見つかりません' } }, 404);
   }
@@ -256,6 +308,8 @@ function bookInputFromBody(body: {
     tags: string[];
     photoBase64?: string | undefined;
     photoMime?: string | undefined;
+    coverIsAiGenerated?: boolean | undefined;
+    aiGenerated?: boolean | undefined;
   }[];
 }): Parameters<typeof createBookShare>[0] {
   return {
@@ -271,6 +325,8 @@ function bookInputFromBody(body: {
       steps: recipe.steps,
       tags: recipe.tags,
       photo: decodePhoto(recipe.photoBase64, recipe.photoMime),
+      coverIsAiGenerated: recipe.coverIsAiGenerated,
+      aiGenerated: recipe.aiGenerated,
     })),
   };
 }
@@ -354,7 +410,14 @@ shareApiRouter.get('/books/:slug', (c) => {
   if (!found) return c.json({ ok: false, error: 'NOT_FOUND' }, 404);
   if (found.book.passcodeHash) {
     const passcode = c.req.header('x-share-passcode') ?? '';
-    if (!/^\d{4}$/.test(passcode)) return c.json({ ok: false, error: 'PASSCODE_REQUIRED' }, 401);
+    // 入力ゲートは新旧どちらの桁数も通す。**新規発行(publish)は 6 桁必須だが、
+    // 既に 4 桁で公開済みの帖は再共有しない限りそのまま**（S4-2 §Web共有設計.md）。
+    // ハッシュ照合（hashPasscode/verifyBookPasscode）は桁数を見ないので、
+    // ここで弾かなければ 4 桁も正しく通る。形式が違う入力は従来どおり
+    // ロックカウンタを消費せずに早期リターンする
+    if (!/^\d{4}$/.test(passcode) && !/^\d{6}$/.test(passcode)) {
+      return c.json({ ok: false, error: 'PASSCODE_REQUIRED' }, 401);
+    }
     const check = verifyBookPasscode(slug, passcode);
     if (check === 'locked') return c.json({ ok: false, error: 'PASSCODE_LOCKED' }, 429);
     if (check === 'wrong') return c.json({ ok: false, error: 'PASSCODE_WRONG' }, 401);
@@ -374,6 +437,8 @@ shareApiRouter.get('/books/:slug', (c) => {
         ingredients: JSON.parse(r.ingredientsJson) as unknown,
         steps: JSON.parse(r.stepsJson) as unknown,
         tags: JSON.parse(r.tagsJson) as unknown,
+        coverIsAiGenerated: r.coverIsAiGenerated === 1,
+        aiGenerated: r.aiGenerated === 1,
       })),
     },
   });
@@ -392,6 +457,8 @@ function shareRowToJson(row: ReturnType<typeof getActiveShare>): Record<string, 
     steps: JSON.parse(row.stepsJson) as unknown,
     tags: JSON.parse(row.tagsJson) as unknown,
     hasPhoto: row.photo !== null,
+    coverIsAiGenerated: row.coverIsAiGenerated === 1,
+    aiGenerated: row.aiGenerated === 1,
   };
 }
 
@@ -405,11 +472,38 @@ shareApiRouter.get('/export', (c) => {
 // ── 閲覧ページ ───────────────────────────────────────────────────────────────
 const sharePageRouter = new Hono();
 
+const SHARE_ACCESS_COOKIE = 'daidoko_share';
+
+/** 受け取り期限内に開いた証明を持っているか（§3-6） */
+function shareRedeemed(
+  c: { req: { header: (n: string) => string | undefined } },
+  slug: string,
+): boolean {
+  return verifyAccessCookie(
+    'r',
+    slug,
+    parseCookie(c.req.header('cookie'), `${SHARE_ACCESS_COOKIE}_${slug}`),
+  );
+}
+
 sharePageRouter.get('/:slug', (c) => {
-  const row = getActiveShare(c.req.param('slug'));
+  const slug = c.req.param('slug');
+  const row = getActiveShare(slug);
   c.header('X-Robots-Tag', 'noindex');
   if (!row) {
     return c.html(renderNotFoundPage(), 404);
+  }
+  const redeemed = shareRedeemed(c, slug);
+  // 受け取り期限（§3-6）: 期限後は「期限内に開いた人」だけが見られる
+  if (!withinReceiveWindow(row.expiresAt) && !redeemed) {
+    return c.html(renderExpiredPage(row.locale), 410);
+  }
+  if (!redeemed) {
+    // 開いた証明を閲覧者のブラウザにだけ残す（サーバーは誰が開いたか記録しない）
+    c.header(
+      'Set-Cookie',
+      `${SHARE_ACCESS_COOKIE}_${slug}=${makeAccessCookie('r', slug)}; Path=/r/${slug}; Max-Age=31536000; HttpOnly; SameSite=Lax; Secure`,
+    );
   }
   return c.html(
     renderSharePage(row, shareBaseUrl(), storeUrlForUserAgent(c.req.header('user-agent'))),
@@ -417,9 +511,12 @@ sharePageRouter.get('/:slug', (c) => {
 });
 
 sharePageRouter.get('/:slug/photo', (c) => {
-  const row = getActiveShare(c.req.param('slug'));
+  const slug = c.req.param('slug');
+  const row = getActiveShare(slug);
   c.header('X-Robots-Tag', 'noindex');
   if (!row || !row.photo || !row.photoMime) return c.notFound();
+  // ページと同じ鍵で守る（ページだけ閉じて写真が直リンクで読めては意味がない）
+  if (!withinReceiveWindow(row.expiresAt) && !shareRedeemed(c, slug)) return c.notFound();
   c.header('Content-Type', row.photoMime);
   c.header('Cache-Control', 'public, max-age=86400');
   return c.body(new Uint8Array(row.photo));
@@ -450,6 +547,24 @@ function bookLocked(
   return !verifyBookCookie(slug, cookie);
 }
 
+const BOOK_ACCESS_COOKIE = 'daidoko_bookaccess';
+
+/** 受け取り期限内に（パスコードがあれば通過して）開いた証明（§3-6） */
+function bookRedeemed(
+  c: { req: { header: (n: string) => string | undefined } },
+  slug: string,
+): boolean {
+  return verifyAccessCookie(
+    'b',
+    slug,
+    parseCookie(c.req.header('cookie'), `${BOOK_ACCESS_COOKIE}_${slug}`),
+  );
+}
+
+function bookAccessSetCookie(slug: string): string {
+  return `${BOOK_ACCESS_COOKIE}_${slug}=${makeAccessCookie('b', slug)}; Path=/b/${slug}; Max-Age=31536000; HttpOnly; SameSite=Lax; Secure`;
+}
+
 bookPageRouter.get('/:slug', (c) => {
   const slug = c.req.param('slug');
   const found = getActiveBook(slug);
@@ -457,9 +572,18 @@ bookPageRouter.get('/:slug', (c) => {
   if (!found) {
     return c.html(renderNotFoundPage(), 404);
   }
-  if (bookLocked(c, slug, found.book.passcodeHash)) {
+  const redeemed = bookRedeemed(c, slug);
+  // 受け取り期限（§3-6）。アクセス Cookie はパスコード通過後にしか出さないので、
+  // 持っている閲覧者はパスコード再入力も免除してよい
+  if (!withinReceiveWindow(found.book.expiresAt) && !redeemed) {
+    return c.html(renderExpiredPage(found.book.locale), 410);
+  }
+  if (!redeemed && bookLocked(c, slug, found.book.passcodeHash)) {
     // 中身もタイトルも出さない（OGP も出さない — プレビューで漏れるため）
     return c.html(renderPasscodePage(slug, found.book.locale, false), 401);
+  }
+  if (!redeemed) {
+    c.header('Set-Cookie', bookAccessSetCookie(slug));
   }
   return c.html(
     renderBookPage(
@@ -477,6 +601,10 @@ bookPageRouter.post('/:slug/unlock', async (c) => {
   const found = getActiveBook(slug);
   c.header('X-Robots-Tag', 'noindex');
   if (!found?.book.passcodeHash) return c.html(renderNotFoundPage(), 404);
+  // 期限後の新規解錠は受けない（§3-6。既に開いた人は Cookie で本編へ行けるのでここへ来ない）
+  if (!withinReceiveWindow(found.book.expiresAt) && !bookRedeemed(c, slug)) {
+    return c.html(renderExpiredPage(found.book.locale), 410);
+  }
   const form = await c.req.parseBody();
   const passcode = typeof form['passcode'] === 'string' ? form['passcode'] : '';
   const check = verifyBookPasscode(slug, passcode);
@@ -487,6 +615,8 @@ bookPageRouter.post('/:slug/unlock', async (c) => {
     'Set-Cookie',
     `${BOOK_COOKIE}_${slug}=${makeBookCookie(slug)}; Path=/b/${slug}; Max-Age=86400; HttpOnly; SameSite=Lax; Secure`,
   );
+  // パスコードを通過した閲覧者に「開いた証明」も渡す（§3-6。期限後の継続閲覧に使う）
+  c.header('Set-Cookie', bookAccessSetCookie(slug), { append: true });
   return c.redirect(`/b/${slug}`, 303);
 });
 
@@ -495,7 +625,10 @@ bookPageRouter.get('/:slug/photo/:index', (c) => {
   const found = getActiveBook(slug);
   c.header('X-Robots-Tag', 'noindex');
   // ページだけ守って写真が直リンクで読めては意味がない — 同じ鍵で守る
-  if (found && bookLocked(c, slug, found.book.passcodeHash)) return c.notFound();
+  if (found && !bookRedeemed(c, slug)) {
+    if (!withinReceiveWindow(found.book.expiresAt)) return c.notFound();
+    if (bookLocked(c, slug, found.book.passcodeHash)) return c.notFound();
+  }
   const index = Number(c.req.param('index'));
   const recipe = found && Number.isInteger(index) ? found.recipes[index] : undefined;
   if (!recipe?.photo || !recipe.photoMime) return c.notFound();

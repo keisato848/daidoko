@@ -11,12 +11,13 @@ import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { t, tCount } from '../../../../src/i18n';
+import { readableErrorMessage } from '../../../../src/services/ai-error';
 import { createCookingLog } from '../../../../src/services/cooking-log.service';
 import { dialog } from '../../../../src/services/dialog.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
 import {
-  capturePhoto,
-  PhotoCaptureCancelledError,
+  capturePhotoSeries,
+  confirmContinueCapture,
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../../src/services/photo-capture.service';
@@ -76,11 +77,15 @@ export default function CookingLogScreen() {
       }
 
       try {
-        const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-        setPhotos((current) => [...current, photo].slice(0, MAX_COOKING_LOG_PHOTOS));
+        // 連続撮影/複数選択: 残り枠（最大 6 枚）まで続けて取り込める
+        const shot = await capturePhotoSeries(source, expoImagePickerPhotoCaptureAdapter, {
+          maxCount: MAX_COOKING_LOG_PHOTOS - photos.length,
+          confirmMore: confirmContinueCapture,
+        });
+        if (shot.length === 0) return; // キャンセル
+        setPhotos((current) => [...current, ...shot].slice(0, MAX_COOKING_LOG_PHOTOS));
       } catch (error) {
-        if (error instanceof PhotoCaptureCancelledError) return;
-        const message = error instanceof Error ? error.message : t('common.photoAddFailed');
+        const message = readableErrorMessage(error, t('common.photoAddFailed'));
         void dialog.alert({ title: t('common.photoAddFailed'), message });
       }
     },
@@ -105,7 +110,7 @@ export default function CookingLogScreen() {
       });
       setShowToast(true);
       // 保存成功＝ポジティブな瞬間にストア評価を打診（条件・頻度はサービス側で管理）
-      void maybeRequestStoreReview();
+      void maybeRequestStoreReview('cooking-log');
 
       // 感想を書いた直後は「レシピに反映する」の最良のタイミング（R2 / Issue #113）。
       // メモが無いときは何も聞かない（材料がないので AI も直しようがない）
@@ -135,7 +140,7 @@ export default function CookingLogScreen() {
       setTimeout(() => router.push('/(tabs)'), 1500);
     } catch (error) {
       await cleanupStoredCookingPhotos(persistedPhotos);
-      const message = error instanceof Error ? error.message : t('log.form.saveFailedBody');
+      const message = readableErrorMessage(error, t('log.form.saveFailedBody'));
       void dialog.alert({ title: t('log.form.saveFailedTitle'), message });
     } finally {
       setSaving(false);

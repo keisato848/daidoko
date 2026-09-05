@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { CookingResumeBar } from '../src/components/CookingResumeBar';
 import { DialogHost } from '../src/components/DialogHost';
 import { Colors } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
@@ -19,13 +20,17 @@ import {
   addAllLowStockToShoppingList,
   checkAndNotifyLowStock,
 } from '../src/services/low-stock.service';
+import { runDailyMenuMaintenance } from '../src/services/menu-plan.service';
 import {
   addCookingResumeTapListener,
   addLowStockTapListener,
+  addMenuTapListener,
   addSyncPushListener,
   consumeLowStockLaunchTap,
+  consumeMenuLaunchTap,
 } from '../src/services/notification.service';
 import { initSync, runSync } from '../src/services/sync-runner.service';
+import { refreshWidgetSnapshot } from '../src/services/widget-snapshot.service';
 import { loadCookingSession, useCookingSessionStore } from '../src/stores/cooking-session.store';
 import { loadUnitSystem } from '../src/stores/unitSystem.store';
 import { decideLaunchDestination } from '../src/utils/launchDestination';
@@ -47,9 +52,15 @@ export default function RootLayout() {
       .catch(() => undefined);
   }, [router]);
 
+  const handleMenuTap = useCallback(() => {
+    router.push('/(tabs)/menu');
+  }, [router]);
+
   // 起動時に在庫の残量しきい値をチェック（1日1回まとめて通知; P3）
   // + 週次の自動バックアップスナップショット（#79。失敗しても起動は止めない）
   // + アプリ起動広告の初期化（広告有効ビルドのみ・ガード多数 — app-open-ad.service）
+  // + 毎日の自動献立モード（#215 A1・既定オフ。内部で pull 完了を待ってから
+  //   自動追加するので、initSync() より後に呼んでも fire-and-forget で構わない）
   useEffect(() => {
     if (isReady) {
       // 単位系は保存値 → 無ければ端末の地域。表示のたびに読むのでストアが持つ
@@ -62,6 +73,7 @@ export default function RootLayout() {
       initAppOpenAds().catch(() => undefined);
       // クラウド同期（家族と共有中の端末だけ動く。未参加なら何もしない）
       initSync();
+      runDailyMenuMaintenance().catch(() => undefined);
     }
   }, [isReady]);
 
@@ -71,6 +83,13 @@ export default function RootLayout() {
     const sub = addLowStockTapListener(handleLowStockTap);
     return () => sub.remove();
   }, [isReady, handleLowStockTap]);
+
+  // 献立通知タップ（#215 §10.11.4）→ 献立画面へ。
+  useEffect(() => {
+    if (!isReady) return;
+    const sub = addMenuTapListener(handleMenuTap);
+    return () => sub.remove();
+  }, [isReady, handleMenuTap]);
 
   // 調理の常駐通知タップ → 料理中モードの続きへ（アプリ生存中のみ。
   // cold-start は復元された pill / ホームカードが受け持つので deep link は張らない）
@@ -101,28 +120,39 @@ export default function RootLayout() {
     if (!isReady || launchRoutedRef.current) return;
     launchRoutedRef.current = true;
     void (async () => {
-      const [tappedLowStockNotification, launchCameraEnabled] = await Promise.all([
-        consumeLowStockLaunchTap().catch(() => false),
-        isLaunchCameraEnabled().catch(() => false),
-      ]);
+      const [tappedLowStockNotification, tappedMenuNotification, launchCameraEnabled] =
+        await Promise.all([
+          consumeLowStockLaunchTap().catch(() => false),
+          consumeMenuLaunchTap().catch(() => false),
+          isLaunchCameraEnabled().catch(() => false),
+        ]);
       const destination = decideLaunchDestination({
         tappedLowStockNotification,
+        tappedMenuNotification,
         launchCameraEnabled,
       });
       if (destination === 'low-stock') handleLowStockTap();
+      if (destination === 'menu') handleMenuTap();
       // push（replace ではない）ので、戻るでホームに帰れる
       if (destination === 'capture') router.push('/(tabs)/recipes/import-photo');
     })();
-  }, [isReady, router, handleLowStockTap]);
+  }, [isReady, router, handleLowStockTap, handleMenuTap]);
 
   // フォアグラウンド復帰でアプリ起動広告（表示条件は service 側で全て判定）
+  // + 毎日の自動献立モード（#215 A1・起動時と同じきっかけ・§10.11.1）
   useEffect(() => {
     if (!isReady) return;
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background') noteAppBackgrounded();
+      if (state === 'background') {
+        noteAppBackgrounded();
+        // 離れる瞬間の姿を焼き込む（ウィジェット設計 §1「AppState background」— 2026-09-04 配線。
+        // 「HH:mm 時点」の時刻が、アプリを最後に見た瞬間と一致するようになる）
+        refreshWidgetSnapshot();
+      }
       if (state === 'active') {
         maybeShowAppOpenAdOnForeground(pathnameRef.current).catch(() => undefined);
         void runSync();
+        runDailyMenuMaintenance().catch(() => undefined);
       }
     });
     return () => sub.remove();
@@ -131,7 +161,8 @@ export default function RootLayout() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>DB Error: {error}</Text>
+        {/* error は useDatabase が t() 済みの文言にしている（英語の生スタックを出さない） */}
+        <Text style={styles.errorText}>{error}</Text>
       </View>
     );
   }
@@ -158,6 +189,10 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
       </Stack>
+      {/* Now Cooking バー — 調理中はどの画面からも 1 タップで続きに戻れる。
+          (tabs) の外の階層画面（設定系など）でも文脈を保つため、ルートに 1 つだけ置く。
+          出す画面・位置の判断はコンポーネント側が持つ */}
+      <CookingResumeBar />
       {/*
         アプリのデザインのダイアログ（`docs/画面設計.md` §7）。**アプリに 1 つだけ**置く。
         `Stack` の外に出しているのは、どの画面から出した確認でも同じ場所に描くため

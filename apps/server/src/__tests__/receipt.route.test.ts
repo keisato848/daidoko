@@ -136,6 +136,19 @@ describe('POST /api/v1/infer/receipt', () => {
     });
   });
 
+  describe('語彙防御（水平展開規約②）', () => {
+    it('カテゴリ語・売り場名の品目はルートを通ると落ちる（生出力を素通ししない）', async () => {
+      stubProvider(async () => ({
+        isReceipt: true,
+        items: [{ name: '牛乳', quantity: 1, unit: '本' }, { name: '調味料' }, { name: '水産' }],
+      }));
+      const res = await post({ imageBase64: TINY_BASE64, mimeType: 'image/jpeg' });
+      const body = (await res.json()) as { ok: boolean; data?: ReceiptVisionRaw };
+      expect(body.ok).toBe(true);
+      expect(body.data?.items?.map((i) => i.name)).toEqual(['牛乳']);
+    });
+  });
+
   describe('エラーケース', () => {
     it('プロバイダ失敗 → ok:false, AI_INFER_FAILED (retryable)', async () => {
       stubProvider(async () => {

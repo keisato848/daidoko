@@ -226,7 +226,7 @@ export default function RecipeListScreen() {
       const id = await createBookFromSelection();
       setBookSheetOpen(false);
       exitSelectMode();
-      router.push({ pathname: '/(tabs)/book-edit', params: { id } });
+      router.push({ pathname: '/book-edit', params: { id } });
     } catch {
       // シートを閉じてから出す。開いたシートの上に重ねると iOS で
       // Modal の入れ子になって表示に失敗しうる（docs/画面設計.md §7-4）
@@ -328,6 +328,11 @@ export default function RecipeListScreen() {
             />
           ) : (
             <Text style={styles.cardEmoji}>{getRecipeEmoji(item.title)}</Text>
+          )}
+          {item.isCoverAiGenerated && (
+            <View style={styles.aiBadge}>
+              <Text style={styles.aiBadgeText}>{t('coverImage.badge')}</Text>
+            </View>
           )}
           {selectMode && (
             <View style={[styles.checkBadge, isSelected && styles.checkBadgeSelected]}>
@@ -441,7 +446,7 @@ export default function RecipeListScreen() {
                       key={book.id}
                       style={styles.bookChip}
                       onPress={() =>
-                        router.push({ pathname: '/(tabs)/book-edit', params: { id: book.id } })
+                        router.push({ pathname: '/book-edit', params: { id: book.id } })
                       }
                       accessibilityLabel={t('recipe.list.books.openLabel', { title: book.title })}
                     >
@@ -836,6 +841,18 @@ const styles = StyleSheet.create({
   },
   cardEmoji: { fontSize: 28 },
   cardImagePhoto: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  aiBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: 'rgba(10, 8, 5, 0.75)',
+    borderWidth: 1,
+    borderColor: Colors.gold,
+  },
+  aiBadgeText: { fontSize: 9, fontWeight: '700', color: Colors.gold, letterSpacing: 0.5 },
   cardBody: { padding: 10 },
   cardTitle: {
     fontSize: 15, // base: レシピカードタイトル

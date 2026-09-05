@@ -12,6 +12,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { Loading } from '../../../../src/components/Loading';
 import { t } from '../../../../src/i18n';
+import { readableErrorMessage } from '../../../../src/services/ai-error';
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../../src/services/cooking-log.service';
@@ -161,7 +162,7 @@ export default function RefineRecipeScreen() {
       if (error instanceof PhotoCaptureCancelledError) return;
       void dialog.alert({
         title: t('common.photoAddFailed'),
-        message: error instanceof Error ? error.message : t('common.photoAddFailed'),
+        message: readableErrorMessage(error, t('common.photoAddFailed')),
       });
     }
   }, []);
@@ -212,6 +213,10 @@ export default function RefineRecipeScreen() {
       // 以前はここで渡さなかった `titleReading` / `prepTimeMin` / `placeName` が
       // 黙って消えていた — 味を近づけるたびに店名まで失われていた（#220）
       await updateRecipe(recipe.id, {
+        // **AI が材料と手順を書き換えた**ので印を立てる（#266）。
+        // この経路は `createRecipe` を通らないため、作成時だけ実装すると丸ごと漏れる。
+        // 元が人の手書きレシピでも、近づけた後の中身は AI の推定を含む
+        aiGenerated: true,
         title: refined.title,
         // **料理名が変わったときだけ**読みを差し替える。
         // AI は現在の読みがなを渡されていない（RefineRecipeSnapshot に無い）ので、
@@ -243,7 +248,7 @@ export default function RefineRecipeScreen() {
     } catch (error) {
       void dialog.alert({
         title: t('recipe.refine.saveFailedTitle'),
-        message: error instanceof Error ? error.message : t('recipe.refine.saveFailedBody'),
+        message: readableErrorMessage(error, t('recipe.refine.saveFailedBody')),
       });
       setPhase('preview');
     }
@@ -402,18 +407,23 @@ export default function RefineRecipeScreen() {
             </Pressable>
           </View>
         ) : (
-          <Pressable
-            style={[
-              styles.primaryButton,
-              (phase !== 'input' || !feedback.trim()) && styles.primaryButtonDisabled,
-            ]}
-            onPress={handleRefine}
-            disabled={phase !== 'input' || !feedback.trim()}
-          >
-            <Text style={styles.primaryButtonText}>
-              {phase === 'processing' ? t('recipe.refine.processing') : t('recipe.refine.start')}
-            </Text>
-          </Pressable>
+          <>
+            {/* 送る前に、何が出ていくのかを見せる。この経路は写真だけでなく
+                レシピ本文と感想の自由記述を送るので、「写真」とだけ書かない */}
+            <Text style={styles.disclosureText}>{t('recipe.refine.disclosure')}</Text>
+            <Pressable
+              style={[
+                styles.primaryButton,
+                (phase !== 'input' || !feedback.trim()) && styles.primaryButtonDisabled,
+              ]}
+              onPress={handleRefine}
+              disabled={phase !== 'input' || !feedback.trim()}
+            >
+              <Text style={styles.primaryButtonText}>
+                {phase === 'processing' ? t('recipe.refine.processing') : t('recipe.refine.start')}
+              </Text>
+            </Pressable>
+          </>
         )}
       </View>
 
@@ -442,7 +452,8 @@ const styles = StyleSheet.create({
   backText: { fontSize: 13, fontWeight: '400', color: Colors.goldDim },
   headerTitle: { fontSize: 16, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
   headerSpacer: { width: 72 },
-  scrollContent: { paddingBottom: 120 },
+  // フッターに開示の 2 行が乗ったぶん、隠れないよう余白を足してある
+  scrollContent: { paddingBottom: 170 },
   recipeTitle: {
     fontSize: 15,
     fontWeight: '400',
@@ -639,6 +650,14 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
   },
   footerRow: { flexDirection: 'row', gap: 10 },
+  // import-photo の disclosureText と同じ色・大きさ（muted は背景と同化して読めない）
+  disclosureText: {
+    fontSize: 12,
+    color: Colors.paperDim,
+    textAlign: 'center',
+    lineHeight: 17,
+    marginBottom: 10,
+  },
   primaryButton: {
     flex: 1,
     backgroundColor: Colors.gold,

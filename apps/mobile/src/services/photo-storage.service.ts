@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
+import { AI_GENERATED_PHOTO_PREFIX } from '../utils/aiGeneratedPhoto';
 import { generateId } from '../utils/id';
 import type { CapturedPhoto } from './photo-capture.service';
 import type { SaveCookingPhotoInput } from './types';
@@ -181,6 +182,16 @@ export function createRecipePhotoFileName(
   return `recipe-photo-${timestamp}-${id}.${extension}`;
 }
 
+export interface PersistRecipePhotoOptions {
+  /**
+   * ファイル名の接頭辞（例: `'aigen-'`）。AI が作ったイメージだと
+   * `isAiGeneratedPhoto()` が判定できるようにするための唯一の運び手
+   * （docs/レシピ表紙AI生成設計.md §4 — 端末内・バックアップ・将来の同期はこれで運ぶ）。
+   * 省略時は接頭辞なし（従来どおり）。
+   */
+  filenamePrefix?: string;
+}
+
 /**
  * Copy a captured photo into the app's recipe-photos directory (used for the
  * recipe cover and per-step photos), compressed for storage.
@@ -190,6 +201,7 @@ export async function persistRecipePhoto(
   photo: CapturedPhoto,
   adapter: FileStorageAdapter = expoFileStorageAdapter,
   compressAdapter: PhotoCompressAdapter = expoPhotoCompressAdapter,
+  options: PersistRecipePhotoOptions = {},
 ): Promise<string> {
   const directory = getRecipePhotoDirectory(adapter);
   const info = await adapter.getInfoAsync(directory);
@@ -199,7 +211,70 @@ export async function persistRecipePhoto(
   const compressed = await compressForStorage(photo.localPath, compressAdapter);
   const source = compressed ?? photo.localPath;
   const extension = compressed ? 'jpg' : extensionForPhoto(photo.localPath, photo.mimeType);
-  const destination = `${directory}${createRecipePhotoFileName(photo.takenAt, extension)}`;
+  const fileName = `${options.filenamePrefix ?? ''}${createRecipePhotoFileName(photo.takenAt, extension)}`;
+  const destination = `${directory}${fileName}`;
   await adapter.copyAsync({ from: source, to: destination });
   return toStoredPhotoPath(destination);
+}
+
+// ─── AI が生成したイメージ（cover-image.provider の応答）を保存する ──────────
+// docs/レシピ表紙AI生成設計.md §2/§4。生成結果は base64 バイト列で届くだけで、
+// `CapturedPhoto` のようにローカルファイルではないため、まずキャッシュへ書き出してから
+// **既存の `persistRecipePhoto` に filenamePrefix 付きで通す**（圧縮パイプライン・
+// 保存先ディレクトリを他の表紙写真と共有する — 別経路を増やさない）。
+
+interface GeneratedImageCacheAdapter {
+  cacheDirectory: string | null;
+  writeAsStringAsync: (
+    uri: string,
+    content: string,
+    options: { encoding: 'base64' },
+  ) => Promise<void>;
+}
+
+const expoGeneratedImageCacheAdapter: GeneratedImageCacheAdapter = {
+  get cacheDirectory() {
+    return FileSystem.cacheDirectory;
+  },
+  writeAsStringAsync: (uri, content, options) =>
+    FileSystem.writeAsStringAsync(uri, content, {
+      encoding:
+        options.encoding === 'base64'
+          ? FileSystem.EncodingType.Base64
+          : FileSystem.EncodingType.UTF8,
+    }),
+};
+
+function extensionForMime(mimeType: string): string {
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'image/webp') return 'webp';
+  return 'jpg';
+}
+
+/**
+ * AI が生成した画像（base64）を、他の表紙写真と同じ保存先へ `aigen-` 接頭辞つきで
+ * 永続化する。ファイル名の接頭辞だけが「AI 生成」の唯一の運び手
+ * （`utils/aiGeneratedPhoto.ts` の `isAiGeneratedPhoto()` が見る）。
+ */
+export async function persistGeneratedCoverImage(
+  result: { mimeType: string; dataBase64: string },
+  cacheAdapter: GeneratedImageCacheAdapter = expoGeneratedImageCacheAdapter,
+  adapter: FileStorageAdapter = expoFileStorageAdapter,
+  compressAdapter: PhotoCompressAdapter = expoPhotoCompressAdapter,
+): Promise<string> {
+  if (!cacheAdapter.cacheDirectory) {
+    throw new Error(t('error.photoStorageUnavailable'));
+  }
+  const tempUri = `${cacheAdapter.cacheDirectory}cover-image-${generateId()}.${extensionForMime(result.mimeType)}`;
+  await cacheAdapter.writeAsStringAsync(tempUri, result.dataBase64, { encoding: 'base64' });
+  const photo: CapturedPhoto = {
+    localPath: tempUri,
+    source: 'gallery',
+    mimeType: result.mimeType,
+    takenAt: new Date().toISOString(),
+    temporary: true,
+  };
+  return persistRecipePhoto(photo, adapter, compressAdapter, {
+    filenamePrefix: AI_GENERATED_PHOTO_PREFIX,
+  });
 }

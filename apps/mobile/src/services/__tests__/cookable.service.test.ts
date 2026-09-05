@@ -13,6 +13,7 @@ function recipe(id: string, title: string, ingredientNames: string[]): RecipeLis
     createdAt: '',
     cookCount: 0,
     heroPhotoUri: null,
+    isCoverAiGenerated: false,
   };
 }
 

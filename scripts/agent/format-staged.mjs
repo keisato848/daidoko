@@ -22,17 +22,46 @@ if (files.length === 0) {
 }
 
 const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-const prettier = runCommand(pnpmCmd, ['exec', 'prettier', '--write', '--ignore-unknown', ...files]);
-if (!prettier.ok) {
-  console.error('format-staged: prettier failed');
-  console.error(prettier.combinedOutput?.slice(0, 1000) ?? '');
-  process.exit(1);
+
+// Windows のコマンドライン長制限（約 8191 字）を超えるとネイティブ側が
+// 「コマンド ラインが長すぎます」で死ぬ（リリースマージの数百ファイルで実発・2026-09-05）。
+// ファイル列をチャンクに割って渡す。
+const CHUNK_CHARS = 6000;
+function chunkByLength(list) {
+  const chunks = [];
+  let current = [];
+  let length = 0;
+  for (const file of list) {
+    if (current.length > 0 && length + file.length + 3 > CHUNK_CHARS) {
+      chunks.push(current);
+      current = [];
+      length = 0;
+    }
+    current.push(file);
+    length += file.length + 3;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
 }
 
-const add = runCommand('git', ['add', '--', ...files]);
-if (!add.ok) {
-  console.error('format-staged: git add failed');
-  process.exit(1);
+for (const chunk of chunkByLength(files)) {
+  const prettier = runCommand(pnpmCmd, [
+    'exec',
+    'prettier',
+    '--write',
+    '--ignore-unknown',
+    ...chunk,
+  ]);
+  if (!prettier.ok) {
+    console.error('format-staged: prettier failed');
+    console.error(prettier.combinedOutput?.slice(0, 1000) ?? '');
+    process.exit(1);
+  }
+  const add = runCommand('git', ['add', '--', ...chunk]);
+  if (!add.ok) {
+    console.error('format-staged: git add failed');
+    process.exit(1);
+  }
 }
 
 console.log(`[OK] prettier auto-format: ${files.length} file(s)`);

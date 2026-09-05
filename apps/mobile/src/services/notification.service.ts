@@ -15,6 +15,8 @@ import { t } from '../i18n';
 const TIMER_CHANNEL_ID = 'timer';
 const LOW_STOCK_CHANNEL_ID = 'low-stock';
 const LOW_STOCK_DATA_TYPE = 'low-stock';
+const MENU_CHANNEL_ID = 'menu';
+const MENU_DATA_TYPE = 'menu';
 const COOKING_CHANNEL_ID = 'cooking-session';
 const COOKING_DATA_TYPE = 'cooking-resume';
 /** identifier 固定で「1 本だけ・上書き更新」にする（ステップ移動のたび積まれない） */
@@ -135,6 +137,16 @@ export async function consumeLowStockLaunchTap(): Promise<boolean> {
   return response?.notification.request.content.data?.type === LOW_STOCK_DATA_TYPE;
 }
 
+/** Cancel any scheduled local notification by id (no-op if already fired/absent). */
+export async function cancelScheduledNotification(id: string | null): Promise<void> {
+  if (!isNativePlatform || !id) return;
+  try {
+    await Notifications.cancelScheduledNotificationAsync(id);
+  } catch {
+    // already fired or cancelled — nothing to do
+  }
+}
+
 /**
  * 調理中の常駐通知（Android のみ・2026-08-28）。Now Cooking バーの OS 側の相棒 —
  * アプリの外にいても通知欄から調理へ戻れる。
@@ -209,12 +221,82 @@ export function addCookingResumeTapListener(onTap: () => void): { remove: () => 
 
 /** Cancel a scheduled timer notification (no-op if already fired/absent). */
 export async function cancelTimerNotification(id: string | null): Promise<void> {
-  if (!isNativePlatform || !id) return;
-  try {
-    await Notifications.cancelScheduledNotificationAsync(id);
-  } catch {
-    // already fired or cancelled — nothing to do
+  await cancelScheduledNotification(id);
+}
+
+// ── 毎日の自動献立モード（#215 §10.11.4）───────────────────────────────────
+// **one-shot を毎起動で 1 本だけ予約し直す。DAILY 繰り返しは使わない**
+// — 開かなくなった利用者に届くのは最大 1 本で自然に止まる（設計の決定変更 E）。
+// 文言は静的（料理名は載せない・予約後の在庫変化で嘘になるため）。
+
+/**
+ * 翌朝の献立通知を `seconds` 秒後に 1 本だけ予約する。
+ * 呼び出し側（`menu-plan.service.ts`）が毎回、`cancelAllMenuNotifications` で
+ * 既存の献立通知を掃いてから呼ぶ責務を持つ — ここでは予約するだけ。
+ */
+export async function scheduleMenuNotification(seconds: number): Promise<string | null> {
+  if (!isNativePlatform || seconds <= 0) return null;
+  if (!(await ensureNotificationPermission())) return null;
+  if (Platform.OS === 'android') {
+    // SCHEDULE_EXACT_ALARM は足さない（朝の案内は数分ずれてよい・審査面の負債にしない）
+    await Notifications.setNotificationChannelAsync(MENU_CHANNEL_ID, {
+      name: t('notification.menuChannel'),
+      importance: Notifications.AndroidImportance.DEFAULT,
+    });
   }
+  try {
+    return await Notifications.scheduleNotificationAsync({
+      content: {
+        title: t('notification.menuReadyTitle'),
+        body: t('notification.menuReadyBody'),
+        data: { type: MENU_DATA_TYPE },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.ceil(seconds),
+        channelId: MENU_CHANNEL_ID,
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 予約済みの献立通知（`data.type === 'menu'`）を **OS の予約一覧を実際に見て** 全部取り消す。
+ *
+ * 以前は「前回予約した id を app_meta に 1 本だけ覚えておいて、それだけ消す」帳簿方式
+ * だったが、`refreshMenuNotificationSchedule`（`menu-plan.service.ts`）が二重に走ると
+ * 両方が同じ id を読んで両方 cancel → 両方 schedule し、id の記録は後勝ちで
+ * **先に予約した方が孤児化**した（AQUOS 実機・§10.11.4 の顛末）。
+ * 掃引方式なら「今 OS に残っている type:menu の予約」を毎回全部消すので、
+ * 二重予約が起きても・過去の版が残した孤児があっても、次に呼んだときに回収できる。
+ */
+export async function cancelAllMenuNotifications(): Promise<void> {
+  if (!isNativePlatform) return;
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const menuOnes = scheduled.filter((n) => n.content.data?.type === MENU_DATA_TYPE);
+    await Promise.all(
+      menuOnes.map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
+    );
+  } catch {
+    // 一覧取得・キャンセルの失敗は致命ではない（次回起動時にまた掃く）
+  }
+}
+
+/** 前面/バックグラウンドで献立通知をタップしたときに `onTap` を呼ぶ。 */
+export function addMenuTapListener(onTap: () => void): { remove: () => void } {
+  return Notifications.addNotificationResponseReceivedListener((response) => {
+    if (response.notification.request.content.data?.type === MENU_DATA_TYPE) onTap();
+  });
+}
+
+/** 献立通知のタップでコールドスタートされたか。起動時に一度だけ呼ぶ。 */
+export async function consumeMenuLaunchTap(): Promise<boolean> {
+  if (!isNativePlatform) return false;
+  const response = await Notifications.getLastNotificationResponseAsync();
+  return response?.notification.request.content.data?.type === MENU_DATA_TYPE;
 }
 
 // ── クラウド同期の変更通知（S1 — docs/クラウド同期設計.md §7）───────────────

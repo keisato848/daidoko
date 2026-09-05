@@ -82,6 +82,10 @@ module.exports = [
     ignores: [
       // 辞書そのもの
       'apps/mobile/src/i18n/**',
+      // ウィジェット（W1）。Android の Headless プロセスから描かれ、アプリの
+      // i18n（src/i18n）を読めないため、snapshot.locale で描き分ける専用の
+      // 小さな辞書を持つ（docs/ウィジェット設計.md 実装タスク指示）
+      'apps/mobile/src/widgets/**',
       // 日本語そのものを処理するロジック・サンプルデータ（設計 §7・P5）
       'apps/mobile/src/db/seed.ts',
       'apps/mobile/src/e2e/**',
@@ -91,6 +95,8 @@ module.exports = [
       'apps/mobile/src/utils/recipeTextParser.ts',
       'apps/mobile/src/utils/recipeTextNormalizer.ts',
       'apps/mobile/src/utils/stepTimer.ts',
+      // 献立の「取り分け」判定語彙（「大さじ」「少々」）。レシピ本文と照合する語であって画面の文言ではない
+      'apps/mobile/src/utils/menuPlan.ts',
       'apps/mobile/src/utils/itemMatch.ts',
       'apps/mobile/src/utils/itemName.ts',
       'apps/mobile/src/utils/kana.ts',
@@ -103,8 +109,16 @@ module.exports = [
       'apps/mobile/src/services/meal-vision.provider.ts',
       'apps/mobile/src/services/receipt-vision.provider.ts',
       'apps/mobile/src/services/name-resolve.provider.ts',
+      // AI 献立並べ替え（M2）のプロンプト本体。サーバー lib/menu-arrange.ts の写し
+      'apps/mobile/src/services/menu-arrange.provider.ts',
+      // 不足分レシピ一括生成（M3）のプロンプト本体。サーバー lib/menu-recipes.ts の写し
+      'apps/mobile/src/services/menu-recipes.provider.ts',
       // 紙面読み取りのプロンプト。サーバー `lib/recipe-page.ts` の写し（BYOK はサーバーを通らない）
       'apps/mobile/src/services/recipe-page.provider.ts',
+      // 冷蔵庫読み取りのプロンプト。サーバー `lib/fridge-vision.ts` の写し（BYOK はサーバーを通らない）
+      'apps/mobile/src/services/fridge-vision.provider.ts',
+      // レシピ「イメージ」の AI 生成プロンプト。サーバー `lib/cover-image.ts` の写し
+      'apps/mobile/src/services/cover-image.provider.ts',
       'apps/mobile/src/services/ai-output-locale.ts',
       // テストは期待値として日本語を書く
       '**/__tests__/**',

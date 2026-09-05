@@ -1,5 +1,6 @@
 import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
 import { thinkingConfigFragment } from './thinking-budget.js';
+import { isCategoryItemName } from './fridge-vision.js';
 /**
  * Receipt — extract grocery items (name / quantity / unit) so the pantry can be
  * stocked in one tap. Provider abstraction (default Gemini Flash).
@@ -67,6 +68,8 @@ const RECEIPT_ITEM_RULES = [
   'quantity には購入数量を入れます。行に数量が印字されておらず内容量（例: 「豚こま 500g」）だけが読めるときは、その内容量を quantity、単位を unit にします。',
   'unit には印字された単位・助数詞（個・本・袋・パック・g・ml など）だけを入れます。数量しか印字されていない場合は unit を省きます。',
   '**数量が読み取れない・自信が無い場合は quantity を省きます（1 で埋めない）**。値引き行や単価行の数字を数量として拾わないでください。',
+  // カテゴリ語・売り場名の禁止（冷蔵庫写真設計 §9 と同根の水平展開・2026-09-05）
+  '「調味料」「飲料」「食品」のようなカテゴリ名や、「農産」「水産」「畜産」「日配」のような売り場・部門名の行は品目として拾いません。必ず具体的な品名だけを挙げます。',
 ];
 
 const RECEIPT_TAIL_RULES = [
@@ -119,6 +122,43 @@ export const RECEIPT_RESPONSE_SCHEMA = {
   },
   required: ['isReceipt'],
 } as const;
+
+/**
+ * レシートに印字されがちな売り場・部門名（カテゴリ語リストのレシート特有分）。
+ * モバイル `receipt-vision.provider.ts` の写しと同じ語であること。
+ */
+export const RECEIPT_SECTION_WORDS = [
+  '農産',
+  '水産',
+  '畜産',
+  '青果',
+  '精肉',
+  '鮮魚',
+  '日配',
+  'デイリー',
+  '雑貨',
+] as const;
+
+const SECTION_KEYS = new Set(RECEIPT_SECTION_WORDS.map((word) => word.normalize('NFKC')));
+
+/**
+ * ルートが返す前の検証（それまで生出力を素通ししていた — 水平展開規約②）。
+ * レシートの品目には confidence が無いので、カテゴリ語・売り場名に**単体一致**した
+ * 品目は除外する（fridge のように「要確認へ落とす」形が取れない）。
+ * 「調味料入れ」のような複合語は対象外。
+ */
+export function sanitizeReceiptRaw(raw: ReceiptVisionRaw): ReceiptVisionRaw {
+  const items = Array.isArray(raw.items)
+    ? raw.items.filter((item) => {
+        if (typeof item?.name !== 'string' || !item.name.trim()) return false;
+        const name = item.name.trim();
+        if (isCategoryItemName(name)) return false;
+        if (SECTION_KEYS.has(name.normalize('NFKC').replace(/\s+/g, ''))) return false;
+        return true;
+      })
+    : raw.items;
+  return { ...raw, ...(items !== undefined && { items }) };
+}
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const REQUEST_TIMEOUT_MS = 30_000;

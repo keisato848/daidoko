@@ -21,6 +21,7 @@ import { getAppMeta, setAppMeta } from './app-meta.service';
 import { isPremium } from './entitlement.service';
 import { ADMOB_APP_OPEN_UNIT_ID, ADMOB_ENABLED } from '../config';
 import { useTimerStore } from '../stores/timer.store';
+import { pathHasAnySegment } from '../utils/routeMatch';
 
 export const APP_OPEN_AD_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h
 export const APP_OPEN_AD_MIN_BACKGROUND_MS = 60 * 1000; // 60s
@@ -73,7 +74,9 @@ export function evaluateAppOpenAdGate(input: AppOpenAdGateInput): AppOpenAdGateR
   if (input.premium) return 'premium';
   if (input.photoCaptureInFlight) return 'photo-capture';
   if (input.timerStatus !== 'idle') return 'cooking-timer';
-  if (SENSITIVE_ROUTE_SEGMENTS.some((seg) => input.pathname.includes(seg))) {
+  // セグメント一致で見る（`includes` だと /cookable が /cook に当たり、
+  // 在庫の「作れるレシピ」画面で広告が出なくなっていた — utils/routeMatch.ts）
+  if (pathHasAnySegment(input.pathname, SENSITIVE_ROUTE_SEGMENTS)) {
     return 'sensitive-screen';
   }
   if (input.backgroundedAt === null) return 'cold-start';

@@ -5,7 +5,7 @@
  * 共有済みの帖は削除トークンを編集トークンとして PATCH し、**slug（＝配った
  * リンク）を変えずに**中身を差し替えられる。
  *
- * 「権限」は人ベースではなくリンクの強度（パスコード4桁・有効期限）。
+ * 「権限」は人ベースではなくリンクの強度（パスコード6桁・有効期限）。
  * パスコードは更新時に再送するため平文で保存する（端末内 SQLite のみ・
  * 端末外に出るのはハッシュだけ）。
  */
@@ -24,7 +24,11 @@ import {
 } from './web-share.service';
 
 export interface ShareAccessOptions {
-  /** 数字4桁。null = 保護なし */
+  /**
+   * 数字6桁。null = 保護なし。**新規発行・変更時のみ 6 桁を強制**（#269）。
+   * 既に 4 桁で公開済みの帖は、入力側（消費画面）が 4 桁も受け付けるので
+   * そのまま開ける — ハッシュ照合は桁数を見ないため
+   */
   passcode: string | null;
   /** null = 無期限 */
   expiresInDays: 7 | 30 | null;
@@ -285,6 +289,27 @@ export async function shareRecipeBook(id: string, access: ShareAccessOptions): P
       isLegacyShare: 0,
     })
     .where(eq(recipeBooks.id, id));
+}
+
+/**
+ * 受け取り期限を「今から 7 日」に張り直す（docs/共有設計.md §3-6）。
+ * 「リンクを送る」たびにベストエフォートで呼ぶ。失敗しても送付は続行する。
+ */
+export async function renewSharedBook(id: string): Promise<void> {
+  const database = await db();
+  const { recipeBooks } = await schema();
+  const { eq } = await import('drizzle-orm');
+  const rows = await database.select().from(recipeBooks).where(eq(recipeBooks.id, id));
+  const row = rows[0];
+  if (!row?.shareSlug || !row.shareDeleteToken) return;
+  try {
+    await fetch(`${API_V1}/share/books/${row.shareSlug}/renew`, {
+      method: 'POST',
+      headers: { 'x-share-delete-token': row.shareDeleteToken },
+    });
+  } catch {
+    // オフライン等。次に送るときに張り直される
+  }
 }
 
 /** 共有を停止する。サーバー 404（既に消えている）でもローカルの共有状態は消す */

@@ -15,6 +15,7 @@ import { normalizeItemName } from '../utils/itemName';
 import { getRecipeDetail } from './recipe.service';
 import { getCurrentUser } from './user.service';
 import type { ShoppingItem, ShoppingItemSource } from './types';
+import { refreshWidgetSnapshot } from './widget-snapshot.service';
 import type { ShoppingPlanRow } from '../utils/shoppingPlan';
 
 interface ShoppingRow {
@@ -91,6 +92,9 @@ export async function addShoppingItem(
   amount?: string,
   options?: { source?: ShoppingItemSource; recipeId?: string; storeGroup?: string | null },
 ): Promise<ShoppingItem | null> {
+  // ウィジェットの鮮度（W0）。**失敗しても呼び出し側を巻き込まない**
+  // — 表示のために買い物リストの操作が失敗しては本末転倒
+  refreshWidgetSnapshot();
   const trimmed = name.trim();
   if (!trimmed || !isNativePlatform) return null;
 
@@ -267,6 +271,9 @@ export async function addSelectedIngredientsToList(
   recipeId: string,
   rows: readonly ShoppingPlanRow[],
 ): Promise<number> {
+  // ウィジェットの鮮度（W0）。**失敗しても呼び出し側を巻き込まない**
+  // — 表示のために買い物リストの操作が失敗しては本末転倒
+  refreshWidgetSnapshot();
   if (!isNativePlatform) return 0;
   let added = 0;
   for (const row of rows) {
@@ -382,6 +389,9 @@ export interface CheckOffResult {
  * - 対象は**未チェックの行だけ**
  */
 export async function checkOffByNames(boughtNames: readonly string[]): Promise<CheckOffResult> {
+  // ウィジェットの鮮度（W0）。**失敗しても呼び出し側を巻き込まない**
+  // — 表示のために買い物リストの操作が失敗しては本末転倒
+  refreshWidgetSnapshot();
   const empty: CheckOffResult = { count: 0, names: [] };
   const hit = await matchPendingByNames(boughtNames);
   if (hit.length === 0) return empty;
@@ -413,6 +423,9 @@ export async function checkOffByNames(boughtNames: readonly string[]): Promise<C
  * （誤照合で消えたままだと買い忘れる）。
  */
 export async function setShoppingItemChecked(id: string, checked: boolean): Promise<void> {
+  // ウィジェットの鮮度（W0）。**失敗しても呼び出し側を巻き込まない**
+  // — 表示のために買い物リストの操作が失敗しては本末転倒
+  refreshWidgetSnapshot();
   if (!isNativePlatform) return;
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');
@@ -557,6 +570,9 @@ export async function countUndecidedSharedShoppingItems(): Promise<number> {
 }
 
 export async function removeShoppingItem(id: string): Promise<void> {
+  // ウィジェットの鮮度（W0）。**失敗しても呼び出し側を巻き込まない**
+  // — 表示のために買い物リストの操作が失敗しては本末転倒
+  refreshWidgetSnapshot();
   if (!isNativePlatform) return;
   const { eq } = await import('drizzle-orm');
   const { getDb } = await import('../db/client');

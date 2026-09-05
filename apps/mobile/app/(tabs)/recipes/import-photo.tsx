@@ -58,6 +58,7 @@ import {
   type FreemiumStatus,
 } from '../../../src/services/usage.service';
 import { createCookingLog } from '../../../src/services/cooking-log.service';
+import { maybeRequestStoreReview } from '../../../src/services/review-request.service';
 import type { CookingLogKind } from '../../../src/services/types';
 import { persistCookingLogPhotos } from '../../../src/services/photo-storage.service';
 import { createPhotoSource } from '../../../src/services/source.service';
@@ -256,7 +257,9 @@ export default function ImportPhotoScreen() {
         labelSummary: photoResult.evidenceSummary ?? photoResult.labelSummary,
         capturedAt: capturedPhoto?.takenAt,
       });
-      const recipeId = await createRecipe({ ...data, sourceId });
+      // 写真から中身を推定した下書き（#266）。クラウド Vision も端末内推定も同じ扱い —
+      // フォールバックした回だけ印が消えるのは安全表示の穴になる
+      const recipeId = await createRecipe({ ...data, sourceId, aiGenerated: true });
 
       // Preserve the user's impression as a recipe memo (best-effort).
       if (notes.trim()) {
@@ -297,6 +300,8 @@ export default function ImportPhotoScreen() {
       setToastMessage(
         logKind === 'eaten_out' ? t('recipe.photo.savedAndPinned') : t('recipe.photo.saved'),
       );
+      // 写真から AI の下書きが初めて形になった瞬間にストア評価を打診（条件・頻度はサービス側）
+      void maybeRequestStoreReview('ai-recipe');
       // 一覧ではなく、いま作ったレシピへ着地する（探させない）
       setTimeout(() => router.replace(`/(tabs)/recipes/${recipeId}`), 1500);
     },
@@ -318,6 +323,17 @@ export default function ImportPhotoScreen() {
           title={t('recipe.photo.formTitle')}
           submitLabel={t('common.save')}
         />
+        {/* AI 生成コンテンツの報告導線（docs/レシピ表紙AI生成設計.md §6）。
+            RecipeForm 自身のヘッダーの邪魔をしないよう画面右下に小さく置く */}
+        <Pressable
+          style={styles.reportFloating}
+          onPress={() =>
+            router.push({ pathname: '/recipes/report', params: { source: 'photo-recipe' } })
+          }
+          hitSlop={8}
+        >
+          <Text style={styles.reportFloatingText}>{t('coverImage.report')}</Text>
+        </Pressable>
         <Toast
           message={toastMessage ?? ''}
           visible={toastMessage != null}
@@ -510,6 +526,16 @@ export default function ImportPhotoScreen() {
 }
 
 const styles = StyleSheet.create({
+  reportFloating: {
+    position: 'absolute',
+    right: 12,
+    bottom: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(10, 8, 5, 0.75)',
+  },
+  reportFloatingText: { fontSize: 11, color: Colors.muted, textDecorationLine: 'underline' },
   placeToggle: {
     flexDirection: 'row',
     gap: 8,

@@ -10,8 +10,15 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 process.env['SHARE_DB_PATH'] = ':memory:';
 
+import { eq } from 'drizzle-orm';
+
 import app from '../app.js';
-import { resetShareDbForTesting } from '../lib/share-store.js';
+import {
+  getShareDb,
+  resetShareDbForTesting,
+  sharedBooks,
+  sharedRecipes,
+} from '../lib/share-store.js';
 import { resetShareRateLimitForTesting } from '../routes/share.js';
 
 // 1x1 JPEG（最小のダミー写真）
@@ -107,6 +114,50 @@ describe('Web 共有', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/jpeg');
     expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(100);
+  });
+
+  it('AI 生成イメージ: coverIsAiGenerated を送るとページに表記が出る（省略時は出ない）', async () => {
+    const withLabel = (await (
+      await publish({
+        ...basePayload(),
+        photoBase64: TINY_JPEG_BASE64,
+        photoMime: 'image/jpeg',
+        coverIsAiGenerated: true,
+      })
+    ).json()) as { slug: string };
+    const page = await (await app.request(`/r/${withLabel.slug}`)).text();
+    expect(page).toContain('AIが作ったイメージです');
+
+    const withoutLabel = (await (
+      await publish({ ...basePayload(), photoBase64: TINY_JPEG_BASE64, photoMime: 'image/jpeg' })
+    ).json()) as { slug: string };
+    const plainPage = await (await app.request(`/r/${withoutLabel.slug}`)).text();
+    expect(plainPage).not.toContain('AIが作ったイメージです');
+  });
+
+  it('AI 由来のレシピ: aiGenerated を送ると注意書きが出る（省略時は出ない・#266）', async () => {
+    const withLabel = (await (await publish({ ...basePayload(), aiGenerated: true })).json()) as {
+      slug: string;
+    };
+    const page = await (await app.request(`/r/${withLabel.slug}`)).text();
+    // 文言はアプリの `ai.disclaimer` と同一。**アレルギーの警告を落とさない**
+    expect(page).toContain('AIが推定したレシピです');
+    expect(page).toContain('アレルギーのある方は特にご注意ください');
+
+    const plain = (await (await publish({ ...basePayload() })).json()) as { slug: string };
+    const plainPage = await (await app.request(`/r/${plain.slug}`)).text();
+    expect(plainPage).not.toContain('AIが推定したレシピです');
+  });
+
+  it('AI 由来のレシピ: 材料が空でも注意書きは出る（#266・入れ子で消さない）', async () => {
+    // 材料の節の中に入れると、材料が空のレシピで警告ごと消える。
+    // 手順は AI のままなので、材料の有無に関わらず出す
+    const { slug } = (await (
+      await publish({ ...basePayload(), ingredients: [], aiGenerated: true })
+    ).json()) as { slug: string };
+    const page = await (await app.request(`/r/${slug}`)).text();
+
+    expect(page).toContain('AIが推定したレシピです');
   });
 
   it('取り消し: 誤トークンは 403・正トークンで取り消し → ページも写真も 404', async () => {
@@ -235,6 +286,31 @@ describe('Web 共有', () => {
       });
     }
 
+    it('AI 生成イメージ: 帖の 1 レシピだけ coverIsAiGenerated でも、そのレシピだけ表記が出る', async () => {
+      const res = await publishBook({
+        attested: true,
+        locale: 'ja',
+        title: 'わが家の定番',
+        description: '家族のいつもの味',
+        recipes: [
+          { ...basePayload(), title: '肉じゃが', attested: undefined, locale: undefined },
+          {
+            title: '卵焼き',
+            ingredients: [{ name: '卵', amount: '3個' }],
+            steps: [{ body: '焼く' }],
+            tags: [],
+            photoBase64: TINY_JPEG_BASE64,
+            photoMime: 'image/jpeg',
+            coverIsAiGenerated: true,
+          },
+        ],
+      });
+      const json = (await res.json()) as { slug: string };
+      const page = await (await app.request(`/b/${json.slug}`)).text();
+      const occurrences = page.split('AIが作ったイメージです').length - 1;
+      expect(occurrences).toBe(1);
+    });
+
     it('公開 → /b の URL が返り、ページに目次と全レシピが載る', async () => {
       const res = await publishBook(bookPayload());
       expect(res.status).toBe(200);
@@ -253,21 +329,106 @@ describe('Web 共有', () => {
     });
 
     it('JSON: パスコード付きの帖は x-share-passcode が要る（#198）', async () => {
-      const res = await publishBook({ ...bookPayload(), passcode: '1234' });
+      const res = await publishBook({ ...bookPayload(), passcode: '123456' });
       const { slug } = (await res.json()) as { slug: string };
 
       const noCode = await app.request(`/api/v1/share/books/${slug}`);
       expect(noCode.status).toBe(401);
       const wrong = await app.request(`/api/v1/share/books/${slug}`, {
-        headers: { 'x-share-passcode': '0000' },
+        headers: { 'x-share-passcode': '000000' },
+      });
+      expect(wrong.status).toBe(401);
+      const ok = await app.request(`/api/v1/share/books/${slug}`, {
+        headers: { 'x-share-passcode': '123456' },
+      });
+      expect(ok.status).toBe(200);
+      const body = (await ok.json()) as { data: { title: string; recipes: { title: string }[] } };
+      expect(body.data.recipes.length).toBeGreaterThan(0);
+    });
+
+    it('新規発行は 6 桁未満のパスコードを拒否する（#269）', async () => {
+      const res = await publishBook({ ...bookPayload(), passcode: '1234' });
+      expect(res.status).toBe(400);
+    });
+
+    it('JSON: 4 桁で公開済みの帖は 6 桁化のあとも開ける（#269 の後方互換）', async () => {
+      // zod を経由せず直接ストアへ書く — publish API は既に 6 桁を強制するので、
+      // 「6 桁化より前に 4 桁で公開された既存の帖」を再現するにはこうするしかない
+      const { slug } = createBookShare(
+        {
+          locale: 'ja',
+          title: '昔からの定番',
+          recipes: [
+            {
+              title: '肉じゃが',
+              ingredients: [{ name: '牛肉' }],
+              steps: [{ body: '煮る' }],
+              tags: [],
+            },
+          ],
+        },
+        { passcode: '1234' },
+      );
+
+      const noCode = await app.request(`/api/v1/share/books/${slug}`);
+      expect(noCode.status).toBe(401);
+      const wrong = await app.request(`/api/v1/share/books/${slug}`, {
+        headers: { 'x-share-passcode': '9999' },
       });
       expect(wrong.status).toBe(401);
       const ok = await app.request(`/api/v1/share/books/${slug}`, {
         headers: { 'x-share-passcode': '1234' },
       });
       expect(ok.status).toBe(200);
-      const body = (await ok.json()) as { data: { title: string; recipes: { title: string }[] } };
-      expect(body.data.recipes.length).toBeGreaterThan(0);
+    });
+
+    it('HTML: unlock のサーバー処理は 4 桁を弾かない（#269 の後方互換）', async () => {
+      const { slug } = createBookShare(
+        {
+          locale: 'ja',
+          title: '昔からの定番',
+          recipes: [
+            {
+              title: '肉じゃが',
+              ingredients: [{ name: '牛肉' }],
+              steps: [{ body: '煮る' }],
+              tags: [],
+            },
+          ],
+        },
+        { passcode: '1234' },
+      );
+
+      const ok = await app.request(`/b/${slug}/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'passcode=1234',
+      });
+      expect(ok.status).toBe(303);
+    });
+
+    it('HTML: 入力欄の pattern がブラウザ側で 4 桁を弾かない（#269）', async () => {
+      // ここは実際のブラウザを動かしていないので、サーバーの POST 処理だけでは
+      // ブラウザの HTML5 バリデーション（pattern/maxlength）の壊れを検出できない。
+      // レンダリングされた HTML そのものを見て固定する
+      const { slug } = createBookShare(
+        {
+          locale: 'ja',
+          title: '昔からの定番',
+          recipes: [
+            {
+              title: '肉じゃが',
+              ingredients: [{ name: '牛肉' }],
+              steps: [{ body: '煮る' }],
+              tags: [],
+            },
+          ],
+        },
+        { passcode: '1234' },
+      );
+      const html = await (await app.request(`/b/${slug}`)).text();
+      expect(html).toContain('pattern="\\d{4}|\\d{6}"');
+      expect(html).not.toContain('パスコード（6桁）'); // 4 桁の帖にも 6 桁を名乗らない
     });
 
     it('attested なしでは公開できない', async () => {
@@ -433,7 +594,7 @@ describe('レシピ帖 S4', () => {
   });
 
   it('パスコード: 未認証はページ 401（中身もタイトルも出ない）・写真も 404', async () => {
-    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '1234' });
+    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '123456' });
     const page = await app.request(`/b/${slug}`);
     expect(page.status).toBe(401);
     const html = await page.text();
@@ -444,18 +605,18 @@ describe('レシピ帖 S4', () => {
   });
 
   it('パスコード: 正解で Cookie が発行され、ページも写真も読める', async () => {
-    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '1234' });
+    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '123456' });
     const wrong = await app.request(`/b/${slug}/unlock`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'passcode=0000',
+      body: 'passcode=000000',
     });
     expect(wrong.status).toBe(401);
 
     const ok = await app.request(`/b/${slug}/unlock`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'passcode=1234',
+      body: 'passcode=123456',
     });
     expect(ok.status).toBe(303);
     const setCookie = ok.headers.get('set-cookie') ?? '';
@@ -469,24 +630,26 @@ describe('レシピ帖 S4', () => {
   });
 
   it('パスコード: 5 回失敗でロックされ、正解でも通らない', async () => {
-    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '1234' });
+    const { slug } = await publishS4Book({ ...s4BookPayload(), passcode: '123456' });
     for (let i = 0; i < 5; i++) {
       await app.request(`/b/${slug}/unlock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'passcode=9999',
+        body: 'passcode=999999',
       });
     }
     const locked = await app.request(`/b/${slug}/unlock`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'passcode=1234',
+      body: 'passcode=123456',
     });
     expect(locked.status).toBe(401);
     expect(await locked.text()).toContain('試行回数');
   });
 
-  it('有効期限: 期限を過ぎた帖は 404（存在を漏らさない）', async () => {
+  it('受け取り期限: 期限を過ぎた帖は新規には 410（期限切れページ）', async () => {
+    // §3-6 で「超えたら 404」から「新規閲覧のみ締め出す 410」に変更。
+    // 中身は出さない（タイトルが漏れないこと）
     const past = new Date(Date.now() - 1000).toISOString();
     const { slug } = createBookShare(
       {
@@ -496,7 +659,42 @@ describe('レシピ帖 S4', () => {
       },
       { expiresAt: past },
     );
-    expect((await app.request(`/b/${slug}`)).status).toBe(404);
+    const res = await app.request(`/b/${slug}`);
+    expect(res.status).toBe(410);
+    const html = await res.text();
+    expect(html).toContain('受け取り期限');
+    expect(html).not.toContain('期限切れ帖');
+  });
+
+  it('受け取り期限: 期限内に開いた閲覧者は Cookie で期限後も見られる', async () => {
+    const soon = new Date(Date.now() + 60_000).toISOString();
+    const { slug } = createBookShare(
+      {
+        locale: 'ja',
+        title: '継続閲覧帖',
+        recipes: [{ title: 'a', ingredients: [{ name: 'x' }], steps: [{ body: 'y' }], tags: [] }],
+      },
+      { expiresAt: soon },
+    );
+    const first = await app.request(`/b/${slug}`);
+    expect(first.status).toBe(200);
+    const setCookie = first.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain(`daidoko_bookaccess_${slug}=`);
+    const cookie = setCookie.split(';')[0] ?? '';
+    // 期限を過去に倒す（DB 直更新）
+    const db = getShareDb();
+    await Promise.resolve(
+      db
+        .update(sharedBooks)
+        .set({ expiresAt: new Date(Date.now() - 1000).toISOString() })
+        .where(eq(sharedBooks.slug, slug))
+        .run(),
+    );
+    // Cookie なし → 410 / Cookie あり → 200
+    expect((await app.request(`/b/${slug}`)).status).toBe(410);
+    const redeemed = await app.request(`/b/${slug}`, { headers: { cookie } });
+    expect(redeemed.status).toBe(200);
+    expect(await redeemed.text()).toContain('継続閲覧帖');
   });
 
   it('有効期限: expiresInDays を渡すと expiresAt が返り、PATCH null で解除できる', async () => {
@@ -534,5 +732,53 @@ describe('storeUrlForUserAgent', () => {
     } finally {
       delete process.env['SHARE_APP_STORE_URL'];
     }
+  });
+});
+
+describe('受け取り期限（レシピ単体・共有設計 §3-6）', () => {
+  beforeEach(() => {
+    resetShareRateLimitForTesting();
+  });
+
+  it('期限内に開くと Cookie が付き、期限後は新規 410・Cookie 保持者は 200・renew で再開', async () => {
+    const res = await publish(basePayload());
+    const { slug, deleteToken } = (await res.json()) as { slug: string; deleteToken: string };
+
+    // 期限内: 200 とアクセス Cookie
+    const first = await app.request(`/r/${slug}`);
+    expect(first.status).toBe(200);
+    const setCookie = first.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain(`daidoko_share_${slug}=`);
+    const cookie = setCookie.split(';')[0] ?? '';
+
+    // 期限を過去へ倒す
+    getShareDb()
+      .update(sharedRecipes)
+      .set({ expiresAt: new Date(Date.now() - 1000).toISOString() })
+      .where(eq(sharedRecipes.slug, slug))
+      .run();
+
+    // 新規は 410（中身・タイトルは出さない）。写真も同じ鍵で閉じる
+    const expired = await app.request(`/r/${slug}`);
+    expect(expired.status).toBe(410);
+    expect(await expired.text()).not.toContain('卵かけごはん');
+    expect((await app.request(`/r/${slug}/photo`)).status).toBe(404);
+
+    // 期限内に開いた閲覧者は Cookie で継続閲覧できる
+    const redeemed = await app.request(`/r/${slug}`, { headers: { cookie } });
+    expect(redeemed.status).toBe(200);
+
+    // renew（オーナーが「送る」）で新規も再び開ける。誤トークンは 403
+    const renew = await app.request(`/api/v1/share/recipes/${slug}/renew`, {
+      method: 'POST',
+      headers: { 'x-share-delete-token': deleteToken },
+    });
+    expect(renew.status).toBe(200);
+    expect((await app.request(`/r/${slug}`)).status).toBe(200);
+    const bad = await app.request(`/api/v1/share/recipes/${slug}/renew`, {
+      method: 'POST',
+      headers: { 'x-share-delete-token': 'wrong' },
+    });
+    expect(bad.status).toBe(403);
   });
 });

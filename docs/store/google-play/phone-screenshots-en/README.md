@@ -62,18 +62,28 @@ node scripts/release/capture-store-screenshots.mjs \
 - デモモードは script が `enter` し直すと Wi-Fi が消えることがある。手で入れてから
   `--keep-status-bar` で撮ると揃う
 
-| 順  | ファイル                     | 内容                                     |
-| --- | ---------------------------- | ---------------------------------------- |
-| 1   | `10-recipe-detail-photo.png` | 料理写真つきレシピ詳細（ヒーロー）       |
-| 2   | `07-photo-to-recipe.png`     | 写真からレシピ（導線・AI の仕組み説明）  |
-| 3   | `08-photo-recipe-result.png` | 写真からつくったレシピの編集可能な下書き |
-| 4   | `01-home-timeline.png`       | ホーム（家族の調理タイムライン）         |
-| 5   | `02-recipe-library.png`      | レシピ蔵書庫（一覧・検索）               |
-| 6   | `03-recipe-detail.png`       | レシピ詳細                               |
-| 7   | `04-cooking-mode.png`        | 料理中モード                             |
-| 8   | `06-family-group.png`        | 家族グループ                             |
+| 順  | ファイル                     | 内容                                          |
+| --- | ---------------------------- | --------------------------------------------- |
+| 1   | `05-menu-plan.png`           | 献立（組んだ状態・理由付き・時間帯チップ）    |
+| 2   | `10-recipe-detail-photo.png` | 料理写真つきレシピ詳細（ヒーロー）            |
+| 3   | `12-fridge-to-recipe.png`    | 冷蔵庫からレシピ（確認シート・1.13.1 新機能） |
+| 4   | `07-photo-to-recipe.png`     | 写真からレシピ（導線・AI の仕組み説明）       |
+| 5   | `08-photo-recipe-result.png` | 写真からつくったレシピの編集可能な下書き      |
+| 6   | `01-home-timeline.png`       | ホーム（家族の調理タイムライン）              |
+| 7   | `02-recipe-library.png`      | レシピ一覧（一覧・検索）                      |
+| 8   | `06-family-group.png`        | 家族グループ                                  |
 
-順番は日本語版と揃えている（1〜3 枚目で推し機能を見せる — ASO 監査 2026-07-14）。
+順番は日本語版と揃えている。**1.13.0（2026-09-01）で並び替え**——理由は日本語版
+README の「1.13.0（2026-09-01）でさらに並び替え」節を参照（掲載文の主語が「献立」へ
+刷新されたのにスクショが旧のままだった）。`03-recipe-detail.png` は `extras/` へ退避
+（`10-recipe-detail-photo.png` と重複気味だったため）。`05-menu-plan.png` の作り方
+（在庫に `Onion` を 1 件足すだけでは Day 2/3 が「Only 8 things to buy」のような大きい数字に
+なって逆効果だった話・3 レシピぶんほぼ全量を在庫化する手順・SQL）も日本語版 README を参照。
+
+**1.13.1（2026-09-05）で `12-fridge-to-recipe.png`（冷蔵庫の確認シート・manual）を
+3 枚目に入れ、`04-cooking-mode.png` を `extras/` へ退避した。** 理由と `12` の撮り方は
+日本語版 README。en で撮るときは先に
+`cmd locale set-app-locales com.daidoko.app --locales en-US` を当ててから同じ手順。
 
 `08-photo-recipe-result.png` は自動化できない（AI を実際に走らせる必要がある）。撮り方:
 
@@ -93,3 +103,10 @@ node scripts/release/capture-store-screenshots.mjs \
   --locale en-US --recipe recipe-7 --shots 03 --out <一時ディレクトリ>
 # 撮れた 03-recipe-detail.png を 10-recipe-detail-photo.png として置く
 ```
+
+## extras/（アップロード対象外）
+
+- `03-recipe-detail.png` — レシピ詳細（実写なし）。1.13.0 で `05-menu-plan.png` を
+  入れるために退避。日本語版と同じ理由（`10-recipe-detail-photo.png` と重複気味）。
+- `04-cooking-mode.png` — 料理中モード。1.13.1 で `12-fridge-to-recipe.png` を入れるために
+  退避（日本語版 README の「1.13.1（2026-09-05）の入れ替え」参照）。

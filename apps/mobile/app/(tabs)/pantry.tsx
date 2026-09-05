@@ -7,6 +7,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Bell,
+  CalendarDays,
   ChefHat,
   Minus,
   Plus,
@@ -205,7 +206,7 @@ export default function PantryScreen() {
         <Text style={styles.headerTitle}>{t('pantry.title')}</Text>
         <View ref={actionsRef} collapsable={false} style={styles.headerActions}>
           <Pressable
-            onPress={() => router.push('/(tabs)/consume-meal')}
+            onPress={() => router.push('/consume-meal')}
             hitSlop={8}
             accessibilityLabel={t('pantry.action.consumeMealLabel')}
             style={styles.headerScan}
@@ -214,7 +215,7 @@ export default function PantryScreen() {
             <Text style={styles.headerScanText}>{t('pantry.action.consumeMeal')}</Text>
           </Pressable>
           <Pressable
-            onPress={() => router.push('/(tabs)/receipt')}
+            onPress={() => router.push('/receipt')}
             hitSlop={8}
             accessibilityLabel={t('pantry.action.receiptLabel')}
             style={styles.headerScan}
@@ -223,7 +224,7 @@ export default function PantryScreen() {
             <Text style={styles.headerScanText}>{t('pantry.action.receipt')}</Text>
           </Pressable>
           <Pressable
-            onPress={() => router.push('/(tabs)/scan-barcode')}
+            onPress={() => router.push('/scan-barcode')}
             hitSlop={8}
             accessibilityLabel={t('pantry.action.scanLabel')}
             style={styles.headerScan}
@@ -285,11 +286,19 @@ export default function PantryScreen() {
       )}
 
       {items.length > 0 && (
-        <Pressable style={styles.cookableButton} onPress={() => router.push('/(tabs)/cookable')}>
+        <Pressable style={styles.cookableButton} onPress={() => router.push('/cookable')}>
           <ChefHat size={16} color={Colors.gold} />
           <Text style={styles.cookableText}>{t('pantry.action.cookable')}</Text>
         </Pressable>
       )}
+
+      {/* 献立（#215）。「作れるレシピ」は**いま作れる 1 品**しか出さず、買い物は
+          「何日分」で考える。その間を埋める入口（設計 §10.1）。
+          主入口はホームのカードで、ここは入口の一つ（決定変更 A・2026-08-28） */}
+      <Pressable style={styles.cookableButton} onPress={() => router.push('/(tabs)/menu')}>
+        <CalendarDays size={16} color={Colors.gold} />
+        <Text style={styles.cookableText}>{t('menu.title')}</Text>
+      </Pressable>
 
       <GroupChips
         groups={groups}

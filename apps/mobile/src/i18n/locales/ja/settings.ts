@@ -1,7 +1,7 @@
 /**
  * 設定画面。
  */
-import type { PluralMessage } from '../../types';
+import type { CriticalMessage, PluralMessage } from '../../types';
 
 const settings = {
   title: '設定',
@@ -59,6 +59,13 @@ const settings = {
     launchCameraSubtitle: '店を出た直後に、起動から1アクションで撮れます',
   },
 
+  /** 献立（#215 §10.11）への入口 1 行。設定自体は menu.settings（S21）で行う */
+  menu: {
+    sectionTitle: '献立',
+    label: '毎日の献立の設定',
+    subtitle: '自動で組む・通知する時刻・不足材料の自動追加',
+  },
+
   account: {
     sectionTitle: 'アカウント',
     profile: 'プロフィール編集',
@@ -79,9 +86,24 @@ const settings = {
     backup: 'バックアップ・復元',
     backupSubtitle: '端末内にバックアップを作成・復元',
     sync: 'クラウド同期',
-    syncSubtitle: '現在は端末内のみ保存されます',
+    syncSubtitle: '家族グループに参加すると、端末どうしで自動的に同期されます',
+    shareStatus: '共有の管理',
+    shareStatusSubtitle: '家族と共有中のもの・リンクで公開中のものを一覧',
     nameAliases: '名寄せ辞書',
-    nameAliasesSubtitle: 'AIが覚えた食材名の対応を確認・修正',
+    /**
+     * 名寄せは**利用者が AI 機能を使わなくても走る**（在庫で作れるレシピを開いたとき・
+     * 足りない材料を買い物リストへ入れたとき — `name-resolve.service.ts`）。
+     * 挙動は変えられないので、自動であることと**送るのは材料名だけ**であることを
+     * ここで開示する。A 階層。
+     */
+    nameAliasesSubtitle: {
+      text: '在庫やレシピの材料名は、表記を揃えるため自動でサーバー（AI 提供元）に送信されます（送るのは材料名だけ）。覚えた対応はここで確認・修正できます',
+      intent:
+        'MUST state that this happens AUTOMATICALLY, without the user starting an AI feature, ' +
+        'AND that ONLY ingredient names are sent. This is the only place the automatic ' +
+        'transmission is disclosed; dropping either half contradicts the store listing and the ' +
+        'privacy policy, which say sending happens on AI screens only.',
+    } satisfies CriticalMessage,
     webShares: 'レシピ帖',
     webSharesSubtitle: '帖の作成・編集と、Web共有の管理',
   },
@@ -95,6 +117,9 @@ const settings = {
     version: 'バージョン',
     licenses: 'ライセンス情報',
     licensesSubtitle: '利用している OSS ライセンスを表示',
+    rateApp: 'アプリを評価する',
+    rateAppSubtitle: 'ストアの評価ページを開きます',
+    rateAppFailedBody: 'ストアを開けませんでした。ストアアプリから「だいどこ」を検索してください。',
   },
 
   coach: {
@@ -103,16 +128,16 @@ const settings = {
       'AI機能（写真レシピ・食材の名寄せ・食事写真）は初回1回無料、以降は広告視聴で1回ずつ使えます。「自分のAIキーを使う」にGeminiキーを設定すると無制限になります。',
     backupTitle: 'データを守る',
     backupText:
-      'データは端末内に保存されます。「バックアップ・復元」でファイルに書き出し・復元ができます。',
+      'データは端末内にあります（家族と共有すると、共有した分だけ端末どうしで同期します）。「バックアップ・復元」でファイルに書き出し・復元ができます。',
     guideTitle: '使い方ガイド',
     guideText:
-      '各画面の「?」でその画面の案内を再生できます。「使い方ガイドを再表示」を押すと全画面の案内をもう一度見られます。',
+      '主な画面の「?」でその画面の案内を再生できます。「使い方ガイドを再表示」を押すと案内をもう一度見られます。',
   },
   webShares: {
     title: 'レシピ帖',
     emptyTitle: 'レシピ帖はまだありません',
     emptyBody:
-      'レシピ一覧で長押し→複数選択→「レシピ帖」から作れます。作った帖はここで編集・共有できます。',
+      'レシピ一覧の棚にある「＋新しい帖」から作れます（レシピを長押し→複数選択→「レシピ帖」でも可）。作った帖はここで編集・共有できます。',
     recipeCount: {
       one: '{{count}}品',
       other: '{{count}}品',
@@ -122,12 +147,72 @@ const settings = {
     legacyNote: '以前の形式の共有（停止のみ可）',
     send: 'リンクを送る',
     stopTitle: 'Web共有を停止',
-    stopConfirm:
-      '共有ページを削除します。リンクを知っている人も見られなくなります。よろしいですか？',
+    stopConfirm: '共有を停止すると、リンクを知っている人も見られなくなります。よろしいですか？',
     stopAction: '停止する',
     stopFailed: '停止できませんでした。通信環境を確認してもう一度お試しください。',
     deleteTitle: 'レシピ帖を削除',
     deleteConfirm: 'この帖を削除しますか？（レシピ自体は消えません）',
+  },
+  shareStatus: {
+    title: '共有の管理',
+    familySection: '家族グループ',
+    familyJoined: '家族グループに参加中',
+    familyJoinedNote: 'メンバーの確認・招待はこちら',
+    familyNotJoined: '家族グループに未参加',
+    familyNotJoinedNote: '参加するとグループの端末どうしで自動的に同期されます',
+    familyScope:
+      '共有: レシピ / レシピ帖 / 買い物リスト / 在庫 — グループのメンバーにだけ見えます。\n共有されない: 調理記録・写真・献立。',
+    linkSection: 'リンクで公開中',
+    linkScope:
+      'リンクを知っている人は誰でも見られます（家族以外も）。新しく開けるのは送ってから7日間で、期限内に開いた人はその後も見られます。「リンクを送る」と期限は張り直されます。',
+    linkEmpty: 'リンクで公開しているものはありません。',
+    deletedRecipe: '（削除したレシピ）',
+    resend: 'リンクを送る',
+    stopTitle: '公開を停止',
+    stopConfirm: '公開を停止すると、リンクを知っている人も見られなくなります。よろしいですか？',
+    stopAction: '停止する',
+    stopFailed: '停止できませんでした。通信環境を確認してもう一度お試しください。',
+    sharedBooks: {
+      one: '共有中のレシピ帖 {{count}}冊',
+      other: '共有中のレシピ帖 {{count}}冊',
+    } satisfies PluralMessage,
+    sharedBooksNote: 'リンクの送付・停止はレシピ帖の管理から',
+    /**
+     * グループ別の実数表示（G5/U3 — docs/共有設計.md §5-4）。
+     * 「0 件」と「そもそも見えない」を区別する — 否定側（recipes スコープの
+     * グループに買い物・在庫が流れないこと）は必ず文で明示する（隆の懸念への回答）。
+     */
+    groupCountRecipes: {
+      one: 'レシピ {{count}}品',
+      other: 'レシピ {{count}}品',
+    } satisfies PluralMessage,
+    groupCountBooks: {
+      one: 'レシピ帖 {{count}}冊',
+      other: 'レシピ帖 {{count}}冊',
+    } satisfies PluralMessage,
+    groupCountShopping: {
+      one: '買い物リスト {{count}}件',
+      other: '買い物リスト {{count}}件',
+    } satisfies PluralMessage,
+    groupCountPantry: {
+      one: '在庫 {{count}}件',
+      other: '在庫 {{count}}件',
+    } satisfies PluralMessage,
+    groupSharedLabel: 'このグループで共有されているもの',
+    groupNotVisible: '買い物リスト・在庫はこのグループには見えません。',
+    groupsNotShared: '調理記録・写真・献立は、どのグループにも共有されません。',
+    groupCurrentMark: 'いま見ているグループ',
+    privateSection: '自分だけ',
+    privateScope:
+      'どのグループにも入れていない品目です。この端末の外には出ません。切替は各品目から。',
+    privateShopping: {
+      one: '買い物リスト {{count}}件',
+      other: '買い物リスト {{count}}件',
+    } satisfies PluralMessage,
+    privatePantry: {
+      one: '在庫 {{count}}件',
+      other: '在庫 {{count}}件',
+    } satisfies PluralMessage,
   },
   book: {
     title: 'レシピ帖',
@@ -137,8 +222,8 @@ const settings = {
     noRecipes: 'まだレシピがありません。「レシピを追加」から選んでください。',
     excludedTag: '共有時は除外（URL取り込み）',
     accessTitle: '公開の設定',
-    passcodeLabel: 'パスコード（4桁）で保護する',
-    passcodeInvalid: 'パスコードは数字4桁で入力してください。',
+    passcodeLabel: 'パスコード（6桁）で保護する',
+    passcodeInvalid: 'パスコードは数字6桁で入力してください。',
     expiryNone: '無期限',
     expiryDays: '{{days}}日で失効',
     shareNow: 'Webページで共有する',

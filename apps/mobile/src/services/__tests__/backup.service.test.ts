@@ -75,6 +75,8 @@ describe('バックアップ対象の取りこぼし防止', () => {
         'ingredients',
         'jan_catalog',
         'memos',
+        'menu_plan_days',
+        'menu_plans',
         'name_aliases',
         'pantry_items',
         'pantry_quantity_parts',
@@ -102,6 +104,12 @@ describe('バックアップ対象の取りこぼし防止', () => {
     expect(columnsOf('recipes')).toContain('place_name');
   });
 
+  it('v17 の recipes.ai_generated が入っている（復元で AI の印が消えないため・#266）', () => {
+    // 落とすと、バックアップから戻した瞬間に安全表示だけが静かに消える。
+    // 在庫 4 テーブルがまるごと漏れた前例があるので、列ごとに固定する
+    expect(columnsOf('recipes')).toContain('ai_generated');
+  });
+
   it('v13 のグループ・賞味期限・誰が が入っている（復元で消えないため）', () => {
     expect(columnsOf('pantry_items')).toEqual(expect.arrayContaining(['group_name', 'expires_on']));
     // v15: 同期の列もバックアップに含める（落とすと復元で共有設定が消える）
@@ -113,6 +121,25 @@ describe('バックアップ対象の取りこぼし防止', () => {
     // 店の学習（レシートの店名→買い物グループ）も消えては困る
     expect(columnsOf('store_group_aliases')).toEqual(
       expect.arrayContaining(['store_name', 'group_name']),
+    );
+  });
+
+  it('v19 の献立テーブルが入っている（復元で献立が消えないため）', () => {
+    // 親（menu_plans）→ 子（menu_plan_days）の順であること — 復元の INSERT はこの並び順
+    const names = BACKUP_TABLES.map((entry) => entry.name);
+    expect(names.indexOf('menu_plans')).toBeGreaterThanOrEqual(0);
+    expect(names.indexOf('menu_plans')).toBeLessThan(names.indexOf('menu_plan_days'));
+    expect(columnsOf('menu_plans')).toEqual(
+      expect.arrayContaining([
+        'meal_time',
+        'generated_at',
+        'anchor_date',
+        'requested_days',
+        'auto_added_item_ids',
+      ]),
+    );
+    expect(columnsOf('menu_plan_days')).toEqual(
+      expect.arrayContaining(['plan_id', 'day', 'recipe_id', 'title', 'reason', 'done_at']),
     );
   });
 

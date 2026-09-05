@@ -18,6 +18,7 @@ const recipe = {
     titleTooLong: '100文字以内で入力してください',
     ingredientsRequired: '材料を1つ以上追加してください',
     stepsRequired: '手順を1つ以上追加してください',
+    tagTooLong: 'タグは30文字以内で入力してください',
   },
 
   /** レシピ入力フォーム（新規・編集・取り込みの確認で共通）。 */
@@ -88,25 +89,50 @@ const recipe = {
       refine: 'お店の味に近づける',
       edit: '編集',
       share: '共有',
-      webShare: 'Webページで共有',
-      webShareSend: 'Web共有リンクを送る',
-      webShareStop: 'Web共有を停止',
       revisions: '版履歴',
+    },
+
+    /**
+     * 共有状態バッジ（U4 — docs/reviews/persona-ui-share-2026-09-04.md）。
+     * 「今このレシピが誰に見えているか」をヘッダ付近で常時示す。用語は §3-4
+     * （公開中/自分だけ）。groups の {{names}} はグループ名を「・」で連結した文字列
+     */
+    shareState: {
+      groups: '共有中: {{names}}',
+      private: '自分だけ',
+      link: 'リンク公開中',
+    },
+
+    // 統一共有シート（docs/共有設計.md §3-2）。可視範囲の 1 行は省略不可
+    shareSheet: {
+      title: 'このレシピを共有',
+      familyJoined: '家族と共有',
+      familyNotJoined: '家族と共有（グループをつくる / 参加する）',
+      familyNote: 'グループのメンバーだけに見えます。参加中は自動で同期されます。',
+      linkTitle: 'リンクで渡す',
+      linkPublish: 'リンクを作って送る',
+      linkSend: 'リンクを送る（公開中）',
+      linkNote:
+        'リンクを知っている人は誰でも見られます（家族以外も）。新しく開けるのは送ってから7日間 — 期限内に開いた人はその後も見られます。',
+      linkStop: '公開を停止',
+      linkStopNote: 'リンクを知っている人も見られなくなります。',
+      linkBlocked: 'URL から取り込んだレシピはリンクにできません（転載をサーバーに置かないため）。',
+      textSend: 'テキストで送る',
+      textNote: '文章として送ります。受け取った人はアプリに取り込めます。',
     },
 
     webShare: {
       attestTitle: '自分で作ったレシピですか？',
       attestBody:
-        'Web共有は、あなた自身が作成した内容だけに使えます。ほかのサイトや本から写した内容は共有できません。\n\n共有すると、リンクを知っている人は誰でもこのレシピを見られます（アプリは不要です）。いつでも停止できます。',
+        'リンクでの共有は、あなた自身が作成した内容だけに使えます。ほかのサイトや本から写した内容は共有できません。\n\n共有すると、リンクを知っている人は誰でもこのレシピを見られます（アプリは不要です）。リンクを新しく開けるのは送ってから7日間で、いつでも停止できます。',
       attestOk: '共有する',
-      failedTitle: 'Web共有',
+      failedTitle: 'リンクで渡す',
       publishFailedBody:
         '共有ページを作成できませんでした。通信環境を確認してもう一度お試しください。',
-      stopTitle: 'Web共有を停止',
-      stopConfirm:
-        '共有ページを削除します。リンクを知っている人も見られなくなります。よろしいですか？',
+      stopTitle: '公開を停止',
+      stopConfirm: '公開を停止すると、リンクを知っている人も見られなくなります。よろしいですか？',
       stopAction: '停止する',
-      stopDoneBody: '共有ページは削除されました。',
+      stopDoneBody: '共有を停止しました。リンクを知っている人も見られなくなりました。',
       stopFailedBody: '停止できませんでした。通信環境を確認してもう一度お試しください。',
     },
 
@@ -294,6 +320,8 @@ const recipe = {
       textDescription: '本文を貼り付けて下書き化',
       ocr: '文字入り画像から作成',
       ocrDescription: 'レシピ本や手書きメモの文字を読み取り',
+      fridge: '冷蔵庫からレシピ',
+      fridgeDescription: '冷蔵庫の写真から食材を在庫に登録し、作れるレシピへ',
       manual: '手動で入力',
       manualDescription: 'レシピを一から入力する',
     },
@@ -302,7 +330,7 @@ const recipe = {
      *
      * 吹き出しは**ハイライトしたカードの話だけ**をする。以前の 1 枚目は「URL取り込み・
      * 文字入り画像の読み取りもここから」と別のカードの話を混ぜていて、しかもその
-     * カードは吹き出しの下に隠れていた。無料枠は生涯 1 回＋広告（`docs/フリーミアム設計.md` §7）
+     * カードは吹き出しの下に隠れていた。無料枠は月 N 回＋広告（`docs/フリーミアム設計.md` §7）
      * なので「1日の」とは書かない。URL・テキスト・文字入り画像は AI の枠を使わない
      * （`ensureInferenceCredit` を通らない）ので、手動の吹き出しでまとめて伝える。
      */
@@ -344,8 +372,9 @@ const recipe = {
 
     offlineNotice: 'インターネットにつながっていると、写真からレシピをつくれます',
 
-    // 無料枠は「生涯 N 回・リセットなし」（usage.service.ts の FREE_LIFETIME_LIMIT）。
-    // 「今日の」と書くと明日また使えると誤解させるので、期間を示す語は入れない。
+    // 無料枠は「月 N 回」（usage.service.ts の FREE_MONTHLY_LIMIT）。
+    // 「今日の」と書くと明日また使えると誤解させるので、期間を示す語は入れない
+    // （「月」も書かない——リセットが来月なことをここで説明する余地が無いため）。
     quotaRemaining: {
       one: '無料作成：あと {{count}} 回',
       other: '無料作成：あと {{count}} 回',
@@ -395,7 +424,7 @@ const recipe = {
     timerPaused: '{{time}}（一時停止中）',
     startTimer: 'タイマーを開始',
     detectedFromBody: '（本文から検出）',
-    tapHint: '画面をタップで材料を表示',
+    tapHint: '画面をタップで材料 / 左右に払って手順を移動',
     prev: '← 前へ',
     finish: '✓ 完成！記録する',
     next: '次へ →',
@@ -447,6 +476,19 @@ const recipe = {
 
     noticeNoChange:
       'レシピに変更はありませんでした。感想をもう少し具体的に書くと直せることがあります。',
+
+    /**
+     * 送信先の開示。**書かないと不当な収集になる**ので A 階層。
+     * この経路は写真だけでなく**レシピ本文と感想の自由記述**を送る（`recipe-refine.provider.ts`）。
+     * 「写真を送ります」と書くと、書いた文章が出ていくことを隠すことになる。
+     */
+    disclosure: {
+      text: 'レシピ全体（材料・手順・タグ）と、書いた感想・添えた写真が、調整のためサーバー（AI 提供元）に送信されます。保存はされません。',
+      intent:
+        'MUST name WHAT leaves the device: the ENTIRE recipe AND the free-text notes the user ' +
+        'typed, not just the photo. MUST also state it goes to a third-party AI provider and is ' +
+        'not retained. Naming only the photo hides that the notes and the whole recipe are sent.',
+    } satisfies CriticalMessage,
 
     feedbackLabel: '作ってみてどうだった？',
     feedbackPlaceholder: 'お店のよりかなり甘かった。とろみも足りない気がする...',

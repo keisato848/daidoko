@@ -7,7 +7,16 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  BackHandler,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { NumberStepper } from '../../../../src/components/NumberStepper';
 import { PhotoPickerField } from '../../../../src/components/PhotoPickerField';
@@ -56,6 +65,7 @@ export default function CookingModeScreen() {
   const [servings, setServings] = useState<number | null>(null);
   const [steps, setSteps] = useState<StepData[]>([]);
   const [ingredients, setIngredients] = useState<IngredientData[]>([]);
+  const [isAiGenerated, setIsAiGenerated] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
   // スワイプでステップ移動（設計 S06「スワイプ or ボタン」— ボタンのみで長らく
@@ -86,6 +96,7 @@ export default function CookingModeScreen() {
     setServings(detail.servings);
     setSteps(detail.steps);
     setIngredients(detail.ingredients);
+    setIsAiGenerated(detail.isAiGenerated);
 
     // 調理セッションを開始（同じレシピの再開なら保存済みの手順位置が返る —
     // ✕ で閉じても・アプリを再起動しても続きから。docs/画面設計.md S06 349行）
@@ -106,6 +117,27 @@ export default function CookingModeScreen() {
     setCurrentStep(index);
     useCookingSessionStore.getState().setStep(index);
   }, []);
+
+  /**
+   * ✕ と Android 戻るの共通の出口（N4・`docs/画面設計.md` §4-1）。
+   * セッションは**終了しない** — 「あとで続きから」の意味（handleComplete だけが end() する）。
+   * 通知やディープリンクで直接開かれて戻り先が無いときは、終了ではなくレシピ詳細へ —
+   * 濡れた手の誤爆でアプリごと閉じると、復帰の pill もホームカードも見えなくなる。
+   */
+  const handleClose = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace(`/(tabs)/recipes/${id}`);
+  }, [router, id]);
+
+  // Android のハードウェア戻るを ✕ と同じ経路に合流させる。
+  // ここで拾わないと、入れ子のタブ／スタックの履歴次第で行き先が変わり得る
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [handleClose]);
 
   useEffect(() => {
     void loadData();
@@ -182,7 +214,7 @@ export default function CookingModeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable onPress={handleClose} hitSlop={12}>
           <X size={20} color={Colors.muted} />
         </Pressable>
         {/*
@@ -323,6 +355,12 @@ export default function CookingModeScreen() {
           <Pressable style={styles.overlaySheet} onPress={(e) => e.stopPropagation()}>
             <View style={styles.overlayHandle} />
             <Text style={styles.overlayTitle}>{t('common.ingredients')}</Text>
+            {/*
+              **料理中モードは詳細画面を通らずに開けるとは限らない**が、ここは
+              分量を見ながら実際に作る面なので、注意書きを出す（#266）。
+              詳細画面だけに置くと、再開の導線から直接ここへ来た人は一度も見ない。
+            */}
+            {isAiGenerated && <Text style={styles.aiNote}>{t('ai.disclaimer')}</Text>}
             {servings != null && (
               <View style={styles.overlayStepper}>
                 <NumberStepper
@@ -566,6 +604,18 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 16,
+  },
+  // 詳細画面の aiRecipeNote と同じ見せ方（#266）
+  aiNote: {
+    fontSize: 11,
+    lineHeight: 17,
+    color: Colors.paper,
+    marginBottom: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.gold,
+    backgroundColor: 'rgba(201,161,106,0.07)',
   },
   overlayTitle: {
     fontSize: 13, // sm: オーバーレイタイトル

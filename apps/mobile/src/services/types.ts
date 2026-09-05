@@ -18,6 +18,12 @@ export interface RecipeListItem {
   cookCount: number;
   /** Card image: the cover photo, else the latest cooking photo, if any */
   heroPhotoUri: string | null;
+  /**
+   * 表紙が AI 生成イメージか（docs/レシピ表紙AI生成設計.md §4）。
+   * `heroPhotoUri` がクッキングログ写真にフォールバックしているときは false
+   * （表紙そのものが無いので該当しない）。
+   */
+  isCoverAiGenerated: boolean;
   /** 作りたいリスト: ピン留め日時（ISO） — null = 未ピン */
   pinnedAt: string | null;
 }
@@ -43,6 +49,19 @@ export interface RecipeDetail {
   heroPhotoUri: string | null;
   /** The recipe's own cover photo (端末内パス) — null if none set */
   coverPhotoPath: string | null;
+  /** 表紙が AI 生成イメージか（docs/レシピ表紙AI生成設計.md §4）。 */
+  isCoverAiGenerated: boolean;
+  /**
+   * 中身（材料・手順）を AI が推定したレシピか（#266）。
+   *
+   * **`false` は「人が書いた」ではなく「AI 由来だと分かっていない」。**
+   * v17 より前の相談・貼り付けテキスト由来のレシピは判定材料が残っていないので
+   * ここが `false` になる。**`false` を根拠に肯定的な表示をしないこと**
+   * （出してよいのは `true` のときの注意書きだけ）。
+   *
+   * 表紙画像だけが AI の場合はこちらは立たない（それは `isCoverAiGenerated`）。
+   */
+  isAiGenerated: boolean;
   /** 作りたいリスト: ピン留め日時（ISO） — null = 未ピン */
   pinnedAt: string | null;
   /** お店の名前（任意）。レシピが持つ（記録側は履歴なので表示に使わない） */
@@ -145,6 +164,13 @@ export interface SaveRecipeInput {
   coverPhotoPath?: string | null;
   /** お店の名前（任意）。空文字・undefined = 未設定 */
   placeName?: string | null;
+  /**
+   * 中身を AI が推定したか（#266）。**真のときだけ渡す。**
+   *
+   * 未指定は「AI ではない」ではなく「分からない」。既に立っている印を
+   * `false` で下げることはできない（`resolveRecipeUpdate` が一方向に守る）。
+   */
+  aiGenerated?: boolean;
 }
 
 /**
@@ -246,7 +272,7 @@ export interface CookingLogEntry {
   placeName: string | null;
 }
 
-export type ShoppingItemSource = 'manual' | 'recipe' | 'low_stock' | 'receipt';
+export type ShoppingItemSource = 'manual' | 'recipe' | 'low_stock' | 'receipt' | 'menu_auto';
 
 export interface ShoppingItem {
   id: string;

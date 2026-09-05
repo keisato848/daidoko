@@ -16,7 +16,17 @@
  * app_meta はバックアップに含まれるので、別グループの端末のバックアップを復元しても
  * 他人の seq を引き継がないようにするため。
  */
-import { getAppMeta, setAppMeta } from './app-meta.service';
+import { getAppMeta, getAppMetaByPrefix, setAppMeta } from './app-meta.service';
+import {
+  ensureEntityGroupsBackfilled,
+  getCurrentSyncGroupId,
+  getKnownSyncGroupIds,
+  getKnownSyncGroupSummaries,
+  registerEntityGroup,
+  removeKnownSyncGroup,
+  resetEntityGroupsForLeave,
+  resolveMembershipsForPush,
+} from './entity-groups.service';
 import { getExpoPushTokenIfPermitted } from './notification.service';
 import { deleteOrphanParts } from './pantry-quantity-db';
 import {
@@ -33,7 +43,13 @@ import {
   buildOutgoingChange,
   listAllSyncableEntities,
 } from './sync-entities.service';
-import { SYNC_PAYLOAD_SCHEMA_VERSION } from './sync-payload';
+import {
+  SYNC_CURSOR_META_KEY,
+  SYNC_PAYLOAD_SCHEMA_VERSION,
+  planPushFanout,
+  syncCursorStorageKey,
+  type SyncGroupScope,
+} from './sync-payload';
 import {
   SYNC_PUSH_BATCH_SIZE,
   bumpSyncQueueRetry,
@@ -44,11 +60,10 @@ import {
   setSyncQueueListener,
   type SyncQueueEntry,
 } from './sync-queue.service';
+import { refreshWidgetSnapshot } from './widget-snapshot.service';
 import { isNativePlatform } from '../db/client';
 import { getLocale } from '../i18n';
 import { notifySyncApplied, setSyncing, setSyncJoined } from '../stores/sync.store';
-
-const CURSOR_KEY = 'sync_cursor';
 
 /** ローカル書き込みから送信までの待ち。連続編集を 1 回の送信にまとめる */
 export const SYNC_DEBOUNCE_MS = 3000;
@@ -77,8 +92,12 @@ interface SyncCursor {
   payloadVersion: number;
 }
 
-async function readCursor(groupId: string): Promise<number> {
-  const raw = await getAppMeta(CURSOR_KEY).catch(() => null);
+/**
+ * グループごとのカーソルを読む。保存鍵は `syncCursorStorageKey`（§12: 主グループは
+ * 従来の `sync_cursor` のまま ＝ 既存キーを主グループのカーソルとして読み替える）。
+ */
+async function readCursor(groupId: string, storageKey: string): Promise<number> {
+  const raw = await getAppMeta(storageKey).catch(() => null);
   if (!raw) return 0;
   try {
     const parsed = JSON.parse(raw) as Partial<SyncCursor>;
@@ -102,19 +121,94 @@ async function readCursor(groupId: string): Promise<number> {
  */
 let cursorEpoch = 0;
 
-async function writeCursor(groupId: string, seq: number, epoch: number): Promise<void> {
+async function writeCursor(
+  groupId: string,
+  storageKey: string,
+  seq: number,
+  epoch: number,
+): Promise<void> {
   if (epoch !== cursorEpoch) return; // 途中で白紙に戻された。この回の結果は捨てる
   const cursor: SyncCursor = {
     groupId,
     seq,
     payloadVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
   };
-  await setAppMeta(CURSOR_KEY, JSON.stringify(cursor)).catch(() => undefined);
+  await setAppMeta(storageKey, JSON.stringify(cursor)).catch(() => undefined);
 }
 
 async function resetCursor(): Promise<void> {
   cursorEpoch += 1;
-  await setAppMeta(CURSOR_KEY, '').catch(() => undefined);
+  await setAppMeta(SYNC_CURSOR_META_KEY, '').catch(() => undefined);
+  // グループ別のカーソル（`sync_cursor:<groupId>`）も全部消す（§12: pull の多重化）。
+  // 主グループだけ消して他を残すと、復元・再参加後に別グループの取り直しが起きない
+  try {
+    const rows = await getAppMetaByPrefix(`${SYNC_CURSOR_META_KEY}:`);
+    for (const row of rows) {
+      if (row.value) await setAppMeta(row.key, '').catch(() => undefined);
+    }
+  } catch {
+    // 読めなければ従来どおり主グループの分だけ。単一グループでは挙動は変わらない
+  }
+}
+
+// ── 多グループの文脈（G-2a — 設計 §12） ─────────────────────────────────────
+
+interface GroupContext {
+  /**
+   * 所属バックフィル（§12-4）が完了しているか。未完の間はファンアウトを使わず、
+   * 従来どおり全部を主グループへ送る（所属が無いだけの実体を「自分だけ」と
+   * 誤読して送信待ちを捨てないための安全弁）。
+   */
+  fanoutReady: boolean;
+  /** 端末クレデンシャルの主グループ（`credentials.groupId`） */
+  primaryGroupId: string;
+  /** 既定所属先（G2「現在のグループ」）。切替 UI が入る G-2b までは常に主グループ */
+  currentGroupId: string;
+  /** 参加中と分かっているグループ（主グループが先頭）。pull はこの数だけ回る */
+  knownGroupIds: string[];
+  /**
+   * グループの scope（分かっているぶんだけ — 控えが旧形式なら空 Map）。
+   * push のファンアウトで scope が許さない種別をそのグループから除外する
+   * （後から scope が絞られたグループへ送って 400 の一括拒否で詰まらないため）
+   */
+  groupScopes: Map<string, SyncGroupScope>;
+}
+
+/**
+ * 1 回の同期で使うグループ文脈を組み立てる。**どこで失敗しても従来の
+ * 単一グループ文脈に倒す**（同期そのものを止めない — §12-4 G7 挙動不変）。
+ */
+async function prepareGroupContext(credentials: SyncCredentials): Promise<GroupContext> {
+  const primaryGroupId = credentials.groupId;
+  try {
+    const fanoutReady = (await ensureEntityGroupsBackfilled(primaryGroupId)) === true;
+    const knownGroupIds = (await getKnownSyncGroupIds(primaryGroupId)) ?? [primaryGroupId];
+    const currentGroupId = (await getCurrentSyncGroupId()) ?? primaryGroupId;
+    // scope は控えから分かるぶんだけ（読めなくても同期は止めない — 空 Map ＝ 除外なし）
+    const groupScopes = new Map<string, SyncGroupScope>();
+    try {
+      for (const summary of (await getKnownSyncGroupSummaries()) ?? []) {
+        groupScopes.set(summary.groupId, summary.scope);
+      }
+    } catch {
+      // scope 不明のまま進む。サーバーが最終的な門番
+    }
+    return {
+      fanoutReady,
+      primaryGroupId,
+      currentGroupId: knownGroupIds.includes(currentGroupId) ? currentGroupId : primaryGroupId,
+      knownGroupIds,
+      groupScopes,
+    };
+  } catch {
+    return {
+      fanoutReady: false,
+      primaryGroupId,
+      currentGroupId: primaryGroupId,
+      knownGroupIds: [primaryGroupId],
+      groupScopes: new Map(),
+    };
+  }
 }
 
 // ── push ─────────────────────────────────────────────────────────────────────
@@ -157,24 +251,43 @@ async function preparePush(): Promise<PreparedPush> {
 }
 
 /**
+ * 送信先グループ。**null は主グループ**で、そのときは `x-sync-group` を付けず
+ * **現行と同一のリクエスト**を出す（§12-2 の互換の要 — 古いサーバーでも通る）。
+ */
+function pushToGroup(
+  changes: readonly SyncPushChange[],
+  groupId: string | null,
+): ReturnType<typeof pushSyncChanges> {
+  return groupId === null ? pushSyncChanges(changes) : pushSyncChanges(changes, groupId);
+}
+
+/**
  * 1 件ずつ送り直す（バッチが**サーバーに内容を拒否された**ときだけ通る道）。
  * 壊れた 1 件のせいで残り全部が永久に送れない、を避ける。
  *
  * 捨てるのは `SERVER_REJECTED`（HTTP 400 ＝ この内容では受理されないと確定した）だけ。
  * 502/504/HTML の応答は**一時障害**なので捨てない — 捨てると、再デプロイ中に
  * たまたま同期した端末の編集が丸ごと消える。
+ *
+ * `removeEntries` が偽のときは待ち行列を触らない（複数グループへのファンアウト中は、
+ * **全グループへ送り終えるまで**消してはいけない — 呼び出し側がまとめて消す）。
  */
-async function pushOneByOne(prepared: PreparedPush): Promise<void> {
+async function pushOneByOne(
+  prepared: PreparedPush,
+  groupId: string | null,
+  removeEntries: boolean,
+): Promise<void> {
   for (let index = 0; index < prepared.changes.length; index += 1) {
     const change = prepared.changes[index];
     const entry = prepared.entries[index];
     if (!change || !entry) continue;
     try {
-      await pushSyncChanges([change]);
-      await removeSentSyncQueueEntries([entry]);
+      await pushToGroup([change], groupId);
+      if (removeEntries) await removeSentSyncQueueEntries([entry]);
     } catch (err) {
       if (err instanceof SyncError && err.code === 'SERVER_REJECTED') {
-        await removeSentSyncQueueEntries([entry]); // この 1 件はサーバーが受け取れない
+        // この 1 件はサーバーが受け取れない
+        if (removeEntries) await removeSentSyncQueueEntries([entry]);
         continue;
       }
       throw err; // ネットワーク断・一時障害・認証切れは全体をやり直す
@@ -183,44 +296,133 @@ async function pushOneByOne(prepared: PreparedPush): Promise<void> {
 }
 
 /**
+ * 1 バッチを 1 グループへ送る（従来の pushPending のバッチ内ロジックそのまま）。
+ * 一時障害はそのまま投げる。呼び出し側はバッチのループを継続 or 中断する。
+ */
+async function sendPreparedToGroup(
+  prepared: PreparedPush,
+  groupId: string | null,
+  removeEntries: boolean,
+): Promise<void> {
+  try {
+    await pushToGroup(prepared.changes, groupId);
+    if (removeEntries) await removeSentSyncQueueEntries(prepared.entries);
+  } catch (err) {
+    await bumpSyncQueueRetry(prepared.entries);
+    if (err instanceof SyncError && err.code === 'SERVER_REJECTED') {
+      // **1 件でも通す。** 「2 件以上のときだけ」にしていると、待ち行列が 1 件
+      // （＝レシピを 1 件直して 3 秒待った、いちばんふつうの状態）のとき 400 の
+      // 1 件が先頭に居座り、この端末は**送信も受信も永久に止まる**
+      await pushOneByOne(prepared, groupId, removeEntries);
+      return;
+    }
+    if (err instanceof SyncError && err.code === 'PAYLOAD_TOO_LARGE') {
+      // 大きすぎるだけ。半分ずつ送れば通る（1 件でも大きければ 1 件ずつの道で
+      // サーバーの 1 件上限に当たって 400 になり、そこで捨てられる）
+      await pushInHalves(prepared, groupId, removeEntries);
+      return;
+    }
+    throw err;
+  }
+}
+
+/** ファンアウト計画の添字から送信用の部分集合を作る */
+function subsetOfPrepared(prepared: PreparedPush, indices: readonly number[]): PreparedPush {
+  const changes: SyncPushChange[] = [];
+  const entries: SyncQueueEntry[] = [];
+  for (const index of indices) {
+    const change = prepared.changes[index];
+    const entry = prepared.entries[index];
+    if (!change || !entry) continue;
+    changes.push(change);
+    entries.push(entry);
+  }
+  return { changes, entries, dropped: [] };
+}
+
+/**
  * 送信待ちを空になるまで送る。
  *
  * 1 バッチ（200 件）で終わると、蔵書の多い端末がグループに参加した直後に
  * 「一部のレシピだけ家族に見えている」状態が次の起動まで続く。
+ *
+ * 多グループ（§12-3 G3）: 所属バックフィル済みなら entity_groups を引いて
+ * **所属グループぶんファンアウト**する。所属ゼロの実体はどこにも送らない（G9 —
+ * 判定は `planPushFanout`・純関数）。バックフィル未完・所属が読めない間は
+ * 従来どおり全部を主グループへ送る（所属が「まだ無いだけ」の実体を
+ * 「自分だけ」と誤読して捨てないための安全弁）。
  */
-async function pushPending(): Promise<void> {
+async function pushPending(ctx: GroupContext): Promise<void> {
   for (let batch = 0; batch < MAX_PUSH_BATCHES; batch += 1) {
     const prepared = await preparePush();
     if (prepared.dropped.length > 0) await removeSentSyncQueueEntries(prepared.dropped);
     if (prepared.changes.length === 0) return;
 
-    try {
-      await pushSyncChanges(prepared.changes);
-      await removeSentSyncQueueEntries(prepared.entries);
-    } catch (err) {
-      await bumpSyncQueueRetry(prepared.entries);
-      if (err instanceof SyncError && err.code === 'SERVER_REJECTED') {
-        // **1 件でも通す。** 「2 件以上のときだけ」にしていると、待ち行列が 1 件
-        // （＝レシピを 1 件直して 3 秒待った、いちばんふつうの状態）のとき 400 の
-        // 1 件が先頭に居座り、この端末は**送信も受信も永久に止まる**
-        await pushOneByOne(prepared);
-        continue;
-      }
-      if (err instanceof SyncError && err.code === 'PAYLOAD_TOO_LARGE') {
-        // 大きすぎるだけ。半分ずつ送れば通る（1 件でも大きければ 1 件ずつの道で
-        // サーバーの 1 件上限に当たって 400 になり、そこで捨てられる）
-        await pushInHalves(prepared);
-        continue;
-      }
-      throw err;
+    if (!ctx.fanoutReady) {
+      await sendPreparedToGroup(prepared, null, true);
+      continue;
     }
+
+    const memberships = await resolveMembershipsForPush(
+      prepared.changes,
+      ctx.currentGroupId,
+      ctx.knownGroupIds,
+    ).catch(() => null);
+    if (memberships === null) {
+      // 所属が読めない（DB の一時失敗）。従来どおり主グループへ — 捨てるよりよい
+      await sendPreparedToGroup(prepared, null, true);
+      continue;
+    }
+    const plan = planPushFanout(prepared.changes, memberships, ctx.primaryGroupId, ctx.groupScopes);
+
+    // G9: どのグループにも属さない実体は送らない ＝ 送信済み扱いで待ち行列から消す
+    if (plan.selfOnlyIndices.length > 0) {
+      await removeSentSyncQueueEntries(subsetOfPrepared(prepared, plan.selfOnlyIndices).entries);
+    }
+    if (plan.groups.length === 0) continue;
+
+    if (plan.groups.length === 1) {
+      // 単一グループ（現行の全利用者はここ）: 従来と同じ送信・同じ消し方
+      const target = plan.groups[0];
+      if (!target) continue;
+      await sendPreparedToGroup(
+        subsetOfPrepared(prepared, target.indices),
+        target.groupId === ctx.primaryGroupId ? null : target.groupId,
+        true,
+      );
+      continue;
+    }
+
+    // 複数グループ: **全グループへ送り終えるまで待ち行列から消さない。**
+    // 先に消すと、後のグループが失敗したときその変更が二度と送られない
+    const sentEntries: SyncQueueEntry[] = [];
+    const seenEntryKeys = new Set<string>();
+    for (const target of plan.groups) {
+      const subset = subsetOfPrepared(prepared, target.indices);
+      await sendPreparedToGroup(
+        subset,
+        target.groupId === ctx.primaryGroupId ? null : target.groupId,
+        false,
+      );
+      for (const entry of subset.entries) {
+        const key = `${entry.entityType} ${entry.entityId}`;
+        if (seenEntryKeys.has(key)) continue;
+        seenEntryKeys.add(key);
+        sentEntries.push(entry);
+      }
+    }
+    await removeSentSyncQueueEntries(sentEntries);
   }
 }
 
 /** 413 を受けたバッチを半分に割って送る。1 件まで割れたら 1 件ずつの道へ */
-async function pushInHalves(prepared: PreparedPush): Promise<void> {
+async function pushInHalves(
+  prepared: PreparedPush,
+  groupId: string | null,
+  removeEntries: boolean,
+): Promise<void> {
   if (prepared.changes.length <= 1) {
-    await pushOneByOne(prepared);
+    await pushOneByOne(prepared, groupId, removeEntries);
     return;
   }
   const mid = Math.ceil(prepared.changes.length / 2);
@@ -234,15 +436,15 @@ async function pushInHalves(prepared: PreparedPush): Promise<void> {
   ];
   for (const half of halves) {
     try {
-      await pushSyncChanges(half.changes);
-      await removeSentSyncQueueEntries(half.entries);
+      await pushToGroup(half.changes, groupId);
+      if (removeEntries) await removeSentSyncQueueEntries(half.entries);
     } catch (err) {
       if (err instanceof SyncError && err.code === 'PAYLOAD_TOO_LARGE') {
-        await pushInHalves(half);
+        await pushInHalves(half, groupId, removeEntries);
         continue;
       }
       if (err instanceof SyncError && err.code === 'SERVER_REJECTED') {
-        await pushOneByOne(half);
+        await pushOneByOne(half, groupId, removeEntries);
         continue;
       }
       throw err;
@@ -264,16 +466,21 @@ async function pushInHalves(prepared: PreparedPush): Promise<void> {
  * **自端末が押した分も適用する**。ローカルが古い（復元直後など）可能性があり、
  * サーバーは自分の古い push を LWW で捨てるので、取り直さないと永久に食い違う。
  */
-async function pullAndApply(credentials: SyncCredentials): Promise<number> {
+async function pullAndApply(credentials: SyncCredentials, groupId: string): Promise<number> {
+  const isPrimary = groupId === credentials.groupId;
+  const storageKey = syncCursorStorageKey(groupId, credentials.groupId);
   const epoch = cursorEpoch;
-  const startCursor = await readCursor(credentials.groupId);
+  const startCursor = await readCursor(groupId, storageKey);
   const applyOwnChanges = startCursor === 0;
   let cursor = startCursor;
   let applied = 0;
   let notified = 0;
 
   for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
-    const result = await pullSyncChanges(cursor);
+    // 主グループは従来と**同一のリクエスト**（引数もヘッダも増やさない — §12-2 互換）
+    const result = isPrimary
+      ? await pullSyncChanges(cursor)
+      : await pullSyncChanges(cursor, 500, groupId);
     let nextCursor = cursor;
     // 書き込みに失敗した変更より先へは進めない（次回の pull でやり直す）
     let blocked = false;
@@ -293,13 +500,21 @@ async function pullAndApply(credentials: SyncCredentials): Promise<number> {
         break;
       }
       if (outcome === 'applied') applied += 1;
+      // §12-3: 受信した実体を受信元グループへ所属させる（tombstone は除く —
+      // 消えたものに所属を付けない）。`skipped`（LWW で負けた等）でも付ける:
+      // サーバーのそのグループに実体がある事実は変わらず、こちらの新しい版を
+      // 同じグループへ送り返すための所属になる。失敗しても投げない（push 時の
+      // 既定所属でも付き直る）
+      if (!change.deleted) {
+        await registerEntityGroup(change.entityType, change.entityId, groupId);
+      }
       nextCursor = Math.max(nextCursor, change.seq);
     }
 
     if (epoch !== cursorEpoch) return applied; // 復元などで白紙に戻った。この回は捨てる
     if (nextCursor > cursor) {
       cursor = nextCursor;
-      await writeCursor(credentials.groupId, cursor, epoch);
+      await writeCursor(groupId, storageKey, cursor, epoch);
     }
     // **ページごとに合図を出す。** 最後にまとめて出すと、途中のページで回線が切れた
     // ときに「適用したのに一覧が古いまま」になる
@@ -311,7 +526,49 @@ async function pullAndApply(credentials: SyncCredentials): Promise<number> {
     if (!result.hasMore || result.changes.length === 0) break;
   }
 
+  // v17: 受信したレシピに AI 由来の印を貼り直す（#266）。
+  // **印を知らない端末から届いたレシピは印が付いていない。** 写真・紙面 OCR 由来なら
+  // 出所行から遡って立てられるので、受信のたびに冪等な backfill を 1 回流す。
+  // これが無いと、家族の端末から届いた AI レシピが**次に起動し直すまで無印**になる。
+  if (applied > 0) {
+    try {
+      const { backfillRecipeAiGenerated } = await import('../db/migrate');
+      const { getExpoDb } = await import('../db/client');
+      backfillRecipeAiGenerated(getExpoDb());
+    } catch {
+      // 受信そのものは成功している。印は次回起動時の runMigrations でも貼られる
+    }
+    // 家族の変更（買い物・献立）が届いたらウィジェットも追随させる
+    // （ウィジェット設計 §1 の 5 フックのうち「同期 pull 完了後」— 2026-09-04 配線）
+    refreshWidgetSnapshot();
+  }
+
   return applied;
+}
+
+/**
+ * 参加グループぶん pull を回す（§12: pull の多重化。カーソルはグループごと）。
+ *
+ * 主グループを先に取り、失敗はそのまま投げる（従来と同じ）。**主グループ以外の
+ * 401 はそのグループから外されただけ**なので、控えから落として次へ進む —
+ * クレデンシャル破棄はしない（`sync-client` 側も groupId 指定時は破棄しない）。
+ */
+async function pullAllGroups(credentials: SyncCredentials, ctx: GroupContext): Promise<void> {
+  for (const groupId of ctx.knownGroupIds) {
+    try {
+      await pullAndApply(credentials, groupId);
+    } catch (err) {
+      if (
+        groupId !== ctx.primaryGroupId &&
+        err instanceof SyncError &&
+        err.code === 'AUTH_INVALID'
+      ) {
+        await removeKnownSyncGroup(groupId);
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 // ── push トークン ────────────────────────────────────────────────────────────
@@ -346,23 +603,43 @@ let running: Promise<void> | null = null;
 let rerunRequested = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * 直近の `execute()` が pull まで成功したか。**献立の自動追加（#215 §10.11.1）専用の状態。**
+ * `runSync()` は失敗しても例外を投げない契約なので、これが無いと「pull が終わったか」を
+ * 呼び出し側が知りようが無い。未参加（家族と同期していない）は「古い在庫観」という
+ * 概念自体が無いので成功扱いにする。
+ */
+let lastPullOutcome: 'ok' | 'failed' | 'not-participating' = 'not-participating';
+
 async function execute(): Promise<void> {
   const credentials = await getStoredCredentials();
   // 画面が「個人/家族」の切り替えを出すかの判断に使う（設計 §5-2）
   setSyncJoined(credentials !== null);
-  if (!credentials) return; // 未参加。同期そのものが無い
+  if (!credentials) {
+    lastPullOutcome = 'not-participating';
+    return; // 未参加。同期そのものが無い
+  }
   setSyncing(true);
   try {
+    // §12-4: 一度きりの所属バックフィルを含む多グループ文脈。失敗すると
+    // fanoutReady=false の従来文脈が返る（同期は従来どおり続く）
+    const ctx = await prepareGroupContext(credentials);
     // **送れないことと受け取れないことは独立させる。** push が投げたら pull を飛ばす、
     // にしていると、送れない変更が 1 件あるだけでその端末は家族の変更を一切受け取れず、
     // 通知の登録もされない（無言で、再インストールまで続く）
     let pushError: unknown = null;
     try {
-      await pushPending();
+      await pushPending(ctx);
     } catch (err) {
       pushError = err;
     }
-    await pullAndApply(credentials); // 適用の合図はページごとに出る（下の pullAndApply）
+    try {
+      await pullAllGroups(credentials, ctx); // 適用の合図はページごとに出る（pullAndApply）
+      lastPullOutcome = 'ok';
+    } catch (err) {
+      lastPullOutcome = 'failed';
+      throw err;
+    }
     await ensurePushTokenRegistered();
     if (pushError !== null) throw pushError;
   } finally {
@@ -391,6 +668,30 @@ export async function runSync(): Promise<void> {
     rerunRequested = false;
     await runSync();
   }
+}
+
+/**
+ * 献立の自動追加（#215 §10.11.1）専用。`runSync()` は「積んだら後でもう一度」の
+ * fire-and-forget 契約（既に走っている回があると即座に返る）で、**pull の完了を
+ * 待つ口が無い**。ここでは既に走っている回があればそれに相乗りして待ち、
+ * 無ければ新しく 1 回走らせて、pull まで成功したかを返す。
+ *
+ * オフラインで pull が失敗した朝は false — 呼び出し側はその朝の自動追加を
+ * スキップする（古い在庫観で家族の買い物リストへ書き込まないため）。
+ */
+export async function runSyncAndAwaitPull(): Promise<boolean> {
+  if (!isNativePlatform) return true;
+  if (running) {
+    await running.catch(() => undefined);
+    return lastPullOutcome !== 'failed';
+  }
+  running = execute()
+    .catch(() => undefined)
+    .finally(() => {
+      running = null;
+    });
+  await running;
+  return lastPullOutcome !== 'failed';
 }
 
 /** ローカル書き込みの後に呼ぶ。数秒待ってから 1 回だけ走らせる */
@@ -426,6 +727,11 @@ export async function onSyncGroupJoined(): Promise<void> {
   // 前のグループから持ち越した「行の無い持ち分」を捨てる（#213）。
   // 残すと、同じ品目があとから行だけ届いたときに二重計上になる
   await deleteOrphanParts();
+  // §12-3: 前のグループの所属とバックフィル完了フラグを白紙へ。**ここを飛ばすと、
+  // 離脱を経ずに鍵が消えた端末（グループ削除・外された＝401 の自動破棄）が再参加した
+  // とき、フラグが立ったまま所属は旧グループのみ → G9 の規則で 1 件も送られなくなる。**
+  // 白紙にすれば直後の runSync のバックフィルが新しいグループへ全実体を所属させる
+  await resetEntityGroupsForLeave();
   setSyncJoined(true);
   registeredPushToken = null; // 新しいグループへ登録し直す
   await enqueueSyncEntities(await listAllSyncableEntities());
@@ -443,6 +749,9 @@ export async function onSyncGroupLeft(): Promise<void> {
   await resetCursor();
   // 行の無い持ち分を残さない（#213）。次にどのグループへ入っても持ち込まれないようにする
   await deleteOrphanParts();
+  // §12-3: 所属と多グループの文脈も白紙へ。次の参加でバックフィルが走り直し、
+  // 新しいグループへ全実体が所属し直す（＝現行の「参加時 全量同期」と同じ意味）
+  await resetEntityGroupsForLeave();
   setSyncJoined(false);
   registeredPushToken = null;
 }
@@ -461,6 +770,12 @@ export async function onLocalDataReplaced(): Promise<void> {
   await resetCursor();
   // 復元で行が入れ替わり、前の中身の持ち分が孤児として残ることがある（#213）
   await deleteOrphanParts();
+  // §12-3: 所属も作り直す。復元後のローカル行と復元前の所属（entity_groups は
+  // バックアップに入れない — schema.ts 参照）が食い違ったまま push すると、
+  // 所属ゼロと誤読して 1 件も送らない事故になる。白紙にすれば直後の runSync の
+  // バックフィルが主グループへ、pull（カーソル 0 の全量取り直し）が受信元グループへ
+  // 所属を付け直す — どちらへ何が残るかは従来どおり LWW が決める
+  await resetEntityGroupsForLeave();
   await enqueueSyncEntities(await listAllSyncableEntities());
   await runSync();
 }

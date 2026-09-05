@@ -12,10 +12,13 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
-import { getAppMeta, setAppMeta } from './app-meta.service';
+import { inArray } from 'drizzle-orm';
+
+import { getAppMeta, getAppMetaByPrefix, setAppMeta } from './app-meta.service';
 import type { RecipeDetail } from './types';
 import { API_V1 } from '../config';
-import { isNativePlatform } from '../db/client';
+import { getDb, isNativePlatform } from '../db/client';
+import * as schema from '../db/schema';
 import { getLocale } from '../i18n';
 
 /** Web 共有ページの写真は表示幅が最大 640px — 1200px あれば Retina でも十分 */
@@ -106,6 +109,70 @@ async function clearWebShare(recipeId: string): Promise<void> {
   await setAppMeta(META_PREFIX + recipeId, '');
 }
 
+export interface WebShareRecipeListItem {
+  recipeId: string;
+  /** レシピが端末から消えていても共有は生きているので null を許す（停止だけできる） */
+  title: string | null;
+  record: WebShareRecord;
+}
+
+/**
+ * 受け取り期限を「今から 7 日」に張り直す（docs/共有設計.md §3-6）。
+ * 「リンクを送る」たびにベストエフォートで呼ぶ — 失敗しても送付自体は続行する
+ * （相手が期限内に開けない事故より、送れない事故のほうが困る）。
+ */
+export async function renewWebShare(recipeId: string): Promise<void> {
+  const record = await getWebShare(recipeId);
+  if (!record) return;
+  try {
+    await fetch(`${API_V1}/share/recipes/${record.slug}/renew`, {
+      method: 'POST',
+      headers: { 'x-share-delete-token': record.deleteToken },
+    });
+  } catch {
+    // オフライン等。次に送るときに張り直される
+  }
+}
+
+/**
+ * リンクで公開中のレシピ単体を列挙する（「共有の管理」画面用）。
+ * 共有状態は app_meta にしか無く、これまで一覧する手段が無かった —
+ * 「今なにを公開しているか」を利用者が確かめられるようにするための関数。
+ * 停止済みは値が '' になっている（clearWebShare）ので parse で自然に落ちる。
+ */
+export async function listWebShareRecipes(): Promise<WebShareRecipeListItem[]> {
+  const rows = await getAppMetaByPrefix(META_PREFIX);
+  const items: Array<{ recipeId: string; record: WebShareRecord }> = [];
+  for (const row of rows) {
+    if (!row.value) continue;
+    try {
+      const parsed = JSON.parse(row.value) as Partial<WebShareRecord>;
+      if (parsed.slug && parsed.url && parsed.deleteToken) {
+        items.push({
+          recipeId: row.key.slice(META_PREFIX.length),
+          record: parsed as WebShareRecord,
+        });
+      }
+    } catch {
+      // 壊れた値は一覧に出さない（getWebShare と同じ扱い）
+    }
+  }
+  if (items.length === 0) return [];
+  const recipeRows = await getDb()
+    .select({ id: schema.recipes.id, title: schema.recipes.title })
+    .from(schema.recipes)
+    .where(
+      inArray(
+        schema.recipes.id,
+        items.map((item) => item.recipeId),
+      ),
+    );
+  const titles = new Map(recipeRows.map((row) => [row.id, row.title]));
+  return items
+    .map((item) => ({ ...item, title: titles.get(item.recipeId) ?? null }))
+    .sort((a, b) => (a.record.sharedAt < b.record.sharedAt ? 1 : -1));
+}
+
 // ── 公開ペイロード ───────────────────────────────────────────────────────────
 
 export interface SharePayload {
@@ -120,6 +187,18 @@ export interface SharePayload {
   tags: string[];
   photoBase64?: string;
   photoMime?: 'image/jpeg';
+  /**
+   * 表紙が AI 生成イメージか（docs/レシピ表紙AI生成設計.md §4）。
+   * **省略可** — 旧サーバー（フィールドを知らない zod）が未知キーで 400 を
+   * 返さないことが前提（`aiNote` と同じ手法）。false は送らない（省略で表す）。
+   */
+  coverIsAiGenerated?: boolean;
+  /**
+   * 中身（材料・手順）を AI が推定したレシピか（#266）。
+   * `coverIsAiGenerated` と同じく**省略可・false は送らない**。
+   * 表紙が AI というだけの場合はこちらは立たない（別の意味の別フィールド）。
+   */
+  aiGenerated?: boolean;
 }
 
 /** レシピ 1 件ぶんの本文（単品共有と帖で共通）。純粋（テスト対象） */
@@ -138,7 +217,10 @@ export function buildShareRecipeBody(
       ...(ing.groupLabel ? { groupLabel: ing.groupLabel } : {}),
     })),
     steps: recipe.steps.map((step) => ({ body: step.body })),
-    tags: recipe.tags,
+    // サーバー契約（タグ ≤10 個・各 ≤30 字）に送信側で収める（P4）
+    tags: recipe.tags.slice(0, 10).map((tag) => tag.slice(0, 30)),
+    ...(recipe.isCoverAiGenerated ? { coverIsAiGenerated: true } : {}),
+    ...(recipe.isAiGenerated ? { aiGenerated: true } : {}),
   };
 }
 

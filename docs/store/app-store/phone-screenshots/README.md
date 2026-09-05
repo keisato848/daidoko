@@ -57,7 +57,7 @@ node scripts/release/capture-ios-screenshots.mjs --shots 01,04   # 部分再取�
 | 順  | ファイル                     | 内容                               |
 | --- | ---------------------------- | ---------------------------------- |
 | 1   | `01-home-timeline.png`       | ホーム（家族の調理タイムライン）   |
-| 2   | `02-recipe-library.png`      | レシピ蔵書庫（一覧・検索）         |
+| 2   | `02-recipe-library.png`      | レシピ一覧（一覧・検索）           |
 | 3   | `03-recipe-detail.png`       | レシピ詳細                         |
 | 4   | `04-cooking-mode.png`        | 料理中モード                       |
 | 5   | `06-family-group.png`        | 家族グループ                       |

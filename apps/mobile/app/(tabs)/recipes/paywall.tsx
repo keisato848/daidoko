@@ -30,7 +30,7 @@ import {
 } from '../../../src/services/entitlement.service';
 import { EntitlementUnavailableError } from '../../../src/services/entitlement.types';
 import {
-  FREE_LIFETIME_LIMIT,
+  FREE_MONTHLY_LIMIT,
   getFreemiumStatus,
   grantAdBonus,
 } from '../../../src/services/usage.service';
@@ -195,7 +195,7 @@ export default function PaywallScreen() {
         <Text style={styles.subtitle}>
           {tCount(
             premiumAvailable ? 'paywall.subtitle' : 'paywall.freeSubtitle',
-            FREE_LIFETIME_LIMIT,
+            FREE_MONTHLY_LIMIT,
           )}
         </Text>
 
@@ -267,7 +267,7 @@ export default function PaywallScreen() {
             <Pressable
               accessibilityRole="button"
               style={styles.adButton}
-              onPress={() => router.replace('/(tabs)/ai-key')}
+              onPress={() => router.replace('/ai-key')}
             >
               <KeyRound size={18} color={Colors.gold} />
               <Text style={styles.adButtonText}>{t('paywall.useOwnKey')}</Text>

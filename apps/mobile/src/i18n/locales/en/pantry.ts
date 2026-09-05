@@ -87,6 +87,8 @@ const pantry: typeof ja = {
     },
     buyLabel: 'Bought {{name}} (move to pantry)',
     uncheckLabel: 'Uncheck {{name}}',
+    menuBadge: 'From meal plan',
+    menuBadgeLabel: 'Added from your meal plan. Tap to open the recipe',
     coach: {
       linkTitle: 'Connected to your pantry',
       linkText:
@@ -101,6 +103,13 @@ const pantry: typeof ja = {
     analyzing: 'Analysing your meal',
     lead: 'Photograph a meal and we’ll estimate what you used and subtract it (experimental).',
     capture: 'Photograph a meal',
+    disclosure: {
+      text: 'Your meal photo is sent to our server (and the AI provider) for analysis. It is not stored.',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
+        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
+        'dropping either half misrepresents what happens to their data.',
+    },
     quotaRemaining: {
       one: 'Free analyses left: {{count}}',
       other: 'Free analyses left: {{count}}',
@@ -115,6 +124,11 @@ const pantry: typeof ja = {
       other: 'Subtract ({{count}})',
     },
     noMatch: 'We think this is “{{dish}}”, but nothing in your pantry matches it.',
+    applied: {
+      one: 'Removed {{count}} item from your pantry',
+      other: 'Removed {{count}} items from your pantry',
+    },
+    applyFailed: "We couldn't update your pantry. Please try again in a moment.",
     notRecognized: "We couldn't recognise the dish. Retake it head-on in good light.",
     failed: 'Analysis failed',
   },
@@ -165,6 +179,55 @@ const pantry: typeof ja = {
     storeGroupUnset: 'Not set',
     notRecognized: "We couldn't read that receipt. Retake it with the whole receipt in frame.",
     noItems: "We couldn't find any items on that receipt. Retake it head-on in good light.",
+    failed: 'Reading failed',
+  },
+
+  fridge: {
+    title: 'From a fridge photo',
+    lead: 'Take a photo of the inside of your fridge and we’ll read the ingredients and add them to your pantry. Taking two photos — the main compartment and the vegetable drawer — reads more accurately. Quantities are filled in only where they can be counted from the photo, and you can edit them.',
+    reading: 'Reading your fridge photo',
+    capture: 'Photograph your fridge',
+    disclosure: {
+      text: 'Reading uses a cloud AI. The fridge photo is sent only to read the ingredients and is not stored.',
+      intent:
+        'MUST state BOTH that the photo LEAVES the device to a cloud AI AND that it is not ' +
+        'retained, BEFORE the user takes or picks the photo. A fridge photo shows what a ' +
+        'family eats and how they live; dropping either half misrepresents what happens to ' +
+        'that data.',
+    },
+    resultHint: {
+      text: 'Here’s what we read. Fix any wrong names or quantities, uncheck what you don’t want, then add. Nothing changes in your pantry until you add here. Quantities are filled in only where they could be counted from the photo (a blank one is fine).',
+      intent:
+        'MUST convey ALL FOUR: nothing is added to the pantry until the user confirms here, ' +
+        'names AND quantities are editable, quantities are present ONLY where they could be ' +
+        'counted from the photo (never guessed), and a blank quantity is fine (tracked as ' +
+        '"no quantity"). Implying quantities were guessed breaks trust in the pantry.',
+    },
+    uncertainBadge: 'maybe',
+    uncertainLabel: 'We’re not sure about this one. Check the name',
+    alreadyInPantry: 'Already in your pantry',
+    quantityPlaceholder: 'Qty',
+    quantityLabel: 'Quantity (blank = not tracked; e.g. 3, about 200g)',
+    exclude: 'Exclude',
+    include: 'Include',
+    retry: 'Start over',
+    confirm: {
+      one: 'Add to pantry ({{count}})',
+      other: 'Add to pantry ({{count}})',
+    },
+    added: {
+      one: 'Added {{count}} item to your pantry',
+      other: 'Added {{count}} items to your pantry',
+    },
+    addFailed: {
+      one: "{{count}} item couldn't be added",
+      other: "{{count}} items couldn't be added",
+    },
+    cookableCta: 'See recipes you can make with your current pantry',
+    consultCta: 'Plan a recipe with AI',
+    noItems:
+      'We couldn’t read any ingredients from that photo. Retake it with the inside well lit, or add items by hand from the pantry screen.',
+    manualFallback: 'Add to pantry by hand',
     failed: 'Reading failed',
   },
 

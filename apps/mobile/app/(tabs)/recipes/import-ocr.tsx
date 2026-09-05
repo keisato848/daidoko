@@ -42,9 +42,9 @@ import { t, tCount } from '../../../src/i18n';
 import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import {
-  capturePhoto,
+  capturePhotoSeries,
   capturePhotosFromGallery,
-  PhotoCaptureCancelledError,
+  confirmContinueCapture,
   UserFacingError,
   type CapturedPhoto,
 } from '../../../src/services/photo-capture.service';
@@ -55,6 +55,7 @@ import {
   type RecipePageResult,
 } from '../../../src/services/recipe-page.provider';
 import { createRecipe } from '../../../src/services/recipe.service';
+import { maybeRequestStoreReview } from '../../../src/services/review-request.service';
 import { createOcrSource } from '../../../src/services/source.service';
 import { recordCloudInference } from '../../../src/services/usage.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
@@ -80,13 +81,17 @@ export default function ImportRecipePageScreen() {
   const addFromCamera = useCallback(async () => {
     setErrorMsg(null);
     try {
-      const photo = await capturePhoto('camera', expoImagePickerPhotoCaptureAdapter);
-      setPages((current) => [...current, photo].slice(0, MAX_RECIPE_PAGE_IMAGES));
+      // 連続撮影: 表→裏のように残り枠まで続けて撮れる（1 枚ごとに続行を確認）
+      const shot = await capturePhotoSeries('camera', expoImagePickerPhotoCaptureAdapter, {
+        maxCount: MAX_RECIPE_PAGE_IMAGES - pages.length,
+        confirmMore: confirmContinueCapture,
+      });
+      if (shot.length === 0) return; // 1 枚目でキャンセル
+      setPages((current) => [...current, ...shot].slice(0, MAX_RECIPE_PAGE_IMAGES));
     } catch (error) {
-      if (error instanceof PhotoCaptureCancelledError) return;
       setErrorMsg(error instanceof UserFacingError ? error.message : t('common.photoAddFailed'));
     }
-  }, []);
+  }, [pages.length]);
 
   const addFromGallery = useCallback(async () => {
     setErrorMsg(null);
@@ -134,8 +139,12 @@ export default function ImportRecipePageScreen() {
         rawText: '',
         capturedAt: pages[0]?.takenAt,
       });
-      await createRecipe({ ...data, sourceId });
+      // 紙面の撮影から中身を起こした下書き（#266）。端末内 OCR は廃止済みで、
+      // この経路は現在すべて生成モデルを通る
+      await createRecipe({ ...data, sourceId, aiGenerated: true });
       setToastMessage(t('recipeImport.saved'));
+      // 紙面から AI の下書きが形になった瞬間にストア評価を打診（条件・頻度はサービス側）
+      void maybeRequestStoreReview('ai-recipe');
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
     [pages, router],

@@ -12,28 +12,28 @@ const recipeImport = {
     loading: '共有ページを読み込んでいます',
     recipeLead: '家族から共有されたレシピです。内容を確認して保存してください。',
     bookLead: {
-      one: 'レシピ帖に{{count}}品あります。まとめて蔵書庫に保存できます。',
-      other: 'レシピ帖に{{count}}品あります。まとめて蔵書庫に保存できます。',
+      one: 'レシピ帖に{{count}}品あります。まとめて保存できます。',
+      other: 'レシピ帖に{{count}}品あります。まとめて保存できます。',
     } satisfies PluralMessage,
     ingredientCount: {
       one: '材料 {{count}}',
       other: '材料 {{count}}',
     } satisfies PluralMessage,
     passcodeLead:
-      'このレシピ帖はパスコードで守られています。共有した人から聞いた4桁を入力してください。',
+      'このレシピ帖はパスコードで守られています。共有した人から聞いた数字を入力してください。',
     unlock: '開く',
-    save: '蔵書庫に保存',
+    save: '保存する',
     saveAll: {
-      one: '{{count}}品を蔵書庫に保存',
-      other: '{{count}}品を蔵書庫に保存',
+      one: '{{count}}品を保存',
+      other: '{{count}}品を保存',
     } satisfies PluralMessage,
     saving: '保存中…',
-    saved: '蔵書庫に保存しました',
+    saved: '保存しました',
     savedCount: {
-      one: '{{count}}品を蔵書庫に保存しました',
-      other: '{{count}}品を蔵書庫に保存しました',
+      one: '{{count}}品を保存しました',
+      other: '{{count}}品を保存しました',
     } satisfies PluralMessage,
-    backToLibrary: '蔵書庫へ戻る',
+    backToLibrary: 'レシピ一覧へ戻る',
     error: {
       notFound:
         'この共有ページは見つかりませんでした（共有が停止されたか、期限が切れた可能性があります）。',
@@ -188,14 +188,20 @@ const recipeImport = {
     removePhoto: 'この写真を外す',
     photoHint: '冷蔵庫の中身や、参考にしたい料理の写真を添えられます',
     /**
-     * 送信先の開示。**写真を添えたときだけ出す**（文字だけの相談では写真は出ない）。
+     * 送信先の開示。**常に出す**。
+     * 以前は写真を添えたときだけ出していたが、この機能は写真が無くても毎回
+     * 会話・作りかけの下書き・（在庫を考慮するときは）材料名を送っている
+     * （`recipe-consult.provider.ts`）。写真だけを言うと、文字だけの相談では
+     * 1 行も出ず、送っていることを隠すことになる。
      */
-    photoDisclosure: {
-      text: '添えた写真は相談のためサーバー（AI 提供元）に送信されます。保存はされません。',
+    disclosure: {
+      text: '会話の内容と作りかけの下書き（在庫を考慮するときは材料名、写真を添えたときは写真も）が、返事をつくるためサーバー（AI 提供元）に送信されます。保存はされません。',
       intent:
-        'MUST state BOTH that the photo LEAVES the device to a third-party AI provider AND that ' +
-        'it is not retained. This is the disclosure the user relies on before sending a photo; ' +
-        'dropping either half misrepresents what happens to their data.',
+        'MUST name what leaves the device on EVERY turn: the conversation and the draft recipe — ' +
+        'not only attached photos. Pantry names and photos are conditional and MUST be marked as ' +
+        'such. MUST also state it goes to a third-party AI provider and is not retained. This ' +
+        'line is shown even with no photo attached; a photo-only wording hides the text that is ' +
+        'always sent.',
     } satisfies CriticalMessage,
     firstMessage:
       '何を作りましょうか。「あっさりした麺類」「冷蔵庫の鶏むねを使いたい」など、ざっくりで大丈夫です。',

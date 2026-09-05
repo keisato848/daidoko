@@ -3,9 +3,9 @@ import type ja from '../ja/paywall';
 const paywall: typeof ja = {
   title: 'DAIDOKO Premium',
   subtitle: {
-    one: 'Your first {{count}} AI recipe is free — after that, each ad you watch unlocks one more.\nWith Premium, use them as much as you like.',
+    one: 'You get {{count}} free AI recipe a month — after that, each ad you watch unlocks one more.\nWith Premium, use them as much as you like.',
     other:
-      'Your first {{count}} AI recipe is free — after that, each ad you watch unlocks one more.\nWith Premium, use them as much as you like.',
+      'You get {{count}} free AI recipes a month — after that, each ad you watch unlocks one more.\nWith Premium, use them as much as you like.',
   },
 
   benefit: {
@@ -26,9 +26,9 @@ const paywall: typeof ja = {
    */
   freeTitle: 'Get more AI recipes',
   freeSubtitle: {
-    one: 'AI recipe creation is free for your first {{count}} use. After that, watch an ad to earn one more.',
+    one: 'AI recipe creation is free for {{count}} use a month. After that, watch an ad to earn one more.',
     other:
-      'AI recipe creation is free for your first {{count}} uses. After that, watch an ad to earn one more.',
+      'AI recipe creation is free for {{count}} uses a month. After that, watch an ad to earn one more.',
   },
 
   terms: {

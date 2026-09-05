@@ -19,6 +19,9 @@ export function runCommand(command, args = [], options = {}) {
     encoding: 'utf8',
     env: { ...process.env, ...(options.env ?? {}) },
     shell,
+    // 既定 1MB だとリリースマージの `git diff --cached` で溢れて
+    // pre-commit（scan-staged-secrets 等）が「git diff failed」で死ぬ（2026-09-05 に実発）
+    maxBuffer: options.maxBuffer ?? 64 * 1024 * 1024,
   });
 
   const stdout = result.stdout ?? '';
@@ -36,11 +39,7 @@ export function runCommand(command, args = [], options = {}) {
 }
 
 export function tail(text, lines = 20) {
-  return String(text)
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .slice(-lines)
-    .join('\n');
+  return String(text).split(/\r?\n/).filter(Boolean).slice(-lines).join('\n');
 }
 
 export async function readJsonFile(filePath) {

@@ -2,7 +2,7 @@
   "expo": {
     "name": "だいどこ",
     "slug": "daidoko",
-    "version": "1.12.3",
+    "version": "1.13.1",
     "orientation": "default",
     "scheme": "daidoko",
     "userInterfaceStyle": "dark",
@@ -16,16 +16,21 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.daidoko.app",
-      "buildNumber": "10033",
+      "buildNumber": "10035",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["ja", "en"]
       },
-      "associatedDomains": ["applinks:daidoko-production.up.railway.app"]
+      "associatedDomains": ["applinks:daidoko-production.up.railway.app"],
+      "appleTeamId": "VY7SNHS2BY",
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.daidoko.app"]
+      }
     },
     "android": {
       "package": "com.daidoko.app",
-      "versionCode": 10033,
+      "versionCode": 10035,
+      "googleServicesFile": "C:/secure/google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"
@@ -44,6 +49,11 @@
               "scheme": "https",
               "host": "daidoko-production.up.railway.app",
               "pathPrefix": "/b/"
+            },
+            {
+              "scheme": "https",
+              "host": "daidoko-production.up.railway.app",
+              "pathPrefix": "/j/"
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
@@ -93,7 +103,41 @@
           "iosAppId": "ca-app-pub-2633806931583277~1080328085",
           "delayAppMeasurementInit": true
         }
-      ]
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "ShoppingList",
+              "label": "買い物リスト",
+              "description": "買い物リストの未購入品を表示します",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "320dp",
+              "maxResizeHeight": "180dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Menu",
+              "label": "献立",
+              "description": "今日の一品を表示します（大きくすると今週の献立一覧）",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "320dp",
+              "maxResizeHeight": "320dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true

@@ -19,6 +19,8 @@
  */
 import { z } from 'zod';
 
+import { parsePartEntityId } from './pantry-quantity';
+
 /**
  * payload の版。列を増やしたら上げる（受信側は自分より新しい版を読み飛ばす）。
  *
@@ -143,6 +145,16 @@ export interface RecipeSyncPayload {
    * 省略可（古い版の送信には無い＝ false 扱い）。
    */
   urlImported?: boolean;
+  /**
+   * 中身（材料・手順）を AI が推定したレシピか（#266）。**レシピ単位**で、
+   * リビジョンの属性ではない — 編集しても落とさない印なので、版ごとに新しい行を作る
+   * リビジョン側に置くと引き継ぎを書き忘れた瞬間に消える。
+   *
+   * 省略可（印を知らない古い版の送信には無い）。**受信側は `false` で上書きしないこと。**
+   * 未指定は「AI ではない」ではなく「分からない」なので、既に立っている印を消す根拠にならない。
+   * `SYNC_PAYLOAD_SCHEMA_VERSION` は**上げない**（省略可の追加なので破壊的変更ではない）。
+   */
+  aiGenerated?: boolean;
   ingredients: {
     id: string;
     sortOrder: number;
@@ -352,6 +364,7 @@ const recipePayloadSchema = z.object({
     .nullish()
     .transform((v) => v ?? null),
   urlImported: z.boolean().optional(),
+  aiGenerated: z.boolean().optional(),
   ingredients: z.array(
     z.object({
       id: z.string().min(1),
@@ -546,4 +559,196 @@ export function incomingChangeWins(
   if (Number.isNaN(incoming)) return false;
   if (Number.isNaN(local)) return true;
   return incoming >= local;
+}
+
+// ── 多グループ（G-2a — 設計 §12-3・共有設計 §5-4）──────────────────────────
+// entity_groups（ローカル DB）の読み書きは entity-groups.service.ts。ここには
+// **判断だけ**を置く（DB を掴む経路は jest で叩けない — このファイル冒頭の分割方針）。
+
+/** 所属解決の鍵（entity_groups の (entity_type, entity_id) に対応する） */
+export interface EntityGroupKey {
+  entityType: string;
+  entityId: string;
+}
+
+/**
+ * この実体の所属を引くための鍵。
+ *
+ * **在庫数量の持ち分（pantry_quantity）は自分では所属を持たず、親品目に従う。**
+ * 持ち分は品目の数量の一部でしかなく、別々のグループに入れられる形にすると
+ * 「品目はグループ A・数量はグループ B」という意味の無い状態を作れてしまう。
+ */
+export function entityGroupKeyOf(entityType: string, entityId: string): EntityGroupKey {
+  if (entityType === SYNC_ENTITY_PANTRY_QUANTITY) {
+    const parsed = parsePartEntityId(entityId);
+    if (parsed) return { entityType: SYNC_ENTITY_PANTRY_ITEM, entityId: parsed.itemId };
+  }
+  return { entityType, entityId };
+}
+
+/** Map の鍵（entityType/entityId の組を 1 文字列に。区切りは id に現れない NUL） */
+export function entityGroupMapKey(key: EntityGroupKey): string {
+  return `${key.entityType}\u0000${key.entityId}`;
+}
+
+/**
+ * 所属の無い実体に「現在のグループ」を既定所属として付けてよいか（G2）。
+ *
+ * - 既に所属がある → 付けない（既定は初回だけ。以後の所属変更は利用者の操作）
+ * - 行が無い（＝削除済みの tombstone）→ 付けない。過去に共有していれば所属が
+ *   残っていてそこへ届くし、一度も共有していなければ**削除の事実ごと外に出さない**
+ * - `shared = 0`（自分だけ）→ 付けない（G9: どのグループにも入れない）。
+ *   `null` は共有扱い（`sync-row-entities.service.ts` の `isShared` と同じ読み方）
+ */
+export function shouldAssignDefaultGroup(input: {
+  hasMemberships: boolean;
+  rowExists: boolean;
+  shared: number | null;
+}): boolean {
+  if (input.hasMemberships) return false;
+  if (!input.rowExists) return false;
+  return input.shared !== 0;
+}
+
+// ── グループの範囲（scope — §12-1） ─────────────────────────────────────────
+
+/** グループの範囲。サーバーの sync_groups.scope と同じ語彙 */
+export type SyncGroupScope = 'all' | 'recipes';
+
+/**
+ * `scope = 'recipes'` のグループで同期を許す entity_type。
+ *
+ * **サーバー `apps/server/src/lib/sync-store.ts` の `RECIPES_SCOPE_TYPES` と一致必須**
+ * （サーバーが門番で、scope 外の push は 400・pull には現れない — §12-1）。
+ * ここでずれると、クライアントが「送ってよい」と判断した種別がサーバーで一括拒否され、
+ * **そのバッチ全体が送れず同期が詰まる**。共有パッケージへ寄せるのは今後の課題
+ * （packages/shared とサーバーは import 構成（ESM/.js 拡張子）が異なり、いま寄せるには
+ * ビルド設定ごと触ることになるため、コメントでの相互参照に留める）。
+ */
+export const RECIPES_SCOPE_TYPES: readonly string[] = [SYNC_ENTITY_RECIPE, SYNC_ENTITY_RECIPE_BOOK];
+
+/**
+ * この種別をその scope のグループへ流してよいか。
+ * 在庫数量の持ち分（pantry_quantity）は親品目（pantry_item）として判定する —
+ * `entityGroupKeyOf` と同じ写像（品目が流れない scope へ持ち分だけ流さない）。
+ */
+export function isTypeAllowedForScope(scope: SyncGroupScope, entityType: string): boolean {
+  if (scope === 'all') return true;
+  const effectiveType =
+    entityType === SYNC_ENTITY_PANTRY_QUANTITY ? SYNC_ENTITY_PANTRY_ITEM : entityType;
+  return RECIPES_SCOPE_TYPES.includes(effectiveType);
+}
+
+/**
+ * 既定所属（G2「いま見ているグループ」）の **scope 対応版**の解決。
+ *
+ * 「現在のグループ」がレシピ限定（scope='recipes'）のとき、買い物・在庫の新規品目を
+ * そのままそのグループへ所属させると、push がサーバーの門番（400）に当たって
+ * **同期が詰まる**。この種別を許さないグループには既定所属を付けず、
+ * 参加グループの先頭（＝主グループ側）から「許すグループ」へ倒す。
+ * どのグループも許さなければ null ＝ 所属を付けない（「自分だけ」— G9 と同義）。
+ *
+ * 単一グループ（scope='all' のみ — 現行の全利用者）では常に currentGroupId を返す。
+ * 控えが空（読めていない）ときも currentGroupId — scope 不明を理由に既定所属を
+ * 止めると、単一グループの現行挙動が変わってしまう。
+ */
+export function resolveDefaultGroupForType(
+  entityType: string,
+  currentGroupId: string,
+  knownGroups: readonly { groupId: string; scope: SyncGroupScope }[],
+): string | null {
+  if (knownGroups.length === 0) return currentGroupId;
+  const current = knownGroups.find((group) => group.groupId === currentGroupId);
+  if (current && isTypeAllowedForScope(current.scope, entityType)) return current.groupId;
+  const fallback = knownGroups.find((group) => isTypeAllowedForScope(group.scope, entityType));
+  return fallback?.groupId ?? null;
+}
+
+/** push のファンアウト計画。indices は入力 `entities` の添字 */
+export interface PushFanoutPlan {
+  /** グループごとの送信対象。**主グループが先頭**、以降は groupId 昇順（決定的） */
+  groups: { groupId: string; indices: number[] }[];
+  /**
+   * どのグループにも属さない実体（G9: 自分だけ）。**送らずに送信待ちから消してよい。**
+   * 移行（§12-4）で既存実体には必ず所属が付くので、所属ゼロは「送らない」と確定できる
+   */
+  selfOnlyIndices: number[];
+}
+
+/**
+ * 送信 1 バッチをグループ別に分配する（G3: 所属グループぶんファンアウト）。
+ *
+ * `memberships` の鍵は `entityGroupMapKey(entityGroupKeyOf(...))`。呼び出し側
+ * （entity-groups.service）が **参加中のグループとの交わりを取った後**の所属を渡す
+ * （他人のバックアップ復元などで残った、参加していないグループへは送らない —
+ * 送ると 401 で同期全体が止まる）。
+ *
+ * `groupScopes`（任意）: グループの scope が分かっているとき、**scope が許さない種別は
+ * そのグループの送信から除外する**。所属が付いた後にサーバー側で scope が絞られた
+ * （PATCH /group）場合でも、400 の一括拒否でバッチ全体が詰まらないための防御。
+ * 除外しても所属（entity_groups）は消さない — 送らないだけ。scope 不明のグループは
+ * 従来どおり送る（サーバーが最終的な門番）。
+ */
+export function planPushFanout(
+  entities: readonly EntityGroupKey[],
+  memberships: ReadonlyMap<string, readonly string[]>,
+  primaryGroupId: string,
+  groupScopes?: ReadonlyMap<string, SyncGroupScope>,
+): PushFanoutPlan {
+  const byGroup = new Map<string, number[]>();
+  const selfOnlyIndices: number[] = [];
+  entities.forEach((entity, index) => {
+    const key = entityGroupMapKey(entityGroupKeyOf(entity.entityType, entity.entityId));
+    const groups = (memberships.get(key) ?? []).filter((groupId) => {
+      const scope = groupScopes?.get(groupId);
+      return scope === undefined || isTypeAllowedForScope(scope, entity.entityType);
+    });
+    if (groups.length === 0) {
+      // 所属ゼロ（G9: 自分だけ）に加え、所属先の scope がすべてこの種別を許さない場合も
+      // ここに落ちる — 送り先が無い点で同じで、待ち行列の扱いも現行ルール（消す）のまま
+      selfOnlyIndices.push(index);
+      return;
+    }
+    for (const groupId of new Set(groups)) {
+      const list = byGroup.get(groupId);
+      if (list) list.push(index);
+      else byGroup.set(groupId, [index]);
+    }
+  });
+  const order = [...byGroup.keys()].sort((a, b) => {
+    if (a === primaryGroupId) return -1;
+    if (b === primaryGroupId) return 1;
+    return a < b ? -1 : 1;
+  });
+  return {
+    groups: order.map((groupId) => ({ groupId, indices: byGroup.get(groupId) ?? [] })),
+    selfOnlyIndices,
+  };
+}
+
+/** 同期カーソルを保存する app_meta の鍵（従来からの単一グループ用） */
+export const SYNC_CURSOR_META_KEY = 'sync_cursor';
+
+/**
+ * グループごとのカーソル保存鍵。
+ *
+ * **主グループは従来の鍵のまま**にする — これが §12-4「既存キーは主グループの
+ * カーソルとして読み替える」の実体で、データ移行そのものが要らない
+ * （1.13.0 以前が書いた `sync_cursor` を 1.13.1 がそのまま主グループとして読む）。
+ */
+export function syncCursorStorageKey(groupId: string, primaryGroupId: string): string {
+  return groupId === primaryGroupId ? SYNC_CURSOR_META_KEY : `${SYNC_CURSOR_META_KEY}:${groupId}`;
+}
+
+/**
+ * 「現在のグループ」（G2 の既定所属先）の解決。
+ * 未設定・参加していないグループを指している（他人のバックアップ復元・離脱後の残骸）
+ * ときは**主グループへ倒す** — 現行の単一グループ挙動そのもの。
+ */
+export function resolveCurrentGroupId(
+  stored: string | null,
+  primaryGroupId: string,
+  knownGroupIds: readonly string[],
+): string {
+  return stored && knownGroupIds.includes(stored) ? stored : primaryGroupId;
 }

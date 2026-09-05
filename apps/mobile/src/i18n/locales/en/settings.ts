@@ -54,6 +54,12 @@ const settings: typeof ja = {
     launchCameraSubtitle: 'Right after you leave — one action from launch to a photo',
   },
 
+  menu: {
+    sectionTitle: 'Meal plan',
+    label: 'Daily meal plan settings',
+    subtitle: 'Auto-planning, notification time, and auto-adding missing ingredients',
+  },
+
   account: {
     sectionTitle: 'Account',
     profile: 'Edit profile',
@@ -74,9 +80,18 @@ const settings: typeof ja = {
     backup: 'Backup & restore',
     backupSubtitle: 'Create and restore backups on this device',
     sync: 'Cloud sync',
-    syncSubtitle: 'Right now everything is stored on this device only',
+    syncSubtitle: 'Join a family group and your devices stay in sync automatically',
+    shareStatus: 'Sharing overview',
+    shareStatusSubtitle: 'See what is shared with family and what is public by link',
     nameAliases: 'Ingredient name dictionary',
-    nameAliasesSubtitle: 'Review and fix the names the AI has learned',
+    nameAliasesSubtitle: {
+      text: 'Ingredient names from your pantry and recipes are sent automatically to our server (and the AI provider) to match up spellings — only the names are sent. Review and fix what it has learned here',
+      intent:
+        'MUST state that this happens AUTOMATICALLY, without the user starting an AI feature, ' +
+        'AND that ONLY ingredient names are sent. This is the only place the automatic ' +
+        'transmission is disclosed; dropping either half contradicts the store listing and the ' +
+        'privacy policy, which say sending happens on AI screens only.',
+    },
     webShares: 'Recipe books',
     webSharesSubtitle: 'Create and edit books, and manage web sharing',
   },
@@ -90,6 +105,9 @@ const settings: typeof ja = {
     version: 'Version',
     licenses: 'Licenses',
     licensesSubtitle: 'Open-source licenses used by this app',
+    rateApp: 'Rate this app',
+    rateAppSubtitle: 'Opens the store review page',
+    rateAppFailedBody: 'Could not open the store. Please search for “Daidoko” in the store app.',
   },
 
   coach: {
@@ -98,16 +116,16 @@ const settings: typeof ja = {
       'AI features (photo recipes, ingredient matching, meal photos) are free once — after that, each ad you watch unlocks one use. Set a Gemini key under “Use your own AI key” to remove the limit.',
     backupTitle: 'Keeping your data safe',
     backupText:
-      'Your data lives on this device. Use “Backup & restore” to write it to a file and bring it back.',
+      'Your data lives on this device (share with family and the shared items sync between your devices). Use “Backup & restore” to write it to a file and bring it back.',
     guideTitle: 'Walkthrough',
     guideText:
-      'Tap “?” on any screen to replay its guidance. “Show the walkthrough again” brings back the guidance on every screen.',
+      'Tap “?” on main screens to replay their guidance. “Show the walkthrough again” brings the guidance back.',
   },
   webShares: {
     title: 'Recipe books',
     emptyTitle: 'No recipe books yet',
     emptyBody:
-      'In the recipe list, long-press to select multiple recipes, then tap "Recipe book". Books you create can be edited and shared here.',
+      'Create one from “+ New book” on the shelf in the recipe list (or long-press to select recipes, then tap “Recipe book”). Books you create can be edited and shared here.',
     recipeCount: {
       one: '{{count}} recipe',
       other: '{{count}} recipes',
@@ -118,11 +136,68 @@ const settings: typeof ja = {
     send: 'Send link',
     stopTitle: 'Stop web sharing',
     stopConfirm:
-      'This deletes the share page. People with the link will no longer see it. Continue?',
+      'This stops sharing. People with the link will no longer be able to see it. Continue?',
     stopAction: 'Stop sharing',
     stopFailed: 'Could not stop sharing. Check your connection and try again.',
     deleteTitle: 'Delete recipe book',
     deleteConfirm: 'Delete this book? (Your recipes themselves are not deleted.)',
+  },
+  shareStatus: {
+    title: 'Sharing overview',
+    familySection: 'Family group',
+    familyJoined: 'In a family group',
+    familyJoinedNote: 'See members and invite family here',
+    familyNotJoined: 'Not in a family group',
+    familyNotJoinedNote: 'Join one and devices in the group stay in sync automatically',
+    familyScope:
+      'Shared: recipes / recipe books / shopping list / pantry — visible only to group members.\nNot shared: cooking logs, photos, menu plans.',
+    linkSection: 'Public by link',
+    linkScope:
+      'Anyone with the link can view these — not just family. New viewers can open a link for 7 days after it was sent; sending it again resets the window.',
+    linkEmpty: 'Nothing is public by link.',
+    deletedRecipe: '(deleted recipe)',
+    resend: 'Send link',
+    stopTitle: 'Stop sharing',
+    stopConfirm:
+      'This stops sharing. People with the link will no longer be able to see it. Continue?',
+    stopAction: 'Stop sharing',
+    stopFailed: 'Could not stop sharing. Check your connection and try again.',
+    sharedBooks: {
+      one: '{{count}} shared recipe book',
+      other: '{{count}} shared recipe books',
+    },
+    sharedBooksNote: 'Send or stop links from the recipe book manager',
+    groupCountRecipes: {
+      one: '{{count}} recipe',
+      other: '{{count}} recipes',
+    },
+    groupCountBooks: {
+      one: '{{count}} recipe book',
+      other: '{{count}} recipe books',
+    },
+    groupCountShopping: {
+      one: '{{count}} shopping list item',
+      other: '{{count}} shopping list items',
+    },
+    groupCountPantry: {
+      one: '{{count}} pantry item',
+      other: '{{count}} pantry items',
+    },
+    groupSharedLabel: 'Shared in this group',
+    groupNotVisible: 'The shopping list and pantry are not visible to this group.',
+    groupsNotShared: 'Cooking logs, photos and menu plans are never shared with any group.',
+    groupCurrentMark: 'Current group',
+    privateSection: 'Only me',
+    privateScope:
+      'Items not placed in any group. They never leave this device. Change this on each item.',
+    privateShopping: {
+      one: '{{count}} shopping list item',
+      other: '{{count}} shopping list items',
+    },
+    privatePantry: {
+      one: '{{count}} pantry item',
+      other: '{{count}} pantry items',
+    },
   },
   book: {
     title: 'Recipe book',
@@ -132,8 +207,8 @@ const settings: typeof ja = {
     noRecipes: 'No recipes yet. Tap "Add recipes" to pick some.',
     excludedTag: 'Excluded when sharing (URL import)',
     accessTitle: 'Sharing options',
-    passcodeLabel: 'Protect with a 4-digit passcode',
-    passcodeInvalid: 'Enter a 4-digit numeric passcode.',
+    passcodeLabel: 'Protect with a 6-digit passcode',
+    passcodeInvalid: 'Enter a 6-digit numeric passcode.',
     expiryNone: 'No expiry',
     expiryDays: 'Expires in {{days}} days',
     shareNow: 'Share as a web page',

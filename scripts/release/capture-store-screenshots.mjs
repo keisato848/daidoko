@@ -42,13 +42,19 @@ const RECIPE_ID = args.recipe ?? 'recipe-1';
 
 /**
  * ショット定義。route は Expo Router のパス（daidoko://<route> で開く）。
- * manual: true は自動化不可（既存ファイル維持）。順序 = Play 表示順（README.md と一致させる）。
+ * manual: true は自動化不可（既存ファイル維持）。表示順の正は update-play-screenshots.mjs の
+ * ORDER（README.md の表と同期）。03・04 は extras 退避済みだが再取得用にここへ残す。
  */
 const SHOTS = [
   { file: '01-home-timeline.png', route: '', label: 'ホーム（調理タイムライン）' },
   { file: '02-recipe-library.png', route: 'recipes', label: 'レシピ蔵書庫' },
   { file: '03-recipe-detail.png', route: `recipes/${RECIPE_ID}`, label: 'レシピ詳細' },
   { file: '04-cooking-mode.png', route: `recipes/${RECIPE_ID}/cook`, label: '料理中モード' },
+  {
+    file: '05-menu-plan.png',
+    route: 'menu',
+    label: '献立（組んだ状態・#215 M1・1.13.0 主役機能）',
+  },
   { file: '06-family-group.png', route: 'family', label: '家族グループ' },
   {
     file: '07-photo-to-recipe.png',
@@ -60,6 +66,11 @@ const SHOTS = [
     file: '10-recipe-detail-photo.png',
     manual: true,
     label: '写真つき詳細（実データ依存・既存維持）',
+  },
+  {
+    file: '12-fridge-to-recipe.png',
+    manual: true,
+    label: '冷蔵庫の確認シート（実冷蔵庫写真で AI 実行が要る・README 参照・1.13.1）',
   },
 ];
 
@@ -91,6 +102,8 @@ let lastShotOpenedCook = false;
  * 下の「cooking session guard」節に置いていた間、このスクリプトは 1 枚も撮れずに落ちていた。
  */
 let sessionGuardUsable = null;
+/** sqlite の失敗警告は 1 度だけ出す（DB 未作成の初回は必ず失敗するため） */
+let sessionGuardWarned = false;
 try {
   for (const shot of selected) {
     if (shot.manual) {
@@ -201,14 +214,17 @@ function clearCookingSession() {
     'shell',
     `sqlite3 ${DB_PATH} "UPDATE app_meta SET value='' WHERE key='cooking_session';"`,
   ]);
-  if (!res.ok) {
+  if (!res.ok && !sessionGuardWarned) {
     // DB 未作成（wipe 直後・アプリ初回起動前）は「消すものが無い」だけ — 諦めない。
     // 最初のショットの起動前は必ずここを通るため、ここで latch すると
-    // 推奨手順（-wipe-data 起動）では run 全体でガードが死ぬ
+    // 推奨手順（-wipe-data 起動）では run 全体でガードが死ぬ。root 自体は使えている
+    // （sessionGuardUsable=true のまま）ので、DB ができる 1 枚目のあとは成功する。
+    // 以前は毎回 sessionGuardUsable=false にして丸ごと諦めていたため、04 の後に撮る
+    // 06/07 に調理セッション pill が写り込む欠陥があった
     if (/unable to open database/i.test(res.output)) return;
-    // sqlite3 が無いなど。撮影は止めず、警告の繰り返しもしない
+    // sqlite3 が無いなど、DB 以外の原因。撮影は止めず、警告の繰り返しもしない
     console.warn(`WARN: 調理セッションの削除に失敗（続行）: ${res.output.slice(0, 200)}`);
-    sessionGuardUsable = false;
+    sessionGuardWarned = true;
   }
 }
 

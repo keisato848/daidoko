@@ -30,6 +30,14 @@
  * （#139）。株の写真で品種を創作されると台帳に嘘が載るので、
  * **`source==='plant'` のときは品種を返させない**。
  *
+ * ## note に「写っていないもの」を書かせない（実機で作話・2026-09-02）
+ *
+ * 空芯菜 1 株だけの写真に対して note が「ほかにトマトも写っています」と返した。
+ * トマトは写っていない。原因は**プロンプトの例文に具体的な作物名を書いていたこと**で、
+ * モデルが形式ごと真似て、もっともらしい別の作物を埋めた。note は確認画面に
+ * そのまま出るため、嘘が利用者の目に直接触れる。例文から作物名を外し、
+ * **1 種類しか写っていないならほかの作物に触れない**ことを明示した。
+ *
  * ## 思考トークンは切る
  *
  * ラベルを読む・作物を見分けるのに深い推論は要らない。harvest-vision と同じく
@@ -63,6 +71,10 @@ export interface IdentifyVisionRaw {
   variety?: string;
   /** 種からか苗からか。ラベルに書かれているときだけ */
   plantedAs?: 'seed' | 'seedling';
+  /** source==='plant' のときだけ。株の生育段階 */
+  growthStage?: 'seedling' | 'vegetative' | 'flowering' | 'fruiting' | 'harvest';
+  /** source==='plant' のときだけ。撮影時点で植え付けからおよそ何日経っているかの推定 */
+  estimatedAgeDays?: number;
   /** 確認画面に出す一言（任意） */
   note?: string;
 }
@@ -93,6 +105,7 @@ const SYSTEM_PROMPT = [
   '- 「種子」「タネ」とあれば plantedAs=seed、「苗」とあれば plantedAs=seedling を入れます。',
   '  判断できない場合は plantedAs を返しません。',
   '- 文字が読めた範囲で確度を cropConfidence に正直に入れます。',
+  '- growthStage と estimatedAgeDays は返しません（まだ植えていないため）。',
   '',
   'source=plant のとき:',
   '- 見た目から作物を推定して cropGuess に入れます。',
@@ -100,6 +113,13 @@ const SYSTEM_PROMPT = [
   '  推測で入れると誤った記録になります。plantedAs も返しません。',
   '- 幼苗で見分けが付きにくい場合は cropConfidence を low にし、',
   '  note に「双葉のみで判別が難しいです」のように理由を書きます。',
+  '- growthStage には生育段階を入れます:',
+  '  seedling（双葉〜本葉数枚の幼苗）/ vegetative（茎葉が育っている）/',
+  '  flowering（開花している）/ fruiting（実が付いている）/ harvest（収穫できる大きさの実がある）。',
+  '- estimatedAgeDays には、その作物の一般的な生育速度から見て、',
+  '  植え付け（定植または播種）からおよそ何日経った状態かを整数で推定して入れます。',
+  '- **自信が無い場合は growthStage と estimatedAgeDays の両方を返しません。**',
+  '  当てずっぽうの日数を入れてはいけません。返さなければ端末側が撮影日を使います。',
   '',
   '作物名の書き方:',
   '- 一般的な和名のカタカナ表記にします（「ミニトマト」「エダマメ」「キュウリ」）。',
@@ -109,11 +129,20 @@ const SYSTEM_PROMPT = [
   '  一覧に無い作物が写っている場合は、無理に当てはめず一般的な和名で返します。',
   '',
   'そのほか:',
-  '- 1 枚につき**主要な 1 つ**だけを返します。複数写っている場合はいちばん大きく写っているものにし、',
-  '  note で「ほかにキュウリも写っています」のように触れるだけにします。',
+  '- 1 枚につき**主要な 1 つ**だけを返します。',
+  '- **写っていないものを note に書いてはいけません。** 別の作物に触れてよいのは、',
+  '  その作物が実際にはっきり写っていて、名前を言い切れるときだけです。',
+  '  1 種類しか写っていないなら、ほかの作物には**一切触れません**（note を空にします）。',
+  '  自信が無いときは「ほかにも植わっているようです」と作物名を出さずに書くか、note を空にします。',
   '- 栽培方法の助言はしません。登録の下書きを作るのが目的です。',
   'すべて自然な日本語で、短く書きます。',
 ].join('\n');
+
+/** growthStage の許容値。schema と sanitize の両方で使う(境界の判定を 1 か所にする) */
+const GROWTH_STAGES = ['seedling', 'vegetative', 'flowering', 'fruiting', 'harvest'] as const;
+
+/** estimatedAgeDays の妥当域の上限(日)。家庭菜園の栽培期間として十分すぎる余裕を見て 10 年 */
+const MAX_ESTIMATED_AGE_DAYS = 3650;
 
 const GEMINI_RESPONSE_SCHEMA = {
   type: 'OBJECT',
@@ -124,6 +153,8 @@ const GEMINI_RESPONSE_SCHEMA = {
     cropConfidence: { type: 'STRING', enum: ['high', 'medium', 'low'] },
     variety: { type: 'STRING' },
     plantedAs: { type: 'STRING', enum: ['seed', 'seedling'] },
+    growthStage: { type: 'STRING', enum: [...GROWTH_STAGES] },
+    estimatedAgeDays: { type: 'NUMBER' },
     note: { type: 'STRING' },
   },
   required: ['found'],
@@ -273,6 +304,23 @@ export function sanitize(raw: IdentifyVisionRaw): IdentifyVisionRaw {
   if (out.source === 'label') {
     if (raw.variety?.trim()) out.variety = raw.variety.trim().slice(0, 50);
     if (raw.plantedAs === 'seed' || raw.plantedAs === 'seedling') out.plantedAs = raw.plantedAs;
+  }
+
+  // 生育段階と経過日数は株の写真だけ。ラベルはまだ植えていないので意味を持たない
+  // （プロンプトでも label には返させていないが、境界でも同じ理由で止める）。
+  if (out.source === 'plant') {
+    if (raw.growthStage && (GROWTH_STAGES as readonly string[]).includes(raw.growthStage)) {
+      out.growthStage = raw.growthStage;
+    }
+    // 負の値・小数混じり・非現実的に大きい値は当てずっぽうとみなして落とす。
+    if (
+      typeof raw.estimatedAgeDays === 'number' &&
+      Number.isFinite(raw.estimatedAgeDays) &&
+      raw.estimatedAgeDays >= 0 &&
+      raw.estimatedAgeDays <= MAX_ESTIMATED_AGE_DAYS
+    ) {
+      out.estimatedAgeDays = Math.round(raw.estimatedAgeDays);
+    }
   }
 
   // 作物名が無ければ登録の下書きにならない。found のまま空を返さない。

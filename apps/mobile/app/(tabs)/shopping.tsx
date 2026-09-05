@@ -256,6 +256,19 @@ export default function ShoppingListScreen() {
                       {item.storeGroup}
                     </Text>
                   )}
+                  {/* 自動献立モードが足した行（#215 §10.11.2）。タップで由来レシピを開く */}
+                  {item.source === 'menu_auto' && item.recipeId != null && (
+                    <Pressable
+                      onPress={() => router.push(`/recipes/${item.recipeId}`)}
+                      hitSlop={4}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('pantry.shopping.menuBadgeLabel')}
+                    >
+                      <Text style={styles.menuBadge} numberOfLines={1}>
+                        {t('pantry.shopping.menuBadge')}
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               </View>
             </Pressable>
@@ -400,6 +413,12 @@ const styles = StyleSheet.create({
   rowBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   itemAmount: { fontSize: 12, color: Colors.paperDim },
   storeBadge: { fontSize: 11, color: Colors.goldDim, maxWidth: 120 },
+  menuBadge: {
+    fontSize: 11,
+    color: Colors.gold,
+    maxWidth: 120,
+    textDecorationLine: 'underline',
+  },
   addStoreRow: {
     flexDirection: 'row',
     alignItems: 'center',

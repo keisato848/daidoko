@@ -12,6 +12,8 @@ import { logger } from 'hono/logger';
 import gardenRouter from './routes/garden.js';
 import importRouter from './routes/import.js';
 import inferRouter from './routes/infer.js';
+import { invitePageRouter } from './routes/invite.js';
+import reportRouter from './routes/report.js';
 import resolveRouter from './routes/resolve.js';
 import syncRouter from './routes/sync.js';
 import { bookPageRouter, shareApiRouter, sharePageRouter } from './routes/share.js';
@@ -46,9 +48,13 @@ app.route('/api/v1/sync', syncRouter);
 app.route('/api/v1/share', shareApiRouter);
 app.route('/r', sharePageRouter);
 app.route('/b', bookPageRouter);
+// 家族共有の招待リンク（/j/:code）。アプリ未導入・App Links 未検証のときだけ人が見る
+app.route('/j', invitePageRouter);
+// アプリ内報告（docs/レシピ表紙AI生成設計.md §6）
+app.route('/api/v1/report', reportRouter);
 
 // ── App Links / Universal Links（#198） ───────────────────────────────────────
-// 共有リンク（/r/:slug・/b/:slug）をインストール済みのアプリで開くための検証ファイル。
+// 共有リンク（/r/:slug・/b/:slug）と招待リンク（/j/:code）をインストール済みのアプリで開くための検証ファイル。
 // 指紋・Team ID は環境変数（Play App Signing の鍵は Play Console にしか無い）。
 // 未設定なら 404 にして、OS 側は従来どおりブラウザで開く（何も壊れない）。
 app.get('/.well-known/assetlinks.json', (c) => {
@@ -77,7 +83,7 @@ app.get('/.well-known/apple-app-site-association', (c) => {
   return c.json({
     applinks: {
       apps: [],
-      details: [{ appID: `${teamId}.com.daidoko.app`, paths: ['/r/*', '/b/*'] }],
+      details: [{ appID: `${teamId}.com.daidoko.app`, paths: ['/r/*', '/b/*', '/j/*'] }],
     },
   });
 });

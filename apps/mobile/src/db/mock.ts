@@ -2,6 +2,7 @@
  * Web mock data provider — mutable mock state for web debugging
  * Supports read/write operations for CRUD testing without SQLite
  */
+import { isAiGeneratedPhoto } from '../utils/aiGeneratedPhoto';
 import { generateId } from '../utils/id';
 import { resolveRecipeUpdate } from '../services/recipe-update';
 import type {
@@ -41,6 +42,8 @@ interface MutableRecipe {
   pinnedAt?: string | null;
   /** お店の名前（v12）。表示は常にこちらを使う（記録側は履歴） */
   placeName?: string | null;
+  /** 中身を AI が推定したか（v17・#266）。未定義 = 不明 */
+  aiGenerated?: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -210,6 +213,7 @@ export function getMockRecipeList(): RecipeListItem[] {
         createdAt: recipe.createdAt,
         cookCount: recipeLogs.length,
         heroPhotoUri: recipe.coverPhotoPath ?? null,
+        isCoverAiGenerated: isAiGeneratedPhoto(recipe.coverPhotoPath),
         pinnedAt: recipe.pinnedAt ?? null,
       };
     });
@@ -259,6 +263,8 @@ export function getMockRecipeDetail(recipeId: string): RecipeDetail | null {
     steps,
     heroPhotoUri: recipe.coverPhotoPath ?? null,
     coverPhotoPath: recipe.coverPhotoPath ?? null,
+    isCoverAiGenerated: isAiGeneratedPhoto(recipe.coverPhotoPath),
+    isAiGenerated: recipe.aiGenerated === true,
     placeName: recipe.placeName ?? null,
     pinnedAt: recipe.pinnedAt ?? null,
   };
@@ -321,6 +327,8 @@ export function createMockRecipe(input: SaveRecipeInput): string {
     // 実装側（recipe.service.createRecipe）と同じく店名も保存する。
     // ここが抜けていたので、mock 経路のテストでは店名の欠落を検出できなかった
     placeName: input.placeName?.trim() ? input.placeName.trim() : null,
+    // AI 由来の印（#266）。実装側と同じく**真のときだけ**立てる
+    aiGenerated: input.aiGenerated === true,
     createdBy: 'user-kei',
     createdAt: now,
     updatedAt: now,
@@ -397,6 +405,7 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
     titleReading: recipe.titleReading ?? null,
     coverPhotoPath: recipe.coverPhotoPath ?? null,
     placeName: recipe.placeName ?? null,
+    aiGenerated: recipe.aiGenerated === true,
     revision: currentRev
       ? {
           servings: currentRev.servings,
@@ -414,6 +423,8 @@ export function updateMockRecipe(recipeId: string, input: UpdateRecipeInput): st
   recipe.currentRevId = revId;
   recipe.coverPhotoPath = next.coverPhotoPath;
   recipe.placeName = next.placeName;
+  // 一方向（立っている印は下げない）
+  recipe.aiGenerated = next.aiGenerated;
   recipe.updatedAt = now;
 
   // Add new revision

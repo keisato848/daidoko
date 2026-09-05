@@ -14,6 +14,7 @@ const CURRENT: RecipeUpdateCurrent = {
   titleReading: 'にくじゃが',
   coverPhotoPath: 'recipe-photos/before.jpg',
   placeName: 'おふくろの味',
+  aiGenerated: false,
   revision: {
     servings: 4,
     cookTimeMin: 40,
@@ -38,6 +39,7 @@ describe('resolveRecipeUpdate', () => {
       titleReading: 'にくじゃが',
       coverPhotoPath: 'recipe-photos/before.jpg',
       placeName: 'おふくろの味',
+      aiGenerated: false,
       servings: 4,
       cookTimeMin: 40,
       prepTimeMin: 15,
@@ -122,5 +124,35 @@ describe('resolveRecipeUpdate', () => {
   it('数値の 0 は「消す」ではなくそのまま採用する（?? に潰さない）', () => {
     // 人数は zod で min(1) なので実際には来ないが、規則としては値として扱う
     expect(resolveRecipeUpdate({ ...MINIMAL, servings: 0 }, CURRENT).servings).toBe(0);
+  });
+});
+
+/**
+ * #266 の回帰。**AI 由来の印は一方向**（立つが、下がらない）。
+ *
+ * ここが壊れると「分量を 1 つ直しただけで AI の印が消えたレシピ」が生まれる。
+ * 安全に関わる表示なのに、**既存テストは 1 本も落ちない**形の壊れ方をする
+ * （mobile のテストは typecheck 対象外で、型に欄を足しても赤くならない）。
+ */
+describe('resolveRecipeUpdate — AI 由来の印（#266）', () => {
+  const AI_CURRENT: RecipeUpdateCurrent = { ...CURRENT, aiGenerated: true };
+
+  it('編集しても印は落ちない（欄を渡さなかった場合）', () => {
+    expect(resolveRecipeUpdate(MINIMAL, AI_CURRENT).aiGenerated).toBe(true);
+  });
+
+  it('false を明示的に渡しても印は下がらない', () => {
+    // 同期で「印を知らない古い端末」由来の更新が後勝ちしても消えないことの担保
+    expect(resolveRecipeUpdate({ ...MINIMAL, aiGenerated: false }, AI_CURRENT).aiGenerated).toBe(
+      true,
+    );
+  });
+
+  it('印が立っていないレシピに true を渡すと立つ（refine で AI が書き換えた場合）', () => {
+    expect(resolveRecipeUpdate({ ...MINIMAL, aiGenerated: true }, CURRENT).aiGenerated).toBe(true);
+  });
+
+  it('印が立っておらず、渡しもしなければ立たない（手編集で勝手に付かない）', () => {
+    expect(resolveRecipeUpdate(MINIMAL, CURRENT).aiGenerated).toBe(false);
   });
 });

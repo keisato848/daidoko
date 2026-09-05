@@ -26,6 +26,14 @@ export type AgentErrorCode =
   /** 感想から変更点を読み取れず、推測で書き換えなかった（失敗ではなく入力不足） */
   | 'REFINE_NO_CHANGE'
   | 'RATE_LIMITED'
+  /** 月次の無料枠切れ（RATE_LIMITED＝コストガードとは別）。クライアントは広告トークンを提案できる */
+  | 'FREE_QUOTA_EXCEEDED'
+  /** 献立の並べ替えに失敗（AI 呼び出し自体は成功したが、検証で全滅した等） */
+  | 'MENU_ARRANGE_FAILED'
+  /** 献立の不足分レシピの一括生成に失敗（M3・§10.12。検証で全滅した等） */
+  | 'MENU_RECIPES_FAILED'
+  /** レシピ表紙の AI イメージ生成に失敗（docs/レシピ表紙AI生成設計.md） */
+  | 'COVER_IMAGE_FAILED'
   | 'UNKNOWN';
 
 export interface AgentResult<T> {

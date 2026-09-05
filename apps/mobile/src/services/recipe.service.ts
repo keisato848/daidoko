@@ -15,6 +15,7 @@ import {
   deleteMockRecipe,
   setMockRecipePinned,
 } from '../db/mock';
+import { isAiGeneratedPhoto } from '../utils/aiGeneratedPhoto';
 import { generateId } from '../utils/id';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
 import { getAliasMap } from './name-alias.service';
@@ -117,6 +118,7 @@ export async function getRecipeList(): Promise<RecipeListItem[]> {
       createdAt: recipe.createdAt,
       cookCount: ratingRows.length,
       heroPhotoUri,
+      isCoverAiGenerated: isAiGeneratedPhoto(recipe.coverPhotoPath),
       pinnedAt: recipe.pinnedAt,
     });
   }
@@ -240,6 +242,11 @@ export async function getRecipeDetail(recipeId: string): Promise<RecipeDetail | 
     steps: stepsList,
     heroPhotoUri,
     coverPhotoPath: resolvePhotoUri(r.coverPhotoPath),
+    // 判定は resolve 前の生パス（相対パス）で行う — ファイル名の接頭辞さえ
+    // 見られればよく、resolve 後でも basename は同じなのでどちらでも結果は同じ
+    isCoverAiGenerated: isAiGeneratedPhoto(r.coverPhotoPath),
+    // NULL（不明）と 0 はどちらも false に寄せる。**false は「人が書いた」ではない**
+    isAiGenerated: r.aiGenerated === 1,
     pinnedAt: r.pinnedAt,
     placeName: r.placeName,
   };
@@ -396,6 +403,10 @@ export async function createRecipe(input: SaveRecipeInput): Promise<string> {
     status: 'active',
     coverPhotoPath: toStoredPhotoPath(input.coverPhotoPath),
     placeName: blankToNull(input.placeName) ?? null,
+    // AI 由来の印（#266）。**真のときだけ 1 を入れ、そうでなければ NULL（＝不明）**。
+    // 0 を入れると「AI ではないと確かめた」に見えるが、実際は呼び出し側が
+    // 渡さなかっただけのことがある
+    aiGenerated: input.aiGenerated === true ? 1 : null,
     createdBy: USER_ID,
     createdAt: now,
     updatedAt: now,
@@ -524,6 +535,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
       titleReading: schema.recipes.titleReading,
       coverPhotoPath: schema.recipes.coverPhotoPath,
       placeName: schema.recipes.placeName,
+      aiGenerated: schema.recipes.aiGenerated,
     })
     .from(schema.recipes)
     .where(eq(schema.recipes.id, recipeId))
@@ -566,6 +578,7 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
     titleReading: recipe[0].titleReading,
     coverPhotoPath: recipe[0].coverPhotoPath,
     placeName: recipe[0].placeName,
+    aiGenerated: recipe[0].aiGenerated === 1,
     revision: previousRev,
   });
 
@@ -595,6 +608,9 @@ export async function updateRecipe(recipeId: string, input: UpdateRecipeInput): 
       currentRevId: revId,
       coverPhotoPath: next.coverPhotoPath,
       placeName: next.placeName,
+      // 一方向。立っている印は下げない（resolveRecipeUpdate が保証する）。
+      // 立っていないものは NULL のまま置く — 0 を書くと「AI ではないと確かめた」に見える
+      aiGenerated: next.aiGenerated ? 1 : null,
       updatedAt: now,
     })
     .where(eq(schema.recipes.id, recipeId));

@@ -70,7 +70,10 @@ const family: typeof ja = {
     inviteLabel: 'Invite code (valid for 24h)',
     inviteExpires: 'Expires: {{when}}',
     shareMessage:
-      'Join my DAIDOKO family share. Enter this code under \u201cFamily group\u201d in the app: {{code}}',
+      'Join my DAIDOKO family share. Open this link to join:\n{{url}}\n\nIf the link does not open, enter this code under \u201cFamily group\u201d in the app: {{code}}',
+    inviteLinkTitle: 'Family share invitation',
+    inviteLinkAlreadyJoined:
+      'This device is already in a share group. To join a different group, leave the current one first.',
     memberCountLabel: {
       one: 'Devices sharing: {{count}}',
       other: 'Devices sharing: {{count}}',
@@ -93,14 +96,63 @@ const family: typeof ja = {
       evictBody:
         'This removes the device last synced {{when}} from sharing. Its own data stays on it, but it stops syncing. A new invite code will be issued (the removed device cannot rejoin with the old one).',
     },
+    groups: {
+      section: 'Share groups',
+      primaryName: 'Family group',
+      unnamedName: 'Unnamed group',
+      currentMark: 'Current group',
+      scopeAll: 'Shares everything',
+      scopeRecipes: 'Shares recipes only',
+      memberCount: {
+        one: '{{count}} member',
+        other: '{{count}} members',
+      },
+      switched: 'Switched to “{{name}}”. New recipes and items will go into this group.',
+      switchFailed: "We couldn't switch groups. Check your connection and try again.",
+      invite: 'Invite',
+      create: 'Create a new group',
+      createTitle: 'New group',
+      createNote:
+        'Create one when you want a different sharing scope per person. Your current group is usually enough.',
+      namePlaceholder: 'Group name (e.g. With my daughter)',
+      scopeLabel: 'What to share',
+      scopeAllTitle: 'Everything',
+      scopeAllDesc:
+        'Recipes, recipe books, the shopping list and the pantry are visible to this group’s members.',
+      scopeRecipesTitle: 'Recipes only',
+      scopeRecipesDesc:
+        'Only recipes and recipe books are visible to members. The shopping list and pantry are not.',
+      createSubmit: 'Create',
+      createdTitle: 'Group created',
+      createdBody:
+        '“{{name}}” is ready. Invite code: {{code}}\nPeople who join will only see what you put into this group from now on.',
+      joinPlaceholder: 'Join another group with a code',
+      joinConfirmTitle: 'Join “{{name}}”?',
+      joinConfirmBodyAll:
+        'This group shares recipes, recipe books, the shopping list and the pantry.',
+      joinConfirmBodyRecipes:
+        'This group shares recipes and recipe books only. The shopping list and pantry are not shared.',
+      joinKeep: 'Join',
+      joinCancel: 'Not now',
+      joinCanceled: 'Joining was cancelled.',
+      joinedAdditional: 'You joined “{{name}}”.',
+    },
     leave: 'Leave this group',
     leaveConfirmTitle: 'Leave the group?',
     leaveConfirmBody:
       'This device stops sharing. Everything already on this device stays. You\u2019ll need an invite code to join again.',
     deleteGroup: 'Delete the share group',
     deleteConfirmTitle: 'Delete the share group?',
-    deleteConfirmBody:
-      'All shared data on the server is erased and sharing stops on every device. Data stored on each device stays. This cannot be undone.',
+    deleteConfirmBody: {
+      text: 'The synced data on the server is erased and sharing stops on every device. Data stored on each device stays. Pages you published with web sharing are not deleted by this — stop a single shared recipe from its own detail menu, and a shared recipe book under Settings › Recipe books. This cannot be undone.',
+      intent:
+        'MUST scope the erasure to the SYNC server only, and MUST say that web-shared pages ' +
+        'SURVIVE this and have to be stopped separately — a single shared recipe from its own ' +
+        'detail menu, and a shared recipe book from Settings. The user decides an irreversible ' +
+        'deletion from this text alone; implying it removes everything on the server would leave ' +
+        'published pages online without them knowing, and naming only one of the two stop paths ' +
+        'would leave the other kind of page stuck online too.',
+    },
     offlineJoined: 'You are in a share group (details will show when online).',
     retry: 'Reload',
     unavailable: 'Sharing is being prepared on the server. Everything else works as usual.',

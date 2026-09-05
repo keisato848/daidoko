@@ -30,7 +30,12 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 
 // v12: レシピの店名 / v13: 在庫・買い物のグループ、賞味期限、誰が / v14: クラウド同期の送信待ち
 // v15: 買い物・在庫の同期（LWW の基準となる updated_at と、個人/家族の shared フラグ）
-export const CURRENT_SCHEMA_VERSION = 16;
+// v17: AI が中身を推定したレシピの印（#266）。レシピ単位・一度立てたら消さない
+// v18: 実体のグループ所属 entity_groups（多グループ G-2a — docs/クラウド同期設計.md §12-3）
+// v19: 献立のテーブル化 menu_plans / menu_plan_days（時間帯ごとに 1 プラン —
+//      docs/買い物リスト・在庫設計.md §10.6。旧 app_meta 'menu_plan' JSON は
+//      menu-plan.service.ts が読み側でレイジーに取り込む）
+export const CURRENT_SCHEMA_VERSION = 19;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -376,6 +381,43 @@ const CREATE_TABLES_SQL = `
   );
 
   CREATE UNIQUE INDEX IF NOT EXISTS idx_store_group_aliases_family_store ON store_group_aliases(family_id, store_name);
+
+  -- v18: entity-to-group memberships (multi-group G-2a, sync design section 12-3).
+  -- No rows = do not send anywhere (G9 "mine only"). Initial memberships are backfilled
+  -- once by the sync runner (app_meta 'sync_entity_groups_migrated'), not here.
+  CREATE TABLE IF NOT EXISTS entity_groups (
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    group_id TEXT NOT NULL,
+    PRIMARY KEY (entity_type, entity_id, group_id)
+  );
+
+  -- v19: menu plans as tables, one plan per meal time (breakfast/lunch/dinner).
+  -- Design: shopping/pantry design doc section 10.6. Legacy app_meta 'menu_plan'
+  -- JSON is imported lazily by menu-plan.service.ts (also covers old-backup restores).
+  CREATE TABLE IF NOT EXISTS menu_plans (
+    id TEXT PRIMARY KEY,
+    meal_time TEXT NOT NULL UNIQUE DEFAULT 'dinner',
+    generated_at TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'coverage',
+    pantry_signature TEXT NOT NULL,
+    anchor_date TEXT,
+    requested_days INTEGER,
+    ai_note TEXT,
+    auto_added_item_ids TEXT
+  );
+
+  -- recipe_id is a weak reference (no REFERENCES on purpose): deleting a recipe must
+  -- neither cascade-delete menu days nor be blocked by them (title copy shows "gone").
+  CREATE TABLE IF NOT EXISTS menu_plan_days (
+    plan_id TEXT NOT NULL REFERENCES menu_plans(id),
+    day INTEGER NOT NULL,
+    recipe_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    done_at TEXT,
+    PRIMARY KEY (plan_id, day)
+  );
 `;
 
 // Columns added after a table first shipped (SQLite has no ADD COLUMN IF NOT
@@ -408,6 +450,9 @@ export const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   // v16: 数量のベースライン（S2-B・設計 §5-3）。NULL = 未移行（quantity が権威）
   { table: 'pantry_items', columnDdl: 'quantity_base REAL' },
   { table: 'pantry_items', columnDdl: 'quantity_epoch INTEGER' },
+  // v17: AI が中身を推定した印（#266）。**NULL = 不明**（AI ではない、ではない）。
+  // 上の v15 と同じ理由で nullable 必須
+  { table: 'recipes', columnDdl: 'ai_generated INTEGER' },
 ];
 
 /**
@@ -436,6 +481,49 @@ function backfillRecipePlaceName(expoDb: { execSync: (sql: string) => void }): v
           WHERE l.recipe_id = recipes.id
             AND l.place_name IS NOT NULL
             AND TRIM(l.place_name) <> ''
+        )
+    `);
+  } catch {
+    // 列がまだ無い等（新規インストール直後）。表示に影響しないので黙って進む
+  }
+}
+
+/**
+ * v17: 既に手元にある「AI が中身を推定したレシピ」に遡って印を立てる（#266）。
+ *
+ * 印を今後の作成分にしか立てないと、**既にある写真レシピが永久に無印**になる。
+ * 写真からの取り込みは AI レシピの主要経路なので、そこが空だと注意書きの意味が薄れる。
+ *
+ * 遡れるのは `sources.type` が `'photo'`（写真から生成）と `'ocr'`（紙面の撮影）の
+ * 2 つだけ。どちらも中身を機械が推定している。`'url'` は JSON-LD の抽出で AI を
+ * 通らないので**対象外**、`'manual'` も当然対象外。
+ *
+ * **`sources` 行を持たない経路は遡れない**（相談・貼り付けテキスト・手入力）。
+ * 判定材料がそもそも残っていないので、それらは `NULL`（不明）のまま残る。
+ *
+ * **「お店の味に近づける」(refine) も遡れない。** あれは既存レシピの材料と手順を AI が
+ * 書き換えるが `sources` 行を作らないので、v17 より前に refine を通しただけのレシピは
+ * 無印のまま残る（写真・OCR 由来のものは元の出所が引き継がれるので拾える）。
+ * 通常の編集画面は印を触らないため、もう一度 refine を通すまで回復しない。
+ *
+ * この非対称は仕様であって漏れではない。`NULL` を「AI ではない」と読まないこと。
+ *
+ * 現行リビジョンだけでなく**全リビジョン**を見る（`web-share.service.ts` の
+ * `getUrlImportedRecipeIds` と同じ考え方）。写真から作った後で人が編集すると
+ * 現行リビジョンの出所が変わることがあるため、現行だけ見ると取りこぼす。
+ *
+ * **冪等**（`ai_generated IS NULL` の行だけ触る）。既に立っている印は下げない。
+ */
+export function backfillRecipeAiGenerated(expoDb: { execSync: (sql: string) => void }): void {
+  try {
+    expoDb.execSync(`
+      UPDATE recipes SET ai_generated = 1
+      WHERE ai_generated IS NULL
+        AND EXISTS (
+          SELECT 1 FROM recipe_revisions r
+          JOIN sources s ON s.id = r.source_id
+          WHERE r.recipe_id = recipes.id
+            AND s.type IN ('photo', 'ocr')
         )
     `);
   } catch {
@@ -474,6 +562,7 @@ export function runMigrations(expoDb: { execSync: (sql: string) => void }): Migr
   }
   backfillRecipePlaceName(expoDb);
   backfillShoppingUpdatedAt(expoDb);
+  backfillRecipeAiGenerated(expoDb);
   expoDb.execSync(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   return { schemaVersion: CURRENT_SCHEMA_VERSION };
 }

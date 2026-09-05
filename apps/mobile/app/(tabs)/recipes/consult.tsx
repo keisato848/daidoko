@@ -24,8 +24,8 @@ import {
 
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import {
-  capturePhoto,
-  PhotoCaptureCancelledError,
+  capturePhotoSeries,
+  confirmContinueCapture,
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
@@ -47,6 +47,7 @@ import {
 } from '../../../src/services/recipe-consult.provider';
 import { dialog } from '../../../src/services/dialog.service';
 import { createRecipe } from '../../../src/services/recipe.service';
+import { maybeRequestStoreReview } from '../../../src/services/review-request.service';
 import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import { recordCloudInference } from '../../../src/services/usage.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
@@ -100,16 +101,25 @@ export default function ConsultScreen() {
     return () => clearTimeout(id);
   }, [messages, busy]);
 
-  const addPhoto = useCallback(async (source: PhotoCaptureSource) => {
-    setErrorMsg(null);
-    try {
-      const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-      setPendingPhotos((current) => [...current, photo].slice(0, MAX_CONSULT_IMAGES_PER_MESSAGE));
-    } catch (error) {
-      if (error instanceof PhotoCaptureCancelledError) return;
-      setErrorMsg(t('common.photoAddFailed'));
-    }
-  }, []);
+  const addPhoto = useCallback(
+    async (source: PhotoCaptureSource) => {
+      setErrorMsg(null);
+      try {
+        // 連続撮影/複数選択: 1 メッセージの残り枠（最大 2 枚）まで続けて取り込める
+        const shot = await capturePhotoSeries(source, expoImagePickerPhotoCaptureAdapter, {
+          maxCount: MAX_CONSULT_IMAGES_PER_MESSAGE - pendingPhotos.length,
+          confirmMore: confirmContinueCapture,
+        });
+        if (shot.length === 0) return; // キャンセル
+        setPendingPhotos((current) =>
+          [...current, ...shot].slice(0, MAX_CONSULT_IMAGES_PER_MESSAGE),
+        );
+      } catch {
+        setErrorMsg(t('common.photoAddFailed'));
+      }
+    },
+    [pendingPhotos.length],
+  );
 
   const removePhoto = useCallback((index: number) => {
     setPendingPhotos((current) => current.filter((_, i) => i !== index));
@@ -182,7 +192,11 @@ export default function ConsultScreen() {
   };
 
   const handleSave = async (data: RecipeFormData) => {
-    const recipeId = await createRecipe(data);
+    // 会話から AI が全文を書いた下書き（#266）。**ここが最大の無印地帯だった** —
+    // 出所行も作らないので、印を立てないと AI 由来だと後から一切分からない
+    const recipeId = await createRecipe({ ...data, aiGenerated: true });
+    // 相談から AI の下書きが形になった瞬間にストア評価を打診（条件・頻度はサービス側）
+    void maybeRequestStoreReview('ai-recipe');
     router.replace(`/(tabs)/recipes/${recipeId}`);
   };
 
@@ -271,6 +285,18 @@ export default function ConsultScreen() {
         )}
 
         <Text style={styles.disclaimer}>{t('recipeImport.consult.disclaimer')}</Text>
+        {draft && (
+          // AI 生成コンテンツの報告導線（docs/レシピ表紙AI生成設計.md §6 —
+          // Play ポリシー「アプリを出ずに報告できること」を満たす）
+          <Pressable
+            onPress={() =>
+              router.push({ pathname: '/recipes/report', params: { source: 'consult' } })
+            }
+            hitSlop={8}
+          >
+            <Text style={styles.reportLink}>{t('coverImage.report')}</Text>
+          </Pressable>
+        )}
       </ScrollView>
 
       <View style={styles.pantryRow}>
@@ -321,10 +347,12 @@ export default function ConsultScreen() {
               </Pressable>
             </View>
           ))}
-          {/* 送信先の開示。**送る前に見えている**必要があるので写真の隣に置く */}
-          <Text style={styles.pendingDisclosure}>{t('recipeImport.consult.photoDisclosure')}</Text>
         </View>
       )}
+
+      {/* 送信先の開示。**写真の有無によらず常に出す** — 文字だけの相談でも、
+          会話・作りかけの下書き・（在庫を考慮するときは）材料名を毎回送っている */}
+      <Text style={styles.disclosureText}>{t('recipeImport.consult.disclosure')}</Text>
 
       <View style={styles.composer}>
         <Pressable
@@ -349,6 +377,9 @@ export default function ConsultScreen() {
           placeholderTextColor={Colors.muted}
           multiline
           editable={!busy}
+          /* サーバー契約は 1 発言 ≤2000 字（inferConsultSchema）。超えて送ると 400 で
+             発言ごと弾かれるので、入力の時点で契約に収める（P4） */
+          maxLength={2000}
         />
         <Pressable
           style={[styles.sendButton, (!input.trim() || busy) && styles.sendButtonDisabled]}
@@ -409,6 +440,12 @@ const styles = StyleSheet.create({
   draftTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
   draftAction: { fontSize: 14, color: Colors.gold, marginTop: 4 },
   disclaimer: { fontSize: 12, lineHeight: 18, color: Colors.muted, marginTop: 8 },
+  reportLink: {
+    fontSize: 12,
+    color: Colors.muted,
+    textDecorationLine: 'underline',
+    marginTop: 6,
+  },
   pantryRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -453,12 +490,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pendingDisclosure: {
-    flex: 1,
-    minWidth: 160,
-    fontSize: 10,
-    lineHeight: 15,
-    color: Colors.muted,
+  // 開示は読めて初めて開示になる。import-photo の disclosureText と同じ色・大きさ
+  disclosureText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: Colors.paperDim,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   attachButton: {
     width: 42,
