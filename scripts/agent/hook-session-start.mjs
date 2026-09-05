@@ -12,21 +12,29 @@ const result = runCommand(process.execPath, ['scripts/agent/preflight.mjs', '--j
 
 let systemMessage = 'Agent Suite session start. Preflight did not run.';
 
-if (result.ok) {
-  try {
-    const summary = JSON.parse(result.stdout);
-    const lines = ['Agent Suite session start', `Preflight: ${summary.ok ? 'OK' : 'FAILED'}`];
-    for (const entry of summary.entries ?? []) {
-      const marker = entry.ok ? '[OK]' : '[NG]';
-      lines.push(`${marker} ${entry.label}: ${entry.detail}`);
-    }
-    lines.push(...knowledgeIndex());
-    systemMessage = lines.join('\n');
-  } catch {
-    systemMessage = `Agent Suite session start\n${result.stdout.trim()}`.trim();
+// preflight は要件を満たさないと exit 1 で返す（ADB の無いリモート環境では常に）。
+// その場合も JSON は stdout に出ているので、成否に関わらずまず JSON として読む。
+// 索引と案内は preflight の成否と無関係なので、どの分岐でも末尾に付ける。
+const parsed = parsePreflight(result.stdout);
+if (parsed) {
+  const lines = ['Agent Suite session start', `Preflight: ${parsed.ok ? 'OK' : 'FAILED'}`];
+  for (const entry of parsed.entries ?? []) {
+    const marker = entry.ok ? '[OK]' : '[NG]';
+    lines.push(`${marker} ${entry.label}: ${entry.detail}`);
   }
+  systemMessage = lines.join('\n');
 } else if (result.combinedOutput) {
   systemMessage = `Agent Suite session start\n${result.combinedOutput}`;
+}
+systemMessage = [systemMessage, ...knowledgeIndex(), ...sessionOpening()].join('\n');
+
+function parsePreflight(stdout) {
+  try {
+    const summary = JSON.parse(stdout);
+    return summary && typeof summary === 'object' ? summary : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -41,6 +49,19 @@ function knowledgeIndex() {
     lines.push(`  - ${entry.kind} → ${entry.path} ${entry.section}`);
   }
   return lines.length > 1 ? lines : [];
+}
+
+/**
+ * セッション開始の現状報告（docs/開発ハーネス.md §7-5）。
+ * フックはエージェントを起動できないので、メインループへの案内だけを出す。
+ * `project-manager` 定義が無ければ（別リポジトリ・削除後）何も出さない。
+ */
+function sessionOpening() {
+  if (!existsSync(join(rootDir, '.claude/agents/project-manager.md'))) return [];
+  return [
+    '着手前: `project-manager` エージェントに「現状報告」を依頼する（ブランチ / PR / CI / ボード / 推奨の一手。15 行以内）。',
+    '  ユーザーが具体的な指示を出しているときは、その作業を優先してよい（docs/開発ハーネス.md §7-5）。',
+  ];
 }
 
 process.stdout.write(`${JSON.stringify({ continue: true, systemMessage }, null, 2)}\n`);
