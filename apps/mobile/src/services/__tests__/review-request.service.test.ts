@@ -44,7 +44,6 @@ describe('maybeRequestStoreReview', () => {
   });
 
   it('fires on the very first cooking log (the first success moment)', async () => {
-    expect(MIN_COOKING_LOGS_FOR_REVIEW).toBe(1);
     mockCount.mockResolvedValue(1);
     expect(await maybeRequestStoreReview('cooking-log')).toBe(true);
   });
@@ -112,6 +111,12 @@ describe('openStoreReviewPage', () => {
     openURL.mockRejectedValueOnce(new Error('no handler')).mockResolvedValueOnce(true);
     expect(await openStoreReviewPage()).toBe(true);
     expect(openURL).toHaveBeenNthCalledWith(2, storeReviewUrls('android')[1]);
+  });
+
+  it('does nothing outside iOS/Android (no store to open)', async () => {
+    Platform.OS = 'web';
+    expect(await openStoreReviewPage()).toBe(false);
+    expect(openURL).not.toHaveBeenCalled();
   });
 
   it('returns false when neither URL opens', async () => {

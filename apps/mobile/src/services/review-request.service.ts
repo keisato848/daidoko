@@ -72,7 +72,8 @@ export function storeReviewUrls(os: 'ios' | 'android'): [primary: string, fallba
   if (os === 'ios') {
     return [
       `itms-apps://itunes.apple.com/app/id${APP_STORE_ID}?action=write-review`,
-      `https://apps.apple.com/jp/app/id${APP_STORE_ID}?action=write-review`,
+      // ストアフロントは固定しない（海外の利用者は Apple 側のリダイレクトに任せる）
+      `https://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`,
     ];
   }
   return [

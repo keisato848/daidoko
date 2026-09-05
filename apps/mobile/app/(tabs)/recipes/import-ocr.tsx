@@ -55,6 +55,7 @@ import {
   type RecipePageResult,
 } from '../../../src/services/recipe-page.provider';
 import { createRecipe } from '../../../src/services/recipe.service';
+import { maybeRequestStoreReview } from '../../../src/services/review-request.service';
 import { createOcrSource } from '../../../src/services/source.service';
 import { recordCloudInference } from '../../../src/services/usage.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
@@ -142,6 +143,8 @@ export default function ImportRecipePageScreen() {
       // この経路は現在すべて生成モデルを通る
       await createRecipe({ ...data, sourceId, aiGenerated: true });
       setToastMessage(t('recipeImport.saved'));
+      // 紙面から AI の下書きが形になった瞬間にストア評価を打診（条件・頻度はサービス側）
+      void maybeRequestStoreReview('ai-recipe');
       setTimeout(() => router.replace('/(tabs)/recipes'), 1500);
     },
     [pages, router],
