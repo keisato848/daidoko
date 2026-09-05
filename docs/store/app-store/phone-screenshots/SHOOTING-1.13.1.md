@@ -65,7 +65,10 @@ Settings アプリで切り替えて構わない。**確認方法**: 初回起�
 erase 後の再インストールは再ビルド不要（§1 のビルド成果物を使い回す）:
 
 ```bash
-xcrun simctl install <udid> apps/mobile/ios/build/Build/Products/Release-iphonesimulator/*.app
+# 成果物は `expo run:ios` だと DerivedData 側に出る（apps/mobile/ios/build/ ではない — 2026-09-05 実地確認）。
+# 実パスは `xcodebuild -showBuildSettings | grep BUILT_PRODUCTS_DIR` か、
+# ~/Library/Developer/Xcode/DerivedData/app-*/Build/Products/Release-iphonesimulator/app.app を使う
+xcrun simctl install <udid> ~/Library/Developer/Xcode/DerivedData/app-*/Build/Products/Release-iphonesimulator/app.app
 # パスが違うときはビルドログの「Installing …」行か DerivedData を確認
 ```
 
