@@ -64,9 +64,9 @@ const home: typeof ja = {
   },
 
   coach: {
-    fabTitle: 'Records and recipes start here',
-    fabText:
-      'Tap “+” to record a dish you cooked, or add a recipe — from a photo with AI, by planning it with AI, from a URL, or by hand.',
+    addTitle: 'Records and recipes start here',
+    addText:
+      'Record a dish or add a recipe from the “Add” tab below — take a photo, plan with AI, import a URL, or type it in.',
     settingsTitle: 'Settings live here',
     settingsText: 'Backup, sharing with family, and how-to guides are behind this gear.',
   },

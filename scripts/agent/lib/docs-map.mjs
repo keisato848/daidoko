@@ -29,6 +29,11 @@ export const DOC_RULES = [
     target: 'docs/開発ハーネス.md §1 構成マップ',
   },
   {
+    // 外部 LLM（Gemini）を MCP で呼ぶ配線。前提・制約は §7-6
+    pattern: /^(\.mcp\.json$|scripts\/agent\/mcp-)/,
+    target: 'docs/開発ハーネス.md §7-6（MCP で別の LLM を呼ぶ）',
+  },
+  {
     pattern: /^apps\/server\/src\/routes\//,
     target: 'docs/アーキテクチャ設計.md（API エンドポイント一覧）',
   },

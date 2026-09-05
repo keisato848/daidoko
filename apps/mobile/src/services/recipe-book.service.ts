@@ -291,6 +291,27 @@ export async function shareRecipeBook(id: string, access: ShareAccessOptions): P
     .where(eq(recipeBooks.id, id));
 }
 
+/**
+ * 受け取り期限を「今から 7 日」に張り直す（docs/共有設計.md §3-6）。
+ * 「リンクを送る」たびにベストエフォートで呼ぶ。失敗しても送付は続行する。
+ */
+export async function renewSharedBook(id: string): Promise<void> {
+  const database = await db();
+  const { recipeBooks } = await schema();
+  const { eq } = await import('drizzle-orm');
+  const rows = await database.select().from(recipeBooks).where(eq(recipeBooks.id, id));
+  const row = rows[0];
+  if (!row?.shareSlug || !row.shareDeleteToken) return;
+  try {
+    await fetch(`${API_V1}/share/books/${row.shareSlug}/renew`, {
+      method: 'POST',
+      headers: { 'x-share-delete-token': row.shareDeleteToken },
+    });
+  } catch {
+    // オフライン等。次に送るときに張り直される
+  }
+}
+
 /** 共有を停止する。サーバー 404（既に消えている）でもローカルの共有状態は消す */
 export async function revokeSharedBook(id: string): Promise<void> {
   const database = await db();

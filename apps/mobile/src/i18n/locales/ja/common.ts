@@ -31,6 +31,17 @@ const common = {
   deletePhoto: '写真を削除',
   photoAddFailed: '写真を追加できませんでした',
 
+  /** 連続撮影（1 枚撮るたびに続けるか聞く。上限 1 の画面では出ない） */
+  captureMore: {
+    title: '続けて撮りますか？',
+    message: {
+      one: 'あと {{count}} 枚追加できます。',
+      other: 'あと {{count}} 枚追加できます。',
+    },
+    more: '続けて撮る',
+    done: 'これで完了',
+  },
+
   /** 語を並べるときの区切り。英語は読点ではなくカンマ＋空白。 */
   listSeparator: '・',
 

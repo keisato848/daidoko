@@ -31,7 +31,7 @@ import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
 import { t, tCount } from '../../src/i18n';
-import { getMenuPlan } from '../../src/services/menu-plan.service';
+import { getMenuPlanForToday, type MenuMealTime } from '../../src/services/menu-plan.service';
 import { formatMonthDay, formatMonthLabel } from '../../src/i18n/format';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
 import { dialog } from '../../src/services/dialog.service';
@@ -96,15 +96,15 @@ export default function HomeScreen() {
 
   // 初回利用ガイド（コーチマーク）
   const settingsRef = useRef<View>(null);
-  const fabRef = useRef<View>(null);
+  // 追加の入口は下の「追加」タブに一本化（2026-09-03）。右下 FAB は「＋が2つあって迷う」
+  // （ペルソナ点検 P1・監査 B1）ため削除した。タブは Portal の外なので ref で指せず中央吹き出し
   const coach = useCoachMarks(
     'home',
     [
       {
-        key: 'fab',
-        title: t('home.coach.fabTitle'),
-        text: t('home.coach.fabText'),
-        ref: fabRef,
+        key: 'add',
+        title: t('home.coach.addTitle'),
+        text: t('home.coach.addText'),
       },
       {
         key: 'settings',
@@ -132,20 +132,27 @@ export default function HomeScreen() {
   const [menuIsToday, setMenuIsToday] = useState(false);
   /** 自動モードのときだけ出す出所（「今朝 HH:MM に自動で組みました」）。手動プランでは null */
   const [menuGeneratedAt, setMenuGeneratedAt] = useState<string | null>(null);
+  /**
+   * カードに出しているプランの時間帯（v19・§10.13）。**夕を優先**し、夕が無ければ
+   * 朝/昼を出す。表記は**夕は無印・朝/昼のときだけ**「（昼）」等を見出しに付ける。
+   */
+  const [menuMealTime, setMenuMealTime] = useState<MenuMealTime>('dinner');
 
   const loadTimeline = useCallback(async () => {
-    const [entries, want, inStock, menu] = await Promise.all([
+    const [entries, want, inStock, today] = await Promise.all([
       getTimeline(),
       getWantToCookRecipes(),
       getInStockNormalizedNames().catch((): string[] => []),
-      getMenuPlan().catch(() => null),
+      getMenuPlanForToday().catch(() => null),
     ]);
     setAllEntries(entries);
     setWantList(want);
     setHasStock(inStock.length > 0);
     // まだ作っていない最初の日。削除されたレシピの日は飛ばす
+    const menu = today?.view ?? null;
     const next = menu?.days.find((d) => d.doneAt === null && !d.missing) ?? null;
     setNextMenuTitle(next ? next.title : null);
+    setMenuMealTime(today?.mealTime ?? 'dinner');
     const isAuto = menu?.plan.anchorDate != null;
     setMenuIsToday(isAuto);
     setMenuGeneratedAt(isAuto ? (menu?.plan.generatedAt ?? null) : null);
@@ -163,6 +170,13 @@ export default function HomeScreen() {
   let menuCardLabel = t('menu.title');
   if (nextMenuTitle)
     menuCardLabel = menuIsToday ? t('menu.card.todayTitle') : t('menu.card.nextTitle');
+  // 時間帯の印は**朝/昼のときだけ**（夕は無印のまま 1 文字も変えない・§10.13）
+  if (nextMenuTitle && menuMealTime !== 'dinner') {
+    menuCardLabel +=
+      menuMealTime === 'breakfast'
+        ? t('menu.mealTime.suffix.breakfast')
+        : t('menu.mealTime.suffix.lunch');
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -333,7 +347,7 @@ export default function HomeScreen() {
               ref={settingsRef}
               collapsable={false}
               style={styles.headerAction}
-              onPress={() => router.push('/(tabs)/settings')}
+              onPress={() => router.push('/settings')}
               hitSlop={8}
               accessibilityLabel={t('home.action.settings')}
             >
@@ -455,7 +469,7 @@ export default function HomeScreen() {
                   <PressableScale
                     style={styles.consultButton}
                     scaleTo={0.98}
-                    onPress={() => router.push('/(tabs)/cookable')}
+                    onPress={() => router.push('/cookable')}
                     accessibilityRole="button"
                     accessibilityLabel={t('home.cookable')}
                   >
@@ -523,7 +537,7 @@ export default function HomeScreen() {
         />
       )}
 
-      {selectMode ? (
+      {selectMode && (
         <View style={styles.actionBar}>
           <Pressable
             style={[
@@ -541,16 +555,6 @@ export default function HomeScreen() {
               {t('common.delete')}
             </Text>
           </Pressable>
-        </View>
-      ) : (
-        <View ref={fabRef} collapsable={false} style={styles.fabContainer}>
-          <PressableScale
-            style={styles.fab}
-            scaleTo={0.9}
-            onPress={() => router.push('/(tabs)/add')}
-          >
-            <Text style={styles.fabText}>＋</Text>
-          </PressableScale>
         </View>
       )}
 
@@ -908,27 +912,5 @@ const styles = StyleSheet.create({
   },
   actionBtnTextDisabled: {
     color: Colors.muted,
-  },
-  fabContainer: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-  },
-  fab: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: Colors.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-  },
-  fabText: {
-    fontSize: 24,
-    color: Colors.bg,
   },
 });

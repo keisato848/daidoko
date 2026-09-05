@@ -23,6 +23,7 @@ import { getUserApiKey } from './byok.service';
 import { requestLocale, type OutputLocale } from './ai-output-locale';
 import { API_V1 } from '../config';
 import { t } from '../i18n';
+import { serverErrorFor } from './ai-error';
 
 /** モバイル側の待ち時間（設計 §5）。サーバー `REQUEST_TIMEOUT_MS`(55s) の外側。 */
 export const CLIENT_TIMEOUT_MS = 75_000;
@@ -44,6 +45,8 @@ export interface CoverImageResult {
 }
 
 export class CoverImageError extends Error {
+  /** t() 済みの文言を持つ印（ai-error.ts） */
+  readonly userVisible = true;
   readonly retryable: boolean;
   constructor(message: string, retryable: boolean) {
     super(message);
@@ -89,7 +92,7 @@ function boundInput(input: CoverImageInput): CoverImageInput {
   return {
     title: input.title,
     ingredientNames: input.ingredientNames.slice(0, MAX_COVER_INGREDIENTS),
-    tags: input.tags.slice(0, MAX_COVER_TAGS),
+    tags: input.tags.slice(0, MAX_COVER_TAGS).map((tag) => tag.slice(0, 30)),
   };
 }
 
@@ -155,10 +158,8 @@ async function generateViaByok(input: CoverImageInput, apiKey: string): Promise<
     });
     if (res.status === 429) throw new CoverImageError(t('ai.error.byokQuota'), false);
     if (!res.ok) {
-      throw new CoverImageError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new CoverImageError(info.message, info.retryable);
     }
     const json = (await res.json()) as InteractionsResponse;
     const found = extractModelOutputImage(json);
@@ -202,10 +203,8 @@ async function generateViaServer(input: CoverImageInput): Promise<CoverImageResu
     // 404/未デプロイも含め、想定外の HTTP ステータスは例外を握って失敗扱いにする
     // （[client-must-survive-server-skew] — 呼び出し側はフォームを壊さずトーストへ落とす）
     if (!res.ok) {
-      throw new CoverImageError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new CoverImageError(info.message, info.retryable);
     }
     const result = (await res.json()) as ServerAgentResult;
     if (!result.ok || !result.data) {

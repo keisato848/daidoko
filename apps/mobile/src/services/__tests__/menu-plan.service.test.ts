@@ -96,3 +96,8 @@ describe('refreshMenuNotificationSchedule', () => {
     expect(mockSchedule).toHaveBeenCalledTimes(1); // 1 回目は cancel で落ちて到達しない
   });
 });
+
+// `requestedDays` の保存互換（旧データに無い・壊れた値）と旧 app_meta JSON の取り込みは、
+// v19 のテーブル化で保存の読み書きが DB 経由（jest で実行できない・§2.3）になったため、
+// 純関数側 `utils/__tests__/menuPlanStorage.test.ts`（parseLegacyMenuPlanJson /
+// menuPlanRowToStored の往復）で固定している。

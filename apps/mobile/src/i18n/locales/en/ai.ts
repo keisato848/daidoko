@@ -33,6 +33,10 @@ const ai: typeof ja = {
 
     noResult: "The AI didn't return a result",
     unparsable: "We couldn't read the AI's response",
+    tooLarge:
+      'The photo or data you sent was too large. Retake the photo or trim the content and try again.',
+    busy: "It's busy right now. Please wait a moment and try again.",
+    serverDown: 'Something went wrong on the server. Please wait a moment and try again.',
     serverError: 'Server error ({{status}})',
     timeout: 'The request timed out',
     unreachable: "We couldn't reach the AI ({{reason}})",

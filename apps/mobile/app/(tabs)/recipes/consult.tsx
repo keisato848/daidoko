@@ -24,8 +24,8 @@ import {
 
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
 import {
-  capturePhoto,
-  PhotoCaptureCancelledError,
+  capturePhotoSeries,
+  confirmContinueCapture,
   type CapturedPhoto,
   type PhotoCaptureSource,
 } from '../../../src/services/photo-capture.service';
@@ -100,16 +100,25 @@ export default function ConsultScreen() {
     return () => clearTimeout(id);
   }, [messages, busy]);
 
-  const addPhoto = useCallback(async (source: PhotoCaptureSource) => {
-    setErrorMsg(null);
-    try {
-      const photo = await capturePhoto(source, expoImagePickerPhotoCaptureAdapter);
-      setPendingPhotos((current) => [...current, photo].slice(0, MAX_CONSULT_IMAGES_PER_MESSAGE));
-    } catch (error) {
-      if (error instanceof PhotoCaptureCancelledError) return;
-      setErrorMsg(t('common.photoAddFailed'));
-    }
-  }, []);
+  const addPhoto = useCallback(
+    async (source: PhotoCaptureSource) => {
+      setErrorMsg(null);
+      try {
+        // 連続撮影/複数選択: 1 メッセージの残り枠（最大 2 枚）まで続けて取り込める
+        const shot = await capturePhotoSeries(source, expoImagePickerPhotoCaptureAdapter, {
+          maxCount: MAX_CONSULT_IMAGES_PER_MESSAGE - pendingPhotos.length,
+          confirmMore: confirmContinueCapture,
+        });
+        if (shot.length === 0) return; // キャンセル
+        setPendingPhotos((current) =>
+          [...current, ...shot].slice(0, MAX_CONSULT_IMAGES_PER_MESSAGE),
+        );
+      } catch {
+        setErrorMsg(t('common.photoAddFailed'));
+      }
+    },
+    [pendingPhotos.length],
+  );
 
   const removePhoto = useCallback((index: number) => {
     setPendingPhotos((current) => current.filter((_, i) => i !== index));
@@ -365,6 +374,9 @@ export default function ConsultScreen() {
           placeholderTextColor={Colors.muted}
           multiline
           editable={!busy}
+          /* サーバー契約は 1 発言 ≤2000 字（inferConsultSchema）。超えて送ると 400 で
+             発言ごと弾かれるので、入力の時点で契約に収める（P4） */
+          maxLength={2000}
         />
         <Pressable
           style={[styles.sendButton, (!input.trim() || busy) && styles.sendButtonDisabled]}

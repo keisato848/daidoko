@@ -10,6 +10,7 @@ const recipe: typeof ja = {
     titleTooLong: 'Use 100 characters or fewer',
     ingredientsRequired: 'Add at least one ingredient',
     stepsRequired: 'Add at least one step',
+    tagTooLong: 'Use 30 characters or fewer for a tag',
   },
 
   form: {
@@ -75,20 +76,40 @@ const recipe: typeof ja = {
       refine: 'Get closer to the restaurant taste',
       edit: 'Edit',
       share: 'Share',
-      webShare: 'Share as web page',
-      webShareSend: 'Send web share link',
-      webShareStop: 'Stop web sharing',
       revisions: 'Version history',
+    },
+
+    shareState: {
+      groups: 'Shared: {{names}}',
+      private: 'Only me',
+      link: 'Public link',
+    },
+
+    shareSheet: {
+      title: 'Share this recipe',
+      familyJoined: 'Share with family',
+      familyNotJoined: 'Share with family (create or join a group)',
+      familyNote: 'Visible only to group members. Syncs automatically while you are in a group.',
+      linkTitle: 'Send a link',
+      linkPublish: 'Create a link and send it',
+      linkSend: 'Send the link (public)',
+      linkNote:
+        'Anyone with the link can view it — not just family. New viewers can open it for 7 days after you send it; anyone who opened it in time keeps access.',
+      linkStop: 'Stop sharing the link',
+      linkStopNote: 'People with the link will no longer be able to see it.',
+      linkBlocked: 'Recipes imported from a URL cannot be shared by link (we never host reposts).',
+      textSend: 'Send as text',
+      textNote: 'Sent as plain text. Recipients can import it into the app.',
     },
 
     webShare: {
       attestTitle: 'Is this your own recipe?',
       attestBody:
-        'Web sharing is only for content you created yourself. Recipes copied from other sites or books cannot be shared.\n\nAnyone with the link can view this recipe (no app needed). You can stop sharing at any time.',
+        'Sharing by link is only for content you created yourself. Recipes copied from other sites or books cannot be shared.\n\nAnyone with the link can view this recipe (no app needed). New viewers can open the link for 7 days after you send it, and you can stop sharing at any time.',
       attestOk: 'Share',
-      failedTitle: 'Web share',
+      failedTitle: 'Send a link',
       publishFailedBody: 'Could not create the share page. Check your connection and try again.',
-      stopTitle: 'Stop web sharing',
+      stopTitle: 'Stop sharing the link',
       stopConfirm:
         'This stops sharing. People with the link will no longer be able to see it. Continue?',
       stopAction: 'Stop sharing',
@@ -270,6 +291,9 @@ const recipe: typeof ja = {
       textDescription: 'Paste the text and turn it into a draft',
       ocr: 'From an image with text',
       ocrDescription: 'Read text from a cookbook or handwritten note',
+      fridge: 'Recipes from your fridge',
+      fridgeDescription:
+        'Read ingredients from a fridge photo, stock the pantry, then find what you can cook',
       manual: 'By hand',
       manualDescription: 'Type the recipe from scratch',
     },
@@ -355,7 +379,7 @@ const recipe: typeof ja = {
     timerPaused: '{{time}} (paused)',
     startTimer: 'Start timer',
     detectedFromBody: ' (found in the step)',
-    tapHint: 'Tap the screen to see the ingredients',
+    tapHint: 'Tap for ingredients / swipe to move between steps',
     resumeLabel: 'Cooking now',
     resumeStep: 'Step {{step}} of {{total}}',
     resumeAction: 'Resume',

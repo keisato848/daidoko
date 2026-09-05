@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   MessagesSquare,
   PenLine,
+  Refrigerator,
 } from 'lucide-react-native';
 import { useRef } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -20,7 +21,7 @@ import { Colors } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 
-type MethodId = 'photo' | 'consult' | 'url' | 'text' | 'ocr' | 'manual';
+type MethodId = 'photo' | 'consult' | 'url' | 'text' | 'ocr' | 'manual' | 'fridge';
 
 interface MethodOption {
   id: MethodId;
@@ -58,6 +59,9 @@ const METHOD_GROUPS: MethodGroup[] = [
     methods: [
       { id: 'photo', icon: <Camera size={24} color={Colors.gold} />, enabled: true },
       { id: 'ocr', icon: <ImageIcon size={24} color={Colors.gold} />, enabled: true },
+      // 冷蔵庫写真 → 在庫登録 → 作れるレシピ（docs/冷蔵庫写真設計.md）。
+      // 入口は増やさず「写真から」の節に**統合**する（ペルソナ確定要件 6）
+      { id: 'fridge', icon: <Refrigerator size={24} color={Colors.gold} />, enabled: true },
     ],
   },
   {
@@ -94,6 +98,7 @@ function methodLabel(id: MethodId): string {
   if (id === 'url') return t('recipe.add.method.url');
   if (id === 'text') return t('recipe.add.method.text');
   if (id === 'ocr') return t('recipe.add.method.ocr');
+  if (id === 'fridge') return t('recipe.add.method.fridge');
   return t('recipe.add.method.manual');
 }
 
@@ -103,6 +108,7 @@ function methodDescription(id: MethodId): string {
   if (id === 'url') return t('recipe.add.method.urlDescription');
   if (id === 'text') return t('recipe.add.method.textDescription');
   if (id === 'ocr') return t('recipe.add.method.ocrDescription');
+  if (id === 'fridge') return t('recipe.add.method.fridgeDescription');
   return t('recipe.add.method.manualDescription');
 }
 
@@ -158,6 +164,8 @@ export default function AddScreen() {
       router.push('/recipes/consult');
     } else if (method.id === 'ocr') {
       router.push('/recipes/import-ocr');
+    } else if (method.id === 'fridge') {
+      router.push('/fridge');
     }
   };
 

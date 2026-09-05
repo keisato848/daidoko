@@ -46,6 +46,12 @@ export const sharedRecipes = sqliteTable('shared_recipes', {
   aiGenerated: integer('ai_generated'),
   createdAt: text('created_at').notNull(),
   revokedAt: text('revoked_at'),
+  /**
+   * 受け取り期限（ISO・docs/共有設計.md §3-6）。**リンクを新しく開ける期限**であって、
+   * ページ自体の期限ではない — 期限内に開いた閲覧者はアクセス Cookie で以後も見られる。
+   * NULL は旧データのみ（起動時に埋める）。
+   */
+  expiresAt: text('expires_at'),
 });
 
 export type SharedRecipeRow = typeof sharedRecipes.$inferSelect;
@@ -61,7 +67,11 @@ export const sharedBooks = sqliteTable('shared_books', {
   description: text('description'),
   createdAt: text('created_at').notNull(),
   revokedAt: text('revoked_at'),
-  /** 有効期限（ISO）。超えたら 404 と同じ扱い（S4-2） */
+  /**
+   * 受け取り期限（ISO）。S4-2 では「超えたら 404」の完全失効だったが、
+   * docs/共有設計.md §3-6 で**新規閲覧の期限**に意味を変えた（期限内に開いた人は
+   * アクセス Cookie で以後も見られる）。判定はルート側で行う。
+   */
   expiresAt: text('expires_at'),
   /** パスコード（数字6桁）の SHA-256(slug + ':' + passcode)。NULL = 保護なし（S4-2） */
   passcodeHash: text('passcode_hash'),
@@ -88,6 +98,12 @@ export const sharedBookRecipes = sqliteTable('shared_book_recipes', {
 export type SharedBookRow = typeof sharedBooks.$inferSelect;
 export type SharedBookRecipeRow = typeof sharedBookRecipes.$inferSelect;
 
+/** 少量の永続設定（アクセス Cookie の署名鍵など）。閲覧者の記録には使わない */
+export const shareMeta = sqliteTable('share_meta', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
+
 // DDL は定数文字列（動的組み立てなし）。1 テーブルなので drizzle-kit の
 // マイグレーション管理は持たず、起動時の CREATE IF NOT EXISTS で足りる。
 const DDL = `
@@ -107,7 +123,12 @@ CREATE TABLE IF NOT EXISTS shared_recipes (
   cover_is_ai_generated INTEGER,
   ai_generated      INTEGER,
   created_at        TEXT NOT NULL,
-  revoked_at        TEXT
+  revoked_at        TEXT,
+  expires_at        TEXT
+);
+CREATE TABLE IF NOT EXISTS share_meta (
+  key               TEXT PRIMARY KEY,
+  value             TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS shared_books (
   slug              TEXT PRIMARY KEY,
@@ -187,8 +208,29 @@ export function getShareDb(): BetterSQLite3Database {
   if (!bookRecipeCols.includes('ai_generated')) {
     sqlite.exec('ALTER TABLE shared_book_recipes ADD COLUMN ai_generated INTEGER');
   }
+  // 受け取り期限（docs/共有設計.md §3-6）。既存 DB へ追い付き＋既存行の埋め立て:
+  // 無期限リンクを残さないため、NULL の行は「今から 7 日」を入れる（それまでに
+  // 開いた閲覧者はアクセス Cookie で以後も見られる。開かなかった URL は失効）
+  if (!recipeCols.includes('expires_at')) {
+    sqlite.exec('ALTER TABLE shared_recipes ADD COLUMN expires_at TEXT');
+  }
+  const backfill = new Date(Date.now() + RECEIVE_WINDOW_MS).toISOString();
+  sqlite.prepare('UPDATE shared_recipes SET expires_at = ? WHERE expires_at IS NULL').run(backfill);
+  sqlite.prepare('UPDATE shared_books SET expires_at = ? WHERE expires_at IS NULL').run(backfill);
   dbSingleton = drizzle(sqlite);
   return dbSingleton;
+}
+
+/** 受け取り期限の窓（docs/共有設計.md §3-6）: リンクを新しく開ける期間 */
+export const RECEIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function receiveWindowEnd(now = Date.now()): string {
+  return new Date(now + RECEIVE_WINDOW_MS).toISOString();
+}
+
+/** 受け取り期限内か（NULL は起動時に埋めるので通常来ないが、来たら開ける側に倒す） */
+export function withinReceiveWindow(expiresAt: string | null): boolean {
+  return expiresAt == null || new Date().toISOString() <= expiresAt;
 }
 
 /** テスト用: シングルトンを破棄（SHARE_DB_PATH=':memory:' と組で使う） */
@@ -245,6 +287,7 @@ export function createShare(input: CreateShareInput): CreateShareResult {
       photoMime: input.photo?.mime ?? null,
       coverIsAiGenerated: input.coverIsAiGenerated ? 1 : null,
       aiGenerated: input.aiGenerated ? 1 : null,
+      expiresAt: receiveWindowEnd(),
       createdAt: new Date().toISOString(),
     })
     .run();
@@ -277,6 +320,42 @@ export function revokeShare(slug: string, deleteToken: string): RevokeResult {
     .where(eq(sharedRecipes.slug, slug))
     .run();
   return 'revoked';
+}
+
+export type RenewResult = 'renewed' | 'not-found' | 'forbidden';
+
+/**
+ * 受け取り期限を「今から 7 日」に張り直す（§3-6）。オーナーが「リンクを送る」たびに
+ * 呼ばれる — 送る意思がある間だけ窓が開き、送らなくなった URL は自然に閉じる。
+ */
+export function renewShare(slug: string, deleteToken: string): RenewResult {
+  const db = getShareDb();
+  const rows = db.select().from(sharedRecipes).where(eq(sharedRecipes.slug, slug)).all();
+  const row = rows[0];
+  if (!row || row.revokedAt) return 'not-found';
+  const expected = Buffer.from(row.deleteTokenHash, 'hex');
+  const actual = Buffer.from(hashToken(deleteToken), 'hex');
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return 'forbidden';
+  db.update(sharedRecipes)
+    .set({ expiresAt: receiveWindowEnd() })
+    .where(eq(sharedRecipes.slug, slug))
+    .run();
+  return 'renewed';
+}
+
+export function renewBookShare(slug: string, deleteToken: string): RenewResult {
+  const db = getShareDb();
+  const rows = db.select().from(sharedBooks).where(eq(sharedBooks.slug, slug)).all();
+  const row = rows[0];
+  if (!row || row.revokedAt) return 'not-found';
+  const expected = Buffer.from(row.deleteTokenHash, 'hex');
+  const actual = Buffer.from(hashToken(deleteToken), 'hex');
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return 'forbidden';
+  db.update(sharedBooks)
+    .set({ expiresAt: receiveWindowEnd() })
+    .where(eq(sharedBooks.slug, slug))
+    .run();
+  return 'renewed';
 }
 
 // ── レシピ帖 ─────────────────────────────────────────────────────────────────
@@ -331,7 +410,11 @@ export function createBookShare(
       title: input.title,
       description: input.description ?? null,
       createdAt: new Date().toISOString(),
-      expiresAt: access.expiresAt ?? null,
+      // 受け取り期限は最長 7 日（§3-6）。クライアントがより短い期限を指定したらそちら
+      expiresAt:
+        access.expiresAt && access.expiresAt < receiveWindowEnd()
+          ? access.expiresAt
+          : receiveWindowEnd(),
       passcodeHash: access.passcode ? hashPasscode(slug, access.passcode) : null,
     })
     .run();
@@ -390,7 +473,11 @@ export function updateBookShare(
       locale: input.locale,
       title: input.title,
       description: input.description ?? null,
-      expiresAt: access.expiresAt ?? null,
+      // 更新も「送り直し」— 受け取り期限を最長 7 日で張り直す（§3-6。無期限には戻さない）
+      expiresAt:
+        access.expiresAt && access.expiresAt < receiveWindowEnd()
+          ? access.expiresAt
+          : receiveWindowEnd(),
       passcodeHash: access.passcode ? hashPasscode(slug, access.passcode) : null,
     })
     .where(eq(sharedBooks.slug, slug))
@@ -411,8 +498,8 @@ export function getActiveBook(
     .all();
   const book = books[0];
   if (!book) return null;
-  // 期限切れは 404 と同じ扱い（存在を漏らさない）
-  if (book.expiresAt && book.expiresAt < new Date().toISOString()) return null;
+  // 期限は 404 にしない（§3-6 で「新規閲覧の期限」に変更 — 判定はルート側。
+  // 期限後もアクセス Cookie を持つ閲覧者には見せる必要があるため、行はそのまま返す）
   const recipes = db
     .select()
     .from(sharedBookRecipes)
@@ -482,6 +569,59 @@ export function makeBookCookie(slug: string): string {
 export function verifyBookCookie(slug: string, cookie: string | undefined): boolean {
   if (!cookie) return false;
   const expected = makeBookCookie(slug);
+  const a = Buffer.from(expected);
+  const b = Buffer.from(cookie);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+// ── アクセス Cookie（受け取り期限・§3-6） ────────────────────────────────────
+// 期限内に開いた閲覧者へ渡す「開いた証明」。**再起動をまたいで有効である必要がある**
+// （パスコード Cookie と違い、失効＝閲覧者の恒久的な締め出しになる）ので、
+// 鍵はプロセス乱数ではなく share_meta に永続化する。閲覧者が誰かは記録しない
+// （Cookie は閲覧者のブラウザにだけ残る — Web共有設計 §0-2 の方針のまま）。
+
+const ACCESS_SECRET_KEY = 'access_cookie_secret';
+let accessSecretCache: string | null = null;
+
+function getAccessCookieSecret(): string {
+  if (accessSecretCache) return accessSecretCache;
+  const db = getShareDb();
+  const rows = db.select().from(shareMeta).where(eq(shareMeta.key, ACCESS_SECRET_KEY)).all();
+  const existing = rows[0]?.value;
+  if (existing) {
+    accessSecretCache = existing;
+    return existing;
+  }
+  const secret = randomBytes(32).toString('base64url');
+  db.insert(shareMeta)
+    .values({ key: ACCESS_SECRET_KEY, value: secret })
+    .onConflictDoNothing()
+    .run();
+  // 併走した別プロセスが先に入れていたら、その値を正とする
+  const after = db.select().from(shareMeta).where(eq(shareMeta.key, ACCESS_SECRET_KEY)).all();
+  accessSecretCache = after[0]?.value ?? secret;
+  return accessSecretCache;
+}
+
+/** テスト用: 秘密のキャッシュを破棄（resetShareDbForTesting と組で使う） */
+export function resetAccessSecretForTesting(): void {
+  accessSecretCache = null;
+}
+
+export function makeAccessCookie(kind: 'r' | 'b', slug: string): string {
+  return createHash('sha256')
+    .update(getAccessCookieSecret())
+    .update(`${kind}:${slug}`)
+    .digest('base64url');
+}
+
+export function verifyAccessCookie(
+  kind: 'r' | 'b',
+  slug: string,
+  cookie: string | undefined,
+): boolean {
+  if (!cookie) return false;
+  const expected = makeAccessCookie(kind, slug);
   const a = Buffer.from(expected);
   const b = Buffer.from(cookie);
   return a.length === b.length && timingSafeEqual(a, b);

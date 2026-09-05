@@ -8,6 +8,19 @@ import { getAppMeta, setAppMeta } from './app-meta.service';
 import { resolvePhotoUri, toStoredPhotoPath } from './photo-path';
 import { t } from '../i18n';
 
+/**
+ * t() 済みの文言だけを持つバックアップエラー（画面は message をそのまま出してよい）。
+ * fs 由来の生例外（英語スタック）と見分けるための印 — `ai-error.ts` の
+ * `readableErrorMessage` が userVisible を見る（水平展開規約②・2026-09-05）。
+ */
+export class BackupError extends Error {
+  readonly userVisible = true;
+  constructor(message: string) {
+    super(message);
+    this.name = 'BackupError';
+  }
+}
+
 const BACKUP_FORMAT = 'daidoko.local-backup';
 const BACKUP_SCHEMA_VERSION = 1;
 const BACKUP_DIRECTORY_NAME = 'backups';
@@ -263,6 +276,30 @@ export const BACKUP_TABLES = [
     columns: ['book_id', 'recipe_id', 'position'],
     optional: true,
   },
+  // ─── 献立（v19・時間帯ごとに 1 プラン — 設計 §10.6）─────────────────────────
+  // optional: 旧ファイルにはテーブルが無い（当時の献立は app_meta の menu_plan JSON で、
+  // それは app_meta ごと復元される → menu-plan.service のレイジー移行が拾う）。
+  // 親（menu_plans）→ 子（menu_plan_days）の順に置く — 復元の INSERT はこの並び順
+  {
+    name: 'menu_plans',
+    columns: [
+      'id',
+      'meal_time',
+      'generated_at',
+      'source',
+      'pantry_signature',
+      'anchor_date',
+      'requested_days',
+      'ai_note',
+      'auto_added_item_ids',
+    ],
+    optional: true,
+  },
+  {
+    name: 'menu_plan_days',
+    columns: ['plan_id', 'day', 'recipe_id', 'title', 'reason', 'done_at'],
+    optional: true,
+  },
 ] as const;
 
 type BackupTableName = (typeof BACKUP_TABLES)[number]['name'];
@@ -330,13 +367,13 @@ export interface MigrationBackupRestoreResult extends BackupOperationResult {
 
 function assertNative(): void {
   if (!isNativePlatform) {
-    throw new Error(t('backup.invalid.notNative'));
+    throw new BackupError(t('backup.invalid.notNative'));
   }
 }
 
 function getBackupDirectory(): string {
   if (!FileSystem.documentDirectory) {
-    throw new Error(t('backup.invalid.noStorage'));
+    throw new BackupError(t('backup.invalid.noStorage'));
   }
   return `${FileSystem.documentDirectory}${BACKUP_DIRECTORY_NAME}/`;
 }
@@ -416,6 +453,8 @@ function createEmptyBackupTables(): BackupTables {
     name_aliases: [],
     recipe_books: [],
     recipe_book_items: [],
+    menu_plans: [],
+    menu_plan_days: [],
   };
 }
 
@@ -447,21 +486,21 @@ function isBackupRow(value: unknown): value is BackupRow {
 function parseJsonObject(text: string): Record<string, unknown> {
   const parsed: unknown = JSON.parse(text);
   if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(t('backup.invalid.format'));
+    throw new BackupError(t('backup.invalid.format'));
   }
   return parsed as Record<string, unknown>;
 }
 
 function parseLocalBackupPayloadObject(parsed: Record<string, unknown>): LocalBackupPayload {
   if (parsed.format !== BACKUP_FORMAT || parsed.schemaVersion !== BACKUP_SCHEMA_VERSION) {
-    throw new Error(t('backup.invalid.unsupportedFormat'));
+    throw new BackupError(t('backup.invalid.unsupportedFormat'));
   }
   if (typeof parsed.exportedAt !== 'string') {
-    throw new Error(t('backup.invalid.exportedAt'));
+    throw new BackupError(t('backup.invalid.exportedAt'));
   }
   const rawTables = parsed.tables;
   if (rawTables == null || typeof rawTables !== 'object' || Array.isArray(rawTables)) {
-    throw new Error(t('backup.invalid.tables'));
+    throw new BackupError(t('backup.invalid.tables'));
   }
 
   const tables = createEmptyBackupTables();
@@ -471,7 +510,7 @@ function parseLocalBackupPayloadObject(parsed: Record<string, unknown>): LocalBa
     // 省略可のテーブルはキーが無ければ 0 件（旧アプリが書き出したファイルの復元）
     if (rows === undefined && isOptionalTable(table)) continue;
     if (!Array.isArray(rows) || !rows.every(isBackupRow)) {
-      throw new Error(t('backup.invalid.tableRows', { table: table.name }));
+      throw new BackupError(t('backup.invalid.tableRows', { table: table.name }));
     }
     tables[table.name] = rows;
   }
@@ -490,14 +529,15 @@ export function parseLocalBackupPayload(text: string): LocalBackupPayload {
 
 function assertString(value: unknown, message: string): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(message);
+    // message は呼び出し元で t() 済み（backup.invalid.*）
+    throw new BackupError(message);
   }
   return value;
 }
 
 function parseMigrationPhotoEntry(value: unknown): MigrationPhotoManifestEntry {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(t('backup.invalid.photoEntry'));
+    throw new BackupError(t('backup.invalid.photoEntry'));
   }
   const entry = value as Record<string, unknown>;
   const archivePath = assertString(entry.archivePath, t('backup.invalid.photoPath'));
@@ -506,7 +546,7 @@ function parseMigrationPhotoEntry(value: unknown): MigrationPhotoManifestEntry {
     archivePath.includes('..') ||
     archivePath.includes('\\')
   ) {
-    throw new Error(t('backup.invalid.photoPath'));
+    throw new BackupError(t('backup.invalid.photoPath'));
   }
 
   return {
@@ -519,12 +559,12 @@ function parseMigrationPhotoEntry(value: unknown): MigrationPhotoManifestEntry {
 
 function parseMigrationRecipePhotoEntry(value: unknown): MigrationRecipePhotoManifestEntry {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(t('backup.invalid.recipePhotoEntry'));
+    throw new BackupError(t('backup.invalid.recipePhotoEntry'));
   }
   const entry = value as Record<string, unknown>;
   const ownerType = entry.ownerType;
   if (ownerType !== 'recipe-cover' && ownerType !== 'step') {
-    throw new Error(t('backup.invalid.recipePhotoKind'));
+    throw new BackupError(t('backup.invalid.recipePhotoKind'));
   }
   const archivePath = assertString(entry.archivePath, t('backup.invalid.recipePhotoPath'));
   if (
@@ -532,7 +572,7 @@ function parseMigrationRecipePhotoEntry(value: unknown): MigrationRecipePhotoMan
     archivePath.includes('..') ||
     archivePath.includes('\\')
   ) {
-    throw new Error(t('backup.invalid.recipePhotoPath'));
+    throw new BackupError(t('backup.invalid.recipePhotoPath'));
   }
 
   return {
@@ -553,21 +593,21 @@ export function parseMigrationBackupManifest(text: string): MigrationBackupManif
     parsed.format !== MIGRATION_BACKUP_FORMAT ||
     parsed.schemaVersion !== MIGRATION_BACKUP_SCHEMA_VERSION
   ) {
-    throw new Error(t('backup.invalid.migrationFormat'));
+    throw new BackupError(t('backup.invalid.migrationFormat'));
   }
   const exportedAt = assertString(parsed.exportedAt, t('backup.invalid.migrationExportedAt'));
   const rawBackup = parsed.backup;
   if (rawBackup == null || typeof rawBackup !== 'object' || Array.isArray(rawBackup)) {
-    throw new Error(t('backup.invalid.migrationData'));
+    throw new BackupError(t('backup.invalid.migrationData'));
   }
   const rawPhotos = parsed.photos;
   if (!Array.isArray(rawPhotos)) {
-    throw new Error(t('backup.invalid.photoList'));
+    throw new BackupError(t('backup.invalid.photoList'));
   }
   // recipePhotos は省略可（旧形式 ZIP との互換）
   const rawRecipePhotos = parsed.recipePhotos;
   if (rawRecipePhotos != null && !Array.isArray(rawRecipePhotos)) {
-    throw new Error(t('backup.invalid.recipePhotoList'));
+    throw new BackupError(t('backup.invalid.recipePhotoList'));
   }
 
   return {
@@ -591,7 +631,7 @@ export function pickLatestBackup(files: BackupFileSummary[]): BackupFileSummary 
 function base64CharToValue(character: string): number {
   const value = BASE64_ALPHABET.indexOf(character);
   if (value < 0) {
-    throw new Error(t('backup.invalid.base64'));
+    throw new BackupError(t('backup.invalid.base64'));
   }
   return value;
 }
@@ -600,7 +640,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
   const normalized = base64.replace(/\s/g, '');
   if (normalized.length === 0) return new Uint8Array();
   if (normalized.length % 4 === 1) {
-    throw new Error(t('backup.invalid.base64'));
+    throw new BackupError(t('backup.invalid.base64'));
   }
   const padding = normalized.endsWith('==') ? 2 : normalized.endsWith('=') ? 1 : 0;
   const bytes = new Uint8Array(Math.floor((normalized.length * 3) / 4) - padding);
@@ -678,7 +718,7 @@ export function createMigrationRecipePhotoArchivePath(
 
 function getRequiredDocumentDirectory(): string {
   if (!FileSystem.documentDirectory) {
-    throw new Error(t('backup.invalid.noStorage'));
+    throw new BackupError(t('backup.invalid.noStorage'));
   }
   return FileSystem.documentDirectory;
 }
@@ -943,7 +983,22 @@ export async function createMigrationBackupPackage(): Promise<MigrationBackupOpe
  * 再送のきっかけが無い）。復元後に `resetCursor()` も走るが、それは別の手順で、
  * 途中でアプリが落ちれば飛ぶ。**同じトランザクションの中で落とすのが確実。**
  */
-const NON_RESTORABLE_APP_META_KEYS: readonly string[] = ['sync_cursor'];
+const NON_RESTORABLE_APP_META_KEYS: readonly string[] = [
+  'sync_cursor',
+  // §12（多グループ・G-2a）: 所属バックフィル完了フラグと現在/参加グループの控えも
+  // 「この端末といまのグループ」の状態。他端末のバックアップから持ち込むと、
+  // 所属が空のままフラグだけ立ち、push が全実体を「自分だけ」と誤読して捨てる。
+  // 復元後の `onLocalDataReplaced` でも白紙にするが、sync_cursor と同じく
+  // 同じトランザクションの中で落とすのが確実
+  'sync_entity_groups_migrated',
+  'sync_current_group',
+  'sync_known_groups',
+];
+
+/** グループ別カーソル `sync_cursor:<groupId>`（§12）も sync_cursor と同じ理由で落とす */
+function isNonRestorableAppMetaKey(key: string): boolean {
+  return NON_RESTORABLE_APP_META_KEYS.includes(key) || key.startsWith('sync_cursor:');
+}
 
 /** 復元直後: 未移行の在庫行をベースライン化し、持ち分から表示値を導出し直す（S2-B） */
 /**
@@ -985,11 +1040,15 @@ function replaceDatabase(payload: LocalBackupPayload): void {
     // 復元後に `clearSyncQueue()` も走るが、それは別の手順で、間にアプリが落ちたり
     // 同期が割り込んだりすると飛ぶ。`sync_cursor` と同じ理由で同じトランザクションに入れる
     expoDb.runSync('DELETE FROM sync_queue');
+    // 実体のグループ所属（§12-3）も復元対象ではないが、ここで必ず捨てる。
+    // 復元前の所属が復元後の行に残ると中身と食い違う。バックフィル完了フラグは
+    // 上の NON_RESTORABLE で必ず落ちるので、次の同期で所属は付け直される
+    expoDb.runSync('DELETE FROM entity_groups');
 
     for (const table of BACKUP_TABLES) {
       const sql = `INSERT INTO ${quoteIdentifier(table.name)} (${tableColumnList(table)}) VALUES (${tablePlaceholders(table)})`;
       for (const row of payload.tables[table.name]) {
-        if (table.name === 'app_meta' && NON_RESTORABLE_APP_META_KEYS.includes(String(row.key))) {
+        if (table.name === 'app_meta' && isNonRestorableAppMetaKey(String(row.key))) {
           continue;
         }
         // `as const` の配列なので、defaults を持たない要素の型には defaults が無い
@@ -1036,7 +1095,7 @@ export async function restoreMigrationBackupPackage(
   const entries = unzipSync(base64ToUint8Array(raw));
   const manifestEntry = entries[MIGRATION_MANIFEST_FILE_NAME];
   if (!manifestEntry) {
-    throw new Error(t('backup.invalid.manifestMissing'));
+    throw new BackupError(t('backup.invalid.manifestMissing'));
   }
 
   const manifest = parseMigrationBackupManifest(strFromU8(manifestEntry));
@@ -1110,7 +1169,7 @@ export async function restoreMigrationBackupPackage(
 export async function restoreLatestLocalBackup(): Promise<BackupOperationResult> {
   const latest = pickLatestBackup(await listLocalBackups());
   if (!latest) {
-    throw new Error(t('backup.invalid.nothingToRestore'));
+    throw new BackupError(t('backup.invalid.nothingToRestore'));
   }
   return restoreLocalBackup(latest.uri);
 }

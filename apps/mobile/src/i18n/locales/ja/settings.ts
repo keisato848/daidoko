@@ -87,6 +87,8 @@ const settings = {
     backupSubtitle: '端末内にバックアップを作成・復元',
     sync: 'クラウド同期',
     syncSubtitle: '家族グループに参加すると、端末どうしで自動的に同期されます',
+    shareStatus: '共有の管理',
+    shareStatusSubtitle: '家族と共有中のもの・リンクで公開中のものを一覧',
     nameAliases: '名寄せ辞書',
     /**
      * 名寄せは**利用者が AI 機能を使わなくても走る**（在庫で作れるレシピを開いたとき・
@@ -126,13 +128,13 @@ const settings = {
       'データは端末内にあります（家族と共有すると、共有した分だけ端末どうしで同期します）。「バックアップ・復元」でファイルに書き出し・復元ができます。',
     guideTitle: '使い方ガイド',
     guideText:
-      '各画面の「?」でその画面の案内を再生できます。「使い方ガイドを再表示」を押すと全画面の案内をもう一度見られます。',
+      '主な画面の「?」でその画面の案内を再生できます。「使い方ガイドを再表示」を押すと案内をもう一度見られます。',
   },
   webShares: {
     title: 'レシピ帖',
     emptyTitle: 'レシピ帖はまだありません',
     emptyBody:
-      'レシピ一覧で長押し→複数選択→「レシピ帖」から作れます。作った帖はここで編集・共有できます。',
+      'レシピ一覧の棚にある「＋新しい帖」から作れます（レシピを長押し→複数選択→「レシピ帖」でも可）。作った帖はここで編集・共有できます。',
     recipeCount: {
       one: '{{count}}品',
       other: '{{count}}品',
@@ -147,6 +149,67 @@ const settings = {
     stopFailed: '停止できませんでした。通信環境を確認してもう一度お試しください。',
     deleteTitle: 'レシピ帖を削除',
     deleteConfirm: 'この帖を削除しますか？（レシピ自体は消えません）',
+  },
+  shareStatus: {
+    title: '共有の管理',
+    familySection: '家族グループ',
+    familyJoined: '家族グループに参加中',
+    familyJoinedNote: 'メンバーの確認・招待はこちら',
+    familyNotJoined: '家族グループに未参加',
+    familyNotJoinedNote: '参加するとグループの端末どうしで自動的に同期されます',
+    familyScope:
+      '共有: レシピ / レシピ帖 / 買い物リスト / 在庫 — グループのメンバーにだけ見えます。\n共有されない: 調理記録・写真・献立。',
+    linkSection: 'リンクで公開中',
+    linkScope:
+      'リンクを知っている人は誰でも見られます（家族以外も）。新しく開けるのは送ってから7日間で、期限内に開いた人はその後も見られます。「リンクを送る」と期限は張り直されます。',
+    linkEmpty: 'リンクで公開しているものはありません。',
+    deletedRecipe: '（削除したレシピ）',
+    resend: 'リンクを送る',
+    stopTitle: '公開を停止',
+    stopConfirm: '公開を停止すると、リンクを知っている人も見られなくなります。よろしいですか？',
+    stopAction: '停止する',
+    stopFailed: '停止できませんでした。通信環境を確認してもう一度お試しください。',
+    sharedBooks: {
+      one: '共有中のレシピ帖 {{count}}冊',
+      other: '共有中のレシピ帖 {{count}}冊',
+    } satisfies PluralMessage,
+    sharedBooksNote: 'リンクの送付・停止はレシピ帖の管理から',
+    /**
+     * グループ別の実数表示（G5/U3 — docs/共有設計.md §5-4）。
+     * 「0 件」と「そもそも見えない」を区別する — 否定側（recipes スコープの
+     * グループに買い物・在庫が流れないこと）は必ず文で明示する（隆の懸念への回答）。
+     */
+    groupCountRecipes: {
+      one: 'レシピ {{count}}品',
+      other: 'レシピ {{count}}品',
+    } satisfies PluralMessage,
+    groupCountBooks: {
+      one: 'レシピ帖 {{count}}冊',
+      other: 'レシピ帖 {{count}}冊',
+    } satisfies PluralMessage,
+    groupCountShopping: {
+      one: '買い物リスト {{count}}件',
+      other: '買い物リスト {{count}}件',
+    } satisfies PluralMessage,
+    groupCountPantry: {
+      one: '在庫 {{count}}件',
+      other: '在庫 {{count}}件',
+    } satisfies PluralMessage,
+    groupSharedLabel: 'このグループで共有されているもの',
+    groupNotVisible: '買い物リスト・在庫はこのグループには見えません。',
+    groupsNotShared: '調理記録・写真・献立は、どのグループにも共有されません。',
+    groupCurrentMark: 'いま見ているグループ',
+    privateSection: '自分だけ',
+    privateScope:
+      'どのグループにも入れていない品目です。この端末の外には出ません。切替は各品目から。',
+    privateShopping: {
+      one: '買い物リスト {{count}}件',
+      other: '買い物リスト {{count}}件',
+    } satisfies PluralMessage,
+    privatePantry: {
+      one: '在庫 {{count}}件',
+      other: '在庫 {{count}}件',
+    } satisfies PluralMessage,
   },
   book: {
     title: 'レシピ帖',

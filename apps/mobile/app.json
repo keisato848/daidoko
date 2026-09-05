@@ -2,7 +2,7 @@
   "expo": {
     "name": "だいどこ",
     "slug": "daidoko",
-    "version": "1.13.0",
+    "version": "1.13.1",
     "orientation": "default",
     "scheme": "daidoko",
     "userInterfaceStyle": "dark",
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.daidoko.app",
-      "buildNumber": "10034",
+      "buildNumber": "10035",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["ja", "en"]
@@ -29,7 +29,7 @@
     },
     "android": {
       "package": "com.daidoko.app",
-      "versionCode": 10034,
+      "versionCode": 10035,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0805"
@@ -117,6 +117,19 @@
               "targetCellHeight": 2,
               "maxResizeWidth": "320dp",
               "maxResizeHeight": "180dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Menu",
+              "label": "献立",
+              "description": "今日の一品を表示します（大きくすると今週の献立一覧）",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 3,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "320dp",
+              "maxResizeHeight": "320dp",
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
             }

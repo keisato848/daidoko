@@ -1,6 +1,9 @@
 import type ja from '../ja/error';
 
 const error: typeof ja = {
+  dbInit:
+    'We couldn’t load your data. Restart the app. If that doesn’t help, save your data from Settings > Backup before reinstalling.',
+
   offline: {
     text: "You're offline. Reconnect and try again.",
     intent:

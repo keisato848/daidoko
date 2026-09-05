@@ -16,6 +16,7 @@ import { API_V1, GEMINI_MODEL } from '../config';
 import { getUserApiKey } from './byok.service';
 import type { RecipeFormData } from '../validation/recipe.schema';
 import { t } from '../i18n';
+import { serverErrorFor } from './ai-error';
 import {
   requestLocale,
   requestUnitSystem,
@@ -76,6 +77,8 @@ export type VisionErrorKind =
   | 'failed';
 
 export class VisionInferenceError extends Error {
+  /** t() 済みの文言を持つ印（ai-error.ts の readableErrorMessage が見る） */
+  readonly userVisible = true;
   readonly retryable: boolean;
   readonly kind: VisionErrorKind;
   constructor(message: string, retryable: boolean, kind: VisionErrorKind = 'failed') {
@@ -396,10 +399,8 @@ async function inferViaServer(
     });
 
     if (!res.ok) {
-      throw new VisionInferenceError(
-        t('ai.error.serverError', { status: res.status }),
-        res.status >= 500,
-      );
+      const info = serverErrorFor(res.status);
+      throw new VisionInferenceError(info.message, info.retryable);
     }
 
     const result = (await res.json()) as ServerAgentResult;

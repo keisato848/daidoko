@@ -27,6 +27,7 @@ import {
 
 import { Avatar } from '../../../src/components/Avatar';
 import { PhotoViewer } from '../../../src/components/PhotoViewer';
+import { ShareSheet } from '../../../src/components/ShareSheet';
 import { ShoppingPickSheet } from '../../../src/components/ShoppingPickSheet';
 import { CoachMarkOverlay } from '../../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../../src/components/HelpButton';
@@ -43,6 +44,17 @@ import { t, tCount } from '../../../src/i18n';
 import { canSkipSelection, type ShoppingPlanRow } from '../../../src/utils/shoppingPlan';
 import { getLogsForRecipe } from '../../../src/services/cooking-log.service';
 import { dialog } from '../../../src/services/dialog.service';
+import {
+  getKnownSyncGroupSummaries,
+  isEntityGroupsBackfillDone,
+  listEntityGroupIds,
+} from '../../../src/services/entity-groups.service';
+import {
+  buildRecipeShareBadges,
+  type KnownGroupSummary,
+  type RecipeShareBadge,
+} from '../../../src/services/share-groups';
+import { getStoredCredentials } from '../../../src/services/sync-client.service';
 import {
   addSelectedIngredientsToList,
   buildRecipeShoppingPlan,
@@ -61,6 +73,7 @@ import {
   getShareBlockReason,
   getWebShare,
   publishRecipeToWeb,
+  renewWebShare,
   revokeWebShare,
   type WebShareRecord,
 } from '../../../src/services/web-share.service';
@@ -109,6 +122,11 @@ export default function RecipeDetailScreen() {
   const [webShare, setWebShare] = useState<WebShareRecord | null>(null);
   const [webShareBlocked, setWebShareBlocked] = useState(true);
   const [webSharePublishing, setWebSharePublishing] = useState(false);
+  // 統一共有シート（docs/共有設計.md §3-2）。共有アクションはメニューからここへ集約
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [familyJoined, setFamilyJoined] = useState(false);
+  // 共有状態バッジ（U4 — docs/reviews/persona-ui-share-2026-09-04.md）。空 = 出さない
+  const [shareBadges, setShareBadges] = useState<RecipeShareBadge[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   /** 全画面で見ている写真。null = 閉じている。一覧・詳細は cover で切っているので逃げ道を置く */
   const [viewerUri, setViewerUri] = useState<string | null>(null);
@@ -141,9 +159,53 @@ export default function RecipeDetailScreen() {
 
   const loadWebShareState = useCallback(async () => {
     if (!id) return;
-    const [blockReason, record] = await Promise.all([getShareBlockReason(id), getWebShare(id)]);
+    const [blockReason, record, credentials] = await Promise.all([
+      getShareBlockReason(id),
+      getWebShare(id),
+      getStoredCredentials().catch(() => null),
+    ]);
     setWebShareBlocked(blockReason != null);
     setWebShare(record);
+    setFamilyJoined(credentials !== null);
+    // 状態バッジ（U4）。導出は純関数（buildRecipeShareBadges）。読めなければ出さないだけ
+    try {
+      if (credentials === null) {
+        setShareBadges(
+          buildRecipeShareBadges({
+            joined: false,
+            backfilled: false,
+            groupNames: [],
+            primaryGroupName: '',
+            webShareActive: record != null,
+          }),
+        );
+      } else {
+        const [groupIds, summaries, backfilled] = await Promise.all([
+          listEntityGroupIds('recipe', id),
+          getKnownSyncGroupSummaries(),
+          isEntityGroupsBackfillDone(),
+        ]);
+        const nameOf = (summary: KnownGroupSummary, index: number): string =>
+          summary.name ??
+          (index === 0 ? t('family.sync.groups.primaryName') : t('family.sync.groups.unnamedName'));
+        setShareBadges(
+          buildRecipeShareBadges({
+            joined: true,
+            backfilled,
+            groupNames: summaries
+              .map((summary, index) => ({ summary, index }))
+              .filter(({ summary }) => groupIds.includes(summary.groupId))
+              .map(({ summary, index }) => nameOf(summary, index)),
+            primaryGroupName: summaries[0]
+              ? nameOf(summaries[0], 0)
+              : t('family.sync.groups.primaryName'),
+            webShareActive: record != null,
+          }),
+        );
+      }
+    } catch {
+      setShareBadges([]);
+    }
   }, [id]);
 
   // 編集モーダルから戻ったときも最新を表示するためフォーカス毎に再取得。
@@ -258,7 +320,8 @@ export default function RecipeDetailScreen() {
   const handleWebShare = async () => {
     if (!recipe) return;
     if (webShare) {
-      // 発行済み — リンクを再共有するだけ
+      // 発行済み — 受け取り期限を張り直して（§3-6・ベストエフォート）再共有する
+      if (id) void renewWebShare(id);
       try {
         await Share.share({ message: `${recipe.title}\n${webShare.url}` });
       } catch {
@@ -466,35 +529,11 @@ export default function RecipeDetailScreen() {
             style={styles.menuItem}
             onPress={() => {
               setShowMenu(false);
-              void handleShare();
+              setShareSheetOpen(true);
             }}
           >
             <Text style={styles.menuItemText}>{t('recipe.detail.menu.share')}</Text>
           </Pressable>
-          {!webShareBlocked && (
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                void handleWebShare();
-              }}
-            >
-              <Text style={styles.menuItemText}>
-                {webShare ? t('recipe.detail.menu.webShareSend') : t('recipe.detail.menu.webShare')}
-              </Text>
-            </Pressable>
-          )}
-          {!webShareBlocked && webShare && (
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                setShowMenu(false);
-                void handleWebShareStop();
-              }}
-            >
-              <Text style={styles.menuItemText}>{t('recipe.detail.menu.webShareStop')}</Text>
-            </Pressable>
-          )}
           <Pressable
             style={styles.menuItem}
             onPress={() => {
@@ -520,6 +559,24 @@ export default function RecipeDetailScreen() {
 
       <View style={styles.meta}>
         <Text style={styles.title}>{recipe.title}</Text>
+        {/* 共有状態バッジ（U4）: 「今このレシピが誰に見えているか」。控えめな Chip */}
+        {shareBadges.length > 0 && (
+          <View style={styles.shareBadgeRow}>
+            {shareBadges.map((badge) => (
+              <View key={badge.kind} style={styles.shareBadge}>
+                <Text style={styles.shareBadgeText} numberOfLines={1}>
+                  {badge.kind === 'groups'
+                    ? t('recipe.detail.shareState.groups', {
+                        names: badge.names.join(t('common.listSeparator')),
+                      })
+                    : badge.kind === 'private'
+                      ? t('recipe.detail.shareState.private')
+                      : t('recipe.detail.shareState.link')}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
         {recipe.isCoverAiGenerated && (
           <Text style={styles.aiDetailNote}>{t('coverImage.detailNote')}</Text>
         )}
@@ -782,6 +839,31 @@ export default function RecipeDetailScreen() {
 
       <PhotoViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
 
+      <ShareSheet
+        visible={shareSheetOpen}
+        onClose={() => setShareSheetOpen(false)}
+        familyJoined={familyJoined}
+        linkShared={webShare != null}
+        linkBlocked={webShareBlocked}
+        onFamily={() => {
+          setShareSheetOpen(false);
+          router.push('/family');
+        }}
+        onLinkSend={() => {
+          // OS の共有シート（や権利確認ダイアログ）と重ならないよう先に閉じる
+          setShareSheetOpen(false);
+          void handleWebShare();
+        }}
+        onLinkStop={() => {
+          setShareSheetOpen(false);
+          void handleWebShareStop();
+        }}
+        onTextSend={() => {
+          setShareSheetOpen(false);
+          void handleShare();
+        }}
+      />
+
       <ShoppingPickSheet
         visible={pickRows !== null}
         rows={pickRows ?? []}
@@ -907,6 +989,18 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     letterSpacing: 0.5,
   },
+  // 共有状態バッジ（U4）。主張しない Chip — 状態表示であってボタンではない
+  shareBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  shareBadge: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    backgroundColor: Colors.bgCard,
+    maxWidth: '100%',
+  },
+  shareBadgeText: { fontSize: 11, color: Colors.paperDim },
   aiDetailNote: { fontSize: 11, color: Colors.muted, marginBottom: 6 },
   // 表紙の一行より強く見せる（材料と分量の安全に関わる）。警告色は使わない — ブランド外
   aiRecipeNote: {

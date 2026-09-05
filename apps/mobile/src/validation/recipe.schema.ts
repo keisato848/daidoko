@@ -43,7 +43,9 @@ export const recipeFormSchema = z.object({
   placeName: z.string().max(60).optional(),
   ingredients: z.array(ingredientSchema).min(1, 'recipe.validation.ingredientsRequired'),
   steps: z.array(stepSchema).min(1, 'recipe.validation.stepsRequired'),
-  tags: z.array(z.string()),
+  // サーバー契約（共有/refine/consult は各タグ ≤30 字・≤10 個）と揃える。
+  // 個数は保存自体を妨げず送信側で 10 個に slice する（長さだけフォームで止める）
+  tags: z.array(z.string().max(30, 'recipe.validation.tagTooLong')),
 });
 
 export type RecipeFormData = z.infer<typeof recipeFormSchema>;

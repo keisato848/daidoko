@@ -14,6 +14,7 @@ import { API_V1 } from '../config';
 import { expoImageManipulatorPreprocessAdapter } from './expo-image-preprocess.adapter';
 import { preprocessImageForOcr } from './image-preprocess.service';
 import { t } from '../i18n';
+import { serverErrorFor } from './ai-error';
 import {
   requestLocale,
   requestUnitSystem,
@@ -63,6 +64,8 @@ export interface ConsultTurnResult {
 }
 
 export class ConsultError extends Error {
+  /** t() 済みの文言を持つ印（ai-error.ts） */
+  readonly userVisible = true;
   readonly retryable: boolean;
   constructor(message: string, retryable: boolean) {
     super(message);
@@ -128,7 +131,10 @@ export function formDataToDraft(form: RecipeFormData): ServerDraft {
       ...(ing.note ? { note: ing.note } : {}),
     })),
     steps: form.steps.map((step) => ({ body: step.body })),
-    ...(form.tags.length > 0 && { tags: form.tags }),
+    // サーバー契約（タグ ≤10 個・各 ≤30 字）に送信側で収める（P4）
+    ...(form.tags.length > 0 && {
+      tags: form.tags.slice(0, 10).map((tag) => tag.slice(0, 30)),
+    }),
   };
 }
 
@@ -351,7 +357,8 @@ async function consultViaByok(args: ConsultArgs, apiKey: string): Promise<Consul
     );
     if (res.status === 429) throw new ConsultError(t('ai.error.byokQuota'), false);
     if (!res.ok) {
-      throw new ConsultError(t('ai.error.serverError', { status: res.status }), res.status >= 500);
+      const info = serverErrorFor(res.status);
+      throw new ConsultError(info.message, info.retryable);
     }
     const json = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -403,7 +410,8 @@ async function consultViaServer(args: ConsultArgs): Promise<ConsultTurnResult> {
       signal: controller.signal,
     });
     if (!res.ok) {
-      throw new ConsultError(t('ai.error.serverError', { status: res.status }), res.status >= 500);
+      const info = serverErrorFor(res.status);
+      throw new ConsultError(info.message, info.retryable);
     }
     const result = (await res.json()) as ServerAgentResult;
     if (!result.ok || !result.data) {

@@ -18,6 +18,7 @@ const recipe = {
     titleTooLong: '100文字以内で入力してください',
     ingredientsRequired: '材料を1つ以上追加してください',
     stepsRequired: '手順を1つ以上追加してください',
+    tagTooLong: 'タグは30文字以内で入力してください',
   },
 
   /** レシピ入力フォーム（新規・編集・取り込みの確認で共通）。 */
@@ -88,22 +89,48 @@ const recipe = {
       refine: 'お店の味に近づける',
       edit: '編集',
       share: '共有',
-      webShare: 'Webページで共有',
-      webShareSend: 'Web共有リンクを送る',
-      webShareStop: 'Web共有を停止',
       revisions: '版履歴',
+    },
+
+    /**
+     * 共有状態バッジ（U4 — docs/reviews/persona-ui-share-2026-09-04.md）。
+     * 「今このレシピが誰に見えているか」をヘッダ付近で常時示す。用語は §3-4
+     * （公開中/自分だけ）。groups の {{names}} はグループ名を「・」で連結した文字列
+     */
+    shareState: {
+      groups: '共有中: {{names}}',
+      private: '自分だけ',
+      link: 'リンク公開中',
+    },
+
+    // 統一共有シート（docs/共有設計.md §3-2）。可視範囲の 1 行は省略不可
+    shareSheet: {
+      title: 'このレシピを共有',
+      familyJoined: '家族と共有',
+      familyNotJoined: '家族と共有（グループをつくる / 参加する）',
+      familyNote: 'グループのメンバーだけに見えます。参加中は自動で同期されます。',
+      linkTitle: 'リンクで渡す',
+      linkPublish: 'リンクを作って送る',
+      linkSend: 'リンクを送る（公開中）',
+      linkNote:
+        'リンクを知っている人は誰でも見られます（家族以外も）。新しく開けるのは送ってから7日間 — 期限内に開いた人はその後も見られます。',
+      linkStop: '公開を停止',
+      linkStopNote: 'リンクを知っている人も見られなくなります。',
+      linkBlocked: 'URL から取り込んだレシピはリンクにできません（転載をサーバーに置かないため）。',
+      textSend: 'テキストで送る',
+      textNote: '文章として送ります。受け取った人はアプリに取り込めます。',
     },
 
     webShare: {
       attestTitle: '自分で作ったレシピですか？',
       attestBody:
-        'Web共有は、あなた自身が作成した内容だけに使えます。ほかのサイトや本から写した内容は共有できません。\n\n共有すると、リンクを知っている人は誰でもこのレシピを見られます（アプリは不要です）。いつでも停止できます。',
+        'リンクでの共有は、あなた自身が作成した内容だけに使えます。ほかのサイトや本から写した内容は共有できません。\n\n共有すると、リンクを知っている人は誰でもこのレシピを見られます（アプリは不要です）。リンクを新しく開けるのは送ってから7日間で、いつでも停止できます。',
       attestOk: '共有する',
-      failedTitle: 'Web共有',
+      failedTitle: 'リンクで渡す',
       publishFailedBody:
         '共有ページを作成できませんでした。通信環境を確認してもう一度お試しください。',
-      stopTitle: 'Web共有を停止',
-      stopConfirm: '共有を停止すると、リンクを知っている人も見られなくなります。よろしいですか？',
+      stopTitle: '公開を停止',
+      stopConfirm: '公開を停止すると、リンクを知っている人も見られなくなります。よろしいですか？',
       stopAction: '停止する',
       stopDoneBody: '共有を停止しました。リンクを知っている人も見られなくなりました。',
       stopFailedBody: '停止できませんでした。通信環境を確認してもう一度お試しください。',
@@ -293,6 +320,8 @@ const recipe = {
       textDescription: '本文を貼り付けて下書き化',
       ocr: '文字入り画像から作成',
       ocrDescription: 'レシピ本や手書きメモの文字を読み取り',
+      fridge: '冷蔵庫からレシピ',
+      fridgeDescription: '冷蔵庫の写真から食材を在庫に登録し、作れるレシピへ',
       manual: '手動で入力',
       manualDescription: 'レシピを一から入力する',
     },
@@ -395,7 +424,7 @@ const recipe = {
     timerPaused: '{{time}}（一時停止中）',
     startTimer: 'タイマーを開始',
     detectedFromBody: '（本文から検出）',
-    tapHint: '画面をタップで材料を表示',
+    tapHint: '画面をタップで材料 / 左右に払って手順を移動',
     prev: '← 前へ',
     finish: '✓ 完成！記録する',
     next: '次へ →',

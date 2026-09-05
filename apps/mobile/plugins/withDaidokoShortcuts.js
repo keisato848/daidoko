@@ -15,6 +15,12 @@ const path = require('path');
 const SHORTCUTS_FILE = 'daidoko_shortcuts.xml';
 const LABEL_KEY = 'daidoko_shortcut_capture_short';
 const LONG_LABEL_KEY = 'daidoko_shortcut_capture_long';
+// 導線見直し（2026-09-04）: 長押しショートカットを撮影だけでなく
+// 「買い物リスト」「献立」にも広げる（毎日開く 2 面への最短経路）
+const SHOPPING_LABEL_KEY = 'daidoko_shortcut_shopping_short';
+const SHOPPING_LONG_LABEL_KEY = 'daidoko_shortcut_shopping_long';
+const MENU_LABEL_KEY = 'daidoko_shortcut_menu_short';
+const MENU_LONG_LABEL_KEY = 'daidoko_shortcut_menu_long';
 
 // targetPackage / targetClass は生成時に埋める（package は app.json の android.package）
 function buildShortcutsXml(androidPackage) {
@@ -31,6 +37,30 @@ function buildShortcutsXml(androidPackage) {
     <intent
       android:action="android.intent.action.VIEW"
       android:data="daidoko://recipes/import-photo"
+      android:targetPackage="${androidPackage}"
+      android:targetClass="${androidPackage}.MainActivity" />
+  </shortcut>
+  <shortcut
+    android:shortcutId="shopping-list"
+    android:enabled="true"
+    android:icon="@mipmap/ic_launcher"
+    android:shortcutShortLabel="@string/${SHOPPING_LABEL_KEY}"
+    android:shortcutLongLabel="@string/${SHOPPING_LONG_LABEL_KEY}">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="daidoko://shopping"
+      android:targetPackage="${androidPackage}"
+      android:targetClass="${androidPackage}.MainActivity" />
+  </shortcut>
+  <shortcut
+    android:shortcutId="menu-plan"
+    android:enabled="true"
+    android:icon="@mipmap/ic_launcher"
+    android:shortcutShortLabel="@string/${MENU_LABEL_KEY}"
+    android:shortcutLongLabel="@string/${MENU_LONG_LABEL_KEY}">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:data="daidoko://menu"
       android:targetPackage="${androidPackage}"
       android:targetClass="${androidPackage}.MainActivity" />
   </shortcut>
@@ -76,6 +106,10 @@ function withShortcutStrings(config) {
     // 短いラベルはランチャーの表示幅が狭く、長いと省略される
     upsert(LABEL_KEY, 'お店の料理を撮る');
     upsert(LONG_LABEL_KEY, 'お店で食べた料理を撮ってレシピにする');
+    upsert(SHOPPING_LABEL_KEY, '買い物リスト');
+    upsert(SHOPPING_LONG_LABEL_KEY, '買い物リストを開く');
+    upsert(MENU_LABEL_KEY, '献立');
+    upsert(MENU_LONG_LABEL_KEY, '今週の献立を開く');
     modConfig.modResults.resources.string = strings;
     return modConfig;
   });

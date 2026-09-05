@@ -49,13 +49,16 @@ let pending: ReturnType<typeof setTimeout> | null = null;
 async function collect(): Promise<WidgetSnapshot | null> {
   if (!isNativePlatform) return null;
   const { getShoppingItems } = await import('./shopping-list.service');
-  const { getMenuPlan } = await import('./menu-plan.service');
+  const { getMenuPlanForToday } = await import('./menu-plan.service');
   const { getLocale } = await import('../i18n');
 
-  const [shoppingItems, menu] = await Promise.all([
+  // 献立は**夕を優先**し、夕が無ければ朝/昼を表記付きで出す（v19・設計 §10.13。
+  // ホームカードと同じ規約 — 片方だけ違う顔をさせない）
+  const [shoppingItems, today] = await Promise.all([
     getShoppingItems().catch(() => []),
-    getMenuPlan().catch(() => null),
+    getMenuPlanForToday().catch(() => null),
   ]);
+  const menu = today?.view ?? null;
 
   return buildWidgetSnapshot({
     shoppingItems,
@@ -63,6 +66,10 @@ async function collect(): Promise<WidgetSnapshot | null> {
     // 自動モード（§10.11）で組まれたプランだけが anchorDate を持つ。
     // 手動プランは null のまま = 「次の一品」（ホームカードと同じ規約・§2）
     anchorDate: menu?.plan.anchorDate ?? null,
+    // 要求日数（不足行用・§2）。旧プランには保存されていない → null（不足行は出ない）
+    requestedDays: menu?.plan.requestedDays ?? null,
+    // 時間帯（§10.13）。夕は buildWidgetSnapshot 側で「書かない」に倒れる
+    mealTime: today?.mealTime ?? null,
     locale: getLocale(),
     now: new Date(),
   });
@@ -121,12 +128,24 @@ async function pushToAndroidWidget(snapshot: WidgetSnapshot): Promise<void> {
     const { requestWidgetUpdate } = await import('react-native-android-widget');
     const { ShoppingListWidget } = await import('../widgets/ShoppingListWidget');
     const { widgetSizeFromWidth } = await import('../widgets/shoppingWidgetContent');
+    const { MenuWidget } = await import('../widgets/MenuWidget');
+    const { menuWidgetSize } = await import('../widgets/menuWidgetContent');
     await requestWidgetUpdate({
       widgetName: 'ShoppingList',
       renderWidget: (info) =>
         React.createElement(ShoppingListWidget, {
           snapshot,
           size: widgetSizeFromWidth(info.width),
+        }),
+    });
+    // 献立ウィジェット（W2）も同じスナップショットで即時反映する。
+    // ホーム画面に未追加なら対象 0 件で無害。
+    await requestWidgetUpdate({
+      widgetName: 'Menu',
+      renderWidget: (info) =>
+        React.createElement(MenuWidget, {
+          snapshot,
+          size: menuWidgetSize(info.width, info.height),
         }),
     });
   } catch {

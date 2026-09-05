@@ -31,7 +31,7 @@ Git hooks のインストールと VS Code 拡張の推奨設定を行います�
   hooks/agent-suite.json        … エージェントフック定義
   skills/                       … 再利用可能な skill (changed-slice-verify, android-release-loop, e2e-triage, scaffold-feature)
   prompts/                      … Step ごとの実装 prompt
-  agents/                       … custom agents (android-verifier, repo-research, release-orchestrator)
+  agents/                       … Copilot 向けの写し (android-verifier のみ。正典は .claude/agents/ — docs/開発ハーネス.md §7)
 
 scripts/agent/
   preflight.mjs                 … 環境チェック

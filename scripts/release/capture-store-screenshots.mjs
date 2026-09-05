@@ -42,7 +42,8 @@ const RECIPE_ID = args.recipe ?? 'recipe-1';
 
 /**
  * ショット定義。route は Expo Router のパス（daidoko://<route> で開く）。
- * manual: true は自動化不可（既存ファイル維持）。順序 = Play 表示順（README.md と一致させる）。
+ * manual: true は自動化不可（既存ファイル維持）。表示順の正は update-play-screenshots.mjs の
+ * ORDER（README.md の表と同期）。03・04 は extras 退避済みだが再取得用にここへ残す。
  */
 const SHOTS = [
   { file: '01-home-timeline.png', route: '', label: 'ホーム（調理タイムライン）' },
@@ -65,6 +66,11 @@ const SHOTS = [
     file: '10-recipe-detail-photo.png',
     manual: true,
     label: '写真つき詳細（実データ依存・既存維持）',
+  },
+  {
+    file: '12-fridge-to-recipe.png',
+    manual: true,
+    label: '冷蔵庫の確認シート（実冷蔵庫写真で AI 実行が要る・README 参照・1.13.1）',
   },
 ];
 

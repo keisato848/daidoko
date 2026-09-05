@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { CookingResumeBar } from '../src/components/CookingResumeBar';
 import { DialogHost } from '../src/components/DialogHost';
 import { Colors } from '../src/constants/theme';
 import { useDatabase } from '../src/hooks/useDatabase';
@@ -29,6 +30,7 @@ import {
   consumeMenuLaunchTap,
 } from '../src/services/notification.service';
 import { initSync, runSync } from '../src/services/sync-runner.service';
+import { refreshWidgetSnapshot } from '../src/services/widget-snapshot.service';
 import { loadCookingSession, useCookingSessionStore } from '../src/stores/cooking-session.store';
 import { loadUnitSystem } from '../src/stores/unitSystem.store';
 import { decideLaunchDestination } from '../src/utils/launchDestination';
@@ -141,7 +143,12 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isReady) return;
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background') noteAppBackgrounded();
+      if (state === 'background') {
+        noteAppBackgrounded();
+        // 離れる瞬間の姿を焼き込む（ウィジェット設計 §1「AppState background」— 2026-09-04 配線。
+        // 「HH:mm 時点」の時刻が、アプリを最後に見た瞬間と一致するようになる）
+        refreshWidgetSnapshot();
+      }
       if (state === 'active') {
         maybeShowAppOpenAdOnForeground(pathnameRef.current).catch(() => undefined);
         void runSync();
@@ -154,7 +161,8 @@ export default function RootLayout() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>DB Error: {error}</Text>
+        {/* error は useDatabase が t() 済みの文言にしている（英語の生スタックを出さない） */}
+        <Text style={styles.errorText}>{error}</Text>
       </View>
     );
   }
@@ -181,6 +189,10 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
       </Stack>
+      {/* Now Cooking バー — 調理中はどの画面からも 1 タップで続きに戻れる。
+          (tabs) の外の階層画面（設定系など）でも文脈を保つため、ルートに 1 つだけ置く。
+          出す画面・位置の判断はコンポーネント側が持つ */}
+      <CookingResumeBar />
       {/*
         アプリのデザインのダイアログ（`docs/画面設計.md` §7）。**アプリに 1 つだけ**置く。
         `Stack` の外に出しているのは、どの画面から出した確認でも同じ場所に描くため

@@ -75,7 +75,13 @@ export async function resolveNames(normalizedNames: string[]): Promise<ResolveRe
   const batch = uncached.slice(0, budget);
   try {
     const { resolveNames: resolveViaProvider } = await import('./name-resolve.provider');
-    const results = await resolveViaProvider(batch);
+    // サーバー契約は names ≤50（routes/resolve.ts）。premium/BYOK は budget が
+    // 無制限なので、50 件ずつに割って送る — 一括で送ると 51 件目から 400 になる（P4）
+    const RESOLVE_BATCH_LIMIT = 50;
+    const results: Awaited<ReturnType<typeof resolveViaProvider>> = [];
+    for (let i = 0; i < batch.length; i += RESOLVE_BATCH_LIMIT) {
+      results.push(...(await resolveViaProvider(batch.slice(i, i + RESOLVE_BATCH_LIMIT))));
+    }
     // Non-food (empty canonical) caches to itself so it isn't re-asked and can't
     // spuriously match; otherwise cache the normalized canonical ingredient name.
     const byName = new Map(results.map((r) => [r.name, r.canonical]));

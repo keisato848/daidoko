@@ -62,3 +62,10 @@ export const Typography = {
     semibold: '600' as const,
   },
 } as const;
+
+/**
+ * ボトムタブバーの中身の高さ（アイコン＋ラベル。下の safe-area はこれに足す）。
+ * `(tabs)/_layout` のタブバーと、その直上に浮く `CookingResumeBar` が同じ値を
+ * 見る必要があるためここに置く（片方だけ変えるとバーがタブに重なる／浮きすぎる）。
+ */
+export const TAB_BAR_CONTENT_HEIGHT = 58;
