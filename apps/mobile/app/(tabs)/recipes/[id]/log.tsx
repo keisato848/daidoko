@@ -110,7 +110,7 @@ export default function CookingLogScreen() {
       });
       setShowToast(true);
       // 保存成功＝ポジティブな瞬間にストア評価を打診（条件・頻度はサービス側で管理）
-      void maybeRequestStoreReview();
+      void maybeRequestStoreReview('cooking-log');
 
       // 感想を書いた直後は「レシピに反映する」の最良のタイミング（R2 / Issue #113）。
       // メモが無いときは何も聞かない（材料がないので AI も直しようがない）

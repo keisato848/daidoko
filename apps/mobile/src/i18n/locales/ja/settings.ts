@@ -117,6 +117,9 @@ const settings = {
     version: 'バージョン',
     licenses: 'ライセンス情報',
     licensesSubtitle: '利用している OSS ライセンスを表示',
+    rateApp: 'アプリを評価する',
+    rateAppSubtitle: 'ストアの評価ページを開きます',
+    rateAppFailedBody: 'ストアを開けませんでした。ストアアプリから「だいどこ」を検索してください。',
   },
 
   coach: {

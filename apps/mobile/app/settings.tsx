@@ -25,6 +25,8 @@ import {
 } from '../src/services/user.service';
 import { getAdRewardProvider } from '../src/services/ad-reward.service';
 import { isEntitlementConfigured } from '../src/services/entitlement.service';
+import { isNativePlatform } from '../src/db/client';
+import { openStoreReviewPage } from '../src/services/review-request.service';
 import { isLaunchCameraEnabled, setLaunchCameraEnabled } from '../src/services/app-meta.service';
 import { getFreemiumStatus, type FreemiumStatus } from '../src/services/usage.service';
 import { useUnitSystemStore } from '../src/stores/unitSystem.store';
@@ -39,6 +41,8 @@ interface SettingItem {
   onPress?: () => void;
   /** 指定するとシェブロンの代わりにスイッチを出す（行タップでも切り替わる） */
   toggle?: { value: boolean; onValueChange: (next: boolean) => void };
+  /** true なら描画しない（そのプラットフォームで成立しない行） */
+  hidden?: boolean;
 }
 
 interface SettingSection {
@@ -337,6 +341,26 @@ export default function SettingsScreen() {
           enabled: true,
         },
         {
+          // ストアの評価ページへの常設リンク。OS の評価ダイアログは回数制限があり、
+          // 出るかどうかを制御できないので、自分から評価しに行ける入口を置く（2026-09-05）。
+          // Web ではストアを開けない（openStoreReviewPage が常に false）ので行ごと出さない
+          id: 'rate-app',
+          label: t('settings.app.rateApp'),
+          subtitle: t('settings.app.rateAppSubtitle'),
+          enabled: true,
+          hidden: !isNativePlatform,
+          onPress: () => {
+            void openStoreReviewPage().then((opened) => {
+              if (!opened) {
+                void dialog.alert({
+                  title: t('settings.app.rateApp'),
+                  message: t('settings.app.rateAppFailedBody'),
+                });
+              }
+            });
+          },
+        },
+        {
           id: 'licenses',
           label: t('settings.app.licenses'),
           subtitle: t('settings.app.licensesSubtitle'),
@@ -373,40 +397,49 @@ export default function SettingsScreen() {
         {sections.map((section) => (
           <View key={section.title} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
-            {section.items.map((item) => (
-              <Pressable
-                key={item.id}
-                ref={item.id === 'plan' ? planRef : item.id === 'backup' ? backupRef : undefined}
-                collapsable={false}
-                style={[styles.settingRow, !item.enabled && styles.settingRowDisabled]}
-                onPress={
-                  item.toggle ? () => item.toggle?.onValueChange(!item.toggle.value) : item.onPress
-                }
-                disabled={!item.onPress && !item.toggle}
-                accessibilityRole={item.toggle ? 'switch' : 'button'}
-                {...(item.toggle && { accessibilityState: { checked: item.toggle.value } })}
-              >
-                <View style={styles.settingContent}>
-                  <Text style={[styles.settingLabel, !item.enabled && styles.settingLabelDisabled]}>
-                    {item.label}
-                  </Text>
-                  {item.subtitle && <Text style={styles.settingSubtitle}>{item.subtitle}</Text>}
-                  {item.statusLabel && <Text style={styles.statusBadge}>{item.statusLabel}</Text>}
-                </View>
-                {item.toggle ? (
-                  <Switch
-                    value={item.toggle.value}
-                    onValueChange={item.toggle.onValueChange}
-                    trackColor={{ false: Colors.border, true: Colors.gold }}
-                    thumbColor={Colors.paper}
-                  />
-                ) : (
-                  item.onPress && (
-                    <ChevronRight size={16} color={item.enabled ? Colors.goldDim : Colors.muted} />
-                  )
-                )}
-              </Pressable>
-            ))}
+            {section.items
+              .filter((item) => !item.hidden)
+              .map((item) => (
+                <Pressable
+                  key={item.id}
+                  ref={item.id === 'plan' ? planRef : item.id === 'backup' ? backupRef : undefined}
+                  collapsable={false}
+                  style={[styles.settingRow, !item.enabled && styles.settingRowDisabled]}
+                  onPress={
+                    item.toggle
+                      ? () => item.toggle?.onValueChange(!item.toggle.value)
+                      : item.onPress
+                  }
+                  disabled={!item.onPress && !item.toggle}
+                  accessibilityRole={item.toggle ? 'switch' : 'button'}
+                  {...(item.toggle && { accessibilityState: { checked: item.toggle.value } })}
+                >
+                  <View style={styles.settingContent}>
+                    <Text
+                      style={[styles.settingLabel, !item.enabled && styles.settingLabelDisabled]}
+                    >
+                      {item.label}
+                    </Text>
+                    {item.subtitle && <Text style={styles.settingSubtitle}>{item.subtitle}</Text>}
+                    {item.statusLabel && <Text style={styles.statusBadge}>{item.statusLabel}</Text>}
+                  </View>
+                  {item.toggle ? (
+                    <Switch
+                      value={item.toggle.value}
+                      onValueChange={item.toggle.onValueChange}
+                      trackColor={{ false: Colors.border, true: Colors.gold }}
+                      thumbColor={Colors.paper}
+                    />
+                  ) : (
+                    item.onPress && (
+                      <ChevronRight
+                        size={16}
+                        color={item.enabled ? Colors.goldDim : Colors.muted}
+                      />
+                    )
+                  )}
+                </Pressable>
+              ))}
           </View>
         ))}
       </ScrollView>
