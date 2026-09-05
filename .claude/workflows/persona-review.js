@@ -129,6 +129,10 @@ const REVIEW = {
         },
         biggest_risk: { type: 'string', description: '半年後に存在意義を失うとしたら何が原因か' },
         verdict_one_line: { type: 'string', description: '記事の見出しに使う一文' },
+        after_reading_design: {
+          type: 'string',
+          description: '設計書と数字を読んで変わった判断。変わらなければ「変わらない」',
+        },
       },
     },
   },
@@ -181,7 +185,7 @@ const reviews = await parallel(
 ${files}
 
 全部開いてから、構造化出力で答える。指摘の screen にはファイル名を使う。
-${p.value ? '加えて docs/store/google-play/listing-ja.md（掲載文）と docs/要件定義.md §2〜§4 を Read し、value 欄を必ず書け（他の欄も書く）。' : 'value 欄は書かない。'}
+${p.value ? '加えて docs/store/google-play/listing-ja.md（掲載文）を Read し、**まずスクショと掲載文だけで** value 欄を書け。そのあと docs/要件定義.md §2〜§4 を Read し、変わった判断を after_reading_design に書け（他の欄も書く）。' : 'value 欄は書かない。'}
 人物設定の「規律」を厳守: 見えるものだけ・支払い判断はしない・埋め草の賞賛をしない。`,
       { label: p.label, phase: 'Review', schema: REVIEW, agentType: p.agent },
     ).then((r) => (r ? { persona: p.label, review: r } : null));
