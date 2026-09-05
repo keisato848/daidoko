@@ -71,6 +71,23 @@ describe('database migrations', () => {
     expect(backfill).toMatch(/WHERE \(place_name IS NULL OR TRIM\(place_name\) = ''\)/);
   });
 
+  it('v19: 献立のテーブル（menu_plans / menu_plan_days）を作る', () => {
+    const statements: string[] = [];
+
+    runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    const createSql = statements[0];
+    expect(createSql).toContain('CREATE TABLE IF NOT EXISTS menu_plans');
+    expect(createSql).toContain('CREATE TABLE IF NOT EXISTS menu_plan_days');
+    // 1 時間帯 1 プラン（UNIQUE）。既定は夕 — 旧データ由来のプランがそのまま夕になる
+    expect(createSql).toMatch(/meal_time TEXT NOT NULL UNIQUE DEFAULT 'dinner'/);
+    // recipe_id は弱参照（REFERENCES を張らない）— レシピ削除で日が消えない・削除を妨げない
+    const dayTable = createSql.slice(
+      createSql.indexOf('CREATE TABLE IF NOT EXISTS menu_plan_days'),
+    );
+    expect(dayTable).not.toMatch(/recipe_id TEXT NOT NULL REFERENCES/);
+  });
+
   it('v13: 在庫・買い物のグループ、賞味期限、誰が の列を足す', () => {
     const statements: string[] = [];
 

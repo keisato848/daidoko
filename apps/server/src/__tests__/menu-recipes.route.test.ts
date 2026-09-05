@@ -21,6 +21,7 @@ import {
   MenuRecipesQuotaError,
   buildMenuRecipesContext,
   buildMenuRecipesResponseSchema,
+  buildMenuRecipesSystemPrompt,
   sanitizeMenuRecipeDrafts,
   type MenuRecipesInput,
   type MenuRecipesProvider,
@@ -322,6 +323,64 @@ describe('POST /api/v1/infer/menu-recipes — エラー写像・枠', () => {
     ).json()) as MenuRecipesResult;
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe('FREE_QUOTA_EXCEEDED');
+  });
+});
+
+describe('POST /api/v1/infer/menu-recipes — 時間帯（mealTime・§10.13）', () => {
+  it('mealTime が provider の入力へそのまま渡る', async () => {
+    let received: MenuRecipesInput | null = null;
+    setMenuRecipesProviderForTesting(
+      stub((input) => {
+        received = input;
+        return { recipes: [draft('一品')] };
+      }),
+    );
+    const res = await post({ days: 1, mealTime: 'breakfast', existingTitles: [], pantry: [] });
+    expect(res.status).toBe(200);
+    expect(received).not.toBeNull();
+    expect((received as unknown as MenuRecipesInput).mealTime).toBe('breakfast');
+  });
+
+  it('省略時は mealTime が渡らない = provider 側で夕になる（旧クライアント互換）', async () => {
+    let received: MenuRecipesInput | null = null;
+    setMenuRecipesProviderForTesting(
+      stub((input) => {
+        received = input;
+        return { recipes: [draft('一品')] };
+      }),
+    );
+    await post({ days: 1, existingTitles: [], pantry: [] });
+    expect((received as unknown as MenuRecipesInput).mealTime).toBeUndefined();
+  });
+
+  it('未知の mealTime は 400（zod）', async () => {
+    const res = await post({ days: 1, mealTime: 'brunch', existingTitles: [], pantry: [] });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('buildMenuRecipesSystemPrompt — 時間帯の出し分け', () => {
+  it('省略・夕は従来のプロンプトと 1 文字も変わらない', () => {
+    const dinner = buildMenuRecipesSystemPrompt('dinner');
+    expect(buildMenuRecipesSystemPrompt()).toBe(dinner);
+    expect(dinner).toContain('夕食を考える');
+    expect(dinner).not.toContain('朝食');
+    expect(dinner).not.toContain('昼食');
+    expect(dinner).not.toContain('主食中心');
+  });
+
+  it('朝は手早く作れる主食中心の指示が入る', () => {
+    const prompt = buildMenuRecipesSystemPrompt('breakfast');
+    expect(prompt).toContain('朝食を考える');
+    expect(prompt).toContain('主食中心');
+    expect(prompt).not.toContain('夕食');
+  });
+
+  it('昼は軽めの指示が入る', () => {
+    const prompt = buildMenuRecipesSystemPrompt('lunch');
+    expect(prompt).toContain('昼食を考える');
+    expect(prompt).toContain('軽め');
+    expect(prompt).not.toContain('夕食');
   });
 });
 

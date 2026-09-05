@@ -185,6 +185,19 @@ describe('buildWidgetSnapshot — 献立の recipeId と週間（W2）', () => {
     expect('requestedDays' in buildWidgetSnapshot(input({ requestedDays: null })).menu).toBe(false);
     expect('requestedDays' in buildWidgetSnapshot(input({ requestedDays: 0 })).menu).toBe(false);
   });
+
+  it('mealTime は朝/昼のときだけ載せる（§10.13）', () => {
+    expect(buildWidgetSnapshot(input({ mealTime: 'breakfast' })).menu.mealTime).toBe('breakfast');
+    expect(buildWidgetSnapshot(input({ mealTime: 'lunch' })).menu.mealTime).toBe('lunch');
+  });
+
+  it.each(['dinner', null, undefined, 'brunch'])(
+    '夕・無し・未知（%p）は mealTime を載せない — 夕の表示を 1 文字も変えないため',
+    (mealTime) => {
+      const snapshot = buildWidgetSnapshot(input({ mealTime: mealTime as string | null }));
+      expect('mealTime' in snapshot.menu).toBe(false);
+    },
+  );
 });
 
 describe('parseWidgetSnapshot — 読む側の防御', () => {
@@ -249,6 +262,21 @@ describe('parseWidgetSnapshot — 読む側の防御', () => {
     const dirty = { ...valid, menu: { ...valid.menu, requestedDays: '5' } };
     const dirtyRound = parseWidgetSnapshot(JSON.stringify(dirty));
     expect(dirtyRound && 'requestedDays' in dirtyRound.menu).toBe(false);
+  });
+
+  it('mealTime（時間帯・省略可）を往復する', () => {
+    const withMeal = buildWidgetSnapshot(
+      input({ menuDays: [{ title: 'a', doneAt: null }], mealTime: 'lunch' }),
+    );
+    expect(parseWidgetSnapshot(JSON.stringify(withMeal))?.menu.mealTime).toBe('lunch');
+  });
+
+  it('mealTime が無い（旧アプリが書いた）・未知の値は「無い = 夕」として読む', () => {
+    const round = parseWidgetSnapshot(JSON.stringify(valid));
+    expect(round && 'mealTime' in round.menu).toBe(false);
+    const dirty = { ...valid, menu: { ...valid.menu, mealTime: 'brunch' } };
+    const dirtyRound = parseWidgetSnapshot(JSON.stringify(dirty));
+    expect(dirtyRound && 'mealTime' in dirtyRound.menu).toBe(false);
   });
 
   it('週間が無い（旧アプリが書いた）スナップショットは空配列で読む', () => {

@@ -73,6 +73,13 @@ export interface WidgetSnapshot {
      * 旧アプリ・旧プラン（要求日数を保存していない）には無い — 無ければ不足行を出さない。
      */
     requestedDays?: number;
+    /**
+     * 出しているプランの時間帯（v19・設計 §10.13）。**省略可フィールドで足したもの**
+     * （版は上げない・§1）。**無ければ夕** — 夕のときは書かないので、夕の表示は
+     * 旧スナップショット・旧ウィジェットと 1 文字も変わらない。朝/昼のときだけ
+     * 見出しに「（昼）」等を付ける（`menuWidgetContent`）。
+     */
+    mealTime?: 'breakfast' | 'lunch';
   };
 }
 
@@ -95,6 +102,11 @@ export interface SnapshotInput {
   anchorDate: string | null;
   /** 「組む」で要求した日数。省略可 — 旧プランには保存されていない */
   requestedDays?: number | null;
+  /**
+   * 出すプランの時間帯。省略・'dinner'・未知の値はどれも「夕」= スナップショットに
+   * 書かない（表示ルール: 夕は無印・§10.13）。
+   */
+  mealTime?: string | null;
   locale: 'ja' | 'en';
   now: Date;
 }
@@ -162,6 +174,10 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot {
       input.requestedDays > 0
         ? { requestedDays: input.requestedDays }
         : {}),
+      // 時間帯（§10.13）。朝/昼のときだけ書く — 夕は書かない（無印の規約そのもの）
+      ...(input.mealTime === 'breakfast' || input.mealTime === 'lunch'
+        ? { mealTime: input.mealTime }
+        : {}),
     },
   };
 }
@@ -219,6 +235,10 @@ export function parseWidgetSnapshot(raw: string): WidgetSnapshot | null {
       Number.isInteger(menu.requestedDays) &&
       menu.requestedDays > 0
         ? { requestedDays: menu.requestedDays }
+        : {}),
+      // 時間帯（省略可・§10.13）。無い・未知の値は「夕」として読む（= 載せない）
+      ...(menu.mealTime === 'breakfast' || menu.mealTime === 'lunch'
+        ? { mealTime: menu.mealTime }
         : {}),
     },
   };

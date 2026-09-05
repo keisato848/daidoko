@@ -44,10 +44,20 @@ export const menuRecipeDraftSchema = z.object({
   tags: z.array(z.string().max(30)).max(10).optional(),
 });
 
+/** 献立の時間帯（v19・買い物リスト・在庫設計 §10.13）。省略 = 夕（旧クライアント互換）。 */
+export const menuRecipesMealTimeSchema = z.enum(['breakfast', 'lunch', 'dinner']);
+
 /** リクエスト本体。locale は AI の**出力言語**（他 infer ルートと同じ意味）。 */
 export const menuRecipesRequestSchema = z.object({
   /** 不足日数 = 生成する品数（1〜7） */
   days: z.number().int().min(1).max(MAX_MENU_RECIPES_DAYS),
+  /**
+   * 献立の時間帯（省略可）。**省略 = 夕** — 時間帯選択より前のクライアントは
+   * このフィールドを送らず、従来どおり夕のプロンプトで生成される。
+   * プロンプトの出し分け（朝: 手早い主食中心・昼: 軽め・夕: 従来どおり）はサーバー側
+   * `apps/server/src/lib/menu-recipes.ts` の `buildMenuRecipesSystemPrompt`。
+   */
+  mealTime: menuRecipesMealTimeSchema.optional(),
   /** 手持ちレシピのタイトル（重複回避用・最大 30） */
   existingTitles: z.array(z.string().min(1).max(100)).max(MAX_MENU_RECIPES_TITLES),
   /** 在庫の品名だけ（最大 50・数量は渡さない） */
@@ -64,6 +74,7 @@ export const menuRecipesResponseSchema = z.object({
   recipes: z.array(menuRecipeDraftSchema).min(1).max(MAX_MENU_RECIPES_DAYS),
 });
 
+export type MenuRecipesMealTime = z.infer<typeof menuRecipesMealTimeSchema>;
 export type MenuRecipeIngredient = z.infer<typeof menuRecipeIngredientSchema>;
 export type MenuRecipeDraft = z.infer<typeof menuRecipeDraftSchema>;
 export type MenuRecipesRequest = z.infer<typeof menuRecipesRequestSchema>;

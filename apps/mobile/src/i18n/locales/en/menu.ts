@@ -16,6 +16,20 @@ const menu = {
     label: 'How many days',
     option: '{{count}} days',
   },
+  mealTime: {
+    label: 'Which meal',
+    breakfast: 'Breakfast',
+    lunch: 'Lunch',
+    dinner: 'Dinner',
+    planLabel: {
+      breakfast: 'Breakfast plan',
+      lunch: 'Lunch plan',
+    },
+    suffix: {
+      breakfast: ' (breakfast)',
+      lunch: ' (lunch)',
+    },
+  },
   buildResult: {
     built: {
       one: 'Planned meals for {{count}} day',

@@ -31,7 +31,7 @@ import { Colors } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
 import { t, tCount } from '../../src/i18n';
-import { getMenuPlan } from '../../src/services/menu-plan.service';
+import { getMenuPlanForToday, type MenuMealTime } from '../../src/services/menu-plan.service';
 import { formatMonthDay, formatMonthLabel } from '../../src/i18n/format';
 import { deleteCookingLog } from '../../src/services/cooking-log.service';
 import { dialog } from '../../src/services/dialog.service';
@@ -132,20 +132,27 @@ export default function HomeScreen() {
   const [menuIsToday, setMenuIsToday] = useState(false);
   /** 自動モードのときだけ出す出所（「今朝 HH:MM に自動で組みました」）。手動プランでは null */
   const [menuGeneratedAt, setMenuGeneratedAt] = useState<string | null>(null);
+  /**
+   * カードに出しているプランの時間帯（v19・§10.13）。**夕を優先**し、夕が無ければ
+   * 朝/昼を出す。表記は**夕は無印・朝/昼のときだけ**「（昼）」等を見出しに付ける。
+   */
+  const [menuMealTime, setMenuMealTime] = useState<MenuMealTime>('dinner');
 
   const loadTimeline = useCallback(async () => {
-    const [entries, want, inStock, menu] = await Promise.all([
+    const [entries, want, inStock, today] = await Promise.all([
       getTimeline(),
       getWantToCookRecipes(),
       getInStockNormalizedNames().catch((): string[] => []),
-      getMenuPlan().catch(() => null),
+      getMenuPlanForToday().catch(() => null),
     ]);
     setAllEntries(entries);
     setWantList(want);
     setHasStock(inStock.length > 0);
     // まだ作っていない最初の日。削除されたレシピの日は飛ばす
+    const menu = today?.view ?? null;
     const next = menu?.days.find((d) => d.doneAt === null && !d.missing) ?? null;
     setNextMenuTitle(next ? next.title : null);
+    setMenuMealTime(today?.mealTime ?? 'dinner');
     const isAuto = menu?.plan.anchorDate != null;
     setMenuIsToday(isAuto);
     setMenuGeneratedAt(isAuto ? (menu?.plan.generatedAt ?? null) : null);
@@ -163,6 +170,13 @@ export default function HomeScreen() {
   let menuCardLabel = t('menu.title');
   if (nextMenuTitle)
     menuCardLabel = menuIsToday ? t('menu.card.todayTitle') : t('menu.card.nextTitle');
+  // 時間帯の印は**朝/昼のときだけ**（夕は無印のまま 1 文字も変えない・§10.13）
+  if (nextMenuTitle && menuMealTime !== 'dinner') {
+    menuCardLabel +=
+      menuMealTime === 'breakfast'
+        ? t('menu.mealTime.suffix.breakfast')
+        : t('menu.mealTime.suffix.lunch');
+  }
 
   useFocusEffect(
     useCallback(() => {

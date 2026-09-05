@@ -63,6 +63,16 @@ describe('menuRecipesRequestSchema — 上限の固定', () => {
     ).toBe(false);
   });
 
+  it('mealTime は朝/昼/夕の 3 値・任意（省略 = 夕 — 旧クライアント互換）', () => {
+    expect(menuRecipesRequestSchema.safeParse(base).success).toBe(true); // 省略可
+    for (const mealTime of ['breakfast', 'lunch', 'dinner']) {
+      expect(menuRecipesRequestSchema.safeParse({ ...base, mealTime }).success).toBe(true);
+    }
+    expect(menuRecipesRequestSchema.safeParse({ ...base, mealTime: 'brunch' }).success).toBe(false);
+    const parsed = menuRecipesRequestSchema.parse(base);
+    expect(parsed.mealTime).toBeUndefined();
+  });
+
   it('嗜好メモは最大 400 字・任意', () => {
     expect(MAX_MENU_RECIPES_PREFERENCES).toBe(400);
     expect(

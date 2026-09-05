@@ -54,6 +54,9 @@ const MENU_DICT = {
     noSnapshot: 'アプリを開くと表示されます',
     // 週間（大）の末尾に 1 行。要求日数に組めた日数が満たないとき（由紀の案）
     shortfall: (count: number) => `残り${count}日分はレシピが足りません`,
+    // 時間帯の印（v19・§10.13）。**朝/昼のときだけ**見出しに付ける — 夕は無印のまま
+    // 1 文字も変えない（snapshot に mealTime が無い = 夕）
+    mealSuffix: { breakfast: '（朝）', lunch: '（昼）' },
   },
   en: {
     today: "Today's dish",
@@ -67,8 +70,17 @@ const MENU_DICT = {
       count === 1
         ? 'Not enough recipes for 1 more day'
         : `Not enough recipes for ${count} more days`,
+    mealSuffix: { breakfast: ' (breakfast)', lunch: ' (lunch)' },
   },
 } as const;
+
+/** 見出しに付ける時間帯の印。夕（mealTime 無し）は空文字 = 見出しは従来のまま */
+function mealTimeSuffix(
+  dict: (typeof MENU_DICT)[keyof typeof MENU_DICT],
+  mealTime: 'breakfast' | 'lunch' | undefined,
+): string {
+  return mealTime ? dict.mealSuffix[mealTime] : '';
+}
 
 /** 週間表示の 1 行（大サイズ） */
 export interface MenuWidgetWeekRow {
@@ -158,6 +170,8 @@ export function buildMenuWidgetContent(
 
   const dict = MENU_DICT[snapshot.locale];
   const timeLabel = dict.asOf(formatSnapshotTime(snapshot.writtenAt));
+  // 朝/昼のときだけ見出しに印（§10.13）。夕（mealTime 無し）は空文字で従来どおり
+  const suffix = mealTimeSuffix(dict, snapshot.menu.mealTime);
 
   if (size === 'large') {
     const week = snapshot.menu.week ?? [];
@@ -179,7 +193,7 @@ export function buildMenuWidgetContent(
     return {
       mode: 'week',
       locale: snapshot.locale,
-      heading: dict.week,
+      heading: dict.week + suffix,
       rows,
       // 実の献立が 1 つも無い（全部未定 or 空）なら案内を出す
       emptyMessage: hasAnyDish ? null : dict.noMenu,
@@ -190,7 +204,7 @@ export function buildMenuWidgetContent(
   }
 
   // 小/中 = 今日の一品
-  const heading = snapshot.menu.kind === 'next' ? dict.next : dict.today;
+  const heading = (snapshot.menu.kind === 'next' ? dict.next : dict.today) + suffix;
   const dishName = snapshot.menu.title;
   const recipeId = snapshot.menu.recipeId ?? null;
   return {

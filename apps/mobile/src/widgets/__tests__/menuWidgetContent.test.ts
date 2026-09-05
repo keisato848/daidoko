@@ -209,6 +209,35 @@ describe('buildMenuWidgetContent — 不足行（要求日数に満たない・�
   });
 });
 
+describe('buildMenuWidgetContent — 時間帯の印（§10.13）', () => {
+  const oneDay = [{ title: '肉じゃが', doneAt: null, recipeId: 'r1', day: 1 }];
+
+  it('昼のプランは見出しに「（昼）」を付ける（小/中）', () => {
+    const snap = snapshot({ menuDays: oneDay, mealTime: 'lunch' });
+    expect(asToday(buildMenuWidgetContent(snap, 'small')).heading).toBe('次の一品（昼）');
+  });
+
+  it('朝のプランは見出しに「（朝）」を付ける（週間・大）', () => {
+    const snap = snapshot({ menuDays: oneDay, mealTime: 'breakfast' });
+    expect(asWeek(buildMenuWidgetContent(snap, 'large')).heading).toBe('今週の献立（朝）');
+  });
+
+  it('夕（mealTime 無し）は従来の見出しのまま 1 文字も変えない', () => {
+    const auto = snapshot({ menuDays: oneDay, anchorDate: '2026-08-28', mealTime: 'dinner' });
+    expect(asToday(buildMenuWidgetContent(auto, 'small')).heading).toBe('今日の一品');
+    expect(asWeek(buildMenuWidgetContent(auto, 'large')).heading).toBe('今週の献立');
+    const manual = snapshot({ menuDays: oneDay });
+    expect(asToday(buildMenuWidgetContent(manual, 'small')).heading).toBe('次の一品');
+  });
+
+  it('en も朝/昼のときだけ付ける', () => {
+    const lunch = snapshot({ locale: 'en', menuDays: oneDay, mealTime: 'lunch' });
+    expect(asToday(buildMenuWidgetContent(lunch, 'small')).heading).toBe('Next dish (lunch)');
+    const dinner = snapshot({ locale: 'en', menuDays: oneDay });
+    expect(asToday(buildMenuWidgetContent(dinner, 'small')).heading).toBe('Next dish');
+  });
+});
+
 describe('buildMenuWidgetContent — en ロケール', () => {
   it('今日の一品を英語の文言で組む', () => {
     const snap = snapshot({
