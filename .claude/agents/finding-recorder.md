@@ -1,6 +1,6 @@
 ---
 name: finding-recorder
-description: 調査・レビュー・実機検証で分かったことをリポジトリへ永続化する役。record-finding の決定表で置き場所を決め、既存の節に症状→原因→対処で足す。未着手のことは GitHub Issue にする。設計書・手順書・Skill 以外は編集しない。
+description: 調査・レビュー・実機検証で分かったことをリポジトリへ永続化する役。「記録しておいて」「覚えておいて」「ハマった」や、Stop フックの督促が出たときに、名指しが無くても proactively に呼ぶ。record-finding の決定表で置き場所を決め、既存の節に症状→原因→対処で足す。設計書・手順書・Skill 以外は編集しない。
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

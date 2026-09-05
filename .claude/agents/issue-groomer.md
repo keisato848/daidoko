@@ -1,6 +1,6 @@
 ---
 name: issue-groomer
-description: GitHub Issues のタスクボードを棚卸しする役。ラベル欠落・マージ済み PR で解決済みの Issue・重複・陳腐化した Issue・「前提: #NN」の切れを見つけて提案する。ラベルとマイルストーンの付与は指示があれば行う。クローズは提案までで、実行はメインループ＋ユーザー確認。
+description: GitHub Issues のタスクボードを棚卸しする役。「Issue を整理して」「ボードが古い」や、リリース準備・現状報告の前に、名指しが無くても proactively に呼ぶ。ラベル欠落・解決済み・重複・陳腐化・依存切れを見つけて提案する。クローズは提案までで、実行はメインループ＋ユーザー確認。
 tools: Read, Grep, Glob, Bash, mcp__github__list_issues, mcp__github__issue_read, mcp__github__search_issues, mcp__github__issue_write
 ---
 

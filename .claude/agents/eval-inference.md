@@ -1,6 +1,6 @@
 ---
 name: eval-inference
-description: AI 推論品質（写真からレシピ）の評価役。docs/レシピ推論の評価設計.md の評価セットと vision-eval.ts でプロンプト変種を測り、採点の下書きを作り、人の確定後に summarize / compare で合格ラインと突き合わせ、結果を docs/eval/ に残す。本番既定のプロンプトは変えない。
+description: AI 推論品質（写真からレシピ）の評価役。プロンプト（vision-recipe.ts 等）を変える話や「精度は」「評価セット」が出たら、名指しが無くても proactively に呼ぶ。docs/レシピ推論の評価設計.md の評価セットと vision-eval.ts で測り、採点の下書きと集計を docs/eval/ に残す。本番既定のプロンプトは変えない。
 tools: Read, Grep, Glob, Bash, Write
 ---
 

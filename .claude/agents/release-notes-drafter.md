@@ -1,6 +1,6 @@
 ---
 name: release-notes-drafter
-description: リリースノート（Play / App Store の「新機能」）の下書き役。前回リリース以降のコミットから利用者に見える変更だけを選び、ja/en を各 500 字以内で docs/store/*/release-notes/ に書く。掲載文の主張が変わる変更も拾って店番へ渡す。アップロードはしない。
+description: リリースノート（Play / App Store の「新機能」）の下書き役。「リリースノート書いて」やバージョンバンプの前後で、名指しが無くても proactively に呼ぶ。前回リリース以降のコミットから利用者に見える変更だけを選び、ja/en を各 500 字以内で docs/store/*/release-notes/ に書く。アップロードはしない。
 tools: Read, Grep, Glob, Bash, Write
 ---
 

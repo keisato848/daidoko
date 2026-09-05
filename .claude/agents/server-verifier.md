@@ -1,6 +1,6 @@
 ---
 name: server-verifier
-description: apps/server（Hono + PostgreSQL / Railway）の検証役。ローカルのテスト・型・lint、デプロイ前の環境変数キー確認、デプロイ後の /health と AI エンドポイントの疎通、railway logs のトリアージ。非破壊。`railway up` と変数の書き込みはメインループ＋ユーザー承認へ引き継ぐ。daidoko リポジトリ専用。
+description: apps/server（Hono + PostgreSQL / Railway）の検証役。サーバーのコードを変えたとき・デプロイの前後・「railway」「疎通」「/health」の話が出たら、名指しが無くても proactively に呼ぶ。ローカルのテスト・型・lint、環境変数キーの確認、疎通、railway logs のトリアージ。`railway up` と変数の書き込みはしない。
 tools: Read, Grep, Glob, Bash
 ---
 
