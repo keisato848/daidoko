@@ -38,7 +38,11 @@ import {
   recordCloudInference,
   type FreemiumStatus,
 } from '../src/services/usage.service';
-import { buildFridgeReviewItems, type FridgeReviewItem } from '../src/utils/fridgeReview';
+import {
+  buildFridgeReviewItems,
+  parseFridgeQuantityText,
+  type FridgeReviewItem,
+} from '../src/utils/fridgeReview';
 
 function mimeTypeFor(uri: string): 'image/jpeg' | 'image/png' | 'image/webp' {
   const lower = uri.toLowerCase();
@@ -136,10 +140,11 @@ export default function FridgeScreen() {
       const name = it.name.trim();
       // 既にその品が 1 か所だけに置いてあるなら、そこへ足す（レシートと同じ）。
       // 数量は null のまま渡す＝「数量未管理」で登録する（分量は読ませない）
-      const groupName = await defaultGroupFor(name, null).catch(() => null);
-      const added = await addPantryItem(name, { quantity: null, unit: null, groupName }).catch(
-        () => null,
-      );
+      // 数量テキスト（「3本」「約200g」）を quantity × unit に分解。読めない表現は
+      // 数量未管理（null）のまま — 推測で 1 にしない
+      const { quantity, unit } = parseFridgeQuantityText(it.quantity);
+      const groupName = await defaultGroupFor(name, unit).catch(() => null);
+      const added = await addPantryItem(name, { quantity, unit, groupName }).catch(() => null);
       // 失敗を数える（P5 — 全部入ったように見せない。正直に言う）
       if (!added) failed += 1;
     }
@@ -259,6 +264,22 @@ export default function FridgeScreen() {
                       }
                       editable={item.include}
                       maxLength={50}
+                    />
+                    {/* 数量（読めた場合のみ入る・編集可・空欄可 = 数量未管理。
+                        オーナー決定 2026-09-05 — 推測はさせず、直せる形で見せる） */}
+                    <TextInput
+                      style={[styles.quantityInput, !item.include && styles.nameInputOff]}
+                      value={item.quantity}
+                      onChangeText={(text) =>
+                        setItems((prev) =>
+                          prev.map((it) => (it.id === item.id ? { ...it, quantity: text } : it)),
+                        )
+                      }
+                      editable={item.include}
+                      maxLength={30}
+                      placeholder={t('pantry.fridge.quantityPlaceholder')}
+                      placeholderTextColor={Colors.muted}
+                      accessibilityLabel={t('pantry.fridge.quantityLabel')}
                     />
                   </View>
                   {/* 在庫に既にある品は既定オフ＋理由の表示（上書き・合算はしない） */}
@@ -448,7 +469,20 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#130E08',
   },
-  nameInputOff: { color: Colors.muted, opacity: 0.5 },
+  quantityInput: {
+    width: 76,
+    fontSize: 14,
+    color: Colors.paper,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    backgroundColor: '#130E08',
+    textAlign: 'center',
+  },
+  // 無効（既定オフ）でも品名は読めること（実機指摘 2026-09-05 — muted #5A4A34 ＋
+  // opacity 0.5 は背景 #0A0805 に沈んで視認不能だった）。#9A8A6C は背景に対して
+  // 約 5.4:1（WCAG AA）。「無効」はチェックなし＋入力背景の消灯で伝える
+  nameInputOff: { color: '#9A8A6C', backgroundColor: 'transparent' },
   inPantryNote: { fontSize: 11, color: Colors.goldDim },
   footer: {
     flexDirection: 'row',

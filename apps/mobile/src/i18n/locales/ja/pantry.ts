@@ -220,7 +220,7 @@ const pantry = {
   /** 冷蔵庫の写真から在庫へ追加（`docs/冷蔵庫写真設計.md`）。 */
   fridge: {
     title: '冷蔵庫の写真から',
-    lead: '冷蔵庫の中を撮影すると、写っている食材を読み取って在庫に追加できます。冷蔵室と野菜室の 2 枚を撮ると、より正確に読み取れます。数量は読み取りません（使うときに入れられます）。',
+    lead: '冷蔵庫の中を撮影すると、写っている食材を読み取って在庫に追加できます。冷蔵室と野菜室の 2 枚を撮ると、より正確に読み取れます。数量は写真から数えられたものだけ入り、あとから直せます。',
     reading: '冷蔵庫の写真を読み取っています',
     capture: '冷蔵庫を撮影',
     /**
@@ -240,17 +240,20 @@ const pantry = {
      * 「勝手に登録されない・数量は入らない」が崩れると在庫への信用が壊れる。
      */
     resultHint: {
-      text: '読み取った食材です。間違いは名前を直し、不要な行のチェックを外してから追加してください。ここで追加するまで在庫は変わりません。数量は登録されません（使うときに入れられます）。',
+      text: '読み取った食材です。間違いは名前や数量を直し、不要な行のチェックを外してから追加してください。ここで追加するまで在庫は変わりません。数量は写真から数えられたものだけ入っています（空欄のままでも追加できます）。',
       intent:
-        'MUST convey ALL THREE: nothing is added to the pantry until the user confirms here, ' +
-        'names are editable (misreads can be fixed, not just excluded), AND no quantities are ' +
-        'registered. Silently auto-confirming or implying quantities breaks trust in the pantry.',
+        'MUST convey ALL FOUR: nothing is added to the pantry until the user confirms here, ' +
+        'names AND quantities are editable, quantities are present ONLY where they could be ' +
+        'counted from the photo (never guessed), and a blank quantity is fine (tracked as ' +
+        '"no quantity"). Implying quantities were guessed breaks trust in the pantry.',
     } satisfies CriticalMessage,
     /** 読み取り信頼度が低い品目の要確認表示（「たぶん◯◯」）。 */
     uncertainBadge: 'たぶん',
     uncertainLabel: '読み取りに自信がありません。名前を確かめてください',
     /** 既存在庫との重複（名寄せ済み比較）。既定オフ — 上書き・合算はしない */
     alreadyInPantry: 'すでに在庫にあります',
+    quantityPlaceholder: '数量',
+    quantityLabel: '数量（空欄なら数量未管理。例: 3本・約200g）',
     exclude: '除外',
     include: '含める',
     retry: 'やり直す',
