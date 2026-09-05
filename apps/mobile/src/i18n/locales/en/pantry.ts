@@ -124,6 +124,11 @@ const pantry: typeof ja = {
       other: 'Subtract ({{count}})',
     },
     noMatch: 'We think this is “{{dish}}”, but nothing in your pantry matches it.',
+    applied: {
+      one: 'Removed {{count}} item from your pantry',
+      other: 'Removed {{count}} items from your pantry',
+    },
+    applyFailed: "We couldn't update your pantry. Please try again in a moment.",
     notRecognized: "We couldn't recognise the dish. Retake it head-on in good light.",
     failed: 'Analysis failed',
   },
@@ -211,11 +216,14 @@ const pantry: typeof ja = {
       one: 'Added {{count}} item to your pantry',
       other: 'Added {{count}} items to your pantry',
     },
+    addFailed: {
+      one: "{{count}} item couldn't be added",
+      other: "{{count}} items couldn't be added",
+    },
     cookableCta: 'See recipes you can make with your current pantry',
     consultCta: 'Plan a recipe with AI',
     noItems:
       'We couldn’t read any ingredients from that photo. Retake it with the inside well lit, or add items by hand from the pantry screen.',
-    tooLarge: 'That photo was too large to send. Please take it again and retry.',
     manualFallback: 'Add to pantry by hand',
     failed: 'Reading failed',
   },

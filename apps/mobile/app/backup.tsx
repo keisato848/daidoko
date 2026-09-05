@@ -19,6 +19,7 @@ import { HeaderBackButton } from '../src/components/HeaderBackButton';
 import { Toast } from '../src/components/Toast';
 import { Colors } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
+import { readableErrorMessage } from '../src/services/ai-error';
 import { formatDateTime } from '../src/i18n/format';
 import { dialog } from '../src/services/dialog.service';
 import {
@@ -91,7 +92,7 @@ export default function BackupScreen() {
   useFocusEffect(
     useCallback(() => {
       void refresh().catch((error) => {
-        const message = error instanceof Error ? error.message : t('backup.listFailed');
+        const message = readableErrorMessage(error, t('backup.listFailed'));
         setToastMessage(message);
       });
     }, [refresh]),
@@ -104,7 +105,7 @@ export default function BackupScreen() {
       await refresh();
       setToastMessage(t('backup.create.done', { size: formatSize(result.sizeBytes) }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('backup.create.failed');
+      const message = readableErrorMessage(error, t('backup.create.failed'));
       void dialog.alert({ title: t('backup.create.failedTitle'), message });
     } finally {
       setBusy(false);
@@ -137,7 +138,7 @@ export default function BackupScreen() {
       await onLocalDataReplaced().catch(() => undefined);
       await refresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('backup.restore.failed');
+      const message = readableErrorMessage(error, t('backup.restore.failed'));
       void dialog.alert({ title: t('backup.restore.failedTitle'), message });
     } finally {
       setBusy(false);
@@ -165,7 +166,7 @@ export default function BackupScreen() {
         }),
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('backup.migration.createFailed');
+      const message = readableErrorMessage(error, t('backup.migration.createFailed'));
       void dialog.alert({ title: t('backup.migration.createFailedTitle'), message });
     } finally {
       setBusy(false);
@@ -200,7 +201,7 @@ export default function BackupScreen() {
       await markBackupExported();
       await refresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('backup.share.failed');
+      const message = readableErrorMessage(error, t('backup.share.failed'));
       void dialog.alert({ title: t('backup.share.failedTitle'), message });
     }
   }, [latestMigration, refresh]);
@@ -213,7 +214,7 @@ export default function BackupScreen() {
         setToastMessage(t('backup.saf.set'));
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('backup.saf.chooseFailed');
+      const message = readableErrorMessage(error, t('backup.saf.chooseFailed'));
       void dialog.alert({ title: t('backup.saf.chooseFailed'), message });
     }
   }, [refresh]);
@@ -256,13 +257,13 @@ export default function BackupScreen() {
         await onLocalDataReplaced().catch(() => undefined);
         await refresh();
       } catch (error) {
-        const message = error instanceof Error ? error.message : t('backup.restore.failed');
+        const message = readableErrorMessage(error, t('backup.restore.failed'));
         void dialog.alert({ title: t('backup.restore.failedTitle'), message });
       } finally {
         setBusy(false);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('backup.migration.pickFailed');
+      const message = readableErrorMessage(error, t('backup.migration.pickFailed'));
       void dialog.alert({ title: t('backup.migration.pickFailed'), message });
     }
   }, [refresh]);

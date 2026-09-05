@@ -106,11 +106,16 @@ const menu = {
     none: 'Nothing missing',
   },
   warnEmptyPantry: 'Your pantry is empty, so this plan assumes shopping',
+  swap: {
+    noCandidates: 'No other recipe to swap in',
+  },
+
   ai: {
     button: 'Let AI rearrange it',
     running: 'Rearranging…',
     failed: "We couldn't rearrange it with AI. Keeping the current plan.",
     emptyResult: "We couldn't use the AI suggestion. Keeping the current plan.",
+    done: 'AI rearranged your menu plan',
     arrangedBadge: 'Arranged by AI',
     limitNote: {
       one: 'Free, {{count}} time a month',

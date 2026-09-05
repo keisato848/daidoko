@@ -179,8 +179,14 @@ export default function MenuScreen() {
     async (day: number) => {
       setBusy(true);
       try {
-        const next = await replaceMenuDay(day, mealTime);
-        if (next) setView(next);
+        const result = await replaceMenuDay(day, mealTime);
+        if (result.outcome === 'swapped') {
+          setView(result.view);
+        } else if (result.outcome === 'no-candidates') {
+          // 変化ゼロで黙らない（P5 — 押したのに何も起きないのは故障に見える）
+          setToastMessage(t('menu.swap.noCandidates'));
+          setToastVisible(true);
+        }
       } finally {
         setBusy(false);
       }
@@ -218,6 +224,9 @@ export default function MenuScreen() {
       if (next) setView(next);
       // 成功時だけ枠を消費（BYOK・プレミアムは内部で no-op・consult と同じ倒し方）
       void recordCloudInference().catch(() => undefined);
+      // 並びが変わらなくても必ず言う（P5 — 無言だと「押せていない」と区別できない）
+      setToastMessage(t('menu.ai.done'));
+      setToastVisible(true);
     } catch (err) {
       setAiError(err instanceof MenuArrangeError ? err.message : t('menu.ai.failed'));
       // plan には触らない — M1（または前回）の並びがそのまま生きている

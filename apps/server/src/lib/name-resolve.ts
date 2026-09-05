@@ -1,5 +1,6 @@
 import { DEFAULT_OUTPUT_LOCALE, withOutputLanguage, type OutputLocale } from './output-locale.js';
 import { thinkingConfigFragment } from './thinking-budget.js';
+import { isCategoryItemName } from './fridge-vision.js';
 /**
  * Managed name resolution — messy pantry/receipt names → canonical ingredient
  * names via Gemini (text, batched). Mirrors the mobile BYOK provider prompt.
@@ -13,6 +14,8 @@ const SYSTEM_PROMPT = [
   '各入力（レシートの商品名や在庫の名前）を、レシピで使う「一般的な食材名」に変換してください。',
   'ブランド名・産地・規格・分量・状態表現（洗い/カット/大袋 等）は取り除き、食材の総称にします。',
   '例: とっとごたまご→卵、アクシアルハーフベーコン→ベーコン、春よ恋強力小麦粉→小麦粉、ぶなしめじ→しめじ。',
+  // 丸め上げの禁止（冷蔵庫写真のカテゴリ名問題と同根の水平展開・2026-09-05）
+  '食材名より**粗くしない**でください。「調味料」「野菜」「飲料」のようなカテゴリ名への丸め上げは不可です。具体的な食材名にできない場合は canonical を空文字 "" にしてください。',
   '食材でないもの（袋・容器・日用品・クーポン・値引 等）は canonical を空文字 "" にしてください。',
   '入力と同じ件数だけ、各要素に name（入力そのまま）と canonical を返してください。',
 ].join('\n');
@@ -40,7 +43,7 @@ export interface NameResolver {
   resolve(names: string[], outputLocale?: OutputLocale): Promise<ResolvedName[]>;
 }
 
-function parseResolved(raw: unknown): ResolvedName[] {
+export function parseResolved(raw: unknown): ResolvedName[] {
   if (!Array.isArray(raw)) return [];
   const out: ResolvedName[] = [];
   for (const item of raw) {
@@ -49,7 +52,13 @@ function parseResolved(raw: unknown): ResolvedName[] {
       typeof (item as ResolvedName).name === 'string' &&
       typeof (item as ResolvedName).canonical === 'string'
     ) {
-      out.push({ name: (item as ResolvedName).name, canonical: (item as ResolvedName).canonical });
+      const canonical = (item as ResolvedName).canonical;
+      out.push({
+        name: (item as ResolvedName).name,
+        // カテゴリ語（「調味料」等）へ丸め上げられた解決は**空文字扱い**にする —
+        // 誤った正規名はキャッシュ（name_aliases）に残って照合を壊し続ける
+        canonical: isCategoryItemName(canonical) ? '' : canonical,
+      });
     }
   }
   return out;

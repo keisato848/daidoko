@@ -7,13 +7,27 @@
  * 同じように行う（`docs/在庫・レシート設計レビュー.md` §3.4 / Issue #178）。
  * テキストで送れると画像トークンが要らず、レシート写真そのものが端末から出ない。
  */
-import * as FileSystem from 'expo-file-system/legacy';
+import { isCategoryName } from '@daidoko/shared';
 
 import { API_V1, GEMINI_MODEL } from '../config';
+import { t } from '../i18n';
 import { normalizeItemName } from '../utils/itemName';
 import { normalizeReceiptQuantity } from '../utils/receiptQuantity';
-import { getUserApiKey } from './byok.service';
+import { serverErrorFor } from './ai-error';
 import { requestLocale, withOutputLanguage } from './ai-output-locale';
+import { getUserApiKey } from './byok.service';
+import { toInferImagePayload } from './image-payload';
+
+/** t() 済みの文言だけを持つ（画面は message をそのまま出してよい）。 */
+export class ReceiptInferError extends Error {
+  readonly userVisible = true;
+  readonly retryable: boolean;
+  constructor(message: string, retryable: boolean) {
+    super(message);
+    this.name = 'ReceiptInferError';
+    this.retryable = retryable;
+  }
+}
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
@@ -27,6 +41,8 @@ const ITEM_RULES = [
   'quantity には購入数量を入れます。行に数量が印字されておらず内容量（例: 「豚こま 500g」）だけが読めるときは、その内容量を quantity、単位を unit にします。',
   'unit には印字された単位・助数詞（個・本・袋・パック・g・ml など）だけを入れます。数量しか印字されていない場合は unit を省きます。',
   '数量が読み取れない・自信が無い場合は quantity を省きます（1 で埋めない）。値引き行や単価行の数字を数量として拾わないでください。',
+  // カテゴリ語・売り場名の禁止（サーバー `receipt-vision.ts` の写し・2026-09-05）
+  '「調味料」「飲料」「食品」のようなカテゴリ名や、「農産」「水産」「畜産」「日配」のような売り場・部門名の行は品目として拾いません。必ず具体的な品名だけを挙げます。',
 ];
 
 const SYSTEM_PROMPT = [
@@ -106,6 +122,23 @@ function mergeQuantity(a: number | null, b: number | null): number | null {
   return Math.round((a + b) * 1000) / 1000;
 }
 
+/**
+ * レシートに印字されがちな売り場・部門名（サーバー `RECEIPT_SECTION_WORDS` の写し）。
+ */
+const RECEIPT_SECTION_WORDS = [
+  '農産',
+  '水産',
+  '畜産',
+  '青果',
+  '精肉',
+  '鮮魚',
+  '日配',
+  'デイリー',
+  '雑貨',
+] as const;
+
+const SECTION_KEYS = new Set(RECEIPT_SECTION_WORDS.map((word) => word.normalize('NFKC')));
+
 export function normalizeReceiptRaw(raw: ReceiptVisionRaw): ReceiptInference {
   // Merge duplicates on the same key the pantry merges on (normalized name ×
   // unit), so what the review screen shows matches what actually gets stored.
@@ -115,6 +148,10 @@ export function normalizeReceiptRaw(raw: ReceiptVisionRaw): ReceiptInference {
     for (const item of raw.items) {
       const name = typeof item?.name === 'string' ? item.name.trim().slice(0, 50) : '';
       if (!name) continue;
+      // カテゴリ語（「調味料」等）・売り場名（「農産」等）は品目ではない — 除外する
+      // （単体一致のみ。「調味料入れ」等の複合語は対象外。冷蔵庫写真設計 §9 の水平展開）
+      if (isCategoryName(name) || SECTION_KEYS.has(name.normalize('NFKC').replace(/\s+/g, '')))
+        continue;
       const { quantity, unit } = normalizeReceiptQuantity(item?.quantity, item?.unit);
       const key = `${normalizeItemName(name)}|${unit ?? ''}`;
       const existingIndex = indexByKey.get(key);
@@ -182,15 +219,18 @@ async function inferViaByok(source: ReceiptSource, apiKey: string): Promise<Rece
     });
     if (res.ok || !RETRYABLE_STATUS.has(res.status)) break;
   }
-  if (!res || !res.ok) {
-    throw new Error(`Gemini receipt infer failed: ${res?.status ?? 'no response'}`);
+  if (!res) throw new ReceiptInferError(t('error.offline'), true);
+  if (res.status === 429) throw new ReceiptInferError(t('ai.error.byokQuota'), false);
+  if (!res.ok) {
+    const info = serverErrorFor(res.status);
+    throw new ReceiptInferError(info.message, info.retryable);
   }
 
   const json = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== 'string') throw new Error('empty model response');
+  if (typeof text !== 'string') throw new ReceiptInferError(t('ai.error.noResult'), true);
   return normalizeReceiptRaw(JSON.parse(text));
 }
 
@@ -204,14 +244,18 @@ async function inferViaServer(source: ReceiptSource): Promise<ReceiptInference> 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...payload, locale: requestLocale() }),
   });
-  if (!res.ok) throw new Error(`server receipt infer failed: ${res.status}`);
+  if (!res.ok) {
+    const info = serverErrorFor(res.status);
+    throw new ReceiptInferError(info.message, info.retryable);
+  }
   const json = (await res.json()) as {
     ok: boolean;
     data?: ReceiptVisionRaw;
     error?: { message?: string };
   };
   if (!json.ok || !json.data) {
-    throw new Error(json.error?.message ?? 'receipt inference unavailable');
+    // サーバーの error.message はロケール対応済みの文言。欠けたら一般文言に倒す
+    throw new ReceiptInferError(json.error?.message ?? t('ai.error.noResult'), true);
   }
   return normalizeReceiptRaw(json.data);
 }
@@ -226,10 +270,10 @@ export async function inferReceiptFromVision(args: {
   localPath: string;
   mimeType: string;
 }): Promise<ReceiptInference> {
-  const base64 = await FileSystem.readAsStringAsync(args.localPath, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  return infer({ kind: 'image', base64, mimeType: args.mimeType });
+  // 送信前の縮小は共通ヘルパーへ一本化（規約① — 端末内 OCR が使えない端末では
+  // この画像経路が標準で、カメラ原寸のままだと冷蔵庫写真と同じ 400 になる）
+  const payload = await toInferImagePayload(args);
+  return infer({ kind: 'image', base64: payload.imageBase64, mimeType: payload.mimeType });
 }
 
 /**

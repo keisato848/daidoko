@@ -18,6 +18,7 @@ const recipe = {
     titleTooLong: '100文字以内で入力してください',
     ingredientsRequired: '材料を1つ以上追加してください',
     stepsRequired: '手順を1つ以上追加してください',
+    tagTooLong: 'タグは30文字以内で入力してください',
   },
 
   /** レシピ入力フォーム（新規・編集・取り込みの確認で共通）。 */

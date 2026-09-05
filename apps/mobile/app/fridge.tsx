@@ -55,6 +55,7 @@ export default function FridgeScreen() {
   const [items, setItems] = useState<FridgeReviewItem[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [addedCount, setAddedCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
   const [freemium, setFreemium] = useState<FreemiumStatus | null>(null);
 
   // 残数表示（ペイウォールから戻ったときに更新される）。読めなくても機能は止めない
@@ -130,14 +131,20 @@ export default function FridgeScreen() {
 
   const handleAdd = useCallback(async () => {
     const chosen = items.filter((it) => it.include && it.name.trim());
+    let failed = 0;
     for (const it of chosen) {
       const name = it.name.trim();
       // 既にその品が 1 か所だけに置いてあるなら、そこへ足す（レシートと同じ）。
       // 数量は null のまま渡す＝「数量未管理」で登録する（分量は読ませない）
       const groupName = await defaultGroupFor(name, null).catch(() => null);
-      await addPantryItem(name, { quantity: null, unit: null, groupName }).catch(() => undefined);
+      const added = await addPantryItem(name, { quantity: null, unit: null, groupName }).catch(
+        () => null,
+      );
+      // 失敗を数える（P5 — 全部入ったように見せない。正直に言う）
+      if (!added) failed += 1;
     }
-    setAddedCount(chosen.length);
+    setAddedCount(chosen.length - failed);
+    setFailedCount(failed);
     setPhase('done');
   }, [items]);
 
@@ -285,6 +292,12 @@ export default function FridgeScreen() {
             <Check size={30} color={Colors.gold} />
           </View>
           <Text style={styles.doneText}>{tCount('pantry.fridge.added', addedCount)}</Text>
+          {/* 一部失敗を隠さない（P5）。名寄せや DB の失敗はここで正直に言う */}
+          {failedCount > 0 && (
+            <Text style={styles.doneFailedText}>
+              {tCount('pantry.fridge.addFailed', failedCount)}
+            </Text>
+          )}
           {/* A: そのまま「この材料で作れるレシピ」へ（新しい生成ロジックは作らない — 既存資産へ接続） */}
           <Pressable style={styles.bigButton} onPress={() => router.replace('/cookable')}>
             <ChefHat size={20} color={Colors.bg} />
@@ -468,4 +481,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1108',
   },
   doneText: { color: Colors.paper, fontSize: 16, fontWeight: '500', textAlign: 'center' },
+  doneFailedText: { color: '#C97A4A', fontSize: 13, textAlign: 'center' },
 });

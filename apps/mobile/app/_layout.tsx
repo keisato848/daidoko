@@ -161,7 +161,8 @@ export default function RootLayout() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>DB Error: {error}</Text>
+        {/* error は useDatabase が t() 済みの文言にしている（英語の生スタックを出さない） */}
+        <Text style={styles.errorText}>{error}</Text>
       </View>
     );
   }

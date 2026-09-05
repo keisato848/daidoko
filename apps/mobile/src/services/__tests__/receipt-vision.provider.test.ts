@@ -175,3 +175,19 @@ describe('送信するもの', () => {
     expect(parts.map((part) => part['text'])).toContain('牛乳 2本');
   });
 });
+
+describe('normalizeReceiptRaw — 語彙防御（水平展開規約②・サーバー sanitizeReceiptRaw と対）', () => {
+  it('カテゴリ語・売り場名の品目は除外する（複合語は残す）', () => {
+    const r = normalizeReceiptRaw({
+      isReceipt: true,
+      items: [
+        { name: '牛乳' },
+        { name: '調味料' }, // カテゴリ語
+        { name: '農産' }, // 売り場名
+        { name: '調味料入れ' }, // 複合語は食品でないがここでは落とさない（プロンプト側の仕事）
+        { name: '野菜ジュース' },
+      ],
+    });
+    expect(r.items.map((it) => it.name)).toEqual(['牛乳', '調味料入れ', '野菜ジュース']);
+  });
+});

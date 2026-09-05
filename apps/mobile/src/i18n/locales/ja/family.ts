@@ -125,6 +125,8 @@ const family = {
         other: 'メンバー {{count}}人',
       } satisfies PluralMessage,
       switched: '「{{name}}」に切り替えました。新しく作るレシピや品目はこのグループに入ります。',
+      /** 切替に失敗しても黙らない（P5 — 切り替わったつもりで別グループに書き込む事故を防ぐ） */
+      switchFailed: '切り替えられませんでした。通信環境を確認して、もう一度お試しください。',
       invite: '招待',
       create: '新しいグループを作る',
       createTitle: '新しいグループ',
