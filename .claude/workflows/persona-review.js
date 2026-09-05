@@ -136,7 +136,7 @@ ${files}
 全部開いてから、構造化出力で答える。指摘の screen にはファイル名を使う。
 人物設定の「規律」を厳守: 見えるものだけ・支払い判断はしない・埋め草の賞賛をしない。`,
       { label: p.label, phase: 'Review', schema: REVIEW, agentType: p.agent },
-    ).then((r) => ({ persona: p.label, review: r }));
+    ).then((r) => (r ? { persona: p.label, review: r } : null));
   }),
 );
 

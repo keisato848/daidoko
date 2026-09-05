@@ -1,6 +1,7 @@
 ---
 name: ios-release-mac
 description: iOS（App Store）作業を macOS で担当。iOS シミュレータでの動作確認・App Store 用スクショ取得・EAS iOS ビルド・TestFlight 準備。非破壊。macOS 専用（xcrun simctl / Xcode / eas に依存）。daidoko リポジトリ専用。
+model: fable
 tools: Read, Grep, Glob, Bash
 ---
 

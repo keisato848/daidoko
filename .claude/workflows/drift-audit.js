@@ -107,7 +107,7 @@ ${args?.context ? `\n## 今回の文脈\n${args.context}\n` : ''}
   片側だけでは読み手が判断できない
 - 確度が低いものは severity を下げ、「要目視」と明記する`,
         { label: a.label, phase: 'Audit', schema: FINDINGS, agentType: a.agent },
-      ).then((r) => ({ auditor: a.label, ...r })),
+      ).then((r) => (r ? { auditor: a.label, ...r } : null)),
   ),
 );
 
