@@ -34,15 +34,21 @@ const SOURCE_BY_LANG = {
   en: { dir: 'docs/store/app-store/phone-screenshots-en', locale: 'en-US' },
 };
 
-/** 表示順。Play 側（`update-play-screenshots.mjs` の ORDER）と揃える。 */
+/**
+ * 表示順。Play 側（`update-play-screenshots.mjs` の ORDER）と揃える。
+ * 1.13.1（2026-09-05）: 1 枚目に 05 献立・3 枚目に 12 冷蔵庫確認シート。
+ * 03・04 は extras/ へ退避（経緯は phone-screenshots/README.md と
+ * docs/store/google-play/phone-screenshots/README.md の 1.13.1 節）。
+ * 撮影手順は phone-screenshots/SHOOTING-1.13.1.md。
+ */
 const ORDER = [
+  '05-menu-plan.png',
   '10-recipe-detail-photo.png',
+  '12-fridge-to-recipe.png',
   '07-photo-to-recipe.png',
   '08-photo-recipe-result.png',
   '01-home-timeline.png',
   '02-recipe-library.png',
-  '03-recipe-detail.png',
-  '04-cooking-mode.png',
   '06-family-group.png',
 ];
 

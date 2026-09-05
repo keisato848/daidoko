@@ -56,7 +56,15 @@ pnpm --filter mobile exec expo run:ios          # dev クライアントで起�
 
 - **写真からレシピ**（AI）が表示・動作する（サーバー/BYOK 経由）。端末内ラベリングは iOS では効かないが
   サーバー推論にフォールバックする。
-- **文字入り画像OCR / レシート** の入口が **表示されない**（add / 在庫画面。Android 専用のため iOS で非表示）。
+- **文字入り画像OCR / レシート** の入口が **表示され、動作する**（2026-09-05 訂正）。
+  > **旧記述「Android 専用のため iOS で非表示」はもう成立しない。**
+  > 症状: 旧記述を合格条件にすると、正しいビルドが必ず「不合格」になる（入口は出るのが正）。
+  > 原因: PR #212（848f90b）で文字入り画像の読み取りが端末内 ML Kit から AI（サーバー/BYOK）に
+  > 替わり、Android 専用の理由が消えた。`add.tsx` の METHOD_GROUPS は `ocr` を無条件表示・
+  > `import-ocr.tsx` / `pantry.tsx` に Platform 分岐は無い。レシートは
+  > `client-ocr.provider.ts` が iOS では端末内 OCR 不可を検知してクラウド解析へ切り替える
+  > （`docs/store/app-store/listing-ja.md`「Android 版との差分」の注記と同じ経緯）。
+  > 対処: 入口が**表示される**ことと、写真を読ませて下書きが返ることを確認する。
 - ローカル機能（レシピ/買い物/在庫/調理記録/家族）・バーコード・URL/手動/テキストが動作する。
 - **iCloud バックアップ包含の確認**（#79）: Documents（DB・写真）をバックアップ除外して**いない**こと
   — コードベースに `isExcludedFromBackup` / `NSURLIsExcludedFromBackupKey` が無いことを確認
@@ -72,7 +80,12 @@ node scripts/release/capture-ios-screenshots.mjs     # 9:41・満充電に固定
 ```
 
 - 出力 = `docs/store/app-store/phone-screenshots/`（en は `phone-screenshots-en/`。順序・サイズは同 README）。
-- 主サイズ = 6.9"（iPhone 16 Pro Max = 1320×2868）。`08`/`10` は manual（AI 実行と実データが要る）。
+- 主サイズ = 6.9"（iPhone 16 Pro Max = 1320×2868）。`08`/`12` は manual（AI 実行が要る）。
+  **1.13.1 の 8 枚構成（05 献立・12 冷蔵庫）での撮影手順・データ仕込み・素材は
+  `docs/store/app-store/phone-screenshots/SHOOTING-1.13.1.md`**（05 の在庫仕込みは
+  `scripts/release/seed-pantry-for-shots.mjs`）。BYOK キーが残っていると `07` の無料枠表示が
+  「自分のAIキー・使い放題」に化けるので、**キーを消してから** `07` を撮る
+  （`.claude/skills/update-store-listing` の既知罠と同じ）。
 - **ストア公開物なのでユーザーに提示して承認を得る**。アップロードは Windows 側から
   `node scripts/release/update-appstore-screenshots.mjs --lang ja|en`（ロケールごとに別セット。
   `docs/リリース手順.md` §7-5）。
