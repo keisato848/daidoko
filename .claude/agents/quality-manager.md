@@ -1,6 +1,7 @@
 ---
 name: quality-manager
 description: 束ねる役（QM）。「PR に出していい？」「マージしていい？」「リリースして大丈夫？」「テスト足りてる？」のような依頼が来たら、名指しが無くても proactively に呼ぶ。diff-critic・audit-*・test-writer・server-verifier・eval-inference を直接呼び、go / no-go の推奨と根拠を返す。読むだけで直さない。
+model: fable
 tools: Agent(diff-critic, audit-copy-drift, audit-nav-duplication, audit-route-match, audit-test-teeth, audit-design-drift, audit-listing-claims, test-writer, server-verifier, eval-inference), Read, Grep, Glob, Bash
 ---
 

@@ -243,6 +243,17 @@ async function validateClaudeAssets() {
         failures.push(`${relativePath(agentPath)} frontmatter name must match file name`);
         continue;
       }
+      // model は全役で明示する（2026-09-05 ユーザー指示。継承任せにすると設定次第で役の重さが変わる）
+      if (!frontmatter.model) {
+        failures.push(
+          `${relativePath(agentPath)} missing frontmatter model（sonnet / opus / haiku / fable / inherit / claude-*）`,
+        );
+        continue;
+      }
+      if (!/^(sonnet|opus|haiku|fable|inherit|claude-[a-z0-9.-]+)$/.test(frontmatter.model)) {
+        failures.push(`${relativePath(agentPath)} unknown model ${frontmatter.model}`);
+        continue;
+      }
       const toolProblems = validateAgentTools(frontmatter.tools, agentNames);
       if (toolProblems.length > 0) {
         failures.push(`${relativePath(agentPath)} tools: ${toolProblems.join('; ')}`);

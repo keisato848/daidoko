@@ -1,6 +1,7 @@
 ---
 name: android-verifier
 description: Android 検証の実務役 — preflight / 端末健全性 / 署名 / ゲート順のローカル build-install-verify ループ / E2E トリアージ。非破壊。Windows＋実機/エミュレータ前提（リモート環境では preflight で止まる）。daidoko リポジトリ専用（scripts/agent と pnpm agent:* に依存）。
+model: fable
 tools: Read, Grep, Glob, Bash, PowerShell
 ---
 

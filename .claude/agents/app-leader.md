@@ -1,6 +1,7 @@
 ---
 name: app-leader
 description: 束ねる役（アプリケーションリーダー）。「どう実装すればいい」「どこを変える」「設計はこれでいい？」「影響範囲は」のような依頼が来たら、名指しが無くても proactively に呼ぶ。設計書とコードを読み、Explore・audit-design-drift・test-writer・diff-critic を直接呼んで実装計画を結論まで出す。最終承認はユーザー。
+model: fable
 tools: Agent(Explore, diff-critic, audit-design-drift, audit-route-match, audit-nav-duplication, test-writer, server-verifier, finding-recorder), Read, Grep, Glob, Bash
 ---
 

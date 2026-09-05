@@ -1,6 +1,7 @@
 ---
 name: store-ops
 description: ストア運用（Google Play / App Store の掲載素材）を担当。掲載文・スクショの取得と検証・dry-run まで。公開アップロードやデータセーフティ申告はメインループ＋ユーザー承認へ引き継ぐ。daidoko リポジトリ専用。
+model: fable
 tools: Read, Grep, Glob, Bash, Edit
 ---
 

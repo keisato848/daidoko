@@ -1,6 +1,7 @@
 ---
 name: server-verifier
 description: apps/server（Hono + PostgreSQL / Railway）の検証役。サーバーのコードを変えたとき・デプロイの前後・「railway」「疎通」「/health」の話が出たら、名指しが無くても proactively に呼ぶ。ローカルのテスト・型・lint、環境変数キーの確認、疎通、railway logs のトリアージ。`railway up` と変数の書き込みはしない。
+model: fable
 tools: Read, Grep, Glob, Bash
 ---
 
