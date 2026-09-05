@@ -19,6 +19,7 @@
  * 使い方:
  *   node scripts/release/capture-ios-screenshots.mjs [--udid <udid>] [--shots 01,02]
  *     [--out <dir>] [--recipe <id>] [--photo-recipe <id>] [--keep-status-bar] [--wait <ms>]
+ *     [--keep-cooking-session]
  *
  * manual 指定のショット（AI 実行結果など自動遷移できない画面）はスキップし、
  * 既存ファイルを維持する。
@@ -46,27 +47,59 @@ const PHOTO_RECIPE_ID = args.photoRecipe ?? 'recipe-7';
 
 /**
  * ショット定義。route は Expo Router のパス（daidoko://<route> で開く）。
- * Android 版（capture-store-screenshots.mjs）と同じ画面構成・同じ順序に揃える。
+ * 掲載 8 枚と表示順の正は update-appstore-screenshots.mjs の ORDER
+ * （Play 版 update-play-screenshots.mjs と同構成・1.13.1）。撮影手順の詳細は
+ * docs/store/app-store/phone-screenshots/SHOOTING-1.13.1.md。
  * manual: true は自動化不可（既存ファイル維持）。
+ * extra: true は extras/ 退避済みの旧ショット — 既定では撮らず、
+ * `--shots 03` のように明示したときだけ撮る。
  */
 const SHOTS = [
   { file: '01-home-timeline.png', route: '', label: 'ホーム（調理タイムライン）' },
   { file: '02-recipe-library.png', route: 'recipes', label: 'レシピ蔵書庫' },
-  { file: '03-recipe-detail.png', route: `recipes/${RECIPE_ID}`, label: 'レシピ詳細' },
-  { file: '04-cooking-mode.png', route: `recipes/${RECIPE_ID}/cook`, label: '料理中モード' },
+  {
+    // 1.13.0 で掲載 8 枚から外れた（10 と内容が重複気味）。再取得用に残す。
+    file: '03-recipe-detail.png',
+    route: `recipes/${RECIPE_ID}`,
+    label: 'レシピ詳細（extras・明示指定時のみ）',
+    extra: true,
+  },
+  {
+    // 1.13.1 で掲載 8 枚から外れた。cook 画面を開くと調理セッションが始まり、
+    // 以後のショットに Now Cooking pill が写り込むため、各ショット前の
+    // clearCookingSession() と run 終了時の後始末が面倒を見る。
+    file: '04-cooking-mode.png',
+    route: `recipes/${RECIPE_ID}/cook`,
+    label: '料理中モード（extras・明示指定時のみ）',
+    extra: true,
+  },
+  {
+    // 事前に献立を組んで menu_plans に保存しておくこと（SHOOTING-1.13.1.md）。
+    // 組んだ献立は terminate してもコールドスタートで復元されるので自動で撮れる。
+    file: '05-menu-plan.png',
+    route: 'menu',
+    label: '献立（組んだ状態・時間帯チップ・1.13.1）',
+  },
   { file: '06-family-group.png', route: 'family', label: '家族グループ' },
   {
+    // BYOK キーが残っていると無料枠の説明が「自分のAIキー・使い放題」に化ける。
+    // キーを消してから撮る（SHOOTING-1.13.1.md の撮影順）。
     file: '07-photo-to-recipe.png',
     route: 'recipes/import-photo',
     label: '写真からレシピ（導線）',
   },
-  { file: '08-photo-recipe-result.png', manual: true, label: 'AI 結果画面（手動撮影・既存維持）' },
+  { file: '08-photo-recipe-result.png', manual: true, label: 'AI 結果画面（手動撮影）' },
   {
     // recipe-7（ふわとろスクランブルエッグトースト）は seedBundledCoverPhotos が
     // assets/seed-photos/scrambled-egg.jpg を表紙に設定するので、実データ無しで再現できる。
     file: '10-recipe-detail-photo.png',
     route: `recipes/${PHOTO_RECIPE_ID}`,
     label: '写真つき詳細（recipe-7・表紙は seed 同梱）',
+  },
+  {
+    file: '12-fridge-to-recipe.png',
+    manual: true,
+    label: '冷蔵庫の確認シート（AI 実行が要る・手動撮影・1.13.1）',
   },
 ];
 
@@ -77,14 +110,20 @@ fs.mkdirSync(outDir, { recursive: true });
 console.log(`simulator: ${udid}`);
 ensureAppInstalled();
 
-const selected = SHOTS.filter(
-  (s) => !args.shots || args.shots.some((prefix) => s.file.startsWith(prefix)),
+const selected = SHOTS.filter((s) =>
+  args.shots ? args.shots.some((prefix) => s.file.startsWith(prefix)) : !s.extra,
 );
 
 if (!args.keepStatusBar) overrideStatusBar();
 const results = [];
 /** 撮影済みの画像ハッシュ → ファイル名。同一画像の二度撮り（＝遷移失敗）を検出する。 */
 const capturedDigests = new Map();
+/** 直前に開いたのが cook 画面か（run の最後が 04 だとセッションが残るため、finally で消す用） */
+let lastShotOpenedCook = false;
+/** 調理セッション削除の失敗警告は 1 度だけ出す */
+let sessionGuardWarned = false;
+/** get_app_container の結果キャッシュ（毎ショット呼ばない） */
+let appDataDir = null;
 try {
   for (const shot of selected) {
     if (shot.manual) {
@@ -96,6 +135,13 @@ try {
   }
 } finally {
   if (!args.keepStatusBar) clearStatusBar();
+  if (lastShotOpenedCook && !args.keepCookingSession) {
+    // --shots 04 のように cook 画面で撮り終えるとセッションだけが残り、この後に
+    // 手で撮る 08/12 に Now Cooking pill が写り込む。次のショットが無い＝
+    // captureShot 冒頭のガードはもう走らないため、ここで消す
+    simctl(['terminate', udid, BUNDLE_ID]);
+    clearCookingSession();
+  }
 }
 
 console.log('\n=== summary ===');
@@ -111,12 +157,14 @@ function captureShot(shot) {
   const url = `${SCHEME}://${shot.route}`;
   // 一度終了してからディープリンクで開くと、確実に対象画面へ遷移できる。
   simctl(['terminate', udid, BUNDLE_ID]); // 未起動でも無害（失敗は無視）
+  clearCookingSession(); // 前のショット（cook 画面）が残したセッションを起動前に消す
   const open = simctl(['openurl', udid, url]);
   if (!open.ok) {
     console.error(`FAILED to open ${url}: ${open.output.slice(0, 200)}`);
     results.push({ ...shot, status: 'FAILED' });
     return;
   }
+  lastShotOpenedCook = shot.route.endsWith('/cook');
   sleep(args.waitMs); // コールドスタート＋データ読込＋アニメーション静定
 
   const dest = path.join(outDir, shot.file);
@@ -156,6 +204,50 @@ function captureShot(shot) {
 
   console.log(`captured: ${shot.file} (${size}) — ${shot.label}`);
   results.push({ ...shot, status: 'captured', size });
+}
+
+// ─── cooking session guard ───────────────────────────────────────────────────
+
+/**
+ * 調理セッション汚染ガード（Android 版 capture-store-screenshots.mjs の移植・PR #254）。
+ *
+ * cook 画面（recipes/{id}/cook）を開くと cooking-session.store.ts がセッションを
+ * app_meta の `cooking_session` キーへ永続化し、「完成」を押すまでタブバー直上に
+ * Now Cooking pill が出続ける（terminate しても次回起動で復元される）。
+ * 04 は 1.13.1 で掲載 8 枚から外れたが、`--shots 04` で extras を撮り直した後や
+ * 手動検証の残骸が以後のショットへ写り込むのを防ぐため、各ショットの起動前と
+ * run 終了時に DB 側で消す。シミュレータの DB は host からそのまま書けるので、
+ * adb root が要る Android 版より単純（sqlite3 は macOS 標準搭載）。
+ * 空文字は store の persist(null) と同じ表現で、起動時の復元がスキップされる。
+ * pill をあえて見せたいショットは --keep-cooking-session でオプトアウト。
+ */
+function clearCookingSession() {
+  if (args.keepCookingSession) return;
+  const dataDir = appContainerDataDir();
+  if (!dataDir) return;
+  const db = path.join(dataDir, 'Documents/SQLite/daidoko.db');
+  if (!fs.existsSync(db)) return; // 初回起動前は消すものが無い（諦めず続行）
+  const res = spawnSync(
+    'sqlite3',
+    [db, "UPDATE app_meta SET value='' WHERE key='cooking_session';"],
+    { encoding: 'utf8' },
+  );
+  if (res.status !== 0 && !sessionGuardWarned) {
+    // sqlite3 が無い等。撮影は止めず、警告の繰り返しもしない
+    console.warn(
+      `WARN: 調理セッションの削除に失敗（続行）: ${(res.stderr ?? res.stdout ?? '').slice(0, 200)}`,
+    );
+    sessionGuardWarned = true;
+  }
+}
+
+/** アプリの data コンテナパス（get_app_container は毎ショット呼ばずキャッシュする）。 */
+function appContainerDataDir() {
+  if (appDataDir === null) {
+    const res = simctl(['get_app_container', udid, BUNDLE_ID, 'data']);
+    appDataDir = res.ok ? res.output.trim() : '';
+  }
+  return appDataDir;
 }
 
 // ─── status bar override ─────────────────────────────────────────────────────
@@ -235,7 +327,7 @@ function sleep(ms) {
 }
 
 function parseArgs(argv) {
-  const parsed = { waitMs: 6000, keepStatusBar: false };
+  const parsed = { waitMs: 6000, keepStatusBar: false, keepCookingSession: false };
   for (let i = 0; i < argv.length; i += 1) {
     const t = argv[i];
     if (t === '--udid') parsed.udid = argv[++i];
@@ -245,6 +337,7 @@ function parseArgs(argv) {
     else if (t === '--shots') parsed.shots = argv[++i].split(',').map((s) => s.trim());
     else if (t === '--wait') parsed.waitMs = Number(argv[++i]);
     else if (t === '--keep-status-bar') parsed.keepStatusBar = true;
+    else if (t === '--keep-cooking-session') parsed.keepCookingSession = true;
   }
   return parsed;
 }
