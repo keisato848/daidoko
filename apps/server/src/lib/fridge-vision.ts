@@ -7,9 +7,9 @@ import { thinkingConfigFragment } from './thinking-budget.js';
  *
  * 契約の正は `packages/shared/src/types/fridge.ts`（設計は `docs/冷蔵庫写真設計.md`）。
  *
- * **数量・分量は読ませない。** 写真から数量は読めず、推測した数字は在庫で合算されて
- * 「家に無いものが在庫にある」状態を静かに作る（レシートの quantity と同じ理由で、
- * こちらは最初から欄ごと無い）。読むのは品名と、その確からしさ（confidence 0〜1）だけ。
+ * **数量は「写真から数えられる場合のみ」**（オーナー決定 2026-09-05）。自由テキスト
+ * （「3本」「約200g」）で、数えられないものは出力しない — **推測で埋めない**。
+ * 推測した数字は在庫で合算されて「家に無いものが在庫にある」状態を静かに作る。
  * 画像はこのリクエストの中でしか使わない — 保存もログ出力もしない（/photo と同じ）。
  */
 
@@ -28,6 +28,7 @@ export interface FridgeVisionInput {
 export interface FridgeVisionItemRaw {
   name?: string;
   confidence?: number;
+  quantity?: string;
 }
 
 export interface FridgeVisionRaw {
@@ -38,6 +39,8 @@ export interface FridgeVisionRaw {
 export interface FridgeItem {
   name: string;
   confidence: number;
+  /** 数量（自由テキスト）。読めなかったものは null（推測で埋めない） */
+  quantity: string | null;
 }
 
 export interface FridgeVisionProvider {
@@ -52,11 +55,14 @@ export const FRIDGE_SYSTEM_PROMPT = [
   '写真に写っている食材・食品・飲料の**品名だけ**を items に列挙してください。',
   '品名は家庭の在庫管理に使える一般的な名前にします（例: 「明治おいしい牛乳」→「牛乳」）。ブランド名・容量・規格は省きます。',
   'パッケージや容器で中身が推定できるもの（卵パック・牛乳パック・調味料ボトルなど）は、その中身の一般名で挙げます。',
+  // 種類名への具体化（オーナー実機確認 2026-09-05 — 「ドレッシング」では在庫として半端）
+  'パッケージの文字や見た目から**商品の種類まで特定できる場合は、種類名で**書きます（例: ×ドレッシング → ○シーザードレッシング / ×チューブ入り香辛料 → ○わさびチューブ・おろししょうが）。特定できないときだけ一般名（ドレッシング など）にとどめ、confidence を下げます。',
   // カテゴリ名の禁止（ペルソナ検証 2026-09-05 — 実写真 11 品中 3 品が「調味料」
   // 「飲料」等で、在庫としてもレシピマッチにも使えなかった。設計 §9）
   '「調味料」「飲料」「食品」「食材」「惣菜」のような**カテゴリ名は品目として返しません**。必ず具体的な品名で挙げます（例: ×調味料 → ○醤油・みりん / ×飲料 → ○麦茶・牛乳）。',
   'パッケージから中身を特定できないものは、無理にカテゴリでまとめず、confidence を下げたうえで判別できる範囲の一般名（例: ドレッシング・ジャム）までにとどめます。',
-  '数量・分量・単位は**絶対に出力しません**。同じ食材が複数見えても 1 品目にまとめます。',
+  '数量は**写真から数えられる・読み取れる場合のみ** quantity に書きます（例: にんじんが 3 本見えるなら「3本」、パック表示が読めるなら「1パック」「約200g」）。数えられない・残量が不明なものは quantity を出力しません。**推測で埋めないでください。**',
+  '同じ食材が複数見えても 1 品目にまとめます（数えられる場合は合計の数量を書きます）。',
   '各品目に confidence（0〜1 の数値）を付けます。はっきり見えて確実なら 0.9 以上、パッケージ越しの推定や一部しか見えないものは 0.5〜0.8、不明瞭で推測に近いものは 0.5 未満にします。',
   '見えないものを想像で足さないでください。判別できないものは挙げないか、confidence を大きく下げてください。',
   '食材・食品以外（保存容器・調理器具・薬など）は挙げません。',
@@ -73,6 +79,8 @@ export const FRIDGE_RESPONSE_SCHEMA = {
         properties: {
           name: { type: 'STRING' },
           confidence: { type: 'NUMBER' },
+          // 数量は任意（読めなかったことを表せる必要がある — required に入れない）
+          quantity: { type: 'STRING' },
         },
         required: ['name', 'confidence'],
       },
@@ -142,6 +150,8 @@ export function isCategoryItemName(name: string): boolean {
  * - confidence が数値でない・範囲外 → 0〜1 に丸める（無ければ 0 = 最も要確認側。
  *   高く埋めると「確認しなくてよさそうに見える」誤りになる — 低く倒すのが安全側）
  * - カテゴリ語（`CATEGORY_NAME_WORDS` 単体一致）→ confidence 0（要確認へ落とす。捨てない）
+ * - quantity は自由テキストを trim・30 字に切り詰め、空なら null（構造チェックのみ。
+ *   語彙防御は不要 — 在庫へは数値化して入り、名寄せ・照合に使われない）
  * - 同名（正規化一致）の重複 → confidence が高い方を残す
  * - `MAX_FRIDGE_ITEMS` を超えたぶん → 捨てる
  * BYOK 経路（モバイル側の写し）と同じ規則。片方だけ直さないこと。
@@ -161,15 +171,17 @@ export function sanitizeFridgeItems(raw: FridgeVisionRaw | null | undefined): Fr
       : typeof item?.confidence === 'number' && Number.isFinite(item.confidence)
         ? Math.min(1, Math.max(0, item.confidence))
         : 0;
+    const quantityRaw = typeof item?.quantity === 'string' ? item.quantity.trim() : '';
+    const quantity = quantityRaw ? quantityRaw.slice(0, 30) : null;
     const existingIndex = indexByKey.get(key);
     if (existingIndex != null) {
       const existing = items[existingIndex];
-      if (confidence > existing.confidence) items[existingIndex] = { name, confidence };
+      if (confidence > existing.confidence) items[existingIndex] = { name, confidence, quantity };
       continue;
     }
     if (items.length >= MAX_FRIDGE_ITEMS) continue;
     indexByKey.set(key, items.length);
-    items.push({ name, confidence });
+    items.push({ name, confidence, quantity });
   }
 
   return items;

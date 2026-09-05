@@ -45,7 +45,7 @@ async function post(body: unknown, headers: Record<string, string> = {}): Promis
 }
 
 type FridgeResult =
-  | { ok: true; data: { items: { name: string; confidence: number }[] } }
+  | { ok: true; data: { items: { name: string; confidence: number; quantity: string | null }[] } }
   | { ok: false; error: { code: string; retryable: boolean } };
 
 const ENV_KEYS = ['INFER_GLOBAL_DAILY_LIMIT', 'INFER_DAILY_LIMIT', 'INFER_MONTHLY_FREE_LIMIT'];
@@ -73,9 +73,9 @@ describe('sanitizeFridgeItems — 捨てる方向のみ・埋めない', () => {
       ],
     });
     expect(items).toEqual([
-      { name: '牛乳', confidence: 1 },
-      { name: '卵', confidence: 0 },
-      { name: '味噌', confidence: 0 },
+      { name: '牛乳', confidence: 1, quantity: null },
+      { name: '卵', confidence: 0, quantity: null },
+      { name: '味噌', confidence: 0, quantity: null },
     ]);
   });
 
@@ -87,7 +87,7 @@ describe('sanitizeFridgeItems — 捨てる方向のみ・埋めない', () => {
         { name: 'ﾄｳﾌ', confidence: 0.6 },
       ],
     });
-    expect(items).toEqual([{ name: 'トウフ', confidence: 0.9 }]);
+    expect(items).toEqual([{ name: 'トウフ', confidence: 0.9, quantity: null }]);
   });
 
   it('上限（60 品）を超えたぶんは捨てる', () => {
@@ -114,10 +114,10 @@ describe('sanitizeFridgeItems — 捨てる方向のみ・埋めない', () => {
       ],
     });
     expect(items).toEqual([
-      { name: '調味料', confidence: 0 },
-      { name: '飲料', confidence: 0 },
-      { name: 'Condiments', confidence: 0 },
-      { name: '牛乳', confidence: 0.9 },
+      { name: '調味料', confidence: 0, quantity: null },
+      { name: '飲料', confidence: 0, quantity: null },
+      { name: 'Condiments', confidence: 0, quantity: null },
+      { name: '牛乳', confidence: 0.9, quantity: null },
     ]);
   });
 
@@ -129,8 +129,8 @@ describe('sanitizeFridgeItems — 捨てる方向のみ・埋めない', () => {
       ],
     });
     expect(items).toEqual([
-      { name: '調味料入れ', confidence: 0.7 },
-      { name: '野菜ジュース', confidence: 0.8 },
+      { name: '調味料入れ', confidence: 0.7, quantity: null },
+      { name: '野菜ジュース', confidence: 0.8, quantity: null },
     ]);
   });
 });
@@ -140,6 +140,13 @@ describe('FRIDGE_SYSTEM_PROMPT — カテゴリ名の禁止（ペルソナ検証
     expect(FRIDGE_SYSTEM_PROMPT).toContain('カテゴリ名は品目として返しません');
     expect(FRIDGE_SYSTEM_PROMPT).toContain('×調味料 → ○醤油・みりん');
     expect(FRIDGE_SYSTEM_PROMPT).toContain('×飲料 → ○麦茶・牛乳');
+  });
+
+  it('種類名への具体化と、数量の「数えられる場合のみ・推測禁止」を含む（2026-09-05 実機指摘）', () => {
+    expect(FRIDGE_SYSTEM_PROMPT).toContain('×ドレッシング → ○シーザードレッシング');
+    expect(FRIDGE_SYSTEM_PROMPT).toContain('○わさびチューブ・おろししょうが');
+    expect(FRIDGE_SYSTEM_PROMPT).toContain('数えられる・読み取れる場合のみ');
+    expect(FRIDGE_SYSTEM_PROMPT).toContain('推測で埋めないでください');
   });
 });
 
@@ -180,12 +187,12 @@ describe('POST /api/v1/infer/fridge — バリデーション', () => {
 });
 
 describe('POST /api/v1/infer/fridge — 成功ケース', () => {
-  it('品目と confidence を返す（分量・数量の欄は無い）', async () => {
+  it('品目・confidence・数量（読めた場合のみ）を返す', async () => {
     setFridgeProviderForTesting(
       stub(() => ({
         items: [
-          { name: '牛乳', confidence: 0.95 },
-          { name: 'にんじん', confidence: 0.6 },
+          { name: '牛乳', confidence: 0.95, quantity: '1本' },
+          { name: 'にんじん', confidence: 0.6, quantity: '3本' },
           { name: '味噌', confidence: 0.3 },
         ],
       })),
@@ -196,12 +203,27 @@ describe('POST /api/v1/infer/fridge — 成功ケース', () => {
     expect(json.ok).toBe(true);
     if (json.ok) {
       expect(json.data.items).toEqual([
-        { name: '牛乳', confidence: 0.95 },
-        { name: 'にんじん', confidence: 0.6 },
-        { name: '味噌', confidence: 0.3 },
+        { name: '牛乳', confidence: 0.95, quantity: '1本' },
+        { name: 'にんじん', confidence: 0.6, quantity: '3本' },
+        // 読めなかった数量は null（推測で埋めない — オーナー決定 2026-09-05）
+        { name: '味噌', confidence: 0.3, quantity: null },
       ]);
-      expect(json.data.items[0]).not.toHaveProperty('quantity');
     }
+  });
+
+  it('quantity は trim・30 字に切り詰め、空文字は null（構造チェックのみ）', () => {
+    const items = sanitizeFridgeItems({
+      items: [
+        { name: '牛乳', confidence: 0.9, quantity: '  1本  ' },
+        { name: '卵', confidence: 0.9, quantity: '   ' },
+        { name: '豚肉', confidence: 0.9, quantity: 'あ'.repeat(40) },
+      ],
+    });
+    expect(items).toEqual([
+      { name: '牛乳', confidence: 0.9, quantity: '1本' },
+      { name: '卵', confidence: 0.9, quantity: null },
+      { name: '豚肉', confidence: 0.9, quantity: 'あ'.repeat(30) },
+    ]);
   });
 
   it('2 枚の画像がそのまま provider に渡る', async () => {
