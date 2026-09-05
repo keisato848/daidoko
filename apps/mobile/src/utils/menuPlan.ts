@@ -150,8 +150,11 @@ export interface ScoredRecipe {
  * `'ai'` は M2（AI 並べ替え）専用 — M1 の採点（`scoreRecipe`）が返すことはない。
  * AI の why をそのまま `subject` として保存するための入れ物（§10.10.4 の
  * 「reason に AI の why をそのまま」を、既存の `kind:subject` 保存形式に乗せる）。
+ * `'ai-new'` は M3（不足分レシピの一括生成・§10.12）で新しく作って組み込んだ日。
+ * subject は使わない（AI バッジ #266 はレシピ側の aiGenerated が担い、献立側は
+ * 「新しく作った」ことだけ言う）。
  */
-export type MenuReasonKind = 'expiry' | 'coverage' | 'pinned' | 'few-missing' | 'ai';
+export type MenuReasonKind = 'expiry' | 'coverage' | 'pinned' | 'few-missing' | 'ai' | 'ai-new';
 
 /**
  * 1 レシピを採点する。`availablePantry` は「まだ他の日に取られていない在庫」で、
@@ -357,7 +360,7 @@ export function decodeReason(reason: string): { kind: MenuReasonKind | null; sub
   if (index < 0) return { kind: null, subject: '' };
   const kind = reason.slice(0, index);
   const subject = reason.slice(index + 1);
-  const known: MenuReasonKind[] = ['expiry', 'coverage', 'pinned', 'few-missing', 'ai'];
+  const known: MenuReasonKind[] = ['expiry', 'coverage', 'pinned', 'few-missing', 'ai', 'ai-new'];
   return {
     kind: (known as string[]).includes(kind) ? (kind as MenuReasonKind) : null,
     subject,
@@ -575,6 +578,84 @@ export function mergeMissingIngredients(
     }
   }
   return [...merged.values()];
+}
+
+/**
+ * 献立の全日ぶんの材料を**在庫にあるか問わず** 1 行へまとめる（M3-5・§10.12）。
+ *
+ * `mergeMissingIngredients` が「足りないものだけ」を返すのに対し、こちらは
+ * #214 の選択シートに渡す前提で**全行**返す — 在庫にある材料も理由付きで
+ * 見せ、消さない（`docs/買い物リスト・在庫設計.md` §5.3-a）。在庫との突合は
+ * `utils/shoppingPlan.ts` の `buildShoppingPlan` がやるので、ここではやらない。
+ * まとめる鍵は素の名前の正規化（辞書でまとめない — §10.4 と同じ理由）。
+ */
+export interface MenuShoppingIngredient {
+  name: string;
+  /** 日ごとの分量を「 / 」区切りで連結（無ければ null） */
+  amount: string | null;
+  /** 由来レシピ（買い物リスト行の「献立から」バッジのタップ先） */
+  recipeId: string;
+}
+
+export function mergeMenuIngredients(
+  days: readonly { recipeId: string }[],
+  recipes: readonly MenuRecipe[],
+): MenuShoppingIngredient[] {
+  const byId = new Map(recipes.map((r) => [r.id, r]));
+  const merged = new Map<string, { name: string; amounts: string[]; recipeId: string }>();
+  for (const day of days) {
+    const recipe = byId.get(day.recipeId);
+    if (!recipe) continue;
+    for (const ing of recipe.ingredients) {
+      const key = normalizeItemName(ing.name);
+      if (!key) continue;
+      const entry = merged.get(key) ?? { name: ing.name, amounts: [], recipeId: recipe.id };
+      if (ing.amount) entry.amounts.push(ing.amount);
+      merged.set(key, entry);
+    }
+  }
+  return [...merged.values()].map((entry) => ({
+    name: entry.name,
+    amount: entry.amounts.length > 0 ? entry.amounts.join(' / ') : null,
+    recipeId: entry.recipeId,
+  }));
+}
+
+// ─── M3: 不足分レシピの一括生成（§10.12）────────────────────────────────────
+
+/**
+ * 一括生成で保存したレシピを、献立の**空き日（末尾）**へ組み込む（M3・§10.12）。
+ * 純関数 — サービス層（`fillMenuPlanShortfall`）は読み書きだけを持つ。
+ *
+ * - 既存の日（作り終わった日も含む）は一切触らない。並べ替えもしない
+ * - 追加分は最終日の次の day 番号から順に積む（day の欠番は作らない前提 —
+ *   `buildMenu`/`rollMenuPlan` は常に 1..k の連番を返す）
+ * - `requestedDays` を**超えては積まない**（超えたぶんは捨てる。呼び出し側は
+ *   不足数ちょうどで生成するので通常は起きない — 防御だけ）
+ * - reason は `'ai-new'`（subject 無し）。AI バッジはレシピ側 aiGenerated（#266）が担う
+ */
+export function appendShortfallDays(
+  currentDays: readonly RollableMenuDay[],
+  requestedDays: number,
+  additions: readonly { recipeId: string; title: string }[],
+): RollableMenuDay[] {
+  const maxDay = currentDays.reduce((max, day) => Math.max(max, day.day), 0);
+  const room = Math.max(0, requestedDays - currentDays.length);
+  const usedIds = new Set(currentDays.map((day) => day.recipeId));
+  const appended: RollableMenuDay[] = [];
+  for (const addition of additions) {
+    if (appended.length >= room) break;
+    if (usedIds.has(addition.recipeId)) continue; // 同じレシピを 2 つの日に入れない
+    usedIds.add(addition.recipeId);
+    appended.push({
+      day: maxDay + appended.length + 1,
+      recipeId: addition.recipeId,
+      title: addition.title,
+      reason: encodeReason('ai-new', null),
+      doneAt: null,
+    });
+  }
+  return [...currentDays, ...appended];
 }
 
 // ─── M2: AI 並べ替え（#215・設計 §10.10）────────────────────────────────────

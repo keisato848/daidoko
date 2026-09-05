@@ -12,6 +12,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { Loading } from '../../../../src/components/Loading';
 import { t } from '../../../../src/i18n';
+import { readableErrorMessage } from '../../../../src/services/ai-error';
 import { Toast } from '../../../../src/components/Toast';
 import { Colors } from '../../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../../src/services/cooking-log.service';
@@ -161,7 +162,7 @@ export default function RefineRecipeScreen() {
       if (error instanceof PhotoCaptureCancelledError) return;
       void dialog.alert({
         title: t('common.photoAddFailed'),
-        message: error instanceof Error ? error.message : t('common.photoAddFailed'),
+        message: readableErrorMessage(error, t('common.photoAddFailed')),
       });
     }
   }, []);
@@ -247,7 +248,7 @@ export default function RefineRecipeScreen() {
     } catch (error) {
       void dialog.alert({
         title: t('recipe.refine.saveFailedTitle'),
-        message: error instanceof Error ? error.message : t('recipe.refine.saveFailedBody'),
+        message: readableErrorMessage(error, t('recipe.refine.saveFailedBody')),
       });
       setPhase('preview');
     }

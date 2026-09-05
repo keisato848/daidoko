@@ -3,6 +3,7 @@
  * Runs migrations and seeds on app startup (native)
  * On web, skips DB init and uses mock data
  */
+import { t } from '../i18n';
 import { useEffect, useState } from 'react';
 
 import { initDatabase, isNativePlatform } from '../db/client';
@@ -36,9 +37,10 @@ export function useDatabase() {
         // Web: no DB, screens use mock data
         setIsReady(true);
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Unknown database error';
-        setError(message);
-        console.error('Database init failed:', message);
+        // 画面には翻訳済みの一般文言だけを出す（英語の生スタックを出さない —
+        // 水平展開規約②）。切り分け用の詳細は console に残す
+        setError(t('error.dbInit'));
+        console.error('Database init failed:', e);
       }
     }
     void init();

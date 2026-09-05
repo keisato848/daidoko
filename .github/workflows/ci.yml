@@ -45,6 +45,16 @@ jobs:
       - name: Script TDZ check
         run: node scripts/agent/check-script-tdz.mjs
 
+      # Q-7: .claude/.github のカスタマイズ（フック配線・Skill/エージェントの frontmatter・
+      # 束ねる役の Agent(...) 許可リストの名前解決）。pre-commit だけだと hooksPath 未設定の
+      # clone や --no-verify で素通りする（2026-09-05 の 7 軸監査）
+      - name: Agent customizations check
+        run: node scripts/agent/test-customizations.mjs
+
+      # Q-8: UserPromptSubmit の振り分け表の歯（発話例 → 期待する役）
+      - name: Agent router self-test
+        run: node scripts/agent/hook-user-prompt-router.mjs --self-test
+
       # Q-5: Tests
       - name: Test (mobile + shared)
         run: pnpm -r test

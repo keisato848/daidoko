@@ -1,5 +1,9 @@
 /**
- * Android Headless タスク（W1・`docs/ウィジェット設計.md` §6-1 の本題）。
+ * Android Headless タスク（W1 買い物・W2 献立・`docs/ウィジェット設計.md` §6-1）。
+ *
+ * 1 本のハンドラで両ウィジェットを描く。`widgetInfo.widgetName`（app.json の
+ * `react-native-android-widget.widgets[].name`）で `ShoppingList` / `Menu` を
+ * 出し分ける。読むスナップショット JSON は共通（`snapshot.json` 1 本）。
  *
  * react-native-android-widget は `registerWidgetTaskHandler` に渡した関数を、
  * ウィジェットの追加・更新・クリック等のたびに **Headless な JS プロセス**で
@@ -19,6 +23,8 @@ import type { WidgetTaskHandler } from 'react-native-android-widget';
 
 import { parseWidgetSnapshot } from '../utils/widgetSnapshot';
 import type { WidgetSnapshot } from '../utils/widgetSnapshot';
+import { MenuWidget } from './MenuWidget';
+import { menuWidgetSize } from './menuWidgetContent';
 import { ShoppingListWidget } from './ShoppingListWidget';
 import { widgetSizeFromWidth } from './shoppingWidgetContent';
 
@@ -39,7 +45,7 @@ async function readSnapshot(): Promise<WidgetSnapshot | null> {
   }
 }
 
-export const shoppingListWidgetTaskHandler: WidgetTaskHandler = async ({
+export const daidokoWidgetTaskHandler: WidgetTaskHandler = async ({
   widgetAction,
   widgetInfo,
   renderWidget,
@@ -50,10 +56,19 @@ export const shoppingListWidgetTaskHandler: WidgetTaskHandler = async ({
   const snapshot = await readSnapshot();
   console.warn(
     '[widget] task handler',
+    widgetInfo.widgetName,
     widgetAction,
     'snapshot:',
     snapshot ? `remaining=${snapshot.shopping.remaining}` : 'null',
   );
+
+  // ウィジェット種別で描画を出し分ける（app.json の widgets[].name と揃える）
+  if (widgetInfo.widgetName === 'Menu') {
+    renderWidget(
+      <MenuWidget snapshot={snapshot} size={menuWidgetSize(widgetInfo.width, widgetInfo.height)} />,
+    );
+    return;
+  }
 
   renderWidget(
     <ShoppingListWidget snapshot={snapshot} size={widgetSizeFromWidth(widgetInfo.width)} />,

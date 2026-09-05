@@ -33,6 +33,21 @@ export const KNOWLEDGE_TARGETS = [
     path: 'docs/リリース手順.md',
     section: '該当節と Skill',
   },
+  {
+    kind: 'ハーネス（フック・Skill・スクリプト）の挙動とエージェントの改廃',
+    path: 'docs/開発ハーネス.md',
+    section: '§1〜§3 / §7-4',
+  },
+  {
+    kind: '推論品質の採点結果',
+    path: 'docs/レシピ推論の評価設計.md',
+    section: '§6（結果は docs/eval/vision-recipe/）',
+  },
+  {
+    kind: '未着手だが忘れてはいけないこと',
+    path: 'docs/開発ハーネス.md',
+    section: '§7-2 の規約で GitHub Issue にする（文書には書かない）',
+  },
 ];
 
 /**

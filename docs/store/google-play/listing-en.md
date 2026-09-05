@@ -1,7 +1,7 @@
 # Google Play Listing (EN)
 
-更新日: 2026-09-02
-対象ビルド: Android 1.13.0（予定）
+更新日: 2026-09-05
+対象ビルド: Android 1.13.1（予定）
 反映方法: androidpublisher API（edits.listings）で CLI 更新
 
 **日本語版の訳ではない。** listing-ja.md は決定変更 B（2026-08-28 利用者確定）で
@@ -44,60 +44,68 @@ email address→email・short ad→ad・expiry の言い回し）で計 43 字�
 collection 1 文目と同じ主張）を削除し、"too" の重複語・冗長な修飾を数か所削って計 92 字を捻出。
 **3984 字（残り 16 字）**。次に増やすときも同じやり方（意味を保ったまま冗長な語を削る）で余白を作ること。
 
+**1.13.1 追記（2026-09-05）**: 冷蔵庫からレシピ・朝昼夕・AI 一括生成・献立ウィジェット・
+グループ別共有・家族更新の通知（permissions 行の "all sent from your own device" は FCM 導入で
+偽になったため削除）を反映。根拠と「書かないこと」（「撮るだけで作れる」を使わない対比構造・
+冷蔵庫の never stored の裏取り・「自動で届く」の対象限定）は `listing-ja.md` の「1.13.1 追記」参照。
+4000 字上限は既存方針どおり冗長語の圧縮で確保（削った箇所は git 差分参照）。最終 3981 字（md 生テキスト。送信時は \*\* を剥がすため update-play-listing.mjs --dry-run 実測で 3969 字）。
+
 ## アプリ名（28 字）
 
 - DAIDOKO: Meal Plan & Recipes
 
-## 短い説明（74 字）
+## 短い説明（77 字）
 
-Meal plan from what's in your fridge — recipes, shopping, pantry, one app.
+Snap your fridge — it becomes pantry, meal plan and the family shopping list.
 
 ## 詳しい説明
 
-"What should I cook tonight?" You open the fridge and answer the same question again. DAIDOKO starts from what you already have — a meal plan, then recipes, shopping and pantry, all in one app instead of scattered across screenshots and links.
-
-Cooking has a lot of moving parts: find a recipe, plan the week, shop, put things away, start over.
+"What should I cook tonight?" You open the fridge. DAIDOKO starts from what you already have — a meal plan, then recipes, shopping and pantry, all in one app.
 
 ■ Plan today's meals
 • Build a 2, 3, 5 or 7-day meal plan from what's in your pantry
 • Each day comes with a one-line reason; swap out what you don't like
+• Plan breakfast, lunch and dinner separately
 • Anything missing goes straight to your shopping list
-• Optional auto-plan mode: today's plan is ready when you wake up, with a notification. Missing ingredients can be added automatically — undo or turn it off any time
+• Short on recipes? AI drafts the missing days in one batch — review each before saving
+• Optional auto-plan mode: today's plan is ready when you wake up; missing items can be auto-added — undo or turn it off any time
 
 ■ Building your recipe collection
 • Search by recipe name, tag or ingredient
 • Import from a recipe URL or pasted text — unlimited, no AI allowance used
-• Just photograph a dish and AI drafts the ingredients, amounts and steps; you always review and edit before saving
-• Photograph a cookbook page or food package and AI reads it — front and back merged into one recipe
-• **AI can generate an image** for the recipe, always labeled "This image was created by AI" (3 free a month, separate from the recipe allowance)
-• Recreate a restaurant dish — write how yours turned out and AI narrows the gap, showing exactly what changed
+• Photograph a dish and AI drafts the ingredients, amounts and steps — review and edit before saving
+• Photograph a cookbook page or food package — AI merges front and back into one recipe
+• **AI can generate an image**, always labeled "This image was created by AI" (3 free a month, separate allowance)
+• Recreate a restaurant dish — write how yours turned out and AI narrows the gap, showing what changed
 • AI-made recipes come with a check-yourself note
-• Cover photos, step photos, and a cooking log of what you made and when
+• Cover and step photos, plus a log of what you cooked and when
 • Cooking mode shows one step at a time, large, with timers and no ads
 
 ■ Shopping and pantry, connected
-• Add what a meal plan or recipe is missing to your shopping list in one tap
-• Check your shopping list from a home-screen widget (Android)
+• Add what a plan or recipe is missing to your shopping list in one tap
+• Check today's plan and your shopping list from a home-screen widget (Android)
 • Move what you bought into the pantry — by barcode or receipt scan
 • Track expiry dates if you want — nothing required, no nagging reminders
-• See which recipes you can cook right now, ranked by how much you already have
+• Snap your fridge — AI reads what's inside, you confirm, and it becomes pantry stock that feeds your meal plan and shopping list (no amounts read; photos never stored)
+• See what you can cook right now, ranked by how much you already have
 • Get a reminder when something is running low
 
 ■ Shared with the family, automatically
 • Share an invite code — **no account, no email address**
 • Recipes, shopping list and pantry arrive on every phone in the family (meal plans stay per-phone)
-• Share the shopping list and pantry per item, or keep any item private
-• Your meal plan, recipes, shopping list, pantry and cooking mode work offline; they catch up when you are back online
-• Needs a connection: AI features, URL import, publishing or opening a shared recipe page, and watching an ad for more AI
+• Share by group — everything with family, recipes only with a friend
+• Share the shopping list and pantry per item, or keep items private
+• Meal plan, recipes, shopping, pantry and cooking mode work offline and catch up later
+• Needs a connection: AI, URL import, publishing or opening a shared recipe page, and ads for more AI
 
 ■ Where your data lives
 • No account, no sign-up. We never hold your email or phone number
 • **Unless you share with family or publish a recipe page, we do not send your data to our servers**
 • Join a family group and only the items you share travel through our server.
-Delete the group and that synced data is erased from the server
+Delete the group and that synced data is erased
 • A published recipe page is separate — deleting the group does not stop it. Stop a single recipe from its own menu, a recipe book from Settings → Recipe books; nobody can open it after that
 • Backup, restore, a transfer file for a new phone, plus your OS backup (Android/iCloud) or chosen folder if set — your account, not ours
-• AI features include a free monthly allowance (5 a month), then an ad unlocks one more.
+• AI features include a free allowance (5 a month); an ad unlocks one more.
 Add your own Gemini key for no limit
 
 ■ Who it is for
@@ -106,7 +114,7 @@ Add your own Gemini key for no limit
 ■ Permissions
 • Camera: photographing dishes, reading text, scanning barcodes
 • Photos and media: choosing an image from your library
-• Notifications: low-stock and meal-plan reminders, and cooking timers — all sent from your own device
+• Notifications: low-stock and meal-plan reminders, cooking timers, and family update alerts
 
 Note on AI: an AI feature sends what it needs (photo, ingredients, recipe, notes, or receipt text) and the screen says so first. Ingredient matching alone runs automatically (see Settings and our privacy policy). Not stored on our servers.
 

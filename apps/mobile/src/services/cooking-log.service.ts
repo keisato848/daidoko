@@ -10,6 +10,7 @@ import {
   getMockTimeline,
 } from '../db/mock';
 import type { CookingLogEntry, SaveCookingLogInput, TimelineEntry } from './types';
+import { refreshWidgetSnapshot } from './widget-snapshot.service';
 import { groupPhotosByLogId } from './photo.utils';
 import { t } from '../i18n';
 
@@ -81,6 +82,9 @@ export async function createCookingLog(input: SaveCookingLogInput): Promise<stri
     );
   }
 
+  // 調理記録は献立の「今日の一品」進行に効く — ウィジェットへ反映
+  // （ウィジェット設計 §1 の 5 フックのうち「調理記録保存」— 2026-09-04 配線）
+  refreshWidgetSnapshot();
   return id;
 }
 
@@ -97,6 +101,7 @@ export async function deleteCookingLog(logId: string): Promise<void> {
 
   await db.delete(schema.cookingPhotos).where(eq(schema.cookingPhotos.logId, logId));
   await db.delete(schema.cookingLogs).where(eq(schema.cookingLogs.id, logId));
+  refreshWidgetSnapshot();
 }
 
 /** 家族全体の調理記録の総数（ストア評価プロンプトのしきい値判定などに使う）。 */

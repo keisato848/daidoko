@@ -10,7 +10,7 @@ export default function InviteLink() {
   return (
     <Redirect
       href={{
-        pathname: '/(tabs)/family',
+        pathname: '/family',
         params: { invite: typeof code === 'string' ? code : '' },
       }}
     />

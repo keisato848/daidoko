@@ -4,9 +4,11 @@
  * otherwise the managed server. Batched: one call resolves many names.
  * See docs/買い物リスト・在庫設計.md §6.
  */
+import { isCategoryName } from '@daidoko/shared';
+
 import { API_V1, GEMINI_MODEL } from '../config';
-import { getUserApiKey } from './byok.service';
 import { requestLocale, withOutputLanguage } from './ai-output-locale';
+import { getUserApiKey } from './byok.service';
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
@@ -17,6 +19,8 @@ const SYSTEM_PROMPT = [
   '各入力（レシートの商品名や在庫の名前）を、レシピで使う「一般的な食材名」に変換してください。',
   'ブランド名・産地・規格・分量・状態表現（洗い/カット/大袋 等）は取り除き、食材の総称にします。',
   '例: とっとごたまご→卵、アクシアルハーフベーコン→ベーコン、春よ恋強力小麦粉→小麦粉、ぶなしめじ→しめじ。',
+  // 丸め上げの禁止（サーバー `name-resolve.ts` の写し・2026-09-05）
+  '食材名より**粗くしない**でください。「調味料」「野菜」「飲料」のようなカテゴリ名への丸め上げは不可です。具体的な食材名にできない場合は canonical を空文字 "" にしてください。',
   '食材でないもの（袋・容器・日用品・クーポン・値引 等）は canonical を空文字 "" にしてください。',
   '入力と同じ件数だけ、各要素に name（入力そのまま）と canonical を返してください。',
 ].join('\n');
@@ -38,12 +42,17 @@ export interface ResolvedName {
   canonical: string;
 }
 
-function parseResolved(raw: unknown): ResolvedName[] {
+export function parseResolved(raw: unknown): ResolvedName[] {
   if (!Array.isArray(raw)) return [];
   const out: ResolvedName[] = [];
   for (const item of raw) {
     if (item && typeof item.name === 'string' && typeof item.canonical === 'string') {
-      out.push({ name: item.name, canonical: item.canonical });
+      // カテゴリ語（「調味料」等）へ丸め上げられた解決は空文字扱い —
+      // 誤った正規名はキャッシュ（name_aliases）に残って照合を壊し続ける
+      out.push({
+        name: item.name,
+        canonical: isCategoryName(item.canonical) ? '' : item.canonical,
+      });
     }
   }
   return out;

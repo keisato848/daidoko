@@ -33,9 +33,11 @@ model: sonnet
      必ず方法を明記して判定すること
 
 4. **セグメント一致の共通関数を使っているか**
-   - このリポジトリには `apps/mobile/src/utils/routeMatch.ts` の
-     `pathHasSegment` / `pathHasAnySegment` がある（`/` で区切った 1 セグメントとして一致）
-   - **新しいコードが `includes` を使っていたら、共通関数へ寄せるよう報告する**
+   - 共通関数は**まだ無い**（#285。この定義は以前「`routeMatch.ts` の `pathHasSegment` がある」と
+     書いていたが、そのファイルはどのブランチにも存在しなかった。2026-09-05 の change-review で発覚）
+   - 現状 `includes` のままの箇所: `CookingResumeBar.tsx:30` / `app-open-ad.service.ts:76`
+   - **新しいコードが `includes` を使っていたら、セグメント一致（`/` で区切った 1 セグメント）に書き換え、
+     共通関数へ切り出すよう報告する**
 
 5. **二重管理を疑う**
    - 同じ「全画面ルートの一覧」がパス片（`'/cook'`）とルート名（`'[id]/cook'`）で

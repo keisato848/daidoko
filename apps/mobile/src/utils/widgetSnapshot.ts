@@ -16,6 +16,24 @@ export const WIDGET_SNAPSHOT_VERSION = 1;
 /** 小サイズで出す上限。中サイズは 6 行＋「ほか n 品」（設計 §2） */
 export const WIDGET_SHOPPING_PREVIEW = 6;
 
+/** 週間表示（W2 大サイズ）で出す上限。7 日分（設計 §2・ペルソナ確定） */
+export const WIDGET_MENU_WEEK_MAX = 7;
+
+/**
+ * 週間表示（大サイズ）の 1 日分。**省略可フィールドで足したもの**（版は上げない・§1）。
+ * `title`/`recipeId` が null の日は「未定」（—）として描く。`isToday` は
+ * `anchorDate` を持つ自動モードのときだけ true になりうる（手動プランは日付が無い）。
+ */
+export interface WidgetMenuWeekDay {
+  title: string | null;
+  /** タップ先。無ければ null（未定・削除済みは献立画面へ） */
+  recipeId: string | null;
+  /** 作り終わった日（ISO）。null = まだ。薄く描くのに使う */
+  doneAt: string | null;
+  /** 今日の行。金色で強調するのに使う */
+  isToday: boolean;
+}
+
 export interface WidgetSnapshot {
   version: number;
   /** 書き出した時刻（ISO）。ウィジェットは「HH:mm 時点」として**必ず表示する** */
@@ -38,17 +56,76 @@ export interface WidgetSnapshot {
     kind: 'today' | 'next' | null;
     /** 出す 1 品。無ければ null */
     title: string | null;
+    /**
+     * 出す 1 品のレシピ ID（タップ先 `daidoko://recipes/<id>`）。無ければ null。
+     * **省略可フィールドで足したもの**（旧ウィジェットは無視する・§1）。
+     */
+    recipeId?: string | null;
+    /**
+     * 週間表示（W2 大サイズ）用の 7 日分。**省略可フィールド**。
+     * 旧アプリが書いた（この欄が無い）スナップショットも読める。
+     */
+    week?: WidgetMenuWeekDay[];
+    /**
+     * 「組む」で要求した日数（`StoredMenuPlan.requestedDays`）。**省略可フィールドで
+     * 足したもの**（版は上げない・§1）。週間表示（大）で `week.length` がこれに
+     * 満たないとき「残り◯日分はレシピが足りません」を末尾に出す。
+     * 旧アプリ・旧プラン（要求日数を保存していない）には無い — 無ければ不足行を出さない。
+     */
+    requestedDays?: number;
+    /**
+     * 出しているプランの時間帯（v19・設計 §10.13）。**省略可フィールドで足したもの**
+     * （版は上げない・§1）。**無ければ夕** — 夕のときは書かないので、夕の表示は
+     * 旧スナップショット・旧ウィジェットと 1 文字も変わらない。朝/昼のときだけ
+     * 見出しに「（昼）」等を付ける（`menuWidgetContent`）。
+     */
+    mealTime?: 'breakfast' | 'lunch';
   };
 }
 
 export interface SnapshotInput {
   shoppingItems: readonly { name: string; checked: boolean }[];
-  /** 献立の日。`doneAt` が null の最初の日を出す */
-  menuDays: readonly { title: string; doneAt: string | null; missing?: boolean }[];
+  /**
+   * 献立の日。`doneAt` が null の最初の日を「今日/次の一品」に出す。
+   * `recipeId`（タップ先）・`day`（自動モードの日番号・1 始まり）は省略可 —
+   * 手動プランや旧データには無い。`day` と `anchorDate` が揃うと週間表示の
+   * 「今日」判定ができる。
+   */
+  menuDays: readonly {
+    title: string;
+    doneAt: string | null;
+    missing?: boolean;
+    recipeId?: string;
+    day?: number;
+  }[];
   /** 自動モードの起点日。**あるときだけ「今日」と言える**（§10.11 で入る） */
   anchorDate: string | null;
+  /** 「組む」で要求した日数。省略可 — 旧プランには保存されていない */
+  requestedDays?: number | null;
+  /**
+   * 出すプランの時間帯。省略・'dinner'・未知の値はどれも「夕」= スナップショットに
+   * 書かない（表示ルール: 夕は無印・§10.13）。
+   */
+  mealTime?: string | null;
   locale: 'ja' | 'en';
   now: Date;
+}
+
+/** ローカル暦日のキー（`YYYY-MM-DD`）。`menuDateKey`（menuPlan）と同じ規約 */
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** `YYYY-MM-DD` に `add` 日足したキー。壊れた anchor なら null */
+function addDaysToDateKey(anchor: string, add: number): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(anchor);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  d.setDate(d.getDate() + add);
+  return localDateKey(d);
 }
 
 /**
@@ -59,6 +136,24 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot {
   const unchecked = input.shoppingItems.filter((item) => !item.checked);
   // 削除されたレシピの日は飛ばす（ウィジェットに「無くなりました」は出せない）
   const nextDay = input.menuDays.find((day) => day.doneAt === null && !day.missing) ?? null;
+
+  // 週間表示（大サイズ）用に先頭 7 日分を写す。「今日」は anchorDate（自動モード）が
+  // あるときだけ日番号から暦日を割り当てて判定する（手動プランは日付が無い・§2）。
+  const todayKey = localDateKey(input.now);
+  const week: WidgetMenuWeekDay[] = input.menuDays.slice(0, WIDGET_MENU_WEEK_MAX).map((day) => {
+    const missing = day.missing === true;
+    let isToday = false;
+    if (input.anchorDate && typeof day.day === 'number') {
+      const key = addDaysToDateKey(input.anchorDate, day.day - 1);
+      isToday = key !== null && key === todayKey;
+    }
+    return {
+      title: missing ? null : day.title,
+      recipeId: missing ? null : (day.recipeId ?? null),
+      doneAt: day.doneAt,
+      isToday,
+    };
+  });
 
   return {
     version: WIDGET_SNAPSHOT_VERSION,
@@ -71,6 +166,18 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot {
     menu: {
       kind: nextDay ? (input.anchorDate ? 'today' : 'next') : null,
       title: nextDay ? nextDay.title : null,
+      recipeId: nextDay ? (nextDay.recipeId ?? null) : null,
+      week,
+      // 要求日数（不足行用）。無い・壊れた値は載せない（旧プランと同じ「出さない」へ倒す）
+      ...(typeof input.requestedDays === 'number' &&
+      Number.isInteger(input.requestedDays) &&
+      input.requestedDays > 0
+        ? { requestedDays: input.requestedDays }
+        : {}),
+      // 時間帯（§10.13）。朝/昼のときだけ書く — 夕は書かない（無印の規約そのもの）
+      ...(input.mealTime === 'breakfast' || input.mealTime === 'lunch'
+        ? { mealTime: input.mealTime }
+        : {}),
     },
   };
 }
@@ -118,7 +225,34 @@ export function parseWidgetSnapshot(raw: string): WidgetSnapshot | null {
     menu: {
       kind: menu.kind ?? null,
       title: typeof menu.title === 'string' ? menu.title : null,
+      recipeId: typeof menu.recipeId === 'string' ? menu.recipeId : null,
+      // 旧アプリが書いた（week の無い）スナップショットも読める。壊れた行は捨てる
+      week: Array.isArray(menu.week)
+        ? menu.week.map(sanitizeWeekDay).filter((d): d is WidgetMenuWeekDay => d !== null)
+        : [],
+      // 要求日数（不足行用・省略可）。無い・壊れた値は「無い」として読む
+      ...(typeof menu.requestedDays === 'number' &&
+      Number.isInteger(menu.requestedDays) &&
+      menu.requestedDays > 0
+        ? { requestedDays: menu.requestedDays }
+        : {}),
+      // 時間帯（省略可・§10.13）。無い・未知の値は「夕」として読む（= 載せない）
+      ...(menu.mealTime === 'breakfast' || menu.mealTime === 'lunch'
+        ? { mealTime: menu.mealTime }
+        : {}),
     },
+  };
+}
+
+/** 週間表示の 1 日分を読む側で正規化する。オブジェクトでなければ null（その行は捨てる） */
+function sanitizeWeekDay(value: unknown): WidgetMenuWeekDay | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const day = value as Record<string, unknown>;
+  return {
+    title: typeof day.title === 'string' ? day.title : null,
+    recipeId: typeof day.recipeId === 'string' ? day.recipeId : null,
+    doneAt: typeof day.doneAt === 'string' ? day.doneAt : null,
+    isToday: day.isToday === true,
   };
 }
 

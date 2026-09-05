@@ -13,11 +13,19 @@ import {
   SYNC_ENTITY_RECIPE_BOOK,
   SYNC_ENTITY_SHOPPING_ITEM,
   SYNC_PAYLOAD_SCHEMA_VERSION,
+  entityGroupKeyOf,
+  entityGroupMapKey,
   hasNaturalKey,
   incomingChangeWins,
   isSyncEntityType,
+  isTypeAllowedForScope,
   parseSyncPayload,
+  planPushFanout,
+  resolveCurrentGroupId,
+  resolveDefaultGroupForType,
   serializeSyncPayload,
+  shouldAssignDefaultGroup,
+  syncCursorStorageKey,
   type RecipeBookSyncPayload,
   type RecipeSyncPayload,
 } from '../sync-payload';
@@ -424,5 +432,268 @@ describe('AI 由来の印（#266）', () => {
     // 省略可のフィールド追加は破壊的変更ではない。上げるとカーソルが 0 に戻り、
     // 旧端末は `schemaVersion` が自分より新しい payload を全部捨てる
     expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(3);
+  });
+});
+
+/**
+ * 多グループ（G-2a — docs/クラウド同期設計.md §12-3 / 共有設計 §5-4）。
+ *
+ * 固定したいこと:
+ * - 持ち分（pantry_quantity）は**親品目の所属に従う**（別グループに割れない）
+ * - 所属ゼロ＝どのグループにも送らない（G9）。既定所属は「行があり shared≠0」のときだけ（G2）
+ * - ファンアウトの分配は決定的（主グループが先頭）
+ * - 主グループのカーソル鍵は従来の `sync_cursor` のまま（§12-4: 移行不要の読み替え）
+ */
+describe('多グループ: 所属解決（entityGroupKeyOf）', () => {
+  it('ふつうの種別はそのまま', () => {
+    expect(entityGroupKeyOf(SYNC_ENTITY_RECIPE, 'recipe-1')).toEqual({
+      entityType: SYNC_ENTITY_RECIPE,
+      entityId: 'recipe-1',
+    });
+  });
+
+  it('在庫数量の持ち分は親品目の所属に従う', () => {
+    expect(entityGroupKeyOf('pantry_quantity', 'item-1:device-9')).toEqual({
+      entityType: SYNC_ENTITY_PANTRY_ITEM,
+      entityId: 'item-1',
+    });
+  });
+
+  it('壊れた持ち分 id はそのまま（既定所属も付かず送られない側に倒れる）', () => {
+    expect(entityGroupKeyOf('pantry_quantity', 'broken')).toEqual({
+      entityType: 'pantry_quantity',
+      entityId: 'broken',
+    });
+  });
+});
+
+describe('多グループ: 既定所属（shouldAssignDefaultGroup — G2/G9）', () => {
+  it('所属が無く、行があり、shared でない 0 でなければ付ける', () => {
+    expect(shouldAssignDefaultGroup({ hasMemberships: false, rowExists: true, shared: null })).toBe(
+      true,
+    );
+    expect(shouldAssignDefaultGroup({ hasMemberships: false, rowExists: true, shared: 1 })).toBe(
+      true,
+    );
+  });
+
+  it('既に所属があれば付けない（既定は初回だけ）', () => {
+    expect(shouldAssignDefaultGroup({ hasMemberships: true, rowExists: true, shared: null })).toBe(
+      false,
+    );
+  });
+
+  it('行の無い tombstone には付けない（一度も共有していない削除を外に出さない）', () => {
+    expect(
+      shouldAssignDefaultGroup({ hasMemberships: false, rowExists: false, shared: null }),
+    ).toBe(false);
+  });
+
+  it('shared = 0（自分だけ）には付けない（G9: どのグループにも入れない）', () => {
+    expect(shouldAssignDefaultGroup({ hasMemberships: false, rowExists: true, shared: 0 })).toBe(
+      false,
+    );
+  });
+});
+
+describe('多グループ: push のファンアウト分配（planPushFanout — G3/G9）', () => {
+  const entities = [
+    { entityType: SYNC_ENTITY_RECIPE, entityId: 'r1' }, // 主グループのみ
+    { entityType: SYNC_ENTITY_RECIPE, entityId: 'r2' }, // 両グループ
+    { entityType: SYNC_ENTITY_RECIPE, entityId: 'r3' }, // 所属ゼロ（自分だけ）
+    { entityType: 'pantry_quantity', entityId: 'item-1:dev-1' }, // 親品目の所属に従う
+  ] as const;
+
+  function memberships(): Map<string, readonly string[]> {
+    return new Map<string, readonly string[]>([
+      [entityGroupMapKey({ entityType: SYNC_ENTITY_RECIPE, entityId: 'r1' }), ['g-main']],
+      [entityGroupMapKey({ entityType: SYNC_ENTITY_RECIPE, entityId: 'r2' }), ['g-sub', 'g-main']],
+      [entityGroupMapKey({ entityType: SYNC_ENTITY_RECIPE, entityId: 'r3' }), []],
+      [entityGroupMapKey({ entityType: SYNC_ENTITY_PANTRY_ITEM, entityId: 'item-1' }), ['g-sub']],
+    ]);
+  }
+
+  it('所属グループごとに添字を分配し、主グループを先頭にする', () => {
+    const plan = planPushFanout([...entities], memberships(), 'g-main');
+
+    expect(plan.groups.map((group) => group.groupId)).toEqual(['g-main', 'g-sub']);
+    expect(plan.groups[0]?.indices).toEqual([0, 1]);
+    expect(plan.groups[1]?.indices).toEqual([1, 3]); // 持ち分は親品目の所属（g-sub）へ
+  });
+
+  it('所属ゼロは selfOnly（G9: どこにも送らない）', () => {
+    const plan = planPushFanout([...entities], memberships(), 'g-main');
+
+    expect(plan.selfOnlyIndices).toEqual([2]);
+  });
+
+  it('所属表に無い実体も selfOnly（安全側 — 呼び出し側は交わり済みの表を渡す）', () => {
+    const plan = planPushFanout(
+      [{ entityType: SYNC_ENTITY_RECIPE, entityId: 'unknown' }],
+      new Map(),
+      'g-main',
+    );
+
+    expect(plan.groups).toEqual([]);
+    expect(plan.selfOnlyIndices).toEqual([0]);
+  });
+
+  it('同じグループが重複して並んでいても 1 回だけ送る', () => {
+    const plan = planPushFanout(
+      [{ entityType: SYNC_ENTITY_RECIPE, entityId: 'r1' }],
+      new Map([
+        [entityGroupMapKey({ entityType: SYNC_ENTITY_RECIPE, entityId: 'r1' }), ['g-a', 'g-a']],
+      ]),
+      'g-main',
+    );
+
+    expect(plan.groups).toEqual([{ groupId: 'g-a', indices: [0] }]);
+  });
+});
+
+describe('多グループ: カーソル鍵と現在グループ（§12-4）', () => {
+  it('主グループは従来の sync_cursor のまま（既存キーの読み替え＝移行不要）', () => {
+    expect(syncCursorStorageKey('g-main', 'g-main')).toBe('sync_cursor');
+  });
+
+  it('他グループは sync_cursor:<groupId>', () => {
+    expect(syncCursorStorageKey('g-sub', 'g-main')).toBe('sync_cursor:g-sub');
+  });
+
+  it('現在グループ: 未設定・未参加のグループ指定は主グループへ倒す', () => {
+    expect(resolveCurrentGroupId(null, 'g-main', ['g-main'])).toBe('g-main');
+    expect(resolveCurrentGroupId('g-gone', 'g-main', ['g-main'])).toBe('g-main');
+    expect(resolveCurrentGroupId('g-sub', 'g-main', ['g-main', 'g-sub'])).toBe('g-sub');
+  });
+});
+
+/**
+ * scope（グループの範囲 — §12-1）。守りたいこと:
+ * - RECIPES_SCOPE_TYPES はサーバー sync-store.ts と一致（recipe / recipe_book のみ）
+ * - 既定所属（G2）は scope が許すグループへ倒れ、どこも許さなければ null（=自分だけ）
+ * - ファンアウトは scope が許さない種別をそのグループから除外する（400 の一括拒否で
+ *   バッチが詰まらない）— scope 不明のグループは従来どおり送る
+ * - 単一グループ（scope='all'）の挙動は 1 ビットも変わらない
+ */
+describe('多グループ: scope の門番（クライアント側 — isTypeAllowedForScope）', () => {
+  it("scope='all' は全種別を許す", () => {
+    for (const type of [
+      SYNC_ENTITY_RECIPE,
+      SYNC_ENTITY_RECIPE_BOOK,
+      SYNC_ENTITY_SHOPPING_ITEM,
+      SYNC_ENTITY_PANTRY_ITEM,
+      SYNC_ENTITY_NAME_ALIAS,
+      'pantry_quantity',
+    ]) {
+      expect(isTypeAllowedForScope('all', type)).toBe(true);
+    }
+  });
+
+  it("scope='recipes' はレシピ・帖だけを許す", () => {
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_RECIPE)).toBe(true);
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_RECIPE_BOOK)).toBe(true);
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_SHOPPING_ITEM)).toBe(false);
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_PANTRY_ITEM)).toBe(false);
+    expect(isTypeAllowedForScope('recipes', SYNC_ENTITY_NAME_ALIAS)).toBe(false);
+  });
+
+  it('在庫数量の持ち分は親品目（pantry_item）として判定される', () => {
+    expect(isTypeAllowedForScope('recipes', 'pantry_quantity')).toBe(false);
+  });
+});
+
+describe('多グループ: scope 対応の既定所属（resolveDefaultGroupForType）', () => {
+  const groups = [
+    { groupId: 'g-main', scope: 'all' as const },
+    { groupId: 'g-recipes', scope: 'recipes' as const },
+  ];
+
+  it('現在のグループが許す種別はそのまま現在のグループ', () => {
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_RECIPE, 'g-recipes', groups)).toBe('g-recipes');
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_SHOPPING_ITEM, 'g-main', groups)).toBe('g-main');
+  });
+
+  it('現在のグループがレシピ限定のとき、買い物・在庫は許すグループへ倒す', () => {
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_SHOPPING_ITEM, 'g-recipes', groups)).toBe(
+      'g-main',
+    );
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_PANTRY_ITEM, 'g-recipes', groups)).toBe('g-main');
+    expect(resolveDefaultGroupForType('pantry_quantity', 'g-recipes', groups)).toBe('g-main');
+  });
+
+  it('どのグループも許さなければ null（=自分だけ・G9 と同義）', () => {
+    const recipesOnly = [{ groupId: 'g-recipes', scope: 'recipes' as const }];
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_SHOPPING_ITEM, 'g-recipes', recipesOnly)).toBe(
+      null,
+    );
+  });
+
+  it('控えが空（scope 不明）なら従来どおり現在のグループ — 単一グループの挙動を変えない', () => {
+    expect(resolveDefaultGroupForType(SYNC_ENTITY_SHOPPING_ITEM, 'g-main', [])).toBe('g-main');
+  });
+});
+
+describe('多グループ: scope によるファンアウト除外（planPushFanout — 後から絞られた防御）', () => {
+  const shoppingKey = entityGroupMapKey({
+    entityType: SYNC_ENTITY_SHOPPING_ITEM,
+    entityId: 's1',
+  });
+  const recipeKey = entityGroupMapKey({ entityType: SYNC_ENTITY_RECIPE, entityId: 'r1' });
+
+  it('scope が許さない種別はそのグループの送信から除外される（所属は消さない — 送らないだけ）', () => {
+    const plan = planPushFanout(
+      [
+        { entityType: SYNC_ENTITY_RECIPE, entityId: 'r1' },
+        { entityType: SYNC_ENTITY_SHOPPING_ITEM, entityId: 's1' },
+      ],
+      new Map([
+        [recipeKey, ['g-main', 'g-recipes']],
+        [shoppingKey, ['g-main', 'g-recipes']],
+      ]),
+      'g-main',
+      new Map([
+        ['g-main', 'all'],
+        ['g-recipes', 'recipes'],
+      ]),
+    );
+
+    expect(plan.groups).toEqual([
+      { groupId: 'g-main', indices: [0, 1] },
+      { groupId: 'g-recipes', indices: [0] }, // 買い物はレシピ限定グループへは送らない
+    ]);
+    expect(plan.selfOnlyIndices).toEqual([]);
+  });
+
+  it('所属先の scope がすべて許さない実体は送り先なし（待ち行列の扱いは selfOnly と同じ）', () => {
+    const plan = planPushFanout(
+      [{ entityType: SYNC_ENTITY_SHOPPING_ITEM, entityId: 's1' }],
+      new Map([[shoppingKey, ['g-recipes']]]),
+      'g-main',
+      new Map([['g-recipes', 'recipes']]),
+    );
+
+    expect(plan.groups).toEqual([]);
+    expect(plan.selfOnlyIndices).toEqual([0]);
+  });
+
+  it('scope 不明のグループは従来どおり送る（サーバーが最終的な門番）', () => {
+    const plan = planPushFanout(
+      [{ entityType: SYNC_ENTITY_SHOPPING_ITEM, entityId: 's1' }],
+      new Map([[shoppingKey, ['g-unknown']]]),
+      'g-main',
+      new Map(),
+    );
+
+    expect(plan.groups).toEqual([{ groupId: 'g-unknown', indices: [0] }]);
+  });
+
+  it('groupScopes を渡さない従来の呼び出しは挙動不変', () => {
+    const plan = planPushFanout(
+      [{ entityType: SYNC_ENTITY_SHOPPING_ITEM, entityId: 's1' }],
+      new Map([[shoppingKey, ['g-main']]]),
+      'g-main',
+    );
+
+    expect(plan.groups).toEqual([{ groupId: 'g-main', indices: [0] }]);
   });
 });

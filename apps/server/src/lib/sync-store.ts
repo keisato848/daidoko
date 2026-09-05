@@ -12,7 +12,7 @@
  * - S0 ではグループ・端末・認証まで。entities / deltas のテーブルは先に作っておき、
  *   push/pull（S1）・数量デルタ（S2 — 設計 §5-1）はこの上に載せる
  */
-import postgres, { type Sql } from 'postgres';
+import postgres, { type Sql, type TransactionSql } from 'postgres';
 
 import {
   MAX_DEVICES_PER_GROUP,
@@ -65,6 +65,25 @@ CREATE TABLE IF NOT EXISTS sync_entities (
   PRIMARY KEY (group_id, entity_type, entity_id)
 );
 CREATE INDEX IF NOT EXISTS idx_sync_entities_pull ON sync_entities (group_id, seq);
+-- ── 多グループ化（G-1・docs/クラウド同期設計.md §12）────────────────────────
+-- グループの名前とスコープ（'all' | 'recipes'）。旧グループは name NULL / scope 'all'
+ALTER TABLE sync_groups ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE sync_groups ADD COLUMN IF NOT EXISTS scope TEXT NOT NULL DEFAULT 'all';
+-- 端末とグループの多対多。pull カーソルと所有権はグループごと（§12-1）
+CREATE TABLE IF NOT EXISTS sync_memberships (
+  device_id     TEXT NOT NULL REFERENCES sync_devices(id) ON DELETE CASCADE,
+  group_id      TEXT NOT NULL REFERENCES sync_groups(id) ON DELETE CASCADE,
+  is_owner      BOOLEAN NOT NULL DEFAULT FALSE,
+  last_pull_seq BIGINT NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (device_id, group_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sync_memberships_group ON sync_memberships (group_id);
+-- 移行（冪等）: 既存の 1端末=1グループ を membership へ写す。sync_devices.group_id は
+-- 「主グループ」（x-sync-group を送らない旧クライアントの解決先）として残す
+INSERT INTO sync_memberships (device_id, group_id, is_owner, last_pull_seq, created_at)
+SELECT id, group_id, is_owner, last_pull_seq, created_at FROM sync_devices
+ON CONFLICT (device_id, group_id) DO NOTHING;
 CREATE TABLE IF NOT EXISTS sync_deltas (
   group_id    TEXT NOT NULL REFERENCES sync_groups(id) ON DELETE CASCADE,
   seq         BIGINT NOT NULL,
@@ -120,6 +139,19 @@ function isUniqueViolation(err: unknown): boolean {
 
 // ── 型 ───────────────────────────────────────────────────────────────────────
 
+/** グループのスコープ（§12-1）。'recipes' はレシピ系だけを同期する */
+export type GroupScope = 'all' | 'recipes';
+
+/**
+ * scope='recipes' のグループで同期を許す entity_type（§12-1 — サーバーが門番）。
+ * 名寄せ辞書等の裏方は 'all' 専用（レシピだけの相手に台所の運用データを流さない）。
+ */
+export const RECIPES_SCOPE_TYPES: readonly string[] = ['recipe', 'recipe_book'];
+
+export function isTypeAllowedForScope(scope: GroupScope, entityType: string): boolean {
+  return scope === 'all' || RECIPES_SCOPE_TYPES.includes(entityType);
+}
+
 export interface DeviceCredentials {
   groupId: string;
   deviceId: string;
@@ -142,12 +174,25 @@ export interface AuthedDevice {
   deviceId: string;
   groupId: string;
   isOwner: boolean;
+  /** 操作対象グループのスコープ（§12）。旧経路の解決でも必ず埋まる */
+  scope: GroupScope;
+}
+
+/** /me/groups の 1 行（§12-2） */
+export interface MembershipSummary {
+  groupId: string;
+  name: string | null;
+  scope: GroupScope;
+  isOwner: boolean;
+  memberCount: number;
 }
 
 export interface GroupInfo {
   memberCount: number;
   inviteCode: string;
   inviteExpiresAt: string;
+  name: string | null;
+  scope: GroupScope;
   /** グループの端末（個人情報は持たない — id・役割・最終同期時刻だけ） */
   devices: DeviceSummary[];
 }
@@ -175,26 +220,39 @@ export const DEVICE_STALE_DAYS = 90;
 
 // ── 操作 ─────────────────────────────────────────────────────────────────────
 
+export interface CreateGroupOptions {
+  name?: string | null;
+  scope?: GroupScope;
+  /** 既存端末が 2 つ目以降のグループを作るとき（§12-2）。無ければ端末も新規発行 */
+  existingDeviceId?: string;
+}
+
 /** グループ新設。作成した端末がオーナー（招待の再発行とグループ削除ができる） */
-export async function createGroup(): Promise<GroupCreated> {
+export async function createGroup(options: CreateGroupOptions = {}): Promise<GroupCreated> {
   const sql = await db();
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const groupId = generateId();
-    const deviceId = generateId();
+    const deviceId = options.existingDeviceId ?? generateId();
     const secret = generateDeviceSecret();
     const code = generateInviteCode();
     const expires = inviteExpiresAt();
+    const scope: GroupScope = options.scope ?? 'all';
     try {
       await sql.begin(async (tx) => {
-        await tx`INSERT INTO sync_groups (id, invite_code, invite_expires_at)
-                 VALUES (${groupId}, ${code}, ${expires})`;
-        await tx`INSERT INTO sync_devices (id, group_id, secret_hash, is_owner)
-                 VALUES (${deviceId}, ${groupId}, ${hashSecret(secret)}, TRUE)`;
+        await tx`INSERT INTO sync_groups (id, invite_code, invite_expires_at, name, scope)
+                 VALUES (${groupId}, ${code}, ${expires}, ${options.name ?? null}, ${scope})`;
+        if (options.existingDeviceId === undefined) {
+          await tx`INSERT INTO sync_devices (id, group_id, secret_hash, is_owner)
+                   VALUES (${deviceId}, ${groupId}, ${hashSecret(secret)}, TRUE)`;
+        }
+        await tx`INSERT INTO sync_memberships (device_id, group_id, is_owner)
+                 VALUES (${deviceId}, ${groupId}, TRUE)`;
       });
       return {
         groupId,
         deviceId,
-        deviceSecret: secret,
+        // 既存端末の 2 つ目以降では新しい秘密は発行しない（応答にも流さない）
+        deviceSecret: options.existingDeviceId === undefined ? secret : '',
         inviteCode: code,
         inviteExpiresAt: expires.toISOString(),
       };
@@ -214,7 +272,10 @@ export async function createGroup(): Promise<GroupCreated> {
  * ロック無しの `count(*)` は READ COMMITTED では競合を防げない（2 台が同時に
  * 9 を読んで 2 台とも入り、定員を超える）。
  */
-export async function joinGroup(rawCode: string): Promise<JoinResult> {
+export async function joinGroup(
+  rawCode: string,
+  existingDeviceId: string | null = null,
+): Promise<JoinResult> {
   const sql = await db();
   const code = normalizeInviteCode(rawCode);
   const groups = await sql<{ id: string; invite_expires_at: Date }[]>`
@@ -229,14 +290,42 @@ export async function joinGroup(rawCode: string): Promise<JoinResult> {
   return sql.begin(async (tx): Promise<JoinResult> => {
     await tx`SELECT id FROM sync_groups WHERE id = ${group.id} FOR UPDATE`;
     const rows = await tx<{ count: string }[]>`
-      SELECT count(*)::text AS count FROM sync_devices WHERE group_id = ${group.id}`;
+      SELECT count(*)::text AS count FROM sync_memberships WHERE group_id = ${group.id}`;
     const memberCount = Number(rows[0]?.count ?? '0');
-    if (memberCount >= MAX_DEVICES_PER_GROUP) return { kind: 'full' };
 
+    if (existingDeviceId !== null) {
+      // 既存端末の追加参加（§12-2）。既に居るなら冪等に成功を返す（再試行安全）
+      const already = await tx<{ device_id: string }[]>`
+        SELECT device_id FROM sync_memberships
+        WHERE device_id = ${existingDeviceId} AND group_id = ${group.id}`;
+      if (already.length > 0) {
+        return {
+          kind: 'joined',
+          groupId: group.id,
+          deviceId: existingDeviceId,
+          deviceSecret: '',
+          memberCount,
+        };
+      }
+      if (memberCount >= MAX_DEVICES_PER_GROUP) return { kind: 'full' };
+      await tx`INSERT INTO sync_memberships (device_id, group_id)
+               VALUES (${existingDeviceId}, ${group.id})`;
+      return {
+        kind: 'joined',
+        groupId: group.id,
+        deviceId: existingDeviceId,
+        deviceSecret: '',
+        memberCount: memberCount + 1,
+      };
+    }
+
+    if (memberCount >= MAX_DEVICES_PER_GROUP) return { kind: 'full' };
     const deviceId = generateId();
     const secret = generateDeviceSecret();
     await tx`INSERT INTO sync_devices (id, group_id, secret_hash)
              VALUES (${deviceId}, ${group.id}, ${hashSecret(secret)})`;
+    await tx`INSERT INTO sync_memberships (device_id, group_id)
+             VALUES (${deviceId}, ${group.id})`;
     return {
       kind: 'joined',
       groupId: group.id,
@@ -247,20 +336,38 @@ export async function joinGroup(rawCode: string): Promise<JoinResult> {
   });
 }
 
-/** 端末 ID＋シークレットで認証。失敗は理由を区別せず null（列挙の手がかりを返さない） */
+/**
+ * 端末 ID＋シークレットで認証し、操作対象グループを解決する（§12-2）。
+ * 失敗は理由を区別せず null（列挙の手がかりを返さない）。
+ *
+ * `requestedGroupId` は新クライアントの `x-sync-group`。null（旧クライアント）は
+ * `sync_devices.group_id`（主グループ）へ解決する — 1.13.0 以前は挙動不変。
+ * 所有権・スコープは membership / group から引く。
+ */
 export async function authenticateDevice(
   deviceId: string,
   secret: string,
+  requestedGroupId: string | null = null,
 ): Promise<AuthedDevice | null> {
   const sql = await db();
-  const rows = await sql<
-    { id: string; group_id: string; secret_hash: string; is_owner: boolean }[]
-  >`
-    SELECT id, group_id, secret_hash, is_owner FROM sync_devices WHERE id = ${deviceId}`;
+  const rows = await sql<{ id: string; group_id: string; secret_hash: string }[]>`
+    SELECT id, group_id, secret_hash FROM sync_devices WHERE id = ${deviceId}`;
   const row = rows[0];
   if (!row) return null;
   if (!verifySecretHash(secret, row.secret_hash)) return null;
-  return { deviceId: row.id, groupId: row.group_id, isOwner: row.is_owner };
+  const groupId = requestedGroupId ?? row.group_id;
+  const memberships = await sql<{ is_owner: boolean; scope: string }[]>`
+    SELECT m.is_owner, g.scope FROM sync_memberships m
+    JOIN sync_groups g ON g.id = m.group_id
+    WHERE m.device_id = ${deviceId} AND m.group_id = ${groupId}`;
+  const membership = memberships[0];
+  if (!membership) return null;
+  return {
+    deviceId: row.id,
+    groupId,
+    isOwner: membership.is_owner,
+    scope: membership.scope === 'recipes' ? 'recipes' : 'all',
+  };
 }
 
 /**
@@ -279,50 +386,105 @@ export async function reapStaleDevices(
     if (keepDeviceId) {
       await tx`UPDATE sync_devices SET last_seen_at = now() WHERE id = ${keepDeviceId}`;
     }
-    // 1. 90 日休眠の端末を消す（自分以外）
+    // 1. 90 日休眠の端末を**このグループの membership から**外す（自分以外・§12: 端末行は
+    //    他グループの membership が残っていれば消さない）
     await tx`
-      DELETE FROM sync_devices
-      WHERE group_id = ${groupId}
-        AND id <> ${keepDeviceId ?? ''}
-        AND COALESCE(last_seen_at, created_at) < now() - make_interval(days => ${DEVICE_STALE_DAYS})`;
-    // 2. オーナーが居ない、または 14 日休眠なら、最も古い生存端末へ移す
-    const owners = await tx<{ id: string; stale: boolean }[]>`
-      SELECT id,
-             (COALESCE(last_seen_at, created_at) < now() - make_interval(days => ${OWNER_STALE_DAYS})) AS stale
-      FROM sync_devices WHERE group_id = ${groupId} AND is_owner = TRUE`;
+      DELETE FROM sync_memberships m
+      USING sync_devices d
+      WHERE m.group_id = ${groupId}
+        AND d.id = m.device_id
+        AND d.id <> ${keepDeviceId ?? ''}
+        AND COALESCE(d.last_seen_at, d.created_at) < now() - make_interval(days => ${DEVICE_STALE_DAYS})`;
+    // membership が空になった端末行は掃除する
+    await tx`
+      DELETE FROM sync_devices d
+      WHERE NOT EXISTS (SELECT 1 FROM sync_memberships m WHERE m.device_id = d.id)`;
+    // 主グループの membership だけが消えた端末は、残っている membership へ付け替える
+    await tx`
+      UPDATE sync_devices d
+      SET group_id = (SELECT m.group_id FROM sync_memberships m
+                      WHERE m.device_id = d.id ORDER BY m.created_at ASC LIMIT 1)
+      WHERE NOT EXISTS (SELECT 1 FROM sync_memberships m2
+                        WHERE m2.device_id = d.id AND m2.group_id = d.group_id)`;
+    // 2. オーナーが居ない、または 14 日休眠なら、最も古い生存 membership へ移す
+    const owners = await tx<{ device_id: string; stale: boolean }[]>`
+      SELECT m.device_id,
+             (COALESCE(d.last_seen_at, d.created_at) < now() - make_interval(days => ${OWNER_STALE_DAYS})) AS stale
+      FROM sync_memberships m JOIN sync_devices d ON d.id = m.device_id
+      WHERE m.group_id = ${groupId} AND m.is_owner = TRUE`;
     const owner = owners[0];
     if (owner && !owner.stale) return;
-    const candidates = await tx<{ id: string }[]>`
-      SELECT id FROM sync_devices
-      WHERE group_id = ${groupId}
-        AND COALESCE(last_seen_at, created_at) >= now() - make_interval(days => ${OWNER_STALE_DAYS})
-      ORDER BY created_at ASC LIMIT 1`;
+    const candidates = await tx<{ device_id: string }[]>`
+      SELECT m.device_id FROM sync_memberships m JOIN sync_devices d ON d.id = m.device_id
+      WHERE m.group_id = ${groupId}
+        AND COALESCE(d.last_seen_at, d.created_at) >= now() - make_interval(days => ${OWNER_STALE_DAYS})
+      ORDER BY m.created_at ASC LIMIT 1`;
     const next = candidates[0];
-    if (!next || next.id === owner?.id) return;
-    await tx`UPDATE sync_devices SET is_owner = FALSE WHERE group_id = ${groupId}`;
-    await tx`UPDATE sync_devices SET is_owner = TRUE WHERE id = ${next.id}`;
+    if (!next || next.device_id === owner?.device_id) return;
+    await tx`UPDATE sync_memberships SET is_owner = FALSE WHERE group_id = ${groupId}`;
+    await tx`UPDATE sync_memberships SET is_owner = TRUE
+             WHERE group_id = ${groupId} AND device_id = ${next.device_id}`;
   });
 }
 
 export async function getGroupInfo(groupId: string): Promise<GroupInfo | null> {
   const sql = await db();
-  const rows = await sql<{ invite_code: string; invite_expires_at: Date }[]>`
-    SELECT invite_code, invite_expires_at FROM sync_groups WHERE id = ${groupId}`;
+  const rows = await sql<
+    { invite_code: string; invite_expires_at: Date; name: string | null; scope: string }[]
+  >`
+    SELECT invite_code, invite_expires_at, name, scope FROM sync_groups WHERE id = ${groupId}`;
   const row = rows[0];
   if (!row) return null;
-  const devices = await sql<{ id: string; is_owner: boolean; seen: Date }[]>`
-    SELECT id, is_owner, COALESCE(last_seen_at, created_at) AS seen
-    FROM sync_devices WHERE group_id = ${groupId} ORDER BY created_at ASC`;
+  const devices = await sql<{ device_id: string; is_owner: boolean; seen: Date }[]>`
+    SELECT m.device_id, m.is_owner, COALESCE(d.last_seen_at, d.created_at) AS seen
+    FROM sync_memberships m JOIN sync_devices d ON d.id = m.device_id
+    WHERE m.group_id = ${groupId} ORDER BY m.created_at ASC`;
   return {
     memberCount: devices.length,
     inviteCode: row.invite_code,
     inviteExpiresAt: row.invite_expires_at.toISOString(),
+    name: row.name,
+    scope: row.scope === 'recipes' ? 'recipes' : 'all',
     devices: devices.map((d) => ({
-      id: d.id,
+      id: d.device_id,
       isOwner: d.is_owner,
       lastSeenAt: d.seen.toISOString(),
     })),
   };
+}
+
+/** 自分が参加しているグループの一覧（§12-2 の GET /sync/me/groups） */
+export async function listDeviceGroups(deviceId: string): Promise<MembershipSummary[]> {
+  const sql = await db();
+  const rows = await sql<
+    { group_id: string; name: string | null; scope: string; is_owner: boolean; count: string }[]
+  >`
+    SELECT m.group_id, g.name, g.scope, m.is_owner,
+           (SELECT count(*)::text FROM sync_memberships c WHERE c.group_id = m.group_id) AS count
+    FROM sync_memberships m JOIN sync_groups g ON g.id = m.group_id
+    WHERE m.device_id = ${deviceId}
+    ORDER BY m.created_at ASC`;
+  return rows.map((r) => ({
+    groupId: r.group_id,
+    name: r.name,
+    scope: r.scope === 'recipes' ? 'recipes' : 'all',
+    isOwner: r.is_owner,
+    memberCount: Number(r.count),
+  }));
+}
+
+/** グループの名前・スコープの変更（オーナーのみ — ルータ側で制御・§12-2） */
+export async function updateGroup(
+  groupId: string,
+  patch: { name?: string | null; scope?: GroupScope },
+): Promise<void> {
+  const sql = await db();
+  if (patch.name !== undefined) {
+    await sql`UPDATE sync_groups SET name = ${patch.name} WHERE id = ${groupId}`;
+  }
+  if (patch.scope !== undefined) {
+    await sql`UPDATE sync_groups SET scope = ${patch.scope} WHERE id = ${groupId}`;
+  }
 }
 
 /**
@@ -333,9 +495,36 @@ export async function getGroupInfo(groupId: string): Promise<GroupInfo | null> {
 export async function evictDevice(owner: AuthedDevice, deviceId: string): Promise<boolean> {
   if (deviceId === owner.deviceId) return false;
   const sql = await db();
-  const rows = await sql<{ id: string }[]>`
-    DELETE FROM sync_devices WHERE id = ${deviceId} AND group_id = ${owner.groupId} RETURNING id`;
-  return rows.length > 0;
+  return sql.begin(async (tx) => {
+    const rows = await tx<{ device_id: string }[]>`
+      DELETE FROM sync_memberships
+      WHERE device_id = ${deviceId} AND group_id = ${owner.groupId} RETURNING device_id`;
+    if (rows.length === 0) return false;
+    await cleanupDeviceRow(tx, deviceId, owner.groupId);
+    return true;
+  });
+}
+
+/**
+ * membership を失った端末行の後始末（§12）。他グループの membership が残っていれば
+ * 端末行は消さず、主グループ（sync_devices.group_id）が外れたグループを指したままなら
+ * 残っている membership の一つへ付け替える。どこにも属していなければ端末行ごと消す。
+ */
+async function cleanupDeviceRow(
+  tx: TransactionSql,
+  deviceId: string,
+  removedGroupId: string,
+): Promise<void> {
+  const remaining = await tx<{ group_id: string }[]>`
+    SELECT group_id FROM sync_memberships WHERE device_id = ${deviceId}
+    ORDER BY created_at ASC LIMIT 1`;
+  const next = remaining[0];
+  if (!next) {
+    await tx`DELETE FROM sync_devices WHERE id = ${deviceId}`;
+    return;
+  }
+  await tx`UPDATE sync_devices SET group_id = ${next.group_id}
+           WHERE id = ${deviceId} AND group_id = ${removedGroupId}`;
 }
 
 /** 招待コードの再発行（オーナーのみ — ルータ側で制御）。旧コードは即座に無効になる */
@@ -366,17 +555,22 @@ export async function rotateInvite(
 export async function leaveGroup(device: AuthedDevice): Promise<void> {
   const sql = await db();
   await sql.begin(async (tx) => {
-    await tx`DELETE FROM sync_devices WHERE id = ${device.deviceId}`;
-    const rows = await tx<{ id: string }[]>`
-      SELECT id FROM sync_devices WHERE group_id = ${device.groupId}
+    await tx`DELETE FROM sync_memberships
+             WHERE device_id = ${device.deviceId} AND group_id = ${device.groupId}`;
+    // **グループ削除より先に**端末行の主グループを付け替える（§12）。
+    // sync_devices.group_id は ON DELETE CASCADE なので、先にグループを消すと
+    // 他グループに属したままの端末行ごと消える（G-1 テストで実際に踏んだ）
+    await cleanupDeviceRow(tx, device.deviceId, device.groupId);
+    const rows = await tx<{ device_id: string }[]>`
+      SELECT device_id FROM sync_memberships WHERE group_id = ${device.groupId}
       ORDER BY created_at ASC LIMIT 1`;
     const oldest = rows[0];
     if (!oldest) {
+      // 最後の 1 台が抜けたらグループごと消す（誰の物でもないデータを残さない）
       await tx`DELETE FROM sync_groups WHERE id = ${device.groupId}`;
-      return;
-    }
-    if (device.isOwner) {
-      await tx`UPDATE sync_devices SET is_owner = TRUE WHERE id = ${oldest.id}`;
+    } else if (device.isOwner) {
+      await tx`UPDATE sync_memberships SET is_owner = TRUE
+               WHERE group_id = ${device.groupId} AND device_id = ${oldest.device_id}`;
     }
   });
 }
@@ -387,7 +581,19 @@ export async function leaveGroup(device: AuthedDevice): Promise<void> {
  */
 export async function deleteGroup(groupId: string): Promise<void> {
   const sql = await db();
-  await sql`DELETE FROM sync_groups WHERE id = ${groupId}`;
+  await sql.begin(async (tx) => {
+    // 他グループにも属している端末は、主グループを付け替えてから消す
+    //（CASCADE で道連れにしない — §12。属し先が無い端末は CASCADE で正しく消える）
+    await tx`
+      UPDATE sync_devices d
+      SET group_id = (SELECT m.group_id FROM sync_memberships m
+                      WHERE m.device_id = d.id AND m.group_id <> ${groupId}
+                      ORDER BY m.created_at ASC LIMIT 1)
+      WHERE d.group_id = ${groupId}
+        AND EXISTS (SELECT 1 FROM sync_memberships m2
+                    WHERE m2.device_id = d.id AND m2.group_id <> ${groupId})`;
+    await tx`DELETE FROM sync_groups WHERE id = ${groupId}`;
+  });
 }
 
 // ── S1: push / pull（設計 §5-1b） ────────────────────────────────────────────
@@ -453,6 +659,13 @@ export async function pushChanges(
 ): Promise<PushResult> {
   const sql = await db();
   const now = Date.now();
+  // スコープの門番（§12-1・ルータでも 400 にするが、ここでも守る — 深層防御）
+  const disallowed = changes.find((c) => !isTypeAllowedForScope(device.scope, c.entityType));
+  if (disallowed) {
+    throw new Error(
+      `scope '${device.scope}' does not allow entity_type '${disallowed.entityType}'`,
+    );
+  }
   return sql.begin(async (tx) => {
     // **先にグループ行をロックして、push を直列化する。** READ COMMITTED では下の
     // 「既存行を読んで LWW を判定する」SELECT に行ロックが無く、2 台が同じ品目を同時に
@@ -525,6 +738,10 @@ export async function pullChanges(
   limit: number,
 ): Promise<PullResult> {
   const sql = await db();
+  // scope='recipes' はレシピ系の行しか降ろさない（§12-1）。scope 外の seq は飛ぶが、
+  // カーソルは「届けた最大 seq」でなく下の delivered 計算で進むため取り漏らしは無い
+  const scopeFilter =
+    device.scope === 'recipes' ? sql`AND entity_type IN ${sql([...RECIPES_SCOPE_TYPES])}` : sql``;
   const rows = await sql<
     {
       entity_type: string;
@@ -538,18 +755,21 @@ export async function pullChanges(
   >`
     SELECT entity_type, entity_id, payload, deleted_at, seq::text, updated_at, updated_by_device
     FROM sync_entities
-    WHERE group_id = ${device.groupId} AND seq > ${since}
+    WHERE group_id = ${device.groupId} AND seq > ${since} ${scopeFilter}
     ORDER BY seq ASC LIMIT ${limit + 1}`;
-  const deltaRows = await sql<
-    {
-      seq: string;
-      entity_type: string;
-      entity_id: string;
-      field: string;
-      delta: number;
-      device_id: string;
-    }[]
-  >`
+  const deltaRows =
+    device.scope === 'recipes'
+      ? []
+      : await sql<
+          {
+            seq: string;
+            entity_type: string;
+            entity_id: string;
+            field: string;
+            delta: number;
+            device_id: string;
+          }[]
+        >`
     SELECT seq::text, entity_type, entity_id, field, delta, device_id
     FROM sync_deltas
     WHERE group_id = ${device.groupId} AND seq > ${since}
@@ -578,10 +798,17 @@ export async function pullChanges(
     SELECT seq::text FROM sync_groups WHERE id = ${device.groupId}`;
   // 到達記録は**実際に届けた**最大 seq。要求された `since` を書くと 1 ページ分ずれる
   //（いまは読み手が無いが、将来の保持期間・休眠端末の判定がこの値を見る）
-  const delivered = Math.max(since, ...changes.map((chg) => chg.seq), ...deltas.map((d) => d.seq));
+  const latestSeq = Number(latest[0]?.seq ?? '0');
+  let delivered = Math.max(since, ...changes.map((chg) => chg.seq), ...deltas.map((d) => d.seq));
+  // scope でフィルタして残り無しなら、カーソルを最新まで進める（scope 外の seq を
+  // 何度も走査し直さないため。フィルタに合致する行はすべて届け終わっている）
+  if (device.scope === 'recipes' && !hasMore) delivered = Math.max(delivered, latestSeq);
+  // カーソルはグループごと（§12-1 — sync_memberships が正）。last_seen_at は端末単位
+  await sql`UPDATE sync_memberships SET last_pull_seq = ${delivered}
+            WHERE device_id = ${device.deviceId} AND group_id = ${device.groupId}`;
   await sql`UPDATE sync_devices SET last_pull_seq = ${delivered}, last_seen_at = now()
-            WHERE id = ${device.deviceId}`;
-  return { changes, deltas, latestSeq: Number(latest[0]?.seq ?? '0'), hasMore };
+            WHERE id = ${device.deviceId} AND group_id = ${device.groupId}`;
+  return { changes, deltas, latestSeq, hasMore };
 }
 
 /** Expo Push トークンの登録（無ければ通知は飛ばないだけ — ベストエフォート） */
@@ -621,8 +848,9 @@ export async function clearDeadPushTokens(tokens: readonly string[]): Promise<vo
 export async function getOtherDevicePushTargets(device: AuthedDevice): Promise<PushTarget[]> {
   const sql = await db();
   const rows = await sql<{ expo_push_token: string | null; locale: string | null }[]>`
-    SELECT expo_push_token, locale FROM sync_devices
-    WHERE group_id = ${device.groupId} AND id != ${device.deviceId}`;
+    SELECT d.expo_push_token, d.locale
+    FROM sync_memberships m JOIN sync_devices d ON d.id = m.device_id
+    WHERE m.group_id = ${device.groupId} AND m.device_id != ${device.deviceId}`;
   return rows
     .filter((r): r is { expo_push_token: string; locale: string | null } => !!r.expo_push_token)
     .map((r) => ({ token: r.expo_push_token, locale: r.locale }));

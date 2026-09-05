@@ -3,7 +3,7 @@
  * table (survives restarts, no extra dependency). Used for things like the
  * cloud Vision inference opt-in consent.
  */
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 
 import { getDb, isNativePlatform } from '../db/client';
 import * as schema from '../db/schema';
@@ -24,6 +24,14 @@ const MENU_AUTO_KEY = 'menu_auto_enabled';
 const MENU_AUTO_ADD_KEY = 'menu_auto_add_enabled';
 const MENU_AUTO_DAYS_KEY = 'menu_auto_days';
 const MENU_AUTO_NOTIFY_TIME_KEY = 'menu_auto_notify_time';
+const MENU_TASTE_MEMO_KEY = 'menu_taste_memo';
+
+/**
+ * 家族の嗜好メモ（M3-4・S21）の上限。契約
+ * `packages/shared/src/types/menu-recipes.ts` の MAX_MENU_RECIPES_PREFERENCES と
+ * 揃える（app_meta 側で先に切っておけば、送信時に黙って切られて驚くことがない）。
+ */
+export const MENU_TASTE_MEMO_MAX_LENGTH = 400;
 
 export async function getAppMeta(key: string): Promise<string | null> {
   if (!isNativePlatform) return null;
@@ -33,6 +41,20 @@ export async function getAppMeta(key: string): Promise<string | null> {
     .where(eq(schema.appMeta.key, key))
     .limit(1);
   return rows[0]?.value ?? null;
+}
+
+/**
+ * 前方一致でキーと値を列挙する。呼び出し側はコード内の固定プレフィックスだけを渡すこと
+ * （`%`/`_` を含む動的文字列を渡すと LIKE のワイルドカードとして解釈される）。
+ */
+export async function getAppMetaByPrefix(
+  prefix: string,
+): Promise<Array<{ key: string; value: string }>> {
+  if (!isNativePlatform) return [];
+  return getDb()
+    .select({ key: schema.appMeta.key, value: schema.appMeta.value })
+    .from(schema.appMeta)
+    .where(like(schema.appMeta.key, `${prefix}%`));
 }
 
 export async function setAppMeta(key: string, value: string): Promise<void> {
@@ -129,4 +151,19 @@ export async function getMenuAutoNotifyTime(): Promise<MenuAutoNotifyTime> {
 
 export async function setMenuAutoNotifyTime(time: MenuAutoNotifyTime): Promise<void> {
   await setAppMeta(MENU_AUTO_NOTIFY_TIME_KEY, formatMenuAutoNotifyTime(time));
+}
+
+/**
+ * 家族の嗜好メモ（M3-4・§10.12）。「義母は洋食を食べない」「うちの定番野菜」のような
+ * 自由テキスト 1 欄で、S21（menu-settings）から編集し、不足分レシピの一括生成に渡す。
+ * **ローカル保存・同期しない**（app_meta は同期対象外）— 家族それぞれの端末で
+ * 自分の言葉で書けばよい。空文字 = 未設定。
+ */
+export async function getMenuTasteMemo(): Promise<string> {
+  const raw = (await getAppMeta(MENU_TASTE_MEMO_KEY)) ?? '';
+  return raw.trim().slice(0, MENU_TASTE_MEMO_MAX_LENGTH);
+}
+
+export async function setMenuTasteMemo(memo: string): Promise<void> {
+  await setAppMeta(MENU_TASTE_MEMO_KEY, memo.trim().slice(0, MENU_TASTE_MEMO_MAX_LENGTH));
 }

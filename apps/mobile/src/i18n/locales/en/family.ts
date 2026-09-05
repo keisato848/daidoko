@@ -96,6 +96,47 @@ const family: typeof ja = {
       evictBody:
         'This removes the device last synced {{when}} from sharing. Its own data stays on it, but it stops syncing. A new invite code will be issued (the removed device cannot rejoin with the old one).',
     },
+    groups: {
+      section: 'Share groups',
+      primaryName: 'Family group',
+      unnamedName: 'Unnamed group',
+      currentMark: 'Current group',
+      scopeAll: 'Shares everything',
+      scopeRecipes: 'Shares recipes only',
+      memberCount: {
+        one: '{{count}} member',
+        other: '{{count}} members',
+      },
+      switched: 'Switched to “{{name}}”. New recipes and items will go into this group.',
+      switchFailed: "We couldn't switch groups. Check your connection and try again.",
+      invite: 'Invite',
+      create: 'Create a new group',
+      createTitle: 'New group',
+      createNote:
+        'Create one when you want a different sharing scope per person. Your current group is usually enough.',
+      namePlaceholder: 'Group name (e.g. With my daughter)',
+      scopeLabel: 'What to share',
+      scopeAllTitle: 'Everything',
+      scopeAllDesc:
+        'Recipes, recipe books, the shopping list and the pantry are visible to this group’s members.',
+      scopeRecipesTitle: 'Recipes only',
+      scopeRecipesDesc:
+        'Only recipes and recipe books are visible to members. The shopping list and pantry are not.',
+      createSubmit: 'Create',
+      createdTitle: 'Group created',
+      createdBody:
+        '“{{name}}” is ready. Invite code: {{code}}\nPeople who join will only see what you put into this group from now on.',
+      joinPlaceholder: 'Join another group with a code',
+      joinConfirmTitle: 'Join “{{name}}”?',
+      joinConfirmBodyAll:
+        'This group shares recipes, recipe books, the shopping list and the pantry.',
+      joinConfirmBodyRecipes:
+        'This group shares recipes and recipe books only. The shopping list and pantry are not shared.',
+      joinKeep: 'Join',
+      joinCancel: 'Not now',
+      joinCanceled: 'Joining was cancelled.',
+      joinedAdditional: 'You joined “{{name}}”.',
+    },
     leave: 'Leave this group',
     leaveConfirmTitle: 'Leave the group?',
     leaveConfirmBody:

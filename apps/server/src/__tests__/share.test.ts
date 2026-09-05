@@ -10,8 +10,15 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 process.env['SHARE_DB_PATH'] = ':memory:';
 
+import { eq } from 'drizzle-orm';
+
 import app from '../app.js';
-import { resetShareDbForTesting } from '../lib/share-store.js';
+import {
+  getShareDb,
+  resetShareDbForTesting,
+  sharedBooks,
+  sharedRecipes,
+} from '../lib/share-store.js';
 import { resetShareRateLimitForTesting } from '../routes/share.js';
 
 // 1x1 JPEG（最小のダミー写真）
@@ -640,7 +647,9 @@ describe('レシピ帖 S4', () => {
     expect(await locked.text()).toContain('試行回数');
   });
 
-  it('有効期限: 期限を過ぎた帖は 404（存在を漏らさない）', async () => {
+  it('受け取り期限: 期限を過ぎた帖は新規には 410（期限切れページ）', async () => {
+    // §3-6 で「超えたら 404」から「新規閲覧のみ締め出す 410」に変更。
+    // 中身は出さない（タイトルが漏れないこと）
     const past = new Date(Date.now() - 1000).toISOString();
     const { slug } = createBookShare(
       {
@@ -650,7 +659,42 @@ describe('レシピ帖 S4', () => {
       },
       { expiresAt: past },
     );
-    expect((await app.request(`/b/${slug}`)).status).toBe(404);
+    const res = await app.request(`/b/${slug}`);
+    expect(res.status).toBe(410);
+    const html = await res.text();
+    expect(html).toContain('受け取り期限');
+    expect(html).not.toContain('期限切れ帖');
+  });
+
+  it('受け取り期限: 期限内に開いた閲覧者は Cookie で期限後も見られる', async () => {
+    const soon = new Date(Date.now() + 60_000).toISOString();
+    const { slug } = createBookShare(
+      {
+        locale: 'ja',
+        title: '継続閲覧帖',
+        recipes: [{ title: 'a', ingredients: [{ name: 'x' }], steps: [{ body: 'y' }], tags: [] }],
+      },
+      { expiresAt: soon },
+    );
+    const first = await app.request(`/b/${slug}`);
+    expect(first.status).toBe(200);
+    const setCookie = first.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain(`daidoko_bookaccess_${slug}=`);
+    const cookie = setCookie.split(';')[0] ?? '';
+    // 期限を過去に倒す（DB 直更新）
+    const db = getShareDb();
+    await Promise.resolve(
+      db
+        .update(sharedBooks)
+        .set({ expiresAt: new Date(Date.now() - 1000).toISOString() })
+        .where(eq(sharedBooks.slug, slug))
+        .run(),
+    );
+    // Cookie なし → 410 / Cookie あり → 200
+    expect((await app.request(`/b/${slug}`)).status).toBe(410);
+    const redeemed = await app.request(`/b/${slug}`, { headers: { cookie } });
+    expect(redeemed.status).toBe(200);
+    expect(await redeemed.text()).toContain('継続閲覧帖');
   });
 
   it('有効期限: expiresInDays を渡すと expiresAt が返り、PATCH null で解除できる', async () => {
@@ -688,5 +732,53 @@ describe('storeUrlForUserAgent', () => {
     } finally {
       delete process.env['SHARE_APP_STORE_URL'];
     }
+  });
+});
+
+describe('受け取り期限（レシピ単体・共有設計 §3-6）', () => {
+  beforeEach(() => {
+    resetShareRateLimitForTesting();
+  });
+
+  it('期限内に開くと Cookie が付き、期限後は新規 410・Cookie 保持者は 200・renew で再開', async () => {
+    const res = await publish(basePayload());
+    const { slug, deleteToken } = (await res.json()) as { slug: string; deleteToken: string };
+
+    // 期限内: 200 とアクセス Cookie
+    const first = await app.request(`/r/${slug}`);
+    expect(first.status).toBe(200);
+    const setCookie = first.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain(`daidoko_share_${slug}=`);
+    const cookie = setCookie.split(';')[0] ?? '';
+
+    // 期限を過去へ倒す
+    getShareDb()
+      .update(sharedRecipes)
+      .set({ expiresAt: new Date(Date.now() - 1000).toISOString() })
+      .where(eq(sharedRecipes.slug, slug))
+      .run();
+
+    // 新規は 410（中身・タイトルは出さない）。写真も同じ鍵で閉じる
+    const expired = await app.request(`/r/${slug}`);
+    expect(expired.status).toBe(410);
+    expect(await expired.text()).not.toContain('卵かけごはん');
+    expect((await app.request(`/r/${slug}/photo`)).status).toBe(404);
+
+    // 期限内に開いた閲覧者は Cookie で継続閲覧できる
+    const redeemed = await app.request(`/r/${slug}`, { headers: { cookie } });
+    expect(redeemed.status).toBe(200);
+
+    // renew（オーナーが「送る」）で新規も再び開ける。誤トークンは 403
+    const renew = await app.request(`/api/v1/share/recipes/${slug}/renew`, {
+      method: 'POST',
+      headers: { 'x-share-delete-token': deleteToken },
+    });
+    expect(renew.status).toBe(200);
+    expect((await app.request(`/r/${slug}`)).status).toBe(200);
+    const bad = await app.request(`/api/v1/share/recipes/${slug}/renew`, {
+      method: 'POST',
+      headers: { 'x-share-delete-token': 'wrong' },
+    });
+    expect(bad.status).toBe(403);
   });
 });

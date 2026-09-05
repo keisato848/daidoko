@@ -111,8 +111,12 @@ module.exports = [
       'apps/mobile/src/services/name-resolve.provider.ts',
       // AI 献立並べ替え（M2）のプロンプト本体。サーバー lib/menu-arrange.ts の写し
       'apps/mobile/src/services/menu-arrange.provider.ts',
+      // 不足分レシピ一括生成（M3）のプロンプト本体。サーバー lib/menu-recipes.ts の写し
+      'apps/mobile/src/services/menu-recipes.provider.ts',
       // 紙面読み取りのプロンプト。サーバー `lib/recipe-page.ts` の写し（BYOK はサーバーを通らない）
       'apps/mobile/src/services/recipe-page.provider.ts',
+      // 冷蔵庫読み取りのプロンプト。サーバー `lib/fridge-vision.ts` の写し（BYOK はサーバーを通らない）
+      'apps/mobile/src/services/fridge-vision.provider.ts',
       // レシピ「イメージ」の AI 生成プロンプト。サーバー `lib/cover-image.ts` の写し
       'apps/mobile/src/services/cover-image.provider.ts',
       'apps/mobile/src/services/ai-output-locale.ts',
