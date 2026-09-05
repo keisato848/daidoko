@@ -170,6 +170,25 @@ node scripts/release/capture-ios-screenshots.mjs --udid <udid> \
 - 初回起動直後はシードでスピナーが写ることがある。**PNG サイズで見分けて**（20KB 台は
   スピナー — Play en README の実測）`--wait 18000` で撮り直す
 
+### 2026-09-05 の実地知見（iOS 18.6・1.13.1 撮影で判明。次回はここから読む）
+
+- **`simctl openurl` の確認ダイアログ「"だいどこ" で開きますか?」は clean prebuild 済みでも毎回出る。**
+  README の 2026-08-13 の記述（prebuild し直したら出なくなった）は iOS 18.6 では成立しない。
+  アプリが前面で生きていても出る。放置すると capture が重複検出で FAILED になるため、
+  **撮影中はダイアログを潰し続けるループが必要**
+- **このダイアログは AX の要素名では掴めない**（`entire contents of window 1` を舐めても
+  name/description が `missing value` の AXGroup）。確実なのは **`sheet 1` の矩形を取って座標クリック**:
+  ```applescript
+  set sh to sheet 1 of group 3 of group 16 of group 1 of window 1
+  set {sx, sy} to position of sh
+  set {sw, shh} to size of sh
+  click at {sx + (sw * 0.75), sy + (shh * 0.78)} -- 右側 = 「開く」
+  ```
+  を 1 秒間隔で回し続ける。デバイス画面の矩形も同じ方法で取れる
+  （実測: position (555,109) / size (328,712) が 1320×2868 に対応）
+- `--wait 6000` では不足。ダイアログ潰しの時間込みで **`--wait 14000`** で安定
+- TODO(#next): このガードを capture-ios-screenshots.mjs 本体へ組み込む
+
 ## 6. 検証と受け渡し
 
 1. 16 枚すべて **1320×2868**・相互に別画像・スピナー/ダイアログ/Now Cooking pill 無し
