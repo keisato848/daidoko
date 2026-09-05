@@ -505,7 +505,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#130E08',
   },
-  nameInputOff: { color: Colors.muted, opacity: 0.5 },
+  // 無効でも品名は読めること（実機指摘 2026-09-05・fridge と同基準 — #9A8A6C は
+  // 背景 #0A0805 に対して約 5.4:1。無効はチェックなし＋入力背景の消灯で伝える）
+  nameInputOff: { color: '#9A8A6C', backgroundColor: 'transparent' },
   qtyInput: {
     width: 52,
     fontSize: 15,

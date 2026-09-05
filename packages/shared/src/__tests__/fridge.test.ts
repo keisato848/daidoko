@@ -59,9 +59,26 @@ describe('fridgeItemSchema — 品名と確からしさだけ', () => {
     expect(fridgeItemSchema.safeParse({ name: '味噌', confidence: -0.1 }).success).toBe(false);
   });
 
-  it('分量・数量の欄を持たない（strict でなくとも契約上の欄が無いことを固定）', () => {
-    const parsed = fridgeItemSchema.parse({ name: '牛乳', confidence: 0.9, quantity: 2 });
-    expect(parsed).toEqual({ name: '牛乳', confidence: 0.9 });
+  it('quantity は省略可の自由テキスト（互換の要: 旧サーバー応答=欠落でも通る）', () => {
+    // 新アプリ×旧サーバー: quantity が来ない応答もそのまま通る
+    expect(fridgeItemSchema.safeParse({ name: '牛乳', confidence: 0.9 }).success).toBe(true);
+    expect(
+      fridgeItemSchema.safeParse({ name: '牛乳', confidence: 0.9, quantity: null }).success,
+    ).toBe(true);
+    expect(
+      fridgeItemSchema.safeParse({ name: 'にんじん', confidence: 0.9, quantity: '3本' }).success,
+    ).toBe(true);
+  });
+
+  it('quantity は 30 字まで・数値は弾く（自由テキスト契約）', () => {
+    expect(
+      fridgeItemSchema.safeParse({ name: '牛乳', confidence: 0.9, quantity: 'あ'.repeat(31) })
+        .success,
+    ).toBe(false);
+    // 数値で送る旧い癖（レシート契約との混同）は契約違反として弾く
+    expect(fridgeItemSchema.safeParse({ name: '牛乳', confidence: 0.9, quantity: 2 }).success).toBe(
+      false,
+    );
   });
 });
 

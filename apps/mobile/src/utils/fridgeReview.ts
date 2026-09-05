@@ -40,10 +40,31 @@ export function canonicalNameKey(name: string, aliasMap: Record<string, string>)
 export interface FridgeReviewItem {
   id: string;
   name: string;
+  /** 数量の自由テキスト（編集可・空欄可）。読めなかった品は ''（数量未管理で入る） */
+  quantity: string;
   band: FridgeConfidenceBand;
   /** 既存在庫と同名（名寄せ済み比較）。表示は「すでに在庫にあります」＋既定オフ */
   inPantry: boolean;
   include: boolean;
+}
+
+/**
+ * 数量の自由テキスト（「3本」「約200g」）を在庫の quantity × unit へ分解する。
+ * 数えられない表現（「少し」等）は quantity=null（= 数量未管理）— **推測で 1 に
+ * しない**（レシート §5.6 と同じ理由。在庫の数量は合算されるので推測は積もる）。
+ */
+export function parseFridgeQuantityText(text: string): {
+  quantity: number | null;
+  unit: string | null;
+} {
+  const normalized = text.normalize('NFKC').trim();
+  if (!normalized) return { quantity: null, unit: null };
+  const match = normalized.match(/^約?\s*(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (!match) return { quantity: null, unit: null };
+  const quantity = Number(match[1]);
+  if (!Number.isFinite(quantity) || quantity <= 0) return { quantity: null, unit: null };
+  const unit = match[2].trim().slice(0, 6);
+  return { quantity, unit: unit || null };
 }
 
 /**
@@ -52,7 +73,7 @@ export interface FridgeReviewItem {
  * 「追加のみ」マージ（設計 §4-3）。
  */
 export function buildFridgeReviewItems(
-  items: { name: string; confidence: number }[],
+  items: { name: string; confidence: number; quantity?: string | null }[],
   pantryNames: string[],
   aliasMap: Record<string, string> = {},
 ): FridgeReviewItem[] {
@@ -62,6 +83,7 @@ export function buildFridgeReviewItems(
     return {
       id: String(index),
       name: item.name,
+      quantity: item.quantity ?? '',
       band: classifyFridgeConfidence(item.confidence),
       inPantry,
       include: !inPantry,

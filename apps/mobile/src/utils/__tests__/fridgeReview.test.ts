@@ -8,6 +8,7 @@ import {
   buildFridgeReviewItems,
   canonicalNameKey,
   classifyFridgeConfidence,
+  parseFridgeQuantityText,
 } from '../fridgeReview';
 
 describe('classifyFridgeConfidence — 境界は 0.8 / 0.5（以上で上の段）', () => {
@@ -75,5 +76,38 @@ describe('buildFridgeReviewItems — 重複は外さずに見せて既定オフ'
   it('confidence の 3 段階が band に載る（低いものが「たぶん」表示になる）', () => {
     const rows = buildFridgeReviewItems(items, []);
     expect(rows.map((r) => r.band)).toEqual(['high', 'medium', 'low']);
+  });
+});
+
+describe('buildFridgeReviewItems — 数量（読めた場合のみ・編集可）', () => {
+  it('quantity をそのまま行へ載せ、無ければ空欄（数量未管理）にする', () => {
+    const rows = buildFridgeReviewItems(
+      [
+        { name: 'にんじん', confidence: 0.9, quantity: '3本' },
+        { name: '味噌', confidence: 0.9, quantity: null },
+        { name: '卵', confidence: 0.9 },
+      ],
+      [],
+    );
+    expect(rows.map((r) => r.quantity)).toEqual(['3本', '', '']);
+  });
+});
+
+describe('parseFridgeQuantityText — 自由テキスト → 在庫の quantity × unit', () => {
+  it.each([
+    ['3本', 3, '本'],
+    ['約200g', 200, 'g'],
+    ['1パック', 1, 'パック'],
+    ['２個', 2, '個'], // 全角も NFKC で読む
+    ['1.5L', 1.5, 'L'],
+    ['3', 3, null],
+  ] as const)('%s → %s %s', (text, quantity, unit) => {
+    expect(parseFridgeQuantityText(text)).toEqual({ quantity, unit });
+  });
+
+  it('数えられない表現・空欄は数量未管理（推測で 1 にしない）', () => {
+    expect(parseFridgeQuantityText('')).toEqual({ quantity: null, unit: null });
+    expect(parseFridgeQuantityText('少し')).toEqual({ quantity: null, unit: null });
+    expect(parseFridgeQuantityText('残りわずか')).toEqual({ quantity: null, unit: null });
   });
 });
