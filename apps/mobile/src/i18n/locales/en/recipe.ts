@@ -290,6 +290,9 @@ const recipe: typeof ja = {
       textDescription: 'Paste the text and turn it into a draft',
       ocr: 'From an image with text',
       ocrDescription: 'Read text from a cookbook or handwritten note',
+      fridge: 'Recipes from your fridge',
+      fridgeDescription:
+        'Read ingredients from a fridge photo, stock the pantry, then find what you can cook',
       manual: 'By hand',
       manualDescription: 'Type the recipe from scratch',
     },

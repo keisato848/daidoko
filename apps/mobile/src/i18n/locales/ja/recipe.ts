@@ -319,6 +319,8 @@ const recipe = {
       textDescription: '本文を貼り付けて下書き化',
       ocr: '文字入り画像から作成',
       ocrDescription: 'レシピ本や手書きメモの文字を読み取り',
+      fridge: '冷蔵庫からレシピ',
+      fridgeDescription: '冷蔵庫の写真から食材を在庫に登録し、作れるレシピへ',
       manual: '手動で入力',
       manualDescription: 'レシピを一から入力する',
     },
