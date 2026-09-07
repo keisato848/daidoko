@@ -86,7 +86,7 @@ Snap your fridge — it becomes pantry, meal plan and the family shopping list.
 • Check today's plan and your shopping list from a home-screen widget (Android)
 • Move what you bought into the pantry — by barcode or receipt scan
 • Track expiry dates if you want — nothing required, no nagging reminders
-• Snap your fridge — AI reads what's inside, you confirm, and it becomes pantry stock that feeds your meal plan and shopping list (no amounts read; photos never stored)
+• Snap your fridge — AI reads what's inside, you confirm, and it becomes pantry stock that feeds your meal plan and shopping list (amounts only when they can be counted; photos never stored)
 • See what you can cook right now, ranked by how much you already have
 • Get a reminder when something is running low
 

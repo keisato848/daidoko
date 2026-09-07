@@ -107,9 +107,15 @@ node scripts/release/capture-ios-screenshots.mjs
 - **Sign-in required = No / Demo account = 不要**
 
 仕様は `apps/mobile/src/services/usage.service.ts` で確認済み（2026-08-14 更新）:
-無料枠は **生涯 1 回（`FREE_LIFETIME_LIMIT`・日付キーを持たないのでリセットされない）**、
-広告で得たトークンは**失効しない**、**広告視聴の回数に上限は無い**
+無料枠は **暦月あたり 5 回（`FREE_MONTHLY_LIMIT`・`usage.service.ts`。端末ローカル時刻の
+`YYYY-MM` でリセット）**、広告で得たトークンは**失効しない**、**広告視聴の回数に上限は無い**
 （`AD_BONUS_DAILY_LIMIT` は #173 で撤廃。無料のまま使い続けられる）。
+
+> **2026-09-06 修正（Issue #296）**: ここは「生涯 1 回」のまま凍結していた。
+> 実装は 2026-08-12 に生涯 1 回へ、**2026-08-28 に月 N 回へ**変わっており、
+> 提出のたびに古い数値を審査に出していた。env 名 `EXPO_PUBLIC_FREE_DAILY_LIMIT` は
+> 歴史的な名前のまま（0 のビルドを常時ペイウォールの E2E に使うので変えない）。
+> **無料枠の仕様を変えたら、実装・この節・Review Notes 本文の 3 か所を必ず揃えること。**
 
 **Review Notes（そのまま貼れる英文）:**
 
@@ -117,11 +123,13 @@ node scripts/release/capture-ios-screenshots.mjs
 No account or login is required. All core features (recipe library, cooking mode,
 shopping list, pantry) work fully offline with no sign-in.
 
-AI features (photo-to-recipe, taste adjustment, recipe consultation) require a
-network connection:
-- Each install includes 1 free AI generation. This is a lifetime allowance and
-  does not reset daily.
-- After it is used, the user can watch a rewarded ad to earn 1 more generation.
+AI features require a network connection. They are: photo-to-recipe, fridge
+photo-to-pantry, receipt scanning, taste adjustment ("get closer to the restaurant
+taste"), recipe consultation, batch meal-plan generation, and AI cover images.
+- Each install includes 5 free AI generations per calendar month. The counter
+  resets at the start of each month in the device's local time.
+- Once the monthly allowance is used, the user can watch a rewarded ad to earn 1
+  more generation.
   Ads are opt-in (never auto-played), there is no cap on how many can be watched,
   and earned credits never expire.
 - Alternatively, entering a personal Google Gemini API key under
@@ -135,7 +143,7 @@ There is no in-app feed, search, or discovery of other users' content. Links are
 noindex, are revocable by the user at any time, and return 404 once revoked.
 ```
 
-日本語で出す場合も内容は同じ。**数値（無料枠 1 回・生涯・広告の視聴回数は無制限）は上記から変えないこと。**
+日本語で出す場合も内容は同じ。**数値（無料枠 月 5 回・暦月リセット・広告の視聴回数は無制限）は実装と揃えること** — `FREE_MONTHLY_LIMIT`（`apps/mobile/src/services/usage.service.ts`）が正。
 
 ### 5. 提出
 
