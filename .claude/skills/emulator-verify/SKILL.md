@@ -141,6 +141,29 @@ adb reverse --remove-all             # 本番構成検証時は必ず除去（�
 （`adb shell dumpsys wifi | grep "^Wi-Fi is"` / `adb shell svc wifi enable`）。
 ただし**無線 adb では `svc wifi disable` は使えない**（adb 自身が切れる）。
 
+**`uiautomator dump` の bounds で「ズレている」と判断しない**（2026-09-08 に誤報を出した）。
+React Native は props の無い `View` を `collapsable` にするので、**枠線やカードの View は dump から消える**。
+残るのは中身の `TextView` だけで、その bounds は親の `padding` と `borderWidth` のぶん内側にある。
+これを別の要素の bounds と比べると、実際には揃っているものが「ズレている」ように見える。
+
+実例: 献立の空状態で本文 Text が `[58,…][1022,…]`、バナー内の Text が `[76,…][1004,…]` だったので
+「本文だけ 18px はみ出している」と報告した。実際はバナーの外枠が dump に無かっただけで、
+枠線はスクショのピクセル上 `x=42..1037`（= `paddingHorizontal:16` × density 2.625）に引かれており、
+`alignSelf:'stretch'` は正しく効いていた。本文はその内側に収まっていた。
+
+**枠の位置はスクショのピクセルで確かめる**（Pillow は入っている）:
+
+```python
+from PIL import Image
+im = Image.open('shot.png').convert('RGB'); W, _ = im.size
+row = [im.getpixel((x, y)) for x in range(W)]          # y = 枠線を横切る行
+bg = row[5]
+xs = [x for x, c in enumerate(row) if sum(abs(a-b) for a, b in zip(c, bg)) > 25]
+print(xs[0], xs[-1])                                    # 枠の左右端
+```
+
+`adb shell wm size` / `wm density` で px↔dp を換算できる（420dpi なら 1dp = 2.625px）。
+
 **エミュレータの表示言語を日本語にする**（AVD は既定で en-US。文言・折り返しの確認は日本語で見る。
 2026-09-08 に必要になった手順）:
 
