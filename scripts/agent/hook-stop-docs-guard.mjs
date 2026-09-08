@@ -82,7 +82,9 @@ function recordedRecently() {
 }
 
 function worktreeFiles() {
-  const status = runCommand('git', ['status', '--porcelain'], { cwd: rootDir });
+  const status = runCommand('git', ['-c', 'core.quotePath=false', 'status', '--porcelain'], {
+    cwd: rootDir,
+  });
   if (!status.ok) return [];
   return status.stdout
     .split(/\r?\n/)
@@ -94,6 +96,12 @@ function recentCommitFiles() {
   const log = runCommand(
     'git',
     [
+      // 非 ASCII パスを引用符＋8進エスケープで返させない。既定のままだと
+      // `"docs/å..."` になり、先頭が `"` なので KNOWLEDGE_PATH_HINT（^docs/）に
+      // 当たらず、**日本語名の設計書へいくら書いても「記録していない」と督促され続ける**
+      // （2026-09-08 に実発。3 回書いても鳴り止まなかった）
+      '-c',
+      'core.quotePath=false',
       'log',
       `--since=${RECENT_WINDOW}`,
       `--max-count=${RECENT_COMMIT_LIMIT}`,
@@ -136,7 +144,9 @@ function collectChangedFiles() {
   const files = [];
 
   // 作業ツリー（staged + unstaged + untracked）
-  const status = runCommand('git', ['status', '--porcelain'], { cwd: rootDir });
+  const status = runCommand('git', ['-c', 'core.quotePath=false', 'status', '--porcelain'], {
+    cwd: rootDir,
+  });
   if (status.ok) {
     for (const line of status.stdout.split(/\r?\n/)) {
       const file = line.slice(3).trim().replace(/^"|"$/g, '');
@@ -148,7 +158,11 @@ function collectChangedFiles() {
   const branch = runCommand('git', ['branch', '--show-current'], { cwd: rootDir });
   const name = branch.ok ? branch.stdout.trim() : '';
   if (name && name !== 'develop' && name !== 'main') {
-    const diff = runCommand('git', ['diff', '--name-only', 'develop...HEAD'], { cwd: rootDir });
+    const diff = runCommand(
+      'git',
+      ['-c', 'core.quotePath=false', 'diff', '--name-only', 'develop...HEAD'],
+      { cwd: rootDir },
+    );
     if (diff.ok) {
       for (const line of diff.stdout.split(/\r?\n/)) {
         const file = line.trim();
