@@ -141,6 +141,43 @@ adb reverse --remove-all             # 本番構成検証時は必ず除去（�
 （`adb shell dumpsys wifi | grep "^Wi-Fi is"` / `adb shell svc wifi enable`）。
 ただし**無線 adb では `svc wifi disable` は使えない**（adb 自身が切れる）。
 
+**`uiautomator dump` の bounds で「ズレている」と判断しない**（2026-09-08 に誤報を出した）。
+React Native は props の無い `View` を `collapsable` にするので、**枠線やカードの View は dump から消える**。
+残るのは中身の `TextView` だけで、その bounds は親の `padding` と `borderWidth` のぶん内側にある。
+これを別の要素の bounds と比べると、実際には揃っているものが「ズレている」ように見える。
+
+実例: 献立の空状態で本文 Text が `[58,…][1022,…]`、バナー内の Text が `[76,…][1004,…]` だったので
+「本文だけ 18px はみ出している」と報告した。実際はバナーの外枠が dump に無かっただけで、
+枠線はスクショのピクセル上 `x=42..1037`（= `paddingHorizontal:16` × density 2.625）に引かれており、
+`alignSelf:'stretch'` は正しく効いていた。本文はその内側に収まっていた。
+
+**枠の位置はスクショのピクセルで確かめる**（Pillow は入っている）:
+
+```python
+from PIL import Image
+im = Image.open('shot.png').convert('RGB'); W, _ = im.size
+row = [im.getpixel((x, y)) for x in range(W)]          # y = 枠線を横切る行
+bg = row[5]
+xs = [x for x, c in enumerate(row) if sum(abs(a-b) for a, b in zip(c, bg)) > 25]
+print(xs[0], xs[-1])                                    # 枠の左右端
+```
+
+`adb shell wm size` / `wm density` で px↔dp を換算できる（420dpi なら 1dp = 2.625px）。
+
+**エミュレータの表示言語を日本語にする**（AVD は既定で en-US。文言・折り返しの確認は日本語で見る。
+2026-09-08 に必要になった手順）:
+
+```bash
+adb -s <serial> root                                   # google_apis イメージなら通る
+adb -s <serial> shell setprop persist.sys.locale ja-JP
+adb -s <serial> shell setprop ctl.restart zygote       # これで初めて反映される
+# zygote 再起動の直後は SystemUI が ANR を出す → am force-stop com.android.systemui で流す
+adb -s <serial> shell am force-stop com.daidoko.app    # アプリも入れ直しではなく再起動が要る
+```
+
+`ro.product.locale` は en-US のまま変わらないので、効いたかは**画面の文字**で判断する
+（システムのダイアログが日本語になれば成功）。`settings get system system_locales` は `null` のままでよい。
+
 **実機での UI 自動操作の落とし穴**（2026-08-22 Pixel 9a で被弾）:
 
 - 日本語 IME だと `adb shell input text` に**かなが混ざる**（`PIXELSYNC` が `PIXELSYNCま` になる）
@@ -191,6 +228,8 @@ adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:
 | 同期の参加/作成が 30 秒黙ってから「通信できませんでした」 | **前日から動いている**（`-dns-server` 無しで起動された）エミュレータはネットが完全に死んでいることがある（2026-09-02: 生 IP への TCP すら届かず、fetch の 30 秒タイムアウトが実装バグに見えた）。`adb -s <serial> emu kill` → 同じ AVD を `-no-snapshot -dns-server 8.8.8.8,1.1.1.1` で再起動。`-wipe-data` は不要（アプリデータは残る） |
 | OCR/ラベリングが動かない                                  | ML Kit モデル未DL（オフライン）→ オンライン実機/Google Playイメージで                                                                                                                                                                                                                                                                    |
 | スクショに ANR ダイアログ                                 | wipe 直後の SystemUI 高負荷 → Wait をタップ、2〜3分待つ                                                                                                                                                                                                                                                                                  |
+| ANR ダイアログの「待機」を押しても消えない                | wipe や zygote 再起動の直後は SystemUI 自体が固まっており、ダイアログのボタンが効かない（2026-09-08: 待機を 2 回タップしても同じダイアログが残り続けた）。`adb shell am force-stop com.android.systemui` で SystemUI を落とすと再起動して消える                                                                                          |
+| `-wipe-data` で起動したまま `offline` から進まない        | GUI つきで wipe 起動すると「Emulator is performing a full startup」のまま 10 分以上 `offline`（2026-09-08・API36）。`adb -s <serial> emu kill` → **`-no-window` を足して再起動**すると 1 分ほどで `device` になる（wipe は済んでいるので二度目に `-wipe-data` は不要）                                                                   |
 | タップが効かない                                          | オーバーレイ（コーチマーク等）が手前 → スクショで確認して先に閉じる                                                                                                                                                                                                                                                                      |
 | ネイティブ変更が反映されない                              | prebuild していない → `--prebuild`（build スクリプトが警告を出す）                                                                                                                                                                                                                                                                       |
 | 署名不一致で install 失敗                                 | debug/release・EAS 鍵の混在 → 同一署名のビルドで `-r`、やむを得ない時だけユーザー承認の上アンインストール                                                                                                                                                                                                                                |
