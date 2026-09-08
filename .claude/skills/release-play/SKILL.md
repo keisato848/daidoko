@@ -39,6 +39,16 @@ description: Google Play へのアプリリリース一式。バージョンバ�
    ```
    認証は `eas.json` の `submit.production`（キー: `C:\secure\play-service-account.json`）
 8. 提出後にユーザーへ案内: データセーフティ（Console UI のみ）・ストア掲載（`update-store-listing` スキル）・審査待ち
+9. **公開されたかは API で確認できる**（Console を開かなくてよい・ユーザーの記憶に頼らない）:
+   `scripts/release/lib/play-api.mjs` の `getAccessToken()` → `POST /edits` →
+   `GET /edits/{id}/tracks` → `tracks[].releases[]` の `status`（`completed` = 全体公開、
+   `inProgress` = 段階公開、`draft` = 未公開）と `versionCodes`。見終わったら `DELETE /edits/{id}`。
+   1.13.0 は `production: status=completed codes=10034` で確認した（2026-09-03）。
+   iOS 側は `ios-release` Skill の審査状態確認（`appStoreState` = `READY_FOR_SALE`）。
+10. **公開後に App Links の指紋を確かめる**（1.13.0 で外れていた）: Play からインストールした
+    端末で `adb shell pm get-app-links com.daidoko.app` → `verified` でなければ
+    `docs/Web共有設計.md` §8 末尾の決着どおり、`Signatures:` の値を Railway の
+    `APP_LINKS_SHA256_FINGERPRINTS` に入れ直して `railway up`。
 
 ## 既知の落とし穴
 
