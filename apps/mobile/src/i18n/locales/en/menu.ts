@@ -94,6 +94,8 @@ const menu = {
   emptyDays: {
     title: "Couldn't plan any meals",
     noRecipes: 'No recipes yet. Add a few first.',
+    /** Shown when bulk generation is offered (§10.12.2) — never dead-end at 'add some first' */
+    noRecipesBulk: 'No recipes yet. AI can create a batch for you.',
     fewRecipes: 'Not enough recipes, so only some days are filled',
     toConsult: 'Create one with AI',
   },

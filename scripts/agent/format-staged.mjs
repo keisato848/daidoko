@@ -6,7 +6,18 @@ import { runCommand } from './lib/runtime.mjs';
 
 const EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|json|md)$/i;
 
-const diff = runCommand('git', ['diff', '--cached', '--name-only', '--diff-filter=ACMR']);
+// `core.quotePath=false` が要る。既定の git は非 ASCII パスを `"docs/å...md"` の形で
+// 返すため、末尾が `"` になって EXTENSIONS に当たらず、**このリポジトリの日本語名の
+// 設計書がまるごと自動整形の対象外になる**（2026-09-08 に発覚）。整形されないまま
+// コミットでき、CI の format:check だけが赤くなるので原因が遠い。
+const diff = runCommand('git', [
+  '-c',
+  'core.quotePath=false',
+  'diff',
+  '--cached',
+  '--name-only',
+  '--diff-filter=ACMR',
+]);
 if (!diff.ok) {
   console.error('format-staged: git diff failed');
   process.exit(1);
