@@ -98,9 +98,13 @@ function resolveFilesFromGit(parsed) {
 }
 
 function gitDiff(extraArgs) {
-  const result = runCommand('git', ['diff', '--name-only', '--relative', ...extraArgs], {
-    cwd: rootDir,
-  });
+  // quotePath=false が要る。既定だと日本語名のファイルが `"docs/å..."` の形で返り、
+  // 拡張子・パス判定から静かに漏れる（scripts/agent/format-staged.mjs と同じ罠・2026-09-08）
+  const result = runCommand(
+    'git',
+    ['-c', 'core.quotePath=false', 'diff', '--name-only', '--relative', ...extraArgs],
+    { cwd: rootDir },
+  );
 
   if (!result.ok) {
     return [];

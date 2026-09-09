@@ -12,9 +12,24 @@ export function formatCommand(command, args = []) {
   return [command, ...args].map(quotePart).join(' ');
 }
 
+/**
+ * `shell: true` の spawnSync は**引数をクォートしない**（Node の仕様）。Windows では
+ * cmd.exe がそのまま解釈するので、`apps/mobile/app/(tabs)/menu.tsx` のような
+ * **括弧を含むパス**が「`(tabs)` was unexpected at this time.」で死ぬ。
+ * Expo Router のルート群は丸ごと `app/(tabs)/` の下にあるため、放っておくと
+ * **モバイル画面を触るコミットが Windows で軒並み pre-commit を通れない**（2026-09-08 に実発）。
+ * shell 経由のときだけ、cmd のメタ文字を含む引数を二重引用符で包む。
+ */
+function quoteForShell(value) {
+  const text = String(value);
+  if (text === '' || /["]/.test(text)) return text; // 既に引用符を含むものは触らない
+  return /[\s()&|<>^,;]/.test(text) ? `"${text}"` : text;
+}
+
 export function runCommand(command, args = [], options = {}) {
   const shell = options.shell ?? (isWindows && /\.(cmd|bat)$/i.test(command));
-  const result = spawnSync(command, args, {
+  const spawnArgs = shell && isWindows ? args.map(quoteForShell) : args;
+  const result = spawnSync(command, spawnArgs, {
     cwd: options.cwd ?? process.cwd(),
     encoding: 'utf8',
     env: { ...process.env, ...(options.env ?? {}) },

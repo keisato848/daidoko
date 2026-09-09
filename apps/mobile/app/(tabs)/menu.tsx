@@ -358,12 +358,59 @@ export default function MenuScreen() {
   const isAuto = view?.plan.anchorDate != null;
   const autoAddedCount = view?.plan.autoAddedItemIds?.length ?? 0;
   // 要求日数に届かなかった分。旧データ（requestedDays 未保存）では 0 のまま = バナーは出ない。
-  // 0 件時だけでなく **1 件以上でも要求未達なら常に案内を出す**（隆: 中間帯こそ案内が要る）
+  // 0 件時だけでなく **1 件以上でも要求未達なら常に案内を出す**（隆: 中間帯こそ案内が要る）。
+  // hasPlan で絞ってはいけない（§10.12.2）— 0 件で組んだプランも requestedDays を持ち、
+  // 「1 日も組めなかった」状態こそ不足日数が最大 = 一括生成が最も要る場面になる
   const requestedDays = view?.plan.requestedDays;
   const shortfall =
-    hasPlan && typeof requestedDays === 'number'
+    view !== null && typeof requestedDays === 'number'
       ? Math.max(0, requestedDays - view.days.length)
       : 0;
+
+  /**
+   * 要求日数に届かなかったときのバナー（一覧の末尾に 1 つ・空カードは並べない）。
+   * 主ボタンは M3 の一括生成（§10.12 — 「AI に相談して作る」はここへ吸収）。
+   * 「レシピを追加」は残す（M3 はあくまで提案。手で選びたい人の道を塞がない）。
+   *
+   * **プランがある時と 0 件の時で同じものを出す**（§10.12.2）。0 件の空状態から
+   * 1 品ずつの相談しか押せないのは M3 の動機（コールドスタートを解く）そのものに反する。
+   */
+  const shortfallBanner =
+    shortfall > 0 ? (
+      <View style={styles.shortfallBanner}>
+        <Text style={styles.shortfallText}>{tCount('menu.shortfall.banner', shortfall)}</Text>
+        <Pressable
+          style={[styles.bulkButton, (bulkRunning || busy) && styles.disabled]}
+          onPress={() => void runBulkGenerate()}
+          disabled={bulkRunning || busy}
+          accessibilityRole="button"
+        >
+          {bulkRunning ? (
+            <ActivityIndicator size="small" color={Colors.bg} />
+          ) : (
+            <Wand2 size={16} color={Colors.bg} />
+          )}
+          <Text style={styles.bulkButtonText}>
+            {bulkRunning
+              ? t('menu.bulk.generating')
+              : tCount('menu.shortfall.bulkGenerate', shortfall)}
+          </Text>
+        </Pressable>
+        {/* 残数は出さない。上限の静的表示だけ（§10.10.4 と同じ判断）。一括=1 回分は M3-3 */}
+        <Text style={styles.aiLimitNote}>
+          {tCount('menu.shortfall.limitNote', FREE_MONTHLY_LIMIT)}
+        </Text>
+        {bulkError ? <Text style={styles.bulkErrorText}>{bulkError}</Text> : null}
+        <Pressable
+          style={styles.secondary}
+          onPress={() => router.push('/(tabs)/add')}
+          accessibilityRole="button"
+        >
+          <Plus size={16} color={Colors.gold} />
+          <Text style={styles.secondaryText}>{t('menu.shortfall.addRecipe')}</Text>
+        </Pressable>
+      </View>
+    ) : null;
 
   return (
     <View style={styles.screen}>
@@ -531,46 +578,7 @@ export default function MenuScreen() {
               />
             ))}
 
-            {/* 要求日数に届かなかったときのバナー（一覧の末尾に 1 つ・空カードは並べない）。
-              主ボタンは M3 の一括生成（§10.12 — 「AI に相談して作る」はここへ吸収）。
-              「レシピを追加」は残す（M3 はあくまで提案。手で選びたい人の道を塞がない） */}
-            {shortfall > 0 ? (
-              <View style={styles.shortfallBanner}>
-                <Text style={styles.shortfallText}>
-                  {tCount('menu.shortfall.banner', shortfall)}
-                </Text>
-                <Pressable
-                  style={[styles.bulkButton, (bulkRunning || busy) && styles.disabled]}
-                  onPress={() => void runBulkGenerate()}
-                  disabled={bulkRunning || busy}
-                  accessibilityRole="button"
-                >
-                  {bulkRunning ? (
-                    <ActivityIndicator size="small" color={Colors.bg} />
-                  ) : (
-                    <Wand2 size={16} color={Colors.bg} />
-                  )}
-                  <Text style={styles.bulkButtonText}>
-                    {bulkRunning
-                      ? t('menu.bulk.generating')
-                      : tCount('menu.shortfall.bulkGenerate', shortfall)}
-                  </Text>
-                </Pressable>
-                {/* 残数は出さない。上限の静的表示だけ（§10.10.4 と同じ判断） */}
-                <Text style={styles.aiLimitNote}>
-                  {tCount('menu.ai.limitNote', FREE_MONTHLY_LIMIT)}
-                </Text>
-                {bulkError ? <Text style={styles.bulkErrorText}>{bulkError}</Text> : null}
-                <Pressable
-                  style={styles.secondary}
-                  onPress={() => router.push('/(tabs)/add')}
-                  accessibilityRole="button"
-                >
-                  <Plus size={16} color={Colors.gold} />
-                  <Text style={styles.secondaryText}>{t('menu.shortfall.addRecipe')}</Text>
-                </Pressable>
-              </View>
-            ) : null}
+            {shortfallBanner}
 
             {/* M3-5: #214 の選択シートへ（在庫突合・自動では入れない）。以前は /shopping へ
               遷移するだけで実際には何も追加していなかった — ラベルどおりの挙動に接続 */}
@@ -586,7 +594,12 @@ export default function MenuScreen() {
         ) : (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{t('menu.emptyDays.title')}</Text>
-            <Text style={styles.emptyBody}>{t('menu.emptyDays.noRecipes')}</Text>
+            {/* 一括生成を出せるときは「先に何品か登録してください」で行き止まりにしない（§10.12.2） */}
+            <Text style={styles.emptyBody}>
+              {shortfall > 0 ? t('menu.emptyDays.noRecipesBulk') : t('menu.emptyDays.noRecipes')}
+            </Text>
+            {shortfallBanner}
+            {/* 1 品ずつ相談する道も残す（M3 は提案であって唯一の入口ではない） */}
             <Pressable
               style={styles.secondary}
               onPress={() => router.push('/recipes/consult')}
@@ -769,6 +782,8 @@ const styles = StyleSheet.create({
   secondaryText: { fontSize: 14, color: Colors.gold },
   // 不足バナー。空カードの代わりに 1 つだけ（枠は staleBar と同じ控えめな線）
   shortfallBanner: {
+    // 空状態（alignItems:'center'）の中でも幅いっぱいに出す
+    alignSelf: 'stretch',
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 10,

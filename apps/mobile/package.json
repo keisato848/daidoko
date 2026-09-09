@@ -80,6 +80,9 @@
     },
     "setupFiles": [
       "<rootDir>/jest.keyboard-controller.js"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.testing-library.js"
     ]
   }
 }
