@@ -176,6 +176,37 @@ const recipeImport = {
     // ready はモデルの自己申告で当てにならないことがある。どちらでもカードは開ける
     draftInProgress: '相談中の下書き',
     openDraft: '下書きを確認して保存',
+    /** カードの 2 行目。タイトルだけだと 2 回目以降の変更が見えない（#303） */
+    meta: {
+      separator: ' · ',
+      servings: { one: '{{count}}人分', other: '{{count}}人分' } satisfies PluralMessage,
+      minutes: { one: '{{count}}分', other: '{{count}}分' } satisfies PluralMessage,
+      ingredients: { one: '材料{{count}}品', other: '材料{{count}}品' } satisfies PluralMessage,
+      steps: { one: '手順{{count}}つ', other: '手順{{count}}つ' } satisfies PluralMessage,
+    },
+    /** 直近の往復で変わった点。下書きの差分から機械的に作る（AI の自己申告ではない） */
+    change: {
+      prefix: 'いま変えた点: {{items}}',
+      /** AQUOS 実機で「にんにくを追加して」→ AI「追加しました」→ 元から入っていて差分ゼロ、が出た。
+       *  AI の返事と食い違うので、その理由の候補を添える */
+      none: '前回と同じ下書きです（頼んだことが元から入っていたか、反映されませんでした）',
+      title: '料理名を「{{title}}」に',
+      servings: { one: '{{count}}人分に', other: '{{count}}人分に' } satisfies PluralMessage,
+      servingsCleared: '人数を外した',
+      minutes: { one: '{{count}}分に', other: '{{count}}分に' } satisfies PluralMessage,
+      minutesCleared: '時間を外した',
+      added: '{{name}}を追加',
+      removed: '{{name}}を外した',
+      /** 分量（note の変更も含む）は件数だけ。名前を並べると頼んだ変更が「ほか N 件」に隠れる。
+       *  「下ごしらえ」はペルソナ検証（ひな）で初心者に通じなかったので言わない */
+      adjusted: { one: '分量{{count}}か所', other: '分量{{count}}か所' } satisfies PluralMessage,
+      stepsCount: {
+        one: '手順を{{count}}つに',
+        other: '手順を{{count}}つに',
+      } satisfies PluralMessage,
+      stepsEdited: { one: '手順{{count}}か所', other: '手順{{count}}か所' } satisfies PluralMessage,
+      more: { one: ' ほか{{count}}件', other: ' ほか{{count}}件' } satisfies PluralMessage,
+    },
     emptyReply: 'うまく聞き取れなかったみたいです。作りたいものを、ひとことで教えてください。',
     confirmTitle: '下書きを確認・保存',
     restart: '最初からやり直す',
