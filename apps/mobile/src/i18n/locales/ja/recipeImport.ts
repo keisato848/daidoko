@@ -187,7 +187,9 @@ const recipeImport = {
     /** 直近の往復で変わった点。下書きの差分から機械的に作る（AI の自己申告ではない） */
     change: {
       prefix: 'いま変えた点: {{items}}',
-      none: '前回と同じ下書きです（変わっていません）',
+      /** AQUOS 実機で「にんにくを追加して」→ AI「追加しました」→ 元から入っていて差分ゼロ、が出た。
+       *  AI の返事と食い違うので、その理由の候補を添える */
+      none: '前回と同じ下書きです（頼んだことが元から入っていたか、反映されませんでした）',
       title: '料理名を「{{title}}」に',
       servings: { one: '{{count}}人分に', other: '{{count}}人分に' } satisfies PluralMessage,
       servingsCleared: '人数を外した',

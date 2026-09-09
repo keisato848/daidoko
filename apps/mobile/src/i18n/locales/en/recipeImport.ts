@@ -158,7 +158,7 @@ const recipeImport: typeof ja = {
     },
     change: {
       prefix: 'Just changed: {{items}}',
-      none: 'Same draft as before (nothing changed)',
+      none: 'Same draft as before (it may already have had that, or the change did not apply)',
       title: 'renamed to "{{title}}"',
       servings: { one: 'now {{count}} serving', other: 'now {{count}} servings' },
       servingsCleared: 'servings cleared',
