@@ -34,7 +34,7 @@ import { GroupMultiChips } from '../../../src/components/GroupMultiChips';
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Colors } from '../../../src/constants/theme';
-import { t } from '../../../src/i18n';
+import { t, tCount } from '../../../src/i18n';
 import {
   getInStockNormalizedNames,
   getPantryGroups,
@@ -51,10 +51,59 @@ import { maybeRequestStoreReview } from '../../../src/services/review-request.se
 import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import { recordCloudInference } from '../../../src/services/usage.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
+import { diffConsultDraft, type DraftChange } from '../../../src/utils/consultDraftDiff';
 
 type Phase = 'chat' | 'confirm';
 
 /** AI 側の発言。 */
+/** カードの 2 行目: 人数・時間・材料と手順の数。中身が変わったことが数字で見える */
+function formatDraftMeta(draft: RecipeFormData): string {
+  const parts: string[] = [];
+  if (draft.servings) parts.push(tCount('recipeImport.consult.meta.servings', draft.servings));
+  if (draft.cookTimeMin) parts.push(tCount('recipeImport.consult.meta.minutes', draft.cookTimeMin));
+  parts.push(tCount('recipeImport.consult.meta.ingredients', draft.ingredients.length));
+  parts.push(tCount('recipeImport.consult.meta.steps', draft.steps.length));
+  return parts.join(t('recipeImport.consult.meta.separator'));
+}
+
+const MAX_CHANGE_ITEMS = 4;
+
+/** 直近の往復で変わった点。AI の reply でなく下書きの差分から作る（#303） */
+function formatDraftChange(change: DraftChange): string {
+  if (change.kind === 'same') return t('recipeImport.consult.change.none');
+  if (change.kind === 'new') return '';
+  const labels = change.items.map((item) => {
+    switch (item.type) {
+      case 'title':
+        return t('recipeImport.consult.change.title', { title: item.to });
+      case 'servings':
+        return item.to
+          ? tCount('recipeImport.consult.change.servings', item.to)
+          : t('recipeImport.consult.change.servingsCleared');
+      case 'cookTime':
+        return item.to
+          ? tCount('recipeImport.consult.change.minutes', item.to)
+          : t('recipeImport.consult.change.minutesCleared');
+      case 'ingredientAdded':
+        return t('recipeImport.consult.change.added', { name: item.name });
+      case 'ingredientRemoved':
+        return t('recipeImport.consult.change.removed', { name: item.name });
+      case 'ingredientsAdjusted':
+        return tCount('recipeImport.consult.change.adjusted', item.count);
+      case 'stepsCount':
+        return tCount('recipeImport.consult.change.stepsCount', item.to);
+      case 'stepsEdited':
+        return tCount('recipeImport.consult.change.stepsEdited', item.count);
+    }
+  });
+  const shown = labels.slice(0, MAX_CHANGE_ITEMS);
+  const rest = labels.length - shown.length;
+  const body = shown.join(t('recipeImport.consult.meta.separator'));
+  return t('recipeImport.consult.change.prefix', {
+    items: rest > 0 ? `${body}${tCount('recipeImport.consult.change.more', rest)}` : body,
+  });
+}
+
 function AssistantRow({ children }: { children: React.ReactNode }) {
   return (
     <View style={styles.assistantRow}>
@@ -70,6 +119,9 @@ export default function ConsultScreen() {
   const [messages, setMessages] = useState<ConsultMessage[]>([]);
   const [input, setInput] = useState(params.seed ?? '');
   const [draft, setDraft] = useState<RecipeFormData | null>(null);
+  // 直近の往復で下書きがどう変わったか。カードがタイトルしか出さないと、2 回目以降の
+  // 要望で中身が変わっても見た目が動かず「更新されない」に見える（#303）
+  const [lastChange, setLastChange] = useState<DraftChange | null>(null);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [usePantry, setUsePantry] = useState(false);
@@ -162,7 +214,10 @@ export default function ConsultScreen() {
         ...(pantry && pantry.length > 0 ? { pantry } : {}),
       });
       setMessages([...next, { role: 'assistant', text: turn.reply }]);
-      if (turn.draft) setDraft(turn.draft);
+      if (turn.draft) {
+        setLastChange(diffConsultDraft(draft, turn.draft));
+        setDraft(turn.draft);
+      }
       setReady(turn.ready);
       // 成功した往復だけ枠を消費する（写真レシピと同じ数え方）
       void recordCloudInference().catch(() => undefined);
@@ -187,6 +242,7 @@ export default function ConsultScreen() {
     if (!confirmed) return;
     setMessages([]);
     setDraft(null);
+    setLastChange(null);
     setReady(false);
     setErrorMsg(null);
   };
@@ -280,6 +336,10 @@ export default function ConsultScreen() {
                 : t('recipeImport.consult.draftInProgress')}
             </Text>
             <Text style={styles.draftTitle}>{draft.title}</Text>
+            <Text style={styles.draftMeta}>{formatDraftMeta(draft)}</Text>
+            {lastChange && lastChange.kind !== 'new' && (
+              <Text style={styles.draftChange}>{formatDraftChange(lastChange)}</Text>
+            )}
             <Text style={styles.draftAction}>{t('recipeImport.consult.openDraft')}</Text>
           </Pressable>
         )}
@@ -438,6 +498,8 @@ const styles = StyleSheet.create({
   },
   draftLabel: { fontSize: 12, color: Colors.gold, letterSpacing: 0.5 },
   draftTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
+  draftMeta: { fontSize: 13, color: Colors.paperDim },
+  draftChange: { fontSize: 13, lineHeight: 18, color: Colors.paper },
   draftAction: { fontSize: 14, color: Colors.gold, marginTop: 4 },
   disclaimer: { fontSize: 12, lineHeight: 18, color: Colors.muted, marginTop: 8 },
   reportLink: {
