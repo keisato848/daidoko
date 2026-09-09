@@ -47,8 +47,12 @@ const menu = {
     },
     addRecipe: 'Add a recipe',
     bulkGenerate: {
-      one: 'Create {{count}} missing day in one go',
+      one: 'Create the {{count}} missing day in one go',
       other: 'Create the missing {{count}} days in one go',
+    },
+    limitNote: {
+      one: 'Counts as one use, however many days (free {{count}} time a month)',
+      other: 'Counts as one use, however many days (free {{count}} times a month)',
     },
   },
   bulk: {
@@ -96,7 +100,6 @@ const menu = {
     noRecipes: 'No recipes yet. Add a few first.',
     /** Shown when bulk generation is offered (§10.12.2) — never dead-end at 'add some first' */
     noRecipesBulk: 'No recipes yet. AI can create a batch for you.',
-    fewRecipes: 'Not enough recipes, so only some days are filled',
     toConsult: 'Create one with AI',
   },
   stale: {

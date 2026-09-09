@@ -396,8 +396,10 @@ export default function MenuScreen() {
               : tCount('menu.shortfall.bulkGenerate', shortfall)}
           </Text>
         </Pressable>
-        {/* 残数は出さない。上限の静的表示だけ（§10.10.4 と同じ判断） */}
-        <Text style={styles.aiLimitNote}>{tCount('menu.ai.limitNote', FREE_MONTHLY_LIMIT)}</Text>
+        {/* 残数は出さない。上限の静的表示だけ（§10.10.4 と同じ判断）。一括=1 回分は M3-3 */}
+        <Text style={styles.aiLimitNote}>
+          {tCount('menu.shortfall.limitNote', FREE_MONTHLY_LIMIT)}
+        </Text>
         {bulkError ? <Text style={styles.bulkErrorText}>{bulkError}</Text> : null}
         <Pressable
           style={styles.secondary}

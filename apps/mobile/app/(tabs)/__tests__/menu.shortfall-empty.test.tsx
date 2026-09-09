@@ -7,7 +7,7 @@
  * 絞っていた描画の分岐 1 か所で、下流（generateMenuPlan / runBulkGenerate）は 0 日でも動く。
  *
  * このテストは「0 日のプランでバナーが出る」ことと「そこから一括生成が実際に走る」ことを
- * 見る。`hasPlan` 条件を戻すと 2 つとも赤くなる。
+ * 見る。`hasPlan` 条件を戻すと 5 本中 3 本（バナー表示・一括生成ボタン表示・押下）が赤くなる。
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
