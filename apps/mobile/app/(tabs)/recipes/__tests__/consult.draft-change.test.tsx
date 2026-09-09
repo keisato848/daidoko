@@ -130,7 +130,7 @@ describe('ConsultScreen — 下書きカードの 2 行目と「いま変えた�
     expect(screen.getByText(metaText(first))).toBeTruthy();
     // 辞書の写しでなく固定文字列でも 1 回は見る（順序と省略の仕様を固定）
     if (metaText(first).includes('人分')) {
-      expect(screen.getByText('2人分 · 20分 · 材料3 · 手順3')).toBeTruthy();
+      expect(screen.getByText('2人分 · 20分 · 材料3品 · 手順3つ')).toBeTruthy();
     }
     expect(screen.queryByText(CHANGE_NONE)).toBeNull();
     expect(changeLineShown()).toBe(false);

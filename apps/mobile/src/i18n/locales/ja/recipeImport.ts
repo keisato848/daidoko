@@ -181,8 +181,8 @@ const recipeImport = {
       separator: ' · ',
       servings: { one: '{{count}}人分', other: '{{count}}人分' } satisfies PluralMessage,
       minutes: { one: '{{count}}分', other: '{{count}}分' } satisfies PluralMessage,
-      ingredients: { one: '材料{{count}}', other: '材料{{count}}' } satisfies PluralMessage,
-      steps: { one: '手順{{count}}', other: '手順{{count}}' } satisfies PluralMessage,
+      ingredients: { one: '材料{{count}}品', other: '材料{{count}}品' } satisfies PluralMessage,
+      steps: { one: '手順{{count}}つ', other: '手順{{count}}つ' } satisfies PluralMessage,
     },
     /** 直近の往復で変わった点。下書きの差分から機械的に作る（AI の自己申告ではない） */
     change: {
@@ -195,11 +195,9 @@ const recipeImport = {
       minutesCleared: '時間を外した',
       added: '{{name}}を追加',
       removed: '{{name}}を外した',
-      /** 分量・下ごしらえは件数だけ。名前を並べると頼んだ変更が「ほか N 件」に隠れる */
-      adjusted: {
-        one: '分量・下ごしらえ{{count}}か所',
-        other: '分量・下ごしらえ{{count}}か所',
-      } satisfies PluralMessage,
+      /** 分量（note の変更も含む）は件数だけ。名前を並べると頼んだ変更が「ほか N 件」に隠れる。
+       *  「下ごしらえ」はペルソナ検証（ひな）で初心者に通じなかったので言わない */
+      adjusted: { one: '分量{{count}}か所', other: '分量{{count}}か所' } satisfies PluralMessage,
       stepsCount: {
         one: '手順を{{count}}つに',
         other: '手順を{{count}}つに',

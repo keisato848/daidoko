@@ -498,8 +498,9 @@ const styles = StyleSheet.create({
   },
   draftLabel: { fontSize: 12, color: Colors.gold, letterSpacing: 0.5 },
   draftTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
-  draftMeta: { fontSize: 13, color: Colors.paperDim },
-  draftChange: { fontSize: 13, lineHeight: 18, color: Colors.paper },
+  // 14px 以上・区切りは空白付き中点。13px の薄色はペルソナ検証（のりこ・老眼）で読めなかった
+  draftMeta: { fontSize: 14, lineHeight: 20, color: Colors.paperDim },
+  draftChange: { fontSize: 14, lineHeight: 20, color: Colors.paper },
   draftAction: { fontSize: 14, color: Colors.gold, marginTop: 4 },
   disclaimer: { fontSize: 12, lineHeight: 18, color: Colors.muted, marginTop: 8 },
   reportLink: {
