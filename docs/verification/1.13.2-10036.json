@@ -1,0 +1,21 @@
+{
+  "version": "1.13.2",
+  "versionCode": 10036,
+  "verifiedAt": "2026-09-10T12:24:22.344Z",
+  "device": {
+    "serialHash": "a21c401427d6",
+    "model": "SH-RM19s",
+    "abi": "arm64-v8a",
+    "isEmulator": false
+  },
+  "installedVersionCode": 10036,
+  "checked": [
+    "1.13.2/10036 release(本番構成・Railway本番) を AQUOS へ -r 上書き: 既存レシピ維持・versionCode 10036",
+    "献立(#302): レシピ1件で7日分→1日目配置+『あと6日分』バナー+『足りない6日分をまとめて作る』+注記『何日分でも1回分(無料で月5回まで)』。レシピ0件で7日分→空状態に『あと7日分』バナー+一括生成ボタン+注記+『AIに相談して作る』",
+    "相談: 無料枠切れで送信→ペイウォール表示・相談は送信されない(入力欄に残る)。広告ボタンは検証APKに広告envが無いため非表示(提出AABには rewarded unit ID 同梱を確認)",
+    "AI経路(一括生成→提案シート7品到達・相談カードの2行目/いま変えた点/前回と同じ)は同日 AQUOS で PR302+305 合成ビルド(同一JS)にて確認済み(PR #302/#305 コメント参照)。10036 では無料枠切れのため再実行せず",
+    "提出AAB: アップロード鍵 76:BA 署名・16KB 48/48 PASS・index.android.bundle 同梱・rewarded unit ID 同梱・google_app_id 同梱・1.13.2/10036"
+  ],
+  "screenshot": "screenshots/1.13.2-10036-2026-09-10T12-24-22-344Z.png",
+  "headCommit": "88681737d6cde47cd491a20bd34819bed08bcdd8"
+}
