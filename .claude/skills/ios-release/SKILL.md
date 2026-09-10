@@ -195,6 +195,10 @@ node scripts/release/submit-appstore-version.mjs --version <x.y.z> --build-numbe
 
 最後のスクリプトがビルド紐づけ → reviewSubmission 作成 → submitted:true まで行う。
 
+> **却下後の再提出**: 古い reviewSubmission を `PATCH { canceled: true }` で取り消し（COMPLETE になるまで
+> 数十秒待つ）→ 版に新ビルドを付けて上の `submit-appstore-version.mjs` を流す。ASC の画面操作は不要
+> （2026-09-11・1.13.2 10036→10037。`docs/リリース手順.md` §2b-1b）。
+
 **審査の状態確認（「却下された？」に API で即答する）** — 見る場所は 2 つ:
 
 - `listVersions`（`lib/asc-api.mjs`）で `appStoreState`。審査待ち = `WAITING_FOR_REVIEW`、
