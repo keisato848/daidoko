@@ -75,6 +75,22 @@ Claude in Chrome（mcp\_\_claude-in-chrome\_\_\*）でメインループが実�
 **リモートセッションでは実行不可**（Claude in Chrome の MCP が無い・ストア API も遮断）。ローカルセッションで回す。
 **変更操作は一切しない**。Apple Ads の一時停止だけは §1 のとおりユーザー承認後に実行（Basic は自動停止しないため）。
 
+### 7-0. 別端末で回すときの全手順（pull から）
+
+```text
+0. Chrome で ASC / Apple Ads Basic / Play Console にログインしタブを開いたままにする（代行不可）
+   Claude in Chrome で appstoreconnect.apple.com / app-ads.apple.com / play.google.com を許可
+1. git fetch origin && git checkout <ブランチ> && git pull --ff-only
+2. mkdir analytics/YYYY-MM-DD        # gitignore 済み
+3. Claude Code を同じフォルダで開き:
+   /console-browser-ops
+   §7「流入の数字を取る」を回して。読み取りのみ。保存先は analytics/YYYY-MM-DD/。ログイン済みタブは開いてある。
+4. Claude が §7-2 の 4 画面を撮り、summary.md に数値を表で書く
+5. 続けて: summary.md と docs/growth/流入の記録.md を渡して growth-analyst を model: haiku で呼んで。§3 の閾値に当てて。
+6. 要約値と判断だけを 流入の記録.md §1-1 / §3 / §6 へ転記 → commit（スクショと summary.md は commit しない）
+7. Apple Ads の「請求書」欄にカード取引が出ていたら＝クレジット枯渇。ユーザー承認後にキャンペーンを一時停止（減額ではなく停止）
+```
+
 ### 7-1. 事前（ユーザー）
 
 - ログインと 2 段階認証は代行不可。ASC・Apple Ads・Play Console に**先にログインしたタブを開いておく**
