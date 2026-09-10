@@ -63,7 +63,8 @@ AI 機能・URL 取り込みに加えて、**Web 共有の公開/停止・共有
 同じ訴求で、冷蔵庫からレシピ・朝昼夕・AI 一括生成・グループ別共有を反映した。
 **移植しなかったもの（iOS の実態・根拠は `listing-ja.md` の「1.13.1 追記」）**:
 家族更新のプッシュ通知（iOS は APNs 受信未検証）・ウィジェット（iOS 版検証中）・
-「no amounts read」（2d43567 で数量欄が付き偽になった — Play 側も要修正）。
+「no amounts read」（2d43567 で数量欄が付き偽になった）。
+**Play 側は 2026-09-06 に “amounts only when they can be counted” へ修正済み**（Issue #296）。
 4000 字上限は既存方針どおり冗長語の圧縮で確保した（冒頭 2 段落・meal-prep の一文・
 auto-plan の "with a notification"・"from the server" 等を圧縮。削った箇所は git 差分参照）。
 **最終 3987 字（残り 13 字・`**` 剥がし後の実測 = 反映スクリプトと同じ抽出）。\*\*

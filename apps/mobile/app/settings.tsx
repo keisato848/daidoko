@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Avatar } from '../src/components/Avatar';
 import { CoachMarkOverlay } from '../src/components/CoachMarkOverlay';
@@ -25,6 +25,7 @@ import {
 } from '../src/services/user.service';
 import { getAdRewardProvider } from '../src/services/ad-reward.service';
 import { isEntitlementConfigured } from '../src/services/entitlement.service';
+import { PRIVACY_POLICY_URL } from '../src/constants/legal';
 import { isNativePlatform } from '../src/db/client';
 import { openStoreReviewPage } from '../src/services/review-request.service';
 import { isLaunchCameraEnabled, setLaunchCameraEnabled } from '../src/services/app-meta.service';
@@ -357,6 +358,24 @@ export default function SettingsScreen() {
                   message: t('settings.app.rateAppFailedBody'),
                 });
               }
+            });
+          },
+        },
+        {
+          // Apple 5.1.1(i) は「ASC のメタデータ欄 かつ アプリ内に容易にアクセスできる形で」
+          // プライバシーポリシーへのリンクを求めている。ASC には登録済みだが、
+          // アプリ内のリンクはペイウォールの premiumAvailable ガードの内側にしか無く
+          // （課金未導入なので常に偽）、実質 1 つも描画されていなかった（2026-09-06・Issue #294）
+          id: 'privacy-policy',
+          label: t('settings.app.privacyPolicy'),
+          subtitle: t('settings.app.privacyPolicySubtitle'),
+          enabled: true,
+          onPress: () => {
+            void Linking.openURL(PRIVACY_POLICY_URL).catch(() => {
+              void dialog.alert({
+                title: t('settings.app.privacyPolicy'),
+                message: t('settings.app.privacyPolicyFailedBody'),
+              });
             });
           },
         },
