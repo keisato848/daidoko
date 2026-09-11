@@ -147,7 +147,7 @@ cooking,recipe manager,grocery,fridge,meal prep,expiry,leftovers,copycat,menu pl
 • Unless you share with family or publish a recipe page, we do not send your data to our servers
 • Join a family group and only the items you share travel through our server. Delete the group and that synced data is erased
 • A published recipe page is separate — deleting the group does not stop it. Stop a single recipe from its own menu, a recipe book from Settings → Recipe books; nobody can open it after that
-• Backup, restore, a transfer file for a new phone, plus your OS backup (Android/iCloud) or chosen folder if set — your account, not ours
+• Backup, restore, a transfer file for a new phone, plus your iCloud backup or chosen folder if set — your account, not ours
 • AI features include a free monthly allowance (5 a month; AI image generation is separate, 3 a month). Add your own Gemini key for no limit
 • Most of the app works offline; AI features, URL import, sharing and ads need a connection
 
