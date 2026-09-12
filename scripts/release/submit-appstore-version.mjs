@@ -70,16 +70,37 @@ if (submission) {
   console.log(`審査提出を作成: ${submission.id}`);
 }
 
-await client.post('/v1/reviewSubmissionItems', {
-  data: {
-    type: 'reviewSubmissionItems',
-    relationships: {
-      reviewSubmission: { data: { type: 'reviewSubmissions', id: submission.id } },
-      appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } },
+/**
+ * 却下からの再提出（2026-09-12・1.13.2 で実地）: 既存の提出に同じバージョンの品目が
+ * `REJECTED` で残っている。この状態で品目を POST すると
+ * `reviewSubmission state does not allow adding more items`（409）、
+ * 品目をそのままに submitted:true を送ると `Version is not ready to be submitted yet`（409・
+ * 何分待っても変わらない）。正しい順序は **品目を resolved:true にしてから submitted:true**。
+ */
+const existingItems = await client.getAll(`/v1/reviewSubmissions/${submission.id}/items?limit=10`);
+const mine = existingItems.find(
+  (i) => i.relationships?.appStoreVersion?.data?.id === version.id || existingItems.length === 1,
+);
+if (mine) {
+  console.log(`既存の品目を使う: ${mine.id} (${mine.attributes.state})`);
+  if (mine.attributes.state === 'REJECTED') {
+    await client.patch(`/v1/reviewSubmissionItems/${mine.id}`, {
+      data: { type: 'reviewSubmissionItems', id: mine.id, attributes: { resolved: true } },
+    });
+    console.log('却下された品目を resolved にしました（READY_FOR_REVIEW）');
+  }
+} else {
+  await client.post('/v1/reviewSubmissionItems', {
+    data: {
+      type: 'reviewSubmissionItems',
+      relationships: {
+        reviewSubmission: { data: { type: 'reviewSubmissions', id: submission.id } },
+        appStoreVersion: { data: { type: 'appStoreVersions', id: version.id } },
+      },
     },
-  },
-});
-console.log('バージョンを審査提出に載せました');
+  });
+  console.log('バージョンを審査提出に載せました');
+}
 
 await client.patch(`/v1/reviewSubmissions/${submission.id}`, {
   data: { type: 'reviewSubmissions', id: submission.id, attributes: { submitted: true } },

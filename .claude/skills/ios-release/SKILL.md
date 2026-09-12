@@ -195,6 +195,13 @@ node scripts/release/submit-appstore-version.mjs --version <x.y.z> --build-numbe
 
 最後のスクリプトがビルド紐づけ → reviewSubmission 作成 → submitted:true まで行う。
 
+**却下後の再提出も同じコマンドでよい**（2026-09-12・1.13.2 で実地）。掲載文だけの却下なら
+`update-appstore-listing.mjs` で直して同じビルド番号で再実行する。内部では、既存提出に残る
+`REJECTED` の品目を `resolved: true` にしてから `submitted: true` を送る（品目の追加は 409、
+resolved を飛ばすと「Version is not ready to be submitted yet」が何分待っても消えない）。
+**Android / Google Play / Google アカウントを ASC の 4 欄に書かない**（2.3.10 で 2 回目の却下・
+`docs/store/app-store/SUBMISSION.md`「1.13.2 の審査拒否と再提出」）。
+
 **審査の状態確認（「却下された？」に API で即答する）** — 見る場所は 2 つ:
 
 - `listVersions`（`lib/asc-api.mjs`）で `appStoreState`。審査待ち = `WAITING_FOR_REVIEW`、

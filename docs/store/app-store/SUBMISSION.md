@@ -272,6 +272,29 @@ Apple が質問票を改訂して追加した項目。**督促は「アプリ情
 **保存直後に「問題が発生しました」らしき要素が DOM に現れるが、8 件とも非表示のテンプレート残骸**で、
 実際の保存は通っている。API で読み返して確かめること。
 
+## 1.13.2 の審査拒否と再提出（2026-09-11 → 09-12・API で実施）
+
+**症状** — build 10037 が Guideline 2.3.10（Accurate Metadata）で拒否。「説明文から Android の言及を除け」。
+Submission `b28eb7d3-8c44-4d5d-9faf-9da6698d0a93`・審査端末 iPad Air 11-inch (M3)。
+直前の再提出でも別件を直していたので、拒否は 2 回目。
+
+**原因** — 説明本文の「Android/iOS 標準のバックアップ…Google/Apple アカウント」（ja）と
+"your OS backup (Android/iCloud)"（en）。Play 版と同じ訴求で書く方針のまま、OS 名の並記を移植していた。
+
+**対処** —
+
+1. `listing-ja.md` / `listing-en.md` の当該行を iCloud / Apple アカウントだけに直し、送信 4 欄を再走査
+   （`d6eba1a`）。ルールは `listing-ja.md`「1.13.2 審査拒否」に固定
+2. `update-appstore-listing.mjs --lang ja` / `--lang en` で反映（REJECTED 状態の版は編集可。反映で
+   `PREPARE_FOR_SUBMISSION` に戻る）
+3. 再提出は `submit-appstore-version.mjs` がそのままでは通らなかった: 既存提出に同じ版の品目が
+   `REJECTED` で残っており、品目の追加は 409（adding more items 不可）、submitted:true だけ送っても
+   「Version is not ready to be submitted yet」で **6 分待っても変わらない**。
+   **`PATCH /v1/reviewSubmissionItems/{id}` に `resolved: true` → `PATCH /v1/reviewSubmissions/{id}` に
+   `submitted: true`** の順で通った（同日にスクリプトへ組み込み済み）
+4. 結果: submission `WAITING_FOR_REVIEW`（2026-09-12 00:05Z）・版 1.13.2 `WAITING_FOR_REVIEW`。
+   新しいビルドは不要だった
+
 ## 現在地（2026-08-26 に API で確認）— **両プラットフォームとも 1.11.0 が公開済み**
 
 | 面        | 状態                                                         |
