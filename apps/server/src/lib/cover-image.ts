@@ -83,8 +83,11 @@ const PROMPT_CONSTRAINTS = [
  * **既定 off。** §7-2 の目視評価（10 題 × off/on）で現行以上と確認してから on にする。
  * env なので Railway の変数を変えるだけでよく、アプリのリリースは要らない。
  * `'1' | 'true' | 'on'` を真として読む。
+ *
+ * 評価スクリプト（`scripts/cover-image-check.ts`）が**同じ判定**で撮った絵に印を付けられるよう
+ * 公開する — off のつもりで on を撮る事故と、off/on の絵が区別できない採点表を防ぐ。
  */
-function cuisineHintEnabled(): boolean {
+export function cuisineHintEnabled(): boolean {
   const raw = process.env['COVER_IMAGE_CUISINE_HINT']?.trim().toLowerCase();
   return raw === '1' || raw === 'true' || raw === 'on';
 }

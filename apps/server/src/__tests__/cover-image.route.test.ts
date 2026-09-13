@@ -334,3 +334,134 @@ describe('POST /api/v1/infer/cover-image — entry（入口の計測・Issue #31
     expect(received[0]).not.toHaveProperty('foo');
   });
 });
+
+describe('POST /api/v1/infer/cover-image — 弾いた要求でも計測行を書く（diff-critic 指摘）', () => {
+  // 成功時だけ書くと「入口別の利用」が「入口別の成功生成」に縮み、
+  // 日次プールを使い切ったあとの試行が入口ごとログから消える。
+  // ここでは 3 経路（端末 ID 不正 / RATE_LIMITED / AI_API_UNAVAILABLE）で
+  // 「1 行だけ」「entry が保たれる」「料理名・端末 ID を書かない」「生成は走らない」を固定する。
+  const savedGeminiKey = process.env['GEMINI_API_KEY'];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (savedGeminiKey === undefined) delete process.env['GEMINI_API_KEY'];
+    else process.env['GEMINI_API_KEY'] = savedGeminiKey;
+  });
+
+  function spyStdout(): { lines: () => string[] } {
+    const write = vi.spyOn(process.stdout, 'write');
+    return {
+      lines: () =>
+        write.mock.calls
+          .map((call) => String(call[0]))
+          .filter((s) => s.startsWith('[infer/cover-image]')),
+    };
+  }
+
+  function countingStub(): { provider: CoverImageProvider; calls: () => number } {
+    let n = 0;
+    return {
+      provider: stub(() => {
+        n += 1;
+        return STUB_RESULT;
+      }),
+      calls: () => n,
+    };
+  }
+
+  it('x-device-id 無し → ok=false error=UNKNOWN が 1 行、provider は呼ばれない', async () => {
+    const { provider, calls } = countingStub();
+    setCoverImageProviderForTesting(provider);
+    const out = spyStdout();
+
+    const res = await app.request('/api/v1/infer/cover-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, // x-device-id 無し
+      body: JSON.stringify({ ...VALID_BODY, entry: 'form' }),
+    });
+    const json = (await res.json()) as CoverImageResponse;
+    expect(json.ok).toBe(false);
+    if (!json.ok) expect(json.error.code).toBe('UNKNOWN');
+
+    expect(out.lines()).toEqual(['[infer/cover-image] entry=form ok=false error=UNKNOWN\n']);
+    expect(calls()).toBe(0);
+  });
+
+  it('x-device-id が書式違反 → ok=false error=UNKNOWN が 1 行、端末 ID 文字列はログに出ない', async () => {
+    const { provider, calls } = countingStub();
+    setCoverImageProviderForTesting(provider);
+    const out = spyStdout();
+
+    const badId = 'short';
+    const res = await post({ ...VALID_BODY, entry: 'detail' }, { 'x-device-id': badId });
+    expect(((await res.json()) as CoverImageResponse).ok).toBe(false);
+
+    const lines = out.lines();
+    expect(lines).toEqual(['[infer/cover-image] entry=detail ok=false error=UNKNOWN\n']);
+    expect(lines[0]).not.toContain(badId);
+    expect(lines[0]).not.toContain(VALID_BODY.title);
+    expect(calls()).toBe(0);
+  });
+
+  it('RATE_LIMITED で弾いた 2 回目も ok=false error=RATE_LIMITED が 1 行、entry=detail が保たれる', async () => {
+    process.env['COVER_IMAGE_GLOBAL_DAILY_LIMIT'] = '1';
+    const { provider, calls } = countingStub();
+    setCoverImageProviderForTesting(provider);
+
+    // 1 回目（枠を使い切る）。ここのログは対象外なので spy の前に済ませる
+    const first = (await (
+      await post({ ...VALID_BODY, entry: 'form' })
+    ).json()) as CoverImageResponse;
+    expect(first.ok).toBe(true);
+    expect(calls()).toBe(1);
+
+    const out = spyStdout();
+    const second = (await (
+      await post({ ...VALID_BODY, entry: 'detail' })
+    ).json()) as CoverImageResponse;
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error.code).toBe('RATE_LIMITED');
+
+    const lines = out.lines();
+    // entry=form（1 回目）に引きずられず、弾かれた要求自身の入口が出る
+    expect(lines).toEqual(['[infer/cover-image] entry=detail ok=false error=RATE_LIMITED\n']);
+    expect(lines[0]).not.toContain(VALID_BODY.title);
+    expect(lines[0]).not.toContain(DEVICE_ID);
+    // 弾かれた要求で生成が走っていない（ログを足したせいで provider が呼ばれる事故の検出）
+    expect(calls()).toBe(1);
+  });
+
+  it('RATE_LIMITED で弾かれた旧クライアント（entry 無し）は entry=unknown', async () => {
+    process.env['COVER_IMAGE_GLOBAL_DAILY_LIMIT'] = '1';
+    const { provider, calls } = countingStub();
+    setCoverImageProviderForTesting(provider);
+
+    expect(((await (await post(VALID_BODY)).json()) as CoverImageResponse).ok).toBe(true);
+
+    const out = spyStdout();
+    const second = (await (await post(VALID_BODY)).json()) as CoverImageResponse;
+    expect(second.ok).toBe(false);
+
+    expect(out.lines()).toEqual([
+      '[infer/cover-image] entry=unknown ok=false error=RATE_LIMITED\n',
+    ]);
+    expect(calls()).toBe(1);
+  });
+
+  it('GEMINI_API_KEY 未設定（CoverImageConfigError）→ ok=false error=AI_API_UNAVAILABLE が 1 行', async () => {
+    delete process.env['GEMINI_API_KEY'];
+    setCoverImageProviderForTesting(null); // 実 provider の解決へ落とす → 構築時に ConfigError
+    const out = spyStdout();
+
+    const res = await post({ ...VALID_BODY, entry: 'form' });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as CoverImageResponse;
+    expect(json.ok).toBe(false);
+    if (!json.ok) expect(json.error.code).toBe('AI_API_UNAVAILABLE');
+
+    const lines = out.lines();
+    expect(lines).toEqual(['[infer/cover-image] entry=form ok=false error=AI_API_UNAVAILABLE\n']);
+    expect(lines[0]).not.toContain(VALID_BODY.title);
+    expect(lines[0]).not.toContain(DEVICE_ID);
+  });
+});

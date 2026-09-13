@@ -63,14 +63,14 @@
 
 ### 2-3. プロンプトとサーバー
 
-| 事実                                                                                                                 | 出典                                                         |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| プロンプトはサーバーが自動組み立て: 料理名＋材料名（≤20）＋タグ（≤5）＋縛り 4 項目＋locale 別の盛り付け 1 行         | `apps/server/src/lib/cover-image.ts:69-100`                  |
-| 盛り付けの指示は **UI 言語で決まる**（ja「日本の家庭の食卓」/ en「English-speaking household」）。料理の出自は見ない | `cover-image.ts:95-98`                                       |
-| モデル `gemini-3.1-flash-lite-image`（env `COVER_IMAGE_MODEL` で差し替え可）・`image_size: '1K'`                     | `cover-image.ts:156-168`                                     |
-| サーバー 55s・リトライなし・クライアント 75s。守衛テストあり                                                         | `cover-image.ts:138-143`、`cover-image-retry-budget.test.ts` |
-| サーバー天井 10 枚/日（`COVER_IMAGE_GLOBAL_DAILY_LIMIT`）、端末別 5 枚/日（`COVER_IMAGE_DAILY_LIMIT`・実装判断）     | `rate-limit.ts:154-161`                                      |
-| 実測の生成時間 5.9〜7.8 秒/枚（Lite・10 題）                                                                         | `docs/eval/cover-image/_batch-summary.json`                  |
+| 事実                                                                                                                 | 出典                                                                 |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| プロンプトはサーバーが自動組み立て: 料理名＋材料名（≤20）＋タグ（≤5）＋縛り 4 項目＋locale 別の盛り付け 1 行         | `cover-image.ts` `buildCoverImagePrompt`                             |
+| 盛り付けの指示は **UI 言語で決まる**（ja「日本の家庭の食卓」/ en「English-speaking household」）。料理の出自は見ない | `cover-image.ts` `localePlatingLine`（#313 以降。栓 off のときの行） |
+| モデル `gemini-3.1-flash-lite-image`（env `COVER_IMAGE_MODEL` で差し替え可）・`image_size: '1K'`                     | `cover-image.ts` `GeminiCoverImageProvider`                          |
+| サーバー 55s・リトライなし・クライアント 75s。守衛テストあり                                                         | `cover-image.ts:138-143`、`cover-image-retry-budget.test.ts`         |
+| サーバー天井 10 枚/日（`COVER_IMAGE_GLOBAL_DAILY_LIMIT`）、端末別 5 枚/日（`COVER_IMAGE_DAILY_LIMIT`・実装判断）     | `rate-limit.ts:154-161`                                              |
+| 実測の生成時間 5.9〜7.8 秒/枚（Lite・10 題）                                                                         | `docs/eval/cover-image/_batch-summary.json`                          |
 
 ### 2-4. ゲート
 

@@ -116,3 +116,34 @@ describe('platingLineFor — 出自 × locale の盛り付け行', () => {
     }
   });
 });
+
+describe('inferCuisine — かな表記の語彙（からあげ / ぎょうざ）', () => {
+  // 「から揚げ」「唐揚げ」は漢字を含むので vocabKey では「からあげ」に落ちない。
+  // かな表記は語彙に**別語として**載っていないと当たらない（消すと下の 2 つが null になる）。
+  it("'からあげ' と 'カラアゲ'（カナ→かな）は japanese — 語彙 'からあげ' を消すと null", () => {
+    expect(inferCuisine('からあげ')).toBe('japanese');
+    expect(inferCuisine('カラアゲ')).toBe('japanese');
+  });
+
+  it("'から揚げ' と '唐揚げ' も従来どおり japanese（表記ゆれ 4 つが同じ結果）", () => {
+    const results = ['からあげ', 'カラアゲ', 'から揚げ', '唐揚げ'].map((title) =>
+      inferCuisine(title),
+    );
+    expect(results).toEqual(['japanese', 'japanese', 'japanese', 'japanese']);
+  });
+
+  it("'ぎょうざ' と 'ギョウザ' は chinese — 語彙 'ぎょうざ' を消すと null", () => {
+    expect(inferCuisine('ぎょうざ')).toBe('chinese');
+    expect(inferCuisine('ギョウザ')).toBe('chinese');
+  });
+
+  it("'餃子' も従来どおり chinese（表記ゆれ 3 つが同じ結果）", () => {
+    const results = ['ぎょうざ', 'ギョウザ', '餃子'].map((title) => inferCuisine(title));
+    expect(results).toEqual(['chinese', 'chinese', 'chinese']);
+  });
+
+  it('かな語は部分一致なので「鶏のからあげ弁当」「焼きぎょうざ」も当たる', () => {
+    expect(inferCuisine('鶏のからあげ弁当')).toBe('japanese');
+    expect(inferCuisine('焼きぎょうざ')).toBe('chinese');
+  });
+});
