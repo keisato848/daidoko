@@ -1,0 +1,1171 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DAIDOKO 「AIに聞く」モック</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Noto+Sans+JP:wght@400;500;700&display=swap"
+    />
+    <style>
+      :root {
+        --bg: #0a0805;
+        --card: #130c06;
+        --input: #1c1409;
+        --overlay: rgba(10, 8, 5, 0.86);
+        --line: #2e2418;
+        --line2: #3d3020;
+        --gold: #c9a16a;
+        --gold-dim: #a07a44;
+        --paper: #f0e6d2;
+        --ink: #dcc9a8;
+        --muted: #8a7250;
+        --muted2: #5a4a34;
+        --ok: #8faf7a;
+        --warn: #d9a441;
+        --bad: #c96b5a;
+        --shell: #151008;
+        --shell-line: #26201a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--shell);
+        color: var(--ink);
+        font-family:
+          'Noto Sans JP',
+          system-ui,
+          -apple-system,
+          sans-serif;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+      button:focus-visible,
+      [tabindex]:focus-visible {
+        outline: 2px solid var(--gold);
+        outline-offset: 2px;
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 28px 20px 60px;
+      }
+      header.top {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 18px;
+      }
+      .wordmark {
+        font-family: 'Cormorant Garamond', Georgia, serif;
+        font-style: italic;
+        font-weight: 600;
+        font-size: 34px;
+        color: var(--gold);
+        letter-spacing: 0.02em;
+        line-height: 1;
+      }
+      .wordmark small {
+        font-family: 'Noto Sans JP', sans-serif;
+        font-style: normal;
+        font-weight: 400;
+        font-size: 13px;
+        color: var(--muted);
+        margin-left: 12px;
+        letter-spacing: 0.08em;
+      }
+      .scen {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .scen button {
+        background: transparent;
+        border: 1px solid var(--line2);
+        color: var(--ink);
+        padding: 7px 12px;
+        border-radius: 999px;
+        font-size: 13px;
+      }
+      .scen button[aria-pressed='true'] {
+        background: var(--gold);
+        color: var(--bg);
+        border-color: var(--gold);
+        font-weight: 700;
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: 392px 1fr;
+        gap: 26px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .cols {
+          grid-template-columns: 1fr;
+        }
+      }
+      /* ── 端末 ─────────────────────────────── */
+      .phone {
+        width: 392px;
+        height: 812px;
+        background: var(--bg);
+        border: 1px solid var(--shell-line);
+        border-radius: 30px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+      }
+      .statusbar {
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .apphead {
+        height: 52px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .apphead .title {
+        flex: 1;
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--paper);
+      }
+      .apphead .ico {
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--line2);
+        border-radius: 10px;
+        background: transparent;
+        color: var(--gold-dim);
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+      }
+      .body {
+        position: absolute;
+        top: 82px;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        overflow: hidden;
+      }
+      .scroll {
+        position: absolute;
+        inset: 0 0 58px 0;
+        overflow-y: auto;
+        padding: 12px 14px 0;
+      }
+      .scroll.withbanner {
+        bottom: 108px;
+      }
+      /* リスト */
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 13px 12px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--card);
+        margin-bottom: 8px;
+      }
+      .row .nm {
+        flex: 1;
+        color: var(--paper);
+      }
+      .row .sub {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .check {
+        width: 24px;
+        height: 24px;
+        border: 1px solid var(--line2);
+        border-radius: 6px;
+        flex: 0 0 auto;
+      }
+      .check.on {
+        background: var(--gold);
+        border-color: var(--gold);
+      }
+      .sect {
+        font-size: 12px;
+        color: var(--muted);
+        margin: 14px 0 7px;
+        letter-spacing: 0.06em;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--card);
+        padding: 13px;
+        margin-bottom: 10px;
+      }
+      .card h4 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        color: var(--paper);
+      }
+      .card p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      /* 広告バナー */
+      .banner {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 58px;
+        height: 50px;
+        background: #241a10;
+        border-top: 1px solid var(--line);
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        color: var(--muted2);
+      }
+      /* タブバー */
+      .tabbar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 58px;
+        border-top: 1px solid var(--line);
+        background: var(--bg);
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        align-items: center;
+      }
+      .tab {
+        text-align: center;
+        font-size: 10px;
+        color: var(--muted);
+        background: none;
+        border: 0;
+        padding: 0;
+      }
+      .tab .g {
+        display: block;
+        font-size: 17px;
+        line-height: 1.2;
+      }
+      .tab.on {
+        color: var(--gold);
+      }
+      .tab.plus .g {
+        width: 34px;
+        height: 34px;
+        margin: 0 auto;
+        border-radius: 50%;
+        background: var(--gold);
+        color: var(--bg);
+        display: grid;
+        place-items: center;
+        font-size: 20px;
+        font-weight: 700;
+      }
+      /* ── 常駐ピル ───────────────────────── */
+      .pill {
+        position: absolute;
+        right: 20px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 44px;
+        padding: 0 15px;
+        border-radius: 999px;
+        border: 1px solid var(--gold);
+        background: rgba(19, 12, 6, 0.82);
+        backdrop-filter: blur(6px);
+        color: var(--gold);
+        font-size: 14px;
+        font-weight: 700;
+        z-index: 30;
+      }
+      .resumebar {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        height: 46px;
+        border-radius: 12px;
+        background: var(--gold);
+        color: var(--bg);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        font-size: 13px;
+        font-weight: 700;
+        z-index: 25;
+      }
+      /* ── シート ─────────────────────────── */
+      .sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        max-height: 78%;
+        background: var(--card);
+        border-top: 1px solid var(--line2);
+        border-radius: 18px 18px 0 0;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+      }
+      .sheet .grab {
+        width: 38px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--line2);
+        margin: 9px auto 4px;
+      }
+      .sheet .shead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 14px 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      .sheet .shead b {
+        flex: 1;
+        font-size: 14px;
+        color: var(--paper);
+      }
+      .nowchip {
+        font-size: 11px;
+        color: var(--gold-dim);
+        border: 1px solid var(--line2);
+        border-radius: 999px;
+        padding: 3px 9px;
+      }
+      .sbody {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px 14px 6px;
+      }
+      .chip {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: var(--input);
+        border: 1px solid var(--line2);
+        color: var(--ink);
+        border-radius: 999px;
+        padding: 11px 14px;
+        margin-bottom: 8px;
+        font-size: 13px;
+        min-height: 44px;
+      }
+      .chip.help {
+        border-style: dashed;
+        color: var(--gold-dim);
+      }
+      .msg {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        align-items: flex-start;
+      }
+      .msg .who {
+        flex: 0 0 auto;
+        font-size: 15px;
+      }
+      .msg .txt {
+        flex: 1;
+        font-size: 14px;
+        color: var(--paper);
+      }
+      .msg.me .txt {
+        background: var(--gold);
+        color: var(--bg);
+        border-radius: 12px;
+        padding: 9px 12px;
+        font-weight: 500;
+      }
+      .actioncard {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        min-height: 48px;
+        border: 1px solid var(--gold);
+        border-radius: 12px;
+        background: rgba(201, 161, 106, 0.09);
+        color: var(--gold);
+        padding: 11px 13px;
+        font-size: 14px;
+        font-weight: 700;
+        margin: 2px 0 10px;
+        text-align: left;
+      }
+      .confirm {
+        border: 1px solid var(--gold);
+        border-radius: 12px;
+        background: rgba(201, 161, 106, 0.09);
+        padding: 12px;
+        margin: 2px 0 10px;
+      }
+      .confirm .q {
+        font-size: 14px;
+        color: var(--paper);
+        margin-bottom: 3px;
+        font-weight: 700;
+      }
+      .confirm .d {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+      .confirm .btns {
+        display: flex;
+        gap: 8px;
+      }
+      .confirm .btns button {
+        flex: 1;
+        min-height: 44px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .btn-go {
+        background: var(--gold);
+        color: var(--bg);
+        border: 0;
+      }
+      .btn-no {
+        background: transparent;
+        color: var(--ink);
+        border: 1px solid var(--line2);
+      }
+      .sfoot {
+        border-top: 1px solid var(--line);
+        padding: 10px 14px 12px;
+      }
+      .inrow {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .inrow .fake {
+        flex: 1;
+        min-height: 44px;
+        border: 1px solid var(--line2);
+        border-radius: 12px;
+        background: var(--input);
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        padding: 0 13px;
+        font-size: 14px;
+      }
+      .inrow .fake.filled {
+        color: var(--paper);
+      }
+      .send {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--gold);
+        color: var(--bg);
+        border: 0;
+        font-size: 16px;
+      }
+      .mic {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: transparent;
+        border: 1px solid var(--line2);
+        color: var(--gold-dim);
+        font-size: 16px;
+      }
+      .disc {
+        font-size: 14px;
+        color: var(--muted);
+        margin-top: 9px;
+        line-height: 1.45;
+      }
+      /* Toast */
+      .toast {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 120px;
+        background: #241a10;
+        border: 1px solid var(--gold);
+        border-radius: 12px;
+        padding: 12px 14px;
+        color: var(--paper);
+        font-size: 14px;
+        z-index: 60;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .toast b {
+        flex: 1;
+        font-weight: 500;
+      }
+      .toast button {
+        background: none;
+        border: 0;
+        color: var(--gold);
+        font-weight: 700;
+        font-size: 13px;
+      }
+      /* コーチマーク */
+      .coach {
+        position: absolute;
+        inset: 0;
+        background: var(--overlay);
+        z-index: 70;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 0 20px 150px;
+      }
+      .coach .bubble {
+        background: var(--card);
+        border: 1px solid var(--gold);
+        border-radius: 14px;
+        padding: 15px;
+        max-width: 300px;
+      }
+      .coach .bubble p {
+        margin: 0 0 12px;
+        font-size: 14px;
+        color: var(--paper);
+      }
+      .coach .ring {
+        position: absolute;
+        right: 14px;
+        bottom: 66px;
+        width: 128px;
+        height: 52px;
+        border: 2px solid var(--gold);
+        border-radius: 999px;
+      }
+      /* ── 右パネル ───────────────────────── */
+      .panel h2 {
+        font-size: 13px;
+        color: var(--gold);
+        letter-spacing: 0.1em;
+        margin: 0 0 9px;
+        font-weight: 700;
+      }
+      .panel section {
+        border: 1px solid var(--shell-line);
+        border-radius: 14px;
+        padding: 15px 16px;
+        margin-bottom: 14px;
+        background: #110c07;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        gap: 4px 10px;
+        font-size: 13px;
+      }
+      .kv span:nth-child(odd) {
+        color: var(--muted);
+      }
+      .toggles {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .toggles button {
+        background: transparent;
+        border: 1px solid var(--line2);
+        color: var(--ink);
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+      .toggles button[aria-pressed='true'] {
+        border-color: var(--gold);
+        color: var(--gold);
+      }
+      ol.cond,
+      ul.note {
+        margin: 0;
+        padding-left: 19px;
+        font-size: 13px;
+      }
+      ol.cond li,
+      ul.note li {
+        margin-bottom: 6px;
+      }
+      .log {
+        font-size: 12px;
+        color: var(--muted);
+        max-height: 168px;
+        overflow-y: auto;
+        font-family: ui-monospace, monospace;
+        line-height: 1.7;
+      }
+      .badge {
+        display: inline-block;
+        font-size: 11px;
+        border: 1px solid var(--line2);
+        border-radius: 5px;
+        padding: 1px 6px;
+        color: var(--muted);
+        margin-left: 6px;
+      }
+      .badge.on {
+        color: var(--ok);
+        border-color: var(--ok);
+      }
+      .badge.off {
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <div class="wordmark">DAIDOKO <small>「AIに聞く」アプリ内アシスタント モック</small></div>
+        <div class="scen" id="scen"></div>
+      </header>
+
+      <div class="cols">
+        <div>
+          <div class="phone" id="phone"></div>
+        </div>
+
+        <div class="panel">
+          <section>
+            <h2>端末とサーバーの状態</h2>
+            <div class="kv" id="state"></div>
+            <div class="toggles" id="toggles"></div>
+          </section>
+          <section>
+            <h2>この操作で確かめたい条件</h2>
+            <ol class="cond" id="cond"></ol>
+          </section>
+          <section>
+            <h2>操作ログ</h2>
+            <div class="log" id="log"></div>
+          </section>
+          <section>
+            <h2>モックの前提</h2>
+            <ul class="note">
+              <li>
+                設計書 <code>docs/AIに聞く設計.md</code>（2026-09-13 決定版）の §3・§5・§8 を再現。
+              </li>
+              <li>
+                ピルは<b>右下</b>・タブバーの直上。広告バナーと調理バーがあるときはその上へ積む。
+              </li>
+              <li>
+                シートは
+                in-tree（下の画面が見えたまま）。料理中・撮影・相談・レシピ編集では<b>ピルを出さない</b>。
+              </li>
+              <li>
+                AI の返事は 3
+                文以内。カタログに無い操作は答えない。料理そのものの質問は「相談」へ送り出す。
+              </li>
+              <li>質問はサーバーに保存しない。AI 写真レシピの無料枠は減らない。1 日 10 問まで。</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ── カタログ（抜粋。設計 §4 の形） ───────────────────────────────
+      const CATALOG = [
+        { id: 'pantry.receipt', route: '/receipt', title: 'レシート読み取り', icon: '📷' },
+        { id: 'pantry.barcode', route: '/scan-barcode', title: 'バーコードで登録', icon: '📗' },
+        { id: 'pantry.fridge', route: '/fridge', title: '冷蔵庫の写真から登録', icon: '🧊' },
+        { id: 'recipes.cookable', route: '/cookable', title: '在庫で作れるレシピ', icon: '🍚' },
+        { id: 'menu.home', route: '/menu', title: '献立', icon: '📅' },
+        { id: 'family.home', route: '/family', title: '家族と分け合う', icon: '👪' },
+      ];
+
+      const SCREENS = {
+        home: { label: 'ホーム', title: 'DAIDOKO', banner: false, tab: 0 },
+        pantry: { label: '在庫', title: '在庫', banner: true, tab: 3 },
+        shopping: { label: '買い物リスト', title: '買い物リスト', banner: true, tab: 4 },
+        cook: { label: '料理中', title: '鶏の唐揚げ', banner: false, tab: -1 },
+        edit: { label: 'レシピ編集（モーダル）', title: 'レシピを編集', banner: false, tab: -1 },
+      };
+
+      // シナリオ定義 ─────────────────────────────────────────────
+      const SCEN = {
+        A: {
+          name: 'A どこ？（通信なし）',
+          screen: 'pantry',
+          cond: [
+            'ピルが右下にあると気づくか。「＋」タブと混同しないか。',
+            '在庫リストの右端のチェック列にピルが被って邪魔にならないか。',
+            '打たずにチップだけで目的に着けるか。',
+            '答えの下のカードを「押せるボタン」と分かるか。',
+          ],
+        },
+        B: {
+          name: 'B なぜ？（AI に聞く）',
+          screen: 'pantry',
+          cond: [
+            '3 文の答えで足りるか。物足りないか。',
+            '「無料枠は減りません」の 1 行に気づくか。信じるか。',
+            'AI が作った答えだと分かるか。',
+          ],
+        },
+        C: {
+          name: 'C 「砂糖を買い物に追加」（音声入力）',
+          screen: 'shopping',
+          cond: [
+            '音声で言ったことが確認カードになる流れが自然か。',
+            '確認の 1 タップを「安心」と感じるか「面倒」と感じるか。',
+            '入ったあと、どこに入ったか分かるか。間違ったとき戻せると思うか。',
+          ],
+        },
+        D: {
+          name: 'D 料理の質問（相談へ送る）',
+          screen: 'home',
+          cond: [
+            '「ここでは答えません」を突き放されたと感じないか。',
+            '送り出された先（相談）が別物だと分かるか。',
+          ],
+        },
+        E: {
+          name: 'E ヘッダの「?」が無い（統合後）',
+          screen: 'pantry',
+          cond: [
+            'ヘッダから「?」が消えたことに気づくか。困るか。',
+            '「この画面の案内をもう一度見る」を見つけられるか。',
+            'コーチマークの再生が 2 タップになったことを面倒に感じるか。',
+          ],
+        },
+        F: {
+          name: 'F 圏外・サーバー停止',
+          screen: 'pantry',
+          cond: [
+            'AI が使えないときも「探して開く」ができることが伝わるか。',
+            '文言で見捨てられた感じがしないか。',
+          ],
+        },
+        G: {
+          name: 'G 今日の 10 問を使い切った',
+          screen: 'pantry',
+          cond: [
+            '「今日はここまで」を理不尽に感じるか。',
+            '課金で増やせると思われないか（増やせない）。',
+          ],
+        },
+        H: {
+          name: 'H 料理中・編集中（ピルを出さない）',
+          screen: 'cook',
+          cond: [
+            '料理中にピルが無いことを不便に感じるか。',
+            '「いつも同じ場所にある」が崩れたと感じるか。',
+          ],
+        },
+      };
+
+      let S = {};
+      function reset(key) {
+        const s = SCEN[key];
+        S = {
+          scen: key,
+          screen: s.screen,
+          sheet: false,
+          msgs: [],
+          draft: '',
+          online: key !== 'F',
+          quota: key === 'G' ? 0 : 10,
+          confirm: null,
+          toast: null,
+          coach: false,
+          cooking: key === 'H',
+          logs: [],
+        };
+        log('シナリオ ' + s.name);
+        render();
+      }
+      function log(t) {
+        S.logs.unshift(t);
+      }
+
+      // 画面ごとの候補チップ
+      function chipsFor(screen) {
+        const m = {
+          pantry: ['在庫って何に使うの？', 'レシートから登録するには', '家族と在庫を分けたい'],
+          shopping: [
+            '買った物を在庫に移すには',
+            'リストを家族に見せたい',
+            'レシピの材料をまとめて入れたい',
+          ],
+          home: ['このアプリは何ができるの？', '献立ってどこ？', '作った料理を記録したい'],
+          cook: [],
+          edit: [],
+        };
+        return m[screen] || [];
+      }
+
+      // 端末内検索（通信なし）
+      function search(q) {
+        const t = q.replace(/\s/g, '');
+        return CATALOG.filter((c) => t && (c.title.includes(t) || hit(c, t))).slice(0, 3);
+      }
+      function hit(c, t) {
+        const alias = {
+          'pantry.receipt': ['レシート', 'れしーと', '買った', 'まとめて'],
+          'pantry.barcode': ['バーコード', 'ばーこーど'],
+          'pantry.fridge': ['冷蔵庫', '写真'],
+          'recipes.cookable': ['作れる', 'つくれる', '在庫'],
+          'menu.home': ['献立', 'こんだて'],
+          'family.home': ['家族', '共有', '分け'],
+        };
+        return (alias[c.id] || []).some((a) => t.includes(a));
+      }
+
+      // ── 送信（シナリオごとの台本） ───────────────────────────
+      function send(text) {
+        S.msgs.push({ me: true, t: text });
+        S.draft = '';
+        S.action = null;
+        S.confirm = null;
+        log('送信: ' + text);
+        if (S.quota <= 0) {
+          S.msgs.push({
+            t: '今日の質問はここまでです。日付が変わるとまた 10 問聞けます。機能を探すだけなら、下の入力欄に言葉を入れると今でも候補が出ます。',
+            noAi: true,
+          });
+          render();
+          return;
+        }
+        if (!S.online) {
+          S.msgs.push({
+            t: 'いまはつながっていないので、AI の答えは出せません。下の入力欄に言葉を入れると、端末の中だけで機能を探せます。',
+            noAi: true,
+          });
+          render();
+          return;
+        }
+        S.quota -= 1;
+        const s = S.scen;
+        if (s === 'C' || /追加|入れて|足して/.test(text)) {
+          S.msgs.push({
+            t: '買い物リストに「砂糖」を入れますか。よろしければ下のボタンを押してください。',
+          });
+          S.confirm = { q: '砂糖 を 買い物リスト に入れる', d: '押すまで何も変わりません。' };
+        } else if (s === 'D' || /コツ|レシピを教え|作り方|おいし/.test(text)) {
+          S.msgs.push({
+            t: 'わたしが答えられるのは、このアプリの使い方までです。料理そのものの相談は「相談しながらつくる」が向いています。そちらへ移りますか。',
+          });
+          S.action = { icon: '💬', label: '相談しながらつくるを開く', route: '/recipes/consult' };
+        } else if (/レシート/.test(text)) {
+          S.msgs.push({
+            t: 'できます。在庫の右上にある「レシート」から撮影します。読み取った品をその場で直せます。',
+          });
+          S.action = { icon: '📷', label: 'レシート読み取りを開く', route: '/receipt' };
+        } else if (/家族|分け/.test(text)) {
+          S.msgs.push({
+            t: '家族ごとに在庫を分けられます。設定の「家族」で家をつくり、あとで在庫の置き場所を選べます。',
+          });
+          S.action = { icon: '👪', label: '家族の設定を開く', route: '/family' };
+        } else {
+          S.msgs.push({
+            t: '在庫は、家にある食材を覚えておく場所です。ここに入れておくと「在庫で作れるレシピ」から今日の料理を選べます。',
+          });
+          S.action = { icon: '🍚', label: '在庫で作れるレシピを開く', route: '/cookable' };
+        }
+        render();
+      }
+
+      // ── 描画 ─────────────────────────────────────────────────
+      function pillVisible() {
+        if (S.screen === 'cook' || S.screen === 'edit') return false;
+        return true;
+      }
+      function pillBottom() {
+        let b = 58 + 12; // タブバー
+        if (SCREENS[S.screen].banner) b += 50;
+        if (S.cooking && S.screen !== 'cook') b += 54;
+        return b;
+      }
+
+      function render() {
+        const sc = SCREENS[S.screen];
+        const p = document.getElementById('phone');
+        let h = '';
+        h += `<div class="statusbar"><span>17:47</span><span>${S.online ? '📶' : '✈️ 圏外'} 🔋</span></div>`;
+        // ヘッダ（E シナリオ＝統合後なので「?」は無い）
+        h += `<div class="apphead"><div class="title">${sc.title}</div>`;
+        if (S.screen === 'pantry') h += `<button class="ico">＋</button>`;
+        if (S.screen === 'cook') h += `<button class="ico">✕</button>`;
+        h += `</div>`;
+
+        h += `<div class="body">`;
+        h += `<div class="scroll ${sc.banner ? 'withbanner' : ''}">${screenBody()}</div>`;
+        if (sc.banner) h += `<div class="banner">広告（AdMob アンカー）</div>`;
+
+        if (S.cooking && S.screen !== 'cook') {
+          h += `<div class="resumebar" style="bottom:${58 + (sc.banner ? 50 : 0) + 6}px">🍳 鶏の唐揚げ・手順 3/6 <span style="margin-left:auto">再開 →</span></div>`;
+        }
+
+        if (pillVisible() && !S.sheet) {
+          h += `<button class="pill" style="bottom:${pillBottom()}px" onclick="openSheet()">💬 使い方</button>`;
+        }
+
+        if (sc.tab >= 0) {
+          const tabs = [
+            ['🏠', 'ホーム'],
+            ['📖', 'レシピ'],
+            ['＋', ''],
+            ['🧺', '在庫'],
+            ['🛒', '買物'],
+          ];
+          h += `<div class="tabbar">`;
+          tabs.forEach((t, i) => {
+            const on = i === sc.tab ? 'on' : '';
+            h +=
+              i === 2
+                ? `<button class="tab plus"><span class="g">＋</span></button>`
+                : `<button class="tab ${on}"><span class="g">${t[0]}</span>${t[1]}</button>`;
+          });
+          h += `</div>`;
+        }
+
+        if (S.sheet) h += sheet();
+        if (S.toast)
+          h += `<div class="toast"><b>${S.toast}</b><button onclick="S.toast=null;render()">閉じる</button></div>`;
+        if (S.coach) h += coach();
+        h += `</div>`;
+        p.innerHTML = h;
+        panel();
+      }
+
+      function screenBody() {
+        if (S.screen === 'pantry')
+          return `<div class="sect">冷蔵</div>
+          ${rows([
+            ['牛乳', '1本 · あと2日'],
+            ['卵', '6個'],
+            ['鶏もも肉', '300g'],
+          ])}
+          <div class="sect">常温</div>
+          ${rows([
+            ['米', '2kg'],
+            ['醤油', '1本'],
+            ['小麦粉', '500g'],
+            ['砂糖', '残りわずか'],
+          ])}`;
+        if (S.screen === 'shopping')
+          return `<div class="sect">買うもの</div>
+          ${rows(
+            [
+              ['牛乳', ''],
+              ['玉ねぎ 2個', ''],
+              ['パン', ''],
+            ],
+            true,
+          )}
+          <div class="sect">買ったもの</div>
+          ${rows([['にんじん', '']], true, true)}`;
+        if (S.screen === 'home')
+          return `<div class="card"><h4>今日の献立</h4><p>まだ組んでいません</p></div>
+          <div class="card"><h4>鶏の唐揚げ</h4><p>母が 2 日前に作りました</p></div>
+          <div class="card"><h4>作りたいリスト</h4><p>3 品</p></div>`;
+        if (S.screen === 'cook')
+          return `<div class="sect">手順 3 / 6</div>
+          <div class="card" style="min-height:260px"><h4>鶏肉に下味をつける</h4>
+          <p style="font-size:14px;color:var(--ink);margin-top:8px">醤油・酒・生姜を揉み込み、15 分おきます。</p></div>
+          <div style="display:flex;gap:8px"><div class="card" style="flex:1;text-align:center">← 前へ</div><div class="card" style="flex:1;text-align:center">次へ →</div></div>`;
+        if (S.screen === 'edit')
+          return `<div class="sect">レシピを編集</div>${rows([
+            ['料理名', '鶏の唐揚げ'],
+            ['人数', '2人分'],
+            ['材料', '8品'],
+          ])}`;
+        return '';
+      }
+      function rows(list, check, on) {
+        return list
+          .map(
+            (r) =>
+              `<div class="row">${check ? `<div class="check ${on ? 'on' : ''}"></div>` : ''}<div class="nm">${r[0]}</div><div class="sub">${r[1] || ''}</div>${check ? '' : '<div class="check"></div>'}</div>`,
+          )
+          .join('');
+      }
+
+      function sheet() {
+        let h = `<div class="sheet"><div class="grab"></div>`;
+        h += `<div class="shead"><b>このアプリの使い方を聞く</b><span class="nowchip">いま: ${SCREENS[S.screen].label}</span><button class="ico" style="width:30px;height:30px" onclick="closeSheet()">✕</button></div>`;
+        h += `<div class="sbody">`;
+
+        if (S.msgs.length === 0) {
+          chipsFor(S.screen).forEach((c) => {
+            h += `<button class="chip" onclick="send('${c}')">${c}</button>`;
+          });
+          h += `<button class="chip" onclick="send('このアプリは何ができるの？')">このアプリでできること</button>`;
+          h += `<button class="chip help" onclick="showCoach()">この画面の案内をもう一度見る</button>`;
+        }
+
+        S.msgs.forEach((m) => {
+          h += `<div class="msg ${m.me ? 'me' : ''}"><span class="who">${m.me ? '🧑' : '🤖'}</span><div class="txt">${m.t}</div></div>`;
+        });
+        if (S.action && !S.confirm) {
+          h += `<button class="actioncard" onclick="go()">${S.action.icon} ${S.action.label} <span style="margin-left:auto">→</span></button>`;
+        }
+        if (S.confirm) {
+          h += `<div class="confirm"><div class="q">${S.confirm.q}</div><div class="d">${S.confirm.d}</div>
+          <div class="btns"><button class="btn-no" onclick="S.confirm=null;log('やめた');render()">やめる</button><button class="btn-go" onclick="doMutate()">入れる</button></div></div>`;
+        }
+
+        // 端末内検索の結果（入力中）
+        if (S.draft) {
+          const r = search(S.draft);
+          if (r.length) {
+            h += `<div class="sect">この機能かもしれません</div>`;
+            r.forEach((c) => {
+              h += `<button class="actioncard" onclick="goTo('${c.route}','${c.title}')">${c.icon} ${c.title}を開く <span style="margin-left:auto">→</span></button>`;
+            });
+          }
+        }
+        h += `</div>`;
+
+        h += `<div class="sfoot"><div class="inrow">
+        <button class="mic" onclick="voice()" title="OS キーボードの音声入力">🎙</button>
+        <div class="fake ${S.draft ? 'filled' : ''}" onclick="type()">${S.draft || '質問を入力…'}</div>
+        <button class="send" onclick="S.draft&&send(S.draft)">➤</button></div>`;
+        h += `<div class="disc">答えは AI が作ります。間違うことがあります。無料枠は減りません${S.quota < 10 ? `（今日はあと ${S.quota} 問）` : ''}</div></div>`;
+        return h + `</div>`;
+      }
+
+      function coach() {
+        return `<div class="coach"><div class="ring"></div><div class="bubble"><p>困ったときは、ここから「使い方」を聞けます。どの画面からでも同じ場所にあります。</p><button class="btn-go" style="min-height:44px;border-radius:10px;padding:0 16px" onclick="S.coach=false;render()">はじめる</button></div></div>`;
+      }
+
+      // 操作 ────────────────────────────────────────────────────
+      function openSheet() {
+        S.sheet = true;
+        log('ピルを押した');
+        render();
+      }
+      function closeSheet() {
+        S.sheet = false;
+        S.msgs = [];
+        S.action = null;
+        S.confirm = null;
+        S.draft = '';
+        log('シートを閉じた（会話は消える）');
+        render();
+      }
+      function showCoach() {
+        S.sheet = false;
+        S.coach = true;
+        log('この画面の案内をもう一度見る');
+        render();
+      }
+      function type() {
+        const t = prompt(
+          '質問を入力（例: レシート / 砂糖を買い物に追加 / 唐揚げのコツ）',
+          S.draft || '',
+        );
+        if (t !== null) {
+          S.draft = t;
+          log('入力中: ' + t);
+          render();
+        }
+      }
+      function voice() {
+        S.draft = '砂糖を買い物リストに追加して';
+        log('🎙 OS キーボードの音声入力で読み上げた');
+        render();
+      }
+      function go() {
+        const a = S.action;
+        S.sheet = false;
+        S.action = null;
+        S.msgs = [];
+        log('シートを閉じてから ' + a.route + ' へ移動');
+        if (a.route === '/cookable') S.screen = 'home';
+        if (a.route === '/recipes/consult') {
+          alert('「相談しながらつくる」へ移りました（別の機能）。戻るで元の画面に帰れます。');
+        }
+        render();
+      }
+      function goTo(route, title) {
+        S.sheet = false;
+        S.msgs = [];
+        S.draft = '';
+        log('端末内の候補から ' + route + ' へ移動');
+        alert(title + ' を開きました。戻るで元の画面に帰れます。');
+        render();
+      }
+      function doMutate() {
+        S.confirm = null;
+        S.sheet = false;
+        S.msgs = [];
+        S.screen = 'shopping';
+        S.toast = '買い物リストに「砂糖」を入れました';
+        log('確認カードを押した → 買い物リストに追加');
+        render();
+      }
+
+      // パネル ──────────────────────────────────────────────────
+      function panel() {
+        document.getElementById('state').innerHTML = `
+        <span>いまの画面</span><span>${SCREENS[S.screen].label}</span>
+        <span>常駐ピル</span><span>${pillVisible() ? '<span class="badge on">出る</span> 右下・下から ' + pillBottom() + 'px' : '<span class="badge off">出さない</span> 料理中/モーダル'}</span>
+        <span>広告バナー</span><span>${SCREENS[S.screen].banner ? 'あり（ピルはこの上）' : 'なし'}</span>
+        <span>通信</span><span>${S.online ? '<span class="badge on">つながる</span>' : '<span class="badge off">圏外</span>'}</span>
+        <span>今日の残り</span><span>${S.quota} / 10 問</span>
+        <span>AI 写真レシピの枠</span><span>減らない（この機能では使わない）</span>
+        <span>質問文の保存</span><span>しない（件数だけ数える）</span>`;
+
+        document.getElementById('toggles').innerHTML = `
+        <button onclick="S.online=!S.online;render()" aria-pressed="${!S.online}">圏外にする</button>
+        <button onclick="S.quota=S.quota?0:10;render()" aria-pressed="${S.quota === 0}">今日の枠を使い切る</button>
+        <button onclick="S.cooking=!S.cooking;render()" aria-pressed="${S.cooking}">料理中にする</button>
+        ${Object.keys(SCREENS)
+          .map(
+            (k) =>
+              `<button onclick="S.screen='${k}';render()" aria-pressed="${S.screen === k}">${SCREENS[k].label}</button>`,
+          )
+          .join('')}`;
+
+        document.getElementById('cond').innerHTML = SCEN[S.scen].cond
+          .map((c) => `<li>${c}</li>`)
+          .join('');
+        document.getElementById('log').innerHTML = S.logs.map((l) => '· ' + l).join('<br>');
+      }
+
+      document.getElementById('scen').innerHTML = Object.keys(SCEN)
+        .map((k) => `<button onclick="reset('${k}')" id="sb-${k}">${SCEN[k].name}</button>`)
+        .join('');
+      const _reset = reset;
+      reset = function (k) {
+        _reset(k);
+        Object.keys(SCEN).forEach((x) =>
+          document.getElementById('sb-' + x).setAttribute('aria-pressed', String(x === k)),
+        );
+      };
+      reset('A');
+    </script>
+  </body>
+</html>
