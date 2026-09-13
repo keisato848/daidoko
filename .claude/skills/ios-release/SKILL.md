@@ -195,9 +195,17 @@ node scripts/release/submit-appstore-version.mjs --version <x.y.z> --build-numbe
 
 最後のスクリプトがビルド紐づけ → reviewSubmission 作成 → submitted:true まで行う。
 
-> **却下後の再提出**: 古い reviewSubmission を `PATCH { canceled: true }` で取り消し（COMPLETE になるまで
-> 数十秒待つ）→ 版に新ビルドを付けて上の `submit-appstore-version.mjs` を流す。ASC の画面操作は不要
-> （2026-09-11・1.13.2 10036→10037。`docs/リリース手順.md` §2b-1b）。
+**却下後の再提出も同じコマンドでよい**（2026-09-12・1.13.2 で実地）。掲載文だけの却下なら
+`update-appstore-listing.mjs` で直して同じビルド番号で再実行する。内部では、既存提出に残る
+`REJECTED` の品目を `resolved: true` にしてから `submitted: true` を送る（品目の追加は 409、
+resolved を飛ばすと「Version is not ready to be submitted yet」が何分待っても消えない）。
+**Android / Google Play / Google アカウントを ASC の 4 欄に書かない**（2.3.10 で 2 回目の却下・
+`docs/store/app-store/SUBMISSION.md`「1.13.2 の審査拒否と再提出」）。
+
+> **新しいビルドを付け直す再提出（2026-09-11・1.13.2 10036→10037）**: 古い reviewSubmission を
+> `PATCH { canceled: true }` で取り消し（COMPLETE になるまで数十秒待つ）→ 版に新ビルドを付けて
+> `submit-appstore-version.mjs` を流す。ASC の画面操作は不要（`docs/リリース手順.md` §2b-1b）。
+> 上の resolved 経路は**同じビルドで出し直す**とき、この取り消し経路は**ビルドを差し替える**とき。
 
 **審査の状態確認（「却下された？」に API で即答する）** — 見る場所は 2 つ:
 

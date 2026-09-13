@@ -1,0 +1,1705 @@
+<title>DAIDOKO イメージ生成モック</title>
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Noto+Sans+JP:wght@400;500;700&display=swap"
+/>
+<style>
+  :root {
+    --bg: #0a0805;
+    --card: #130c06;
+    --input: #1c1409;
+    --overlay: rgba(10, 8, 5, 0.86);
+    --line: #2e2418;
+    --line2: #3d3020;
+    --gold: #c9a16a;
+    --gold-dim: #a07a44;
+    --paper: #f0e6d2;
+    --ink: #dcc9a8;
+    --muted: #8a7250;
+    --muted2: #5a4a34;
+    --ok: #8faf7a;
+    --warn: #d9a441;
+    --bad: #c96b5a;
+    --shell: #151008;
+    --shell-line: #26201a;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--shell);
+    color: var(--ink);
+    font-family:
+      'Noto Sans JP',
+      system-ui,
+      -apple-system,
+      sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  button {
+    font: inherit;
+    cursor: pointer;
+  }
+  button:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+  header.top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .wordmark {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: 34px;
+    color: var(--gold);
+    letter-spacing: 0.02em;
+    line-height: 1;
+  }
+  .wordmark small {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-style: normal;
+    font-weight: 400;
+    font-size: 13px;
+    color: var(--muted);
+    margin-left: 12px;
+    letter-spacing: 0.08em;
+  }
+  .scen {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .scen button {
+    background: transparent;
+    border: 1px solid var(--line2);
+    color: var(--ink);
+    padding: 7px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+  }
+  .scen button[aria-pressed='true'] {
+    background: var(--gold);
+    color: var(--bg);
+    border-color: var(--gold);
+    font-weight: 700;
+  }
+  .scen button.reset {
+    border-style: dashed;
+    color: var(--muted);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* phone */
+  .device {
+    background: #000;
+    border-radius: 44px;
+    padding: 12px;
+    border: 1px solid var(--shell-line);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+  }
+  .screen {
+    position: relative;
+    width: 396px;
+    height: 760px;
+    background: var(--bg);
+    border-radius: 34px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .statusbar {
+    height: 34px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 22px;
+    font-size: 12px;
+    color: var(--muted);
+    flex: none;
+  }
+  .hwbar {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 12px 0 2px;
+  }
+  .hwbar button {
+    background: transparent;
+    border: 1px solid var(--line2);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+  .hwbar button b {
+    color: var(--gold);
+  }
+  .view {
+    position: absolute;
+    inset: 34px 0 0 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .view[hidden] {
+    display: none;
+  }
+  .hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    flex: none;
+  }
+  .hdr button {
+    background: transparent;
+    border: 0;
+    color: var(--gold);
+    font-size: 14px;
+    padding: 6px 4px;
+  }
+  .hdr .ttl {
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+  .scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 16px 40px;
+  }
+  .hero {
+    height: 140px;
+    border-radius: 14px;
+    background: var(--input);
+    border: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    color: var(--muted);
+  }
+  .hero.photo {
+    background: radial-gradient(ellipse at 30% 30%, #7a4a2a, #2a1810 70%);
+    color: var(--paper);
+  }
+  .hero.ai {
+    background: radial-gradient(ellipse at 60% 40%, #a8783e, #3a2412 70%);
+    color: var(--paper);
+  }
+  .badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: var(--gold);
+    color: var(--bg);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+  }
+  .genband {
+    position: absolute;
+    inset: auto 0 0 0;
+    background: var(--overlay);
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--gold);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .spin {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--gold);
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: sp 1s linear infinite;
+    flex: none;
+  }
+  @keyframes sp {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spin {
+      animation: none;
+    }
+  }
+  h1.rt {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 30px;
+    color: var(--paper);
+    margin: 14px 0 2px;
+  }
+  .note {
+    font-size: 11px;
+    color: var(--muted);
+    margin: 2px 0 8px;
+  }
+  .tags {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .tag {
+    font-size: 11px;
+    border: 1px solid var(--line2);
+    color: var(--ink);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .sec {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--gold-dim);
+    margin: 18px 0 8px;
+    text-transform: uppercase;
+  }
+  .ing {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+  .step {
+    display: flex;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .step .n {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 20px;
+    color: var(--gold);
+    width: 22px;
+    flex: none;
+    line-height: 1.1;
+  }
+  .step .body {
+    flex: 1;
+    font-size: 13px;
+  }
+  .thumb {
+    font: inherit;
+    line-height: 1.2;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    border: 1px dashed var(--line2);
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--muted);
+    position: relative;
+  }
+  .thumb.has {
+    border-style: solid;
+    background: linear-gradient(135deg, #5a3d22, #2a1b10);
+  }
+  .thumb.ai {
+    border-style: solid;
+    background: linear-gradient(135deg, #c9a16a33, #3a2412);
+    color: var(--paper);
+  }
+  .thumb .badge {
+    top: 3px;
+    left: 3px;
+    font-size: 8px;
+    padding: 1px 4px;
+  }
+  .entry {
+    margin: 10px 0 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    border-radius: 10px;
+    width: 100%;
+    text-align: left;
+    color: var(--ink);
+  }
+  .entry b {
+    color: var(--gold);
+    font-weight: 500;
+  }
+  .entry small {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .fab {
+    position: absolute;
+    right: 14px;
+    top: 8px;
+  }
+  /* sheet & dialogs */
+  .dim {
+    position: absolute;
+    inset: 0;
+    background: var(--overlay);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .dim.center {
+    align-items: center;
+    padding: 24px;
+  }
+  .dim[hidden] {
+    display: none;
+  }
+  .sheet {
+    width: 100%;
+    background: var(--card);
+    border-top: 1px solid var(--line2);
+    border-radius: 18px 18px 0 0;
+    padding: 14px 16px 22px;
+  }
+  .sheet .grip {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line2);
+    margin: 0 auto 12px;
+  }
+  .menu button {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    padding: 12px 4px;
+    text-align: left;
+    font-size: 14px;
+  }
+  .menu button:last-child {
+    border-bottom: 0;
+  }
+  .menu button small {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .menu button.danger {
+    color: var(--bad);
+  }
+  .menu button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .dlg {
+    background: var(--card);
+    border: 1px solid var(--line2);
+    border-radius: 14px;
+    padding: 16px;
+    width: 100%;
+    max-width: 320px;
+  }
+  .dlg h3 {
+    margin: 0 0 6px;
+    font-size: 15px;
+    color: var(--paper);
+    font-weight: 700;
+  }
+  .dlg p {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .dlg p.crit {
+    color: var(--warn);
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .btn {
+    background: transparent;
+    border: 1px solid var(--line2);
+    color: var(--ink);
+    padding: 9px 14px;
+    border-radius: 9px;
+    font-size: 13px;
+  }
+  .btn.primary {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--bg);
+    font-weight: 700;
+  }
+  .btn.danger {
+    border-color: var(--bad);
+    color: var(--bad);
+  }
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .btn.wide {
+    width: 100%;
+    text-align: center;
+  }
+  .preview {
+    height: 220px;
+    border-radius: 12px;
+    background: radial-gradient(ellipse at 60% 40%, #a8783e, #3a2412 70%);
+    display: flex;
+    align-items: flex-end;
+    padding: 10px;
+    color: var(--paper);
+    font-size: 12px;
+    position: relative;
+    margin-bottom: 10px;
+  }
+  .sheet .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .toast {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 18px;
+    background: var(--paper);
+    color: var(--bg);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .toast[hidden] {
+    display: none;
+  }
+  /* step-images route */
+  .nums {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 8px 0 14px;
+  }
+  .num {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .num small {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .num b {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: 28px;
+    color: var(--gold);
+    font-variant-numeric: tabular-nums;
+  }
+  .num b em {
+    font-size: 14px;
+    font-style: italic;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .disc {
+    font-size: 11px;
+    color: var(--muted);
+    margin: 6px 0 12px;
+  }
+  .gridimg {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .cell {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--input);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--muted);
+    flex-direction: column;
+    gap: 4px;
+  }
+  .cell.done {
+    background: linear-gradient(135deg, #c9a16a33, #3a2412);
+    color: var(--paper);
+  }
+  .cell.excl {
+    opacity: 0.35;
+    filter: grayscale(1);
+  }
+  .cell .x {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: var(--bg);
+    border: 1px solid var(--line2);
+    color: var(--ink);
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+  }
+  .cell .k {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 20px;
+    color: var(--gold);
+  }
+  .prog {
+    height: 6px;
+    background: var(--input);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 6px 0 12px;
+  }
+  .prog i {
+    display: block;
+    height: 100%;
+    background: var(--gold);
+    transition: width 0.3s;
+  }
+  .ad {
+    position: absolute;
+    inset: 0;
+    background: #0d0d0d;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    color: #ccc;
+    font-size: 13px;
+  }
+  .ad[hidden] {
+    display: none;
+  }
+  .ad .box {
+    width: 260px;
+    height: 180px;
+    background: repeating-linear-gradient(45deg, #1a1a1a, #1a1a1a 10px, #222 10px, #222 20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #333;
+  }
+  .ad .close {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    background: transparent;
+    border: 1px solid #444;
+    color: #ccc;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+  }
+
+  /* right panel */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .card h2 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--gold-dim);
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .kv {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .kv div {
+    border-left: 2px solid var(--line2);
+    padding-left: 10px;
+  }
+  .kv small {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .kv b {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--paper);
+    font-variant-numeric: tabular-nums;
+  }
+  .kv b span {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .log {
+    max-height: 220px;
+    overflow: auto;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .log div {
+    padding: 3px 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .log div span {
+    color: var(--muted);
+    margin-right: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .chk {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .chk label {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .chk .dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--line2);
+    flex: none;
+    margin-top: 4px;
+  }
+  .chk .dot.on {
+    background: var(--ok);
+    border-color: var(--ok);
+  }
+  .chk .id {
+    color: var(--muted);
+    font-size: 11px;
+    min-width: 34px;
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0;
+  }
+  .hint b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="wordmark">DAIDOKO <small>イメージ生成の導線モック</small></div>
+    <div class="scen" role="group" aria-label="シナリオ">
+      <button id="s-cover-none" aria-pressed="true">表紙・写真なし</button>
+      <button id="s-cover-photo" aria-pressed="false">表紙・写真あり</button>
+      <button id="s-steps" aria-pressed="false">手順のイラスト</button>
+      <button id="s-reset" class="reset">状態をリセット</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="device">
+        <div class="screen" id="screen">
+          <div class="statusbar"><span>9:41</span><span>●●● ▮</span></div>
+
+          <!-- Detail view -->
+          <div class="view" id="v-detail">
+            <div class="hdr">
+              <button id="hb-detail">‹ 蔵書</button>
+              <span class="ttl">レシピ</span>
+              <button id="menu-open" aria-label="メニュー">⋯</button>
+            </div>
+            <div class="scroll" id="detail-scroll">
+              <div class="hero" id="hero"></div>
+              <h1 class="rt" id="rtitle">唐揚げ</h1>
+              <div class="note" id="hero-note" hidden>
+                AIが作ったイメージです。実物とは異なります。
+              </div>
+              <div class="tags"><span class="tag">肉</span><span class="tag">揚げ物</span></div>
+              <div class="sec">材料 ・ 4人分</div>
+              <div class="ing"><span>鶏もも肉</span><span>500g</span></div>
+              <div class="ing"><span>醤油</span><span>大さじ2</span></div>
+              <div class="ing"><span>にんにく</span><span>2かけ</span></div>
+              <div class="ing"><span>しょうが</span><span>1かけ</span></div>
+              <div class="ing"><span>酒</span><span>大さじ1</span></div>
+              <div class="ing"><span>片栗粉</span><span>適量</span></div>
+              <div class="ing"><span>揚げ油</span><span>適量</span></div>
+              <div class="sec">手順</div>
+              <button class="entry" id="step-entry" hidden>
+                <span><b>手順のイラストをAIでつくる</b><small id="step-entry-sub"></small></span
+                ><span>›</span>
+              </button>
+              <div id="steps"></div>
+              <div class="sec">調理記録</div>
+              <div class="ing"><span>04月28日 ・ 恵</span><span>★★★★★</span></div>
+              <div class="ing"><span>03月12日 ・ 健</span><span>★★★★☆</span></div>
+              <div class="ing"><span>02月02日 ・ 恵</span><span>★★★★☆</span></div>
+            </div>
+
+            <div
+              class="genband"
+              id="genband"
+              hidden
+              style="
+                position: absolute;
+                top: 158px;
+                left: 16px;
+                right: 16px;
+                bottom: auto;
+                border-radius: 0 0 14px 14px;
+              "
+            >
+              <span class="spin"></span>イメージを作っています…
+            </div>
+
+            <!-- menu sheet -->
+            <div class="dim" id="menu" hidden>
+              <div class="sheet menu">
+                <div class="grip"></div>
+                <button>近づける</button>
+                <button>編集</button>
+                <button id="menu-ai">
+                  <span>AIでイメージをつくる<br /><small id="menu-ai-sub"></small></span>
+                </button>
+                <button>共有</button>
+                <button>版履歴</button>
+                <button class="danger" style="border-top: 1px solid var(--line2); margin-top: 6px">
+                  削除
+                </button>
+                <button id="menu-cancel"><small>閉じる</small></button>
+              </div>
+            </div>
+            <!-- step thumb action sheet -->
+            <div class="dim" id="thumbmenu" hidden>
+              <div class="sheet menu">
+                <div class="grip"></div>
+                <p class="note" id="thumbmenu-ttl" style="text-align: center"></p>
+                <button id="tm-camera">撮影する</button>
+                <button id="tm-gallery">ギャラリーから選ぶ</button>
+                <button id="tm-ai">
+                  <span>AIでイラストをつくる<br /><small>広告を見て1枚ずつ作れます</small></span>
+                </button>
+                <button id="tm-cancel"><small>閉じる</small></button>
+              </div>
+            </div>
+            <!-- preview sheet -->
+            <div class="dim" id="preview" hidden>
+              <div class="sheet">
+                <div class="grip"></div>
+                <div class="preview"><span class="badge">AI</span>唐揚げのイメージ</div>
+                <p class="note" style="color: var(--warn)">
+                  AIが作ったイメージです。実際の仕上がりとは異なります。
+                </p>
+                <div class="stack">
+                  <button class="btn primary wide" id="pv-adopt">このイメージにする</button>
+                  <button class="btn wide" id="pv-retry">作り直す（1回ぶん使います）</button>
+                  <button class="btn wide" id="pv-cancel">やめる</button>
+                  <p class="note" style="text-align: center; margin: 0">
+                    やめても、この1枚は戻りません
+                  </p>
+                  <button class="btn wide" id="pv-report" style="border: 0; color: var(--muted)">
+                    報告する
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="toast" id="toast" hidden></div>
+          </div>
+
+          <!-- Step-images route -->
+          <div class="view" id="v-steps" hidden>
+            <div class="hdr">
+              <button id="hb-steps">‹ 唐揚げ</button>
+              <span class="ttl" id="steps-ttl">手順のイラストをまとめてつくる</span>
+              <span style="width: 40px"></span>
+            </div>
+            <div class="scroll" id="steps-body"></div>
+            <div class="ad" id="ad" hidden>
+              <button class="close" id="ad-close" aria-label="広告を閉じる">×</button>
+              <div class="box">広告（モック）</div>
+              <div id="ad-timer">あと5秒</div>
+              <div style="font-size: 11px; color: #777">
+                最後まで見ると、イラストが1枚ぶん貯まります
+              </div>
+            </div>
+            <div class="toast" id="toast2" hidden></div>
+          </div>
+
+          <!-- shared dialog layer -->
+          <div class="dim center" id="dialog" hidden>
+            <div class="dlg">
+              <h3 id="dlg-title"></h3>
+              <p id="dlg-body"></p>
+              <div class="row">
+                <button class="btn" id="dlg-no"></button
+                ><button class="btn primary" id="dlg-yes"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hwbar">
+          <button id="hw-back"><b>◀</b> Android 戻る</button>
+          <button id="hw-home"><b>■</b> ホームへ→復帰</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="card">
+        <h2>端末とサーバーの状態</h2>
+        <div class="kv">
+          <div>
+            <small>表紙の無料枠（月）</small><b id="k-cover">3<span> / 3</span></b>
+          </div>
+          <div><small>広告で貯めた枚数（手順のイラスト）</small><b id="k-credit">0</b></div>
+          <div>
+            <small>手順のイラスト（今月）</small><b id="k-month">0<span> / 30</span></b>
+          </div>
+          <div><small>サーバー課金（模擬）</small><b id="k-cost">¥0</b></div>
+          <div>
+            <small>表紙プール（日）</small><b id="k-pool-c">0<span> / 10</span></b>
+          </div>
+          <div>
+            <small>手順プール（日）</small><b id="k-pool-s">0<span> / 10</span></b>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>この操作で確かめたい条件</h2>
+        <div class="chk" id="chk"></div>
+      </div>
+      <div class="card">
+        <h2>操作ログ</h2>
+        <div class="log" id="log"></div>
+      </div>
+      <div class="card">
+        <h2>モックの前提</h2>
+        <p class="hint">
+          生成は <b>3 秒</b>、広告は <b>5 秒</b> に短縮。サーバー課金は生成リクエスト送信時に
+          <b>¥5</b> を計上（中止しても戻らない）。<br />「◀ Android 戻る」「‹
+          ヘッダー戻る」「シート外タップ」はすべて同じ処理に合流する設計。「■
+          ホームへ→復帰」は生成中にアプリを離れた場合の二重生成を確かめる。<br />ペルソナの声・掲載文・実データはこのモックに含めない。
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const GEN_MS = 3000,
+      AD_MS = 5000,
+      MONTHLY = 30,
+      POOL = 10;
+    const STEP_TEXT = [
+      '鶏肉を一口大に切り、A の調味料に 30 分漬ける',
+      '片栗粉をまぶし、余分な粉をはたく',
+      '170℃の油で 3 分揚げて取り出す',
+      '4 分休ませて余熱で火を通す',
+      '190℃で 1 分、二度揚げして色をつける',
+      '油を切って皿に盛る',
+    ];
+    let S; // state
+    const CHECKS = {
+      cover: [
+        ['1', '詳細メニューから生成 → プレビュー → 採用がフォームを開かずに完了する'],
+        ['15', 'メニューに「あと N 枚」が出て、生成 1 回で数字が 1 減る'],
+        ['3', '写真ありレシピでは採用直前に確認が出る。やめると写真は変わらない'],
+        ['10', '生成中に戻ると「中止／続ける」。中止しても送信済みなら枠 1 枚消費'],
+        [
+          '11',
+          'プレビューで戻る／シート外タップ＝やめる。写真は変わらず、スクロール位置が保たれる',
+        ],
+        ['12', '確認ダイアログで戻る → シートに戻り、生成物は捨てない'],
+        ['13', '採用後は詳細画面のまま表紙が更新される（フォームに潜らない）'],
+        ['14', '生成中にホームへ→復帰しても二重生成しない。シートは 1 回だけ'],
+      ],
+      steps: [
+        [
+          '1s',
+          '写真なしのサムネをタップ → 「AIでイラストをつくる」でその手順 1 件だけを対象に同じ流れが動く',
+        ],
+        [
+          '1',
+          'まとめての入口は写真の無い手順が 2 つ以上あるときだけ。生成前に「n 件・広告で貯めた枚数・広告あと k 本・今月作れる枚数」を数字と 1 文で見る',
+        ],
+        ['2', '広告 1 本＝1 枚ぶん貯まる（上限は今月の残り枚数）。途中で閉じた 1 本は付与しない'],
+        ['3', '貯めた枚数が今月の残りに達すると広告ボタンが出ない'],
+        ['9', '生成中に戻ると「中止／続ける」。完了分はプレビューに残る'],
+        ['10', '採用画面で戻ると「n 枚を捨てますか」。捨てても使った枚数は戻らない'],
+        ['11', '採用後は詳細画面に戻り、外さなかった手順だけ AI バッジ付きで即更新'],
+        ['6c', '全部「入れる」状態で並び、× で外せる。写真のある手順は最初から対象外'],
+      ],
+    };
+    let scenario = 'cover-none';
+    function reset() {
+      S = {
+        cover: 3,
+        credit: 0,
+        month: 0,
+        cost: 0,
+        poolC: 0,
+        poolS: 0,
+        hasPhoto: false,
+        heroKind: 'none',
+        menu: false,
+        generating: false,
+        sent: false,
+        preview: false,
+        inFlight: null,
+        pendingResult: false,
+        replaceConfirm: false,
+        abortConfirm: false,
+        stepPhotos: [false, true, false, true, false, true],
+        route: 'detail',
+        phase: 'confirm',
+        target: null,
+        adRunning: false,
+        adTimer: null,
+        adLeft: 0,
+        batch: [],
+        batchIdx: -1,
+        cancelReq: false,
+        genTimer: null,
+        dialog: null,
+        done: {},
+      };
+      if (scenario === 'cover-photo') {
+        S.hasPhoto = true;
+        S.heroKind = 'photo';
+      }
+      $('log').innerHTML = '';
+      $('detail-scroll').scrollTop = 0;
+      render();
+    }
+    function log(t) {
+      const d = document.createElement('div');
+      const n = new Date();
+      d.innerHTML = '<span>' + n.toTimeString().slice(0, 8) + '</span>' + t;
+      $('log').prepend(d);
+    }
+    function mark(id) {
+      S.done[id] = true;
+      renderChecks();
+    }
+    function toast(t, which) {
+      const el = $(which || 'toast');
+      el.textContent = t;
+      el.hidden = false;
+      setTimeout(() => (el.hidden = true), 2200);
+    }
+    function dialog(title, body, no, yes, onNo, onYes, crit) {
+      S.dialog = { onNo, onYes };
+      $('dlg-title').textContent = title;
+      $('dlg-body').textContent = body;
+      $('dlg-body').className = crit ? 'crit' : '';
+      $('dlg-no').textContent = no;
+      $('dlg-yes').textContent = yes;
+      $('dialog').hidden = false;
+    }
+    function closeDialog() {
+      S.dialog = null;
+      $('dialog').hidden = true;
+    }
+    $('dlg-no').onclick = () => {
+      const d = S.dialog;
+      closeDialog();
+      d && d.onNo && d.onNo();
+    };
+    $('dlg-yes').onclick = () => {
+      const d = S.dialog;
+      closeDialog();
+      d && d.onYes && d.onYes();
+    };
+    $('dialog').onclick = (e) => {
+      if (e.target === $('dialog')) {
+        const d = S.dialog;
+        closeDialog();
+        d && d.onNo && d.onNo();
+      }
+    };
+
+    /* ---------- render ---------- */
+    function render() {
+      $('k-cover').innerHTML = S.cover + '<span> / 3</span>';
+      $('k-credit').innerHTML = String(S.credit);
+      $('k-month').innerHTML = S.month + '<span> / ' + MONTHLY + '</span>';
+      $('k-cost').textContent = '¥' + S.cost;
+      $('k-pool-c').innerHTML = S.poolC + '<span> / ' + POOL + '</span>';
+      $('k-pool-s').innerHTML = S.poolS + '<span> / ' + POOL + '</span>';
+      // hero
+      const h = $('hero');
+      h.className = 'hero ' + (S.heroKind === 'photo' ? 'photo' : S.heroKind === 'ai' ? 'ai' : '');
+      h.innerHTML =
+        S.heroKind === 'photo'
+          ? '撮影した写真'
+          : S.heroKind === 'ai'
+            ? '<span class="badge">AI</span>AIが作ったイメージ'
+            : 'まだ写真がありません';
+      $('hero-note').hidden = S.heroKind !== 'ai';
+      $('genband').hidden = !S.generating;
+      $('menu').hidden = !S.menu;
+      $('menu-ai-sub').textContent =
+        'あと' + S.cover + '枚・押すと1枚つかいます（やめても戻りません）';
+      $('menu-ai').disabled = S.generating;
+      $('preview').hidden = !(S.preview && !S.replaceConfirm);
+      // steps
+      const missing = S.stepPhotos.filter((x) => !x).length;
+      $('step-entry').hidden = !(scenario === 'steps' && missing >= 2);
+      $('step-entry-sub').textContent =
+        '広告を見て、写真のない' + missing + 'つの手順にイラストを付けられます';
+      $('steps').innerHTML = STEP_TEXT.map((t, i) => {
+        const p = S.stepPhotos[i];
+        const cls = p === true ? 'thumb has' : p === 'ai' ? 'thumb ai' : 'thumb';
+        return (
+          '<div class="step"><div class="n">' +
+          (i + 1) +
+          '</div><div class="body">' +
+          t +
+          '</div>' +
+          (p
+            ? '<div class="' +
+              cls +
+              '">' +
+              (p === 'ai' ? '<span class="badge">AI</span>イラスト' : '写真') +
+              '</div>'
+            : '<button class="' +
+              cls +
+              '" data-step="' +
+              i +
+              '" aria-label="手順' +
+              (i + 1) +
+              'に写真やイラストを付ける">＋<br>写真・イラスト</button>') +
+          '</div>'
+        );
+      }).join('');
+      $('v-detail').hidden = S.route !== 'detail';
+      $('v-steps').hidden = S.route !== 'steps';
+      if (S.route === 'steps') renderSteps();
+      renderChecks();
+    }
+    function renderChecks() {
+      const list = scenario === 'steps' ? CHECKS.steps : CHECKS.cover;
+      $('chk').innerHTML = list
+        .map(
+          ([id, t]) =>
+            '<label><span class="dot ' +
+            (S.done[id] ? 'on' : '') +
+            '"></span><span class="id">条件 ' +
+            id +
+            '</span><span>' +
+            t +
+            '</span></label>',
+        )
+        .join('');
+    }
+
+    /* ---------- cover flow ---------- */
+    $('menu-open').onclick = () => {
+      S.menu = true;
+      render();
+    };
+    $('menu-cancel').onclick = () => {
+      S.menu = false;
+      render();
+    };
+    $('menu').onclick = (e) => {
+      if (e.target === $('menu')) {
+        S.menu = false;
+        render();
+      }
+    };
+    $('menu-ai').onclick = () => {
+      S.menu = false;
+      startCover();
+    };
+    function startCover() {
+      if (S.inFlight) {
+        log('再入防止: 既に生成中なので無視');
+        return;
+      }
+      if (S.cover <= 0) {
+        dialog(
+          '今月の無料枠を使い切りました',
+          '短い広告を見ると、イメージ生成をもう1回使えます（貯めずにその場で1回だけ）。',
+          'やめる',
+          '広告を見る',
+          null,
+          () => {
+            log('（モック）広告視聴 → その場で 1 回');
+            S.cover = 1;
+            startCover();
+          },
+        );
+        render();
+        return;
+      }
+      S.generating = true;
+      S.sent = true;
+      S.cost += 5;
+      S.poolC++;
+      S.cover--;
+      log('生成リクエスト送信（枠 −1・¥5）');
+      mark('15');
+      S.inFlight = setTimeout(() => {
+        S.inFlight = null;
+        S.generating = false;
+        if (S.pendingResult === false) {
+          S.preview = true;
+          log('生成完了 → プレビューシート');
+        }
+        render();
+      }, GEN_MS);
+      render();
+    }
+    $('pv-adopt').onclick = () => {
+      if (S.hasPhoto && S.heroKind === 'photo') {
+        S.replaceConfirm = true;
+        render();
+        dialog(
+          '今の写真をAIのイメージに置き換えます',
+          '置き換えると、元の写真には戻せません。',
+          'やめる',
+          '置き換える',
+          () => {
+            S.replaceConfirm = false;
+            log('置き換え確認 → やめる（シートに戻る・生成物は保持）');
+            mark('12');
+            render();
+          },
+          () => {
+            S.replaceConfirm = false;
+            adopt();
+          },
+          true,
+        );
+        return;
+      }
+      adopt();
+    };
+    function adopt() {
+      S.preview = false;
+      S.heroKind = 'ai';
+      S.hasPhoto = true;
+      log('採用 → coverPhotoPath だけ更新。詳細画面のまま');
+      mark('1');
+      mark('13');
+      if (scenario === 'cover-photo') mark('3');
+      render();
+      toast('イメージを設定しました');
+    }
+    $('pv-cancel').onclick = () => cancelPreview('［やめる］');
+    $('pv-retry').onclick = () => {
+      S.preview = false;
+      render();
+      startCover();
+    };
+    $('pv-report').onclick = () => {
+      S.preview = false;
+      render();
+      toast('報告画面を開きます（モック）');
+    };
+    $('preview').onclick = (e) => {
+      if (e.target === $('preview')) cancelPreview('シート外タップ');
+    };
+    function cancelPreview(how) {
+      S.preview = false;
+      log(
+        how +
+          ' → 何も変えない。枠は戻らない。スクロール位置 ' +
+          Math.round($('detail-scroll').scrollTop) +
+          'px 保持',
+      );
+      mark('11');
+      if (scenario === 'cover-photo' && S.heroKind === 'photo') mark('3');
+      render();
+    }
+
+    /* back handling: one function for hw back / header back */
+    function backDetail(src) {
+      if (S.dialog) {
+        const d = S.dialog;
+        closeDialog();
+        d.onNo && d.onNo();
+        log(src + '（ダイアログ中）＝キャンセル');
+        return;
+      }
+      if (S.menu) {
+        S.menu = false;
+        render();
+        return;
+      }
+      if (S.preview) {
+        cancelPreview(src);
+        return;
+      }
+      if (S.generating) {
+        dialog(
+          '生成を中止しますか',
+          'すでにサーバーへ送ったため、この1枚ぶんはつかいます。中止しても戻りません。',
+          '続ける',
+          '中止する',
+          () => log(src + '（生成中）→ 続ける'),
+          () => {
+            clearTimeout(S.inFlight);
+            S.inFlight = null;
+            S.generating = false;
+            log('中止。枠は戻らない（送信済み）。詳細画面に留まる');
+            mark('10');
+            render();
+          },
+          true,
+        );
+        log(src + '（生成中）→ 「中止／続ける」を問う。画面は離れない');
+        return;
+      }
+      log(src + ' → 蔵書一覧へ戻る（モックでは留まる）');
+      toast('蔵書へ戻ります（モック）');
+    }
+    $('hb-detail').onclick = () => backDetail('ヘッダー戻る');
+    $('hw-home').onclick = () => {
+      if (S.route === 'detail' && S.generating) {
+        log('ホームへ（生成中）… 復帰');
+        S.pendingResult = true;
+        setTimeout(() => {
+          S.pendingResult = false;
+          if (!S.generating && !S.preview && S.inFlight === null) {
+            S.preview = true;
+            log('復帰: 完了していたのでシートを 1 回だけ出す');
+          } else log('復帰: まだ生成中。表示が続く。二重生成なし');
+          mark('14');
+          render();
+        }, 1200);
+      } else if (S.route === 'steps' && S.phase === 'generating') {
+        log('ホームへ → 復帰。ループは JS で続く。runningRef で二重起動しない');
+        mark('9');
+      } else log('ホームへ → 復帰（何も起きない）');
+    };
+
+    /* ---------- step-images route ---------- */
+    $('step-entry').onclick = () => openSteps(null, 'まとめての入口');
+    function missingIdx() {
+      const all = S.stepPhotos.map((p, i) => (p ? null : i)).filter((i) => i !== null);
+      return S.target == null ? all : all.filter((i) => i === S.target);
+    }
+    function openSteps(target, how) {
+      S.route = 'steps';
+      S.phase = 'confirm';
+      S.batch = [];
+      S.target = target;
+      $('steps-ttl').textContent =
+        target == null
+          ? '手順のイラストをまとめてつくる'
+          : '手順' + (target + 1) + 'のイラストをつくる';
+      log(how + ' → ルート画面へ push（[id] はスタックに残る）');
+      render();
+    }
+    $('steps').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-step]');
+      if (!b) return;
+      S.thumbStep = +b.dataset.step;
+      $('thumbmenu-ttl').textContent = '手順' + (S.thumbStep + 1) + 'に付ける';
+      $('thumbmenu').hidden = false;
+      log('写真なしのサムネをタップ → 撮影／ギャラリー／AI の 3 択');
+    });
+    $('tm-cancel').onclick = () => {
+      $('thumbmenu').hidden = true;
+    };
+    $('thumbmenu').onclick = (e) => {
+      if (e.target === $('thumbmenu')) $('thumbmenu').hidden = true;
+    };
+    $('tm-gallery').onclick = () => {
+      $('thumbmenu').hidden = true;
+      S.stepPhotos[S.thumbStep] = true;
+      log('（モック）ギャラリーから手順' + (S.thumbStep + 1) + 'に写真を付けた');
+      render();
+    };
+    $('tm-camera').onclick = () => {
+      $('thumbmenu').hidden = true;
+      S.stepPhotos[S.thumbStep] = true;
+      log('（モック）撮影して手順' + (S.thumbStep + 1) + 'に写真を付けた');
+      render();
+    };
+    $('tm-ai').onclick = () => {
+      $('thumbmenu').hidden = true;
+      openSteps(S.thumbStep, 'サムネの「AIでイラストをつくる」');
+      mark('1s');
+    };
+    function renderSteps() {
+      const b = $('steps-body');
+      const miss = missingIdx();
+      const monthLeft = MONTHLY - S.month;
+      if (S.phase === 'confirm') {
+        const gen = Math.min(miss.length, S.credit, monthLeft);
+        const short = miss.length - gen;
+        const canAd = S.credit < monthLeft;
+        b.innerHTML =
+          '<div class="nums">' +
+          '<div class="num"><small>写真のない手順</small><b>' +
+          miss.length +
+          '<em>件</em></b></div>' +
+          '<div class="num"><small>広告で貯めた枚数</small><b>' +
+          S.credit +
+          '<em>枚</em></b></div>' +
+          '<div class="num"><small>全部作るのに見る広告</small><b>' +
+          (short > 0 ? 'あと' + short : '0') +
+          '<em>本</em></b></div>' +
+          '<div class="num"><small>今月作れるのは</small><b>' +
+          monthLeft +
+          '<em>枚</em></b></div></div>' +
+          '<p class="disc" style="margin-top:-6px">' +
+          (S.target != null
+            ? '手順' +
+              (S.target + 1) +
+              'に1枚作ります。' +
+              (gen > 0 ? '貯めた枚数から1枚つかいます。' : '広告を1本見ると作れます。') +
+              '今月はあと' +
+              monthLeft +
+              '枚作れます。'
+            : '写真のない手順' +
+              miss.length +
+              '件のうち、貯めた' +
+              S.credit +
+              '枚ぶんを今すぐ作れます。全部作るには広告をあと' +
+              short +
+              '本見ます。今月はあと' +
+              monthLeft +
+              '枚作れます。') +
+          '</p>' +
+          '<p class="disc">レシピのイメージ（月3枚の無料枠）とは別です。広告を1本見るごとに、イラストを1枚作れます（貯められるのは今月の残り枚数まで）。イラストは手描きの絵のように仕上がり、実際の調理とは異なります。料理名・材料名・手順の文をサーバー（AI提供元）に送信します。写真は送りません。</p>' +
+          '<div class="stack" style="display:flex;flex-direction:column;gap:8px">' +
+          '<button class="btn ' +
+          (gen > 0 ? 'primary ' : '') +
+          'wide" id="st-go" ' +
+          (gen <= 0 ? 'disabled' : '') +
+          '>' +
+          (gen >= miss.length ? '全部作る（' + gen + '枚）' : '貯めた' + gen + '枚ぶん作る') +
+          '</button>' +
+          (canAd
+            ? '<button class="btn ' +
+              (gen > 0 ? '' : 'primary ') +
+              'wide" id="st-ad">広告を見て1枚ぶん貯める</button>'
+            : '<p class="disc" style="color:var(--warn)">' +
+              (monthLeft <= 0
+                ? '今月の上限（' + MONTHLY + '枚）に達しました。来月またご利用いただけます。'
+                : '今月作れる枚数ぶん貯まっています。先にイラストを作ってください。') +
+              '</p>') +
+          '<button class="btn wide" id="st-cancel">やめる</button></div>';
+        $('st-cancel').onclick = () => leaveSteps('やめる');
+        if ($('st-ad')) $('st-ad').onclick = startAd;
+        $('st-go').onclick = () => startBatch(gen);
+        mark('1');
+        if (!canAd) mark('3');
+      } else if (S.phase === 'generating') {
+        const doneN = S.batch.filter((x) => x.status === 'done').length;
+        b.innerHTML =
+          '<p class="disc" style="color:var(--gold)"><span class="spin" style="display:inline-block;vertical-align:middle;margin-right:6px"></span>' +
+          doneN +
+          ' / ' +
+          S.batch.length +
+          '枚ができました</p>' +
+          '<div class="prog"><i style="width:' +
+          (doneN / S.batch.length) * 100 +
+          '%"></i></div>' +
+          grid(false) +
+          '<button class="btn wide" id="st-stop">中止する</button>';
+        $('st-stop').onclick = () => backSteps('［中止］');
+      } else if (S.phase === 'review') {
+        const keep = S.batch.filter((x) => x.status === 'done' && !x.excluded).length;
+        b.innerHTML =
+          '<p class="note" style="color:var(--warn)">AIが作ったイラストです。実際の調理とは異なります。</p><p class="disc">できたイラストは、すべてレシピに入れる設定になっています。いらないものは×で外せます（もう一度押すと戻ります）。外しても、使った枚数は戻りません。</p>' +
+          grid(true) +
+          '<div style="display:flex;flex-direction:column;gap:8px"><button class="btn primary wide" id="st-adopt" ' +
+          (keep <= 0 ? 'disabled' : '') +
+          '>このイラストを使う（' +
+          keep +
+          '枚）</button>' +
+          '<button class="btn wide" id="st-report" style="border:0;color:var(--muted)">報告する</button></div>';
+        $('st-adopt').onclick = adoptBatch;
+        $('st-report').onclick = () => toast('報告画面を開きます（モック）', 'toast2');
+        b.querySelectorAll('.x').forEach(
+          (x) =>
+            (x.onclick = () => {
+              const it = S.batch[+x.dataset.i];
+              it.excluded = !it.excluded;
+              log('手順 ' + (it.step + 1) + ' を' + (it.excluded ? '外す' : '戻す'));
+              mark('6c');
+              renderSteps();
+            }),
+        );
+        mark('6c');
+      }
+    }
+    function grid(review) {
+      return (
+        '<div class="gridimg">' +
+        S.batch
+          .map((it, i) => {
+            const cls =
+              'cell ' + (it.status === 'done' ? 'done' : '') + (it.excluded ? ' excl' : '');
+            const inner =
+              it.status === 'done'
+                ? '<span class="k">' +
+                  (it.step + 1) +
+                  '</span>イラスト' +
+                  (review
+                    ? '<button class="x" data-i="' + i + '" aria-label="外す">×</button>'
+                    : '')
+                : it.status === 'running'
+                  ? '<span class="spin"></span>手順' + (it.step + 1)
+                  : it.status === 'failed'
+                    ? '作れませんでした'
+                    : '手順' + (it.step + 1);
+            return '<div class="' + cls + '">' + inner + '</div>';
+          })
+          .join('') +
+        '</div>'
+      );
+    }
+    function startAd() {
+      S.adRunning = true;
+      S.adLeft = AD_MS / 1000;
+      $('ad').hidden = false;
+      $('ad-timer').textContent = 'あと' + S.adLeft + '秒';
+      log('広告ロード → 表示（タップでオプトイン）');
+      S.adTimer = setInterval(() => {
+        S.adLeft--;
+        $('ad-timer').textContent = 'あと' + S.adLeft + '秒';
+        if (S.adLeft <= 0) {
+          clearInterval(S.adTimer);
+          S.adRunning = false;
+          $('ad').hidden = true;
+          S.credit = S.credit + 1;
+          log('広告完了（rewarded:true）→ ためた枚数 +1 = ' + S.credit);
+          mark('2');
+          render();
+        }
+      }, 1000);
+    }
+    $('ad-close').onclick = () => {
+      clearInterval(S.adTimer);
+      S.adRunning = false;
+      $('ad').hidden = true;
+      log('広告を途中で閉じた（rewarded:false）→ 付与しない。貯まった分は減らない');
+      mark('2');
+      render();
+    };
+    function startBatch(n) {
+      const miss = missingIdx().slice(0, n);
+      S.batch = miss.map((i) => ({ step: i, status: 'pending', excluded: false }));
+      S.phase = 'generating';
+      S.cancelReq = false;
+      S.batchIdx = -1;
+      log(n + ' 枚の逐次生成を開始');
+      render();
+      next();
+    }
+    function next() {
+      if (S.cancelReq) {
+        finishBatch('中止');
+        return;
+      }
+      const i = S.batch.findIndex((x) => x.status === 'pending');
+      if (i < 0) {
+        finishBatch('完了');
+        return;
+      }
+      if (S.poolS >= POOL) {
+        S.batch[i].status = 'failed';
+        log('RATE_LIMITED（手順プール天井）→ review へ。枠は減らない');
+        finishBatch('天井');
+        return;
+      }
+      S.batch[i].status = 'running';
+      S.cost += 5;
+      S.poolS++;
+      log('手順 ' + (S.batch[i].step + 1) + ' を送信（¥5）');
+      renderSteps();
+      render();
+      S.genTimer = setTimeout(() => {
+        S.batch[i].status = 'done';
+        S.credit--;
+        S.month++;
+        log('手順 ' + (S.batch[i].step + 1) + ' 完了 → 枠 −1・今月 +1');
+        render();
+        next();
+      }, 2000);
+    }
+    function finishBatch(why) {
+      S.phase = 'review';
+      log('生成' + why + ' → 採用画面（完了分はここに残る）');
+      render();
+    }
+    function adoptBatch() {
+      S.batch
+        .filter((x) => x.status === 'done' && !x.excluded)
+        .forEach((x) => (S.stepPhotos[x.step] = 'ai'));
+      const n = S.batch.filter((x) => x.status === 'done' && !x.excluded).length;
+      S.route = 'detail';
+      S.phase = 'confirm';
+      S.target = null;
+      S.batch = [];
+      log(
+        n +
+          ' 枚を setStepPhoto → router.back() → 詳細の useFocusEffect が再読込。スクロール位置 ' +
+          Math.round($('detail-scroll').scrollTop) +
+          'px',
+      );
+      mark('11');
+      render();
+      toast('イラストを' + n + '枚入れました');
+    }
+    function leaveSteps(how) {
+      S.route = 'detail';
+      S.phase = 'confirm';
+      S.target = null;
+      log(how + ' → 詳細画面へ戻る（何も書き込まない）');
+      render();
+    }
+    function backSteps(src) {
+      if (S.dialog) {
+        const d = S.dialog;
+        closeDialog();
+        d.onNo && d.onNo();
+        return;
+      }
+      if (S.adRunning) {
+        log(src + '（広告中）→ SDK の閉じる扱い');
+        $('ad-close').onclick();
+        return;
+      }
+      if (S.phase === 'confirm') {
+        leaveSteps(src);
+        return;
+      }
+      if (S.phase === 'generating') {
+        dialog(
+          '生成を中止しますか',
+          '送信中の1枚は仕上がってから止まります（送った分はつかいます）。できたぶんは残ります。',
+          '続ける',
+          '残りを中止する',
+          () => log(src + '（生成中）→ 続ける'),
+          () => {
+            S.cancelReq = true;
+            log('中止を受付。送信中の 1 枚を待つ');
+            mark('9');
+          },
+          false,
+        );
+        log(src + '（生成中）→ 「中止／続ける」を問う');
+        return;
+      }
+      if (S.phase === 'review') {
+        const n = S.batch.filter((x) => x.status === 'done').length;
+        dialog(
+          'できたイラスト' + n + '枚を捨てますか',
+          '捨てても、使った枚数は戻りません。',
+          '残す',
+          '捨てる',
+          () => log(src + '（採用画面）→ 続ける'),
+          () => {
+            S.batch = [];
+            S.route = 'detail';
+            S.phase = 'confirm';
+            S.target = null;
+            log('捨てて詳細画面へ。手順は不変');
+            mark('10');
+            render();
+          },
+          true,
+        );
+        return;
+      }
+    }
+    $('hb-steps').onclick = () => backSteps('ヘッダー戻る');
+    $('hw-back').onclick = () => {
+      S.route === 'detail' ? backDetail('Android 戻る') : backSteps('Android 戻る');
+    };
+
+    /* ---------- scenarios ---------- */
+    function setScenario(s) {
+      scenario = s;
+      ['s-cover-none', 's-cover-photo', 's-steps'].forEach((id) =>
+        $(id).setAttribute('aria-pressed', String(id === 's-' + s)),
+      );
+      reset();
+      log('シナリオ: ' + $('s-' + s).textContent);
+    }
+    $('s-cover-none').onclick = () => setScenario('cover-none');
+    $('s-cover-photo').onclick = () => setScenario('cover-photo');
+    $('s-steps').onclick = () => setScenario('steps');
+    $('s-reset').onclick = () => {
+      reset();
+      log('状態をリセット');
+    };
+    reset();
+    log('シナリオ: 表紙・写真なし');
+  })();
+</script>
