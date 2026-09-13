@@ -18,7 +18,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { GeminiCoverImageProvider, type CoverImageInput } from '../src/lib/cover-image.js';
+import {
+  GeminiCoverImageProvider,
+  cuisineHintEnabled,
+  type CoverImageInput,
+} from '../src/lib/cover-image.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -279,13 +283,30 @@ async function runBatch(outDirArg: string | undefined): Promise<void> {
     });
   }
 
-  const results: { id: string; model: string; ok: boolean; detail: string; ms: number }[] = [];
+  /**
+   * どちらのプロンプト版で撮ったか（設計 §7-2 (a) の「10 題 × off/on」）。
+   * **これを記録しないと採点表が作れない** — 同じ `docs/eval/cover-image/` に上書きして
+   * off と on の絵が区別できなくなる（1.13.0 で「生成ログだけ残って判定なし」を実際にやった）。
+   * 判定は実装と同じ `cuisineHintEnabled()` を使う。`.env` に値が入っていて意図せず on に
+   * なっている事故も、見出しと summary に出るので撮る前に気づける。
+   */
+  const cuisineHint = cuisineHintEnabled() ? 'on' : 'off';
+  process.stdout.write(`COVER_IMAGE_CUISINE_HINT=${cuisineHint}\n`);
+
+  const results: {
+    id: string;
+    model: string;
+    cuisineHint: 'on' | 'off';
+    ok: boolean;
+    detail: string;
+    ms: number;
+  }[] = [];
 
   for (const job of jobs) {
     const model = job.model ?? defaultModel;
     const provider = new GeminiCoverImageProvider(job.model ? { model: job.model } : undefined);
-    const filename = `${job.id}${job.suffix}.jpg`;
-    process.stdout.write(`--- ${job.title} (${model}) -> ${filename} ---\n`);
+    const filename = `${job.id}${job.suffix}-hint-${cuisineHint}.jpg`;
+    process.stdout.write(`--- ${job.title} (${model}, hint=${cuisineHint}) -> ${filename} ---\n`);
     const startedAt = Date.now();
     try {
       const result = await provider.generate(job.input);
@@ -294,20 +315,23 @@ async function runBatch(outDirArg: string | undefined): Promise<void> {
       process.stdout.write(
         `  OK (${ms}ms, ${result.mimeType}, ${result.dataBase64.length} b64 chars)\n`,
       );
-      results.push({ id: job.id, model, ok: true, detail: result.mimeType, ms });
+      results.push({ id: job.id, model, cuisineHint, ok: true, detail: result.mimeType, ms });
     } catch (err) {
       const ms = Date.now() - startedAt;
       const detail = err instanceof Error ? err.message : String(err);
       process.stdout.write(`  NG (${ms}ms): ${detail}\n`);
-      results.push({ id: job.id, model, ok: false, detail, ms });
+      results.push({ id: job.id, model, cuisineHint, ok: false, detail, ms });
     }
   }
 
   process.stdout.write(`\n=== summary ===\n`);
   for (const r of results) {
-    process.stdout.write(`${r.ok ? 'OK' : 'NG'}\t${r.id}\t${r.model}\t${r.ms}ms\t${r.detail}\n`);
+    process.stdout.write(
+      `${r.ok ? 'OK' : 'NG'}\t${r.id}\thint=${r.cuisineHint}\t${r.model}\t${r.ms}ms\t${r.detail}\n`,
+    );
   }
-  const summaryPath = path.join(outDir, '_batch-summary.json');
+  // summary も版ごとに分ける（off の結果を on の実行で潰さない）
+  const summaryPath = path.join(outDir, `_batch-summary-hint-${cuisineHint}.json`);
   writeFileSync(summaryPath, JSON.stringify(results, null, 2));
   process.stdout.write(`\nsummary JSON: ${summaryPath}\n`);
 }

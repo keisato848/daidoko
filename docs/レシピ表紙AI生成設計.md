@@ -37,7 +37,7 @@
 | 採用先             | 詳細からの採用は **`setRecipeCoverPhoto(recipeId, path)`**（`recipe.service.ts`・`setStepPhoto` の隣）: `recipes.coverPhotoPath` だけ update。**版を切らない・`updatedAt` を進めない・同期に載せない**（`coverPhotoPath` は `sync-payload.ts` に無い）。`updateRecipe` は必ずリビジョンを作るので通さない                                                                          |
 | 置き換え確認       | 本物の写真（`aigen-` でない `coverPhotoPath`）があるときだけ、プレビューの［このイメージにする］直後・DB に書く前に `dialog.confirm({destructive:true})`: 「今の写真をAIのイメージに置き換えます／**置き換えると、元の写真には戻せません。**」（版履歴は表紙を持たないので事実。CriticalMessage）。やめる → シートに戻り生成物は保持。旧ファイルはフォーム差し替えと同じく消さない |
 | メニュー並び       | 近づける／編集／**AIでイメージをつくる**／共有／版履歴／（区切り線）削除。ペルソナ M3「AI 項目の 2 つ下に赤い削除」。PM 確認済み: メニューは `[id].tsx` ローカルで他画面に同型なし                                                                                                                                                                                                 |
-| 計測               | body に任意 `entry: 'form' \| 'detail'`。サーバー zod `.optional()`（未知キー strip で旧クライアント互換）。pino 1 行。BYOK は数えられない                                                                                                                                                                                                                                         |
+| 計測               | body に任意 `entry: 'form' \| 'detail'`。サーバー zod `.optional()`（未知キー strip で旧クライアント互換）。ログ 1 行（stdout。下の注記）。BYOK は数えられない                                                                                                                                                                                                                     |
 
 **戻る操作**（利用者指示「導線と戻るボタンに注意・満足度に直結」）。詳細画面は `headerShown:false` で戻るは自前 Pressable。`router.back()`・ハード戻る・iOS スワイプは `useNavigation().addListener('beforeRemove')` に集める。
 
@@ -53,6 +53,10 @@
 **スクロール位置の保持は「画面を unmount させない」の一点**。触ってはいけない: `loadRecipe` に `setIsLoading(true)` を足さない、ヒーローに `key` を付けない。
 
 **プロンプト（C-1・2026-09-13）**: 盛り付けの 1 行を UI 言語（locale）でなく、**料理名・タグ・材料名からの出自推定**（`packages/shared` の語彙表 `inferCuisine`・NFKC 正規化・タグ優先）で決める。判定不能なら現行の locale 行にフォールバック（今より悪くならない）。server と mobile（BYOK）が同じ関数を使う（「写し」規約）。栓は env `COVER_IMAGE_CUISINE_HINT`（既定 off → §7-2 の評価で現行以上と確認してから on）。API 契約は不変。
+
+> **実装で分かったこと（2026-09-13・#313）**: 「同じ関数を使う」は**直 import ではなく写し**になる。server は tsconfig の `rootDir` が `src` に閉じていて `@daidoko/shared` を import すると TS6059 で型検査を通らない（`__tests__/shared-parity.test.ts` の冒頭に既出の制約）。そのため**正は `packages/shared/src/constants/cuisine.ts`、`apps/server/src/lib/cuisine.ts` が写し**、ズレは parity テストが割る。モバイル（BYOK）は shared を直接 import できる。
+> **ログは pino ではなく stdout 1 行**: 初稿は「pino 1 行」と書いていたが、`apps/server` は依存に pino を持つだけで **routes には配線されていない**（`app.ts` が使うのは `hono/logger`）。既存の `routes/report.ts` と同じ `process.stdout.write` の 1 行にした（Railway のログ基盤に載る点は同じ）。書くのは `entry`・`ok`・`error.code` だけで、料理名も端末 ID も出さない。
+> **BYOK は当面この行を使わない**: 栓がサーバーの env なので、BYOK（端末が直接 Gemini を叩く経路）は判定材料を持たない。#313 は server のみの変更で、BYOK 側の追従は mobile の PR（#315）で行う。それまで BYOK の盛り付け行は現行（locale）のまま — 評価もフラグ on の server 経路で行うので、判断材料は欠けない。
 
 ## 3. ゲート（別勘定・決定変更 G）
 
@@ -150,7 +154,13 @@
    **未実施のまま 1.13.0 を出荷した（2026-09-12 の drift 監査で判明。`docs/eval/cover-image/_batch-summary.json` は生成ログのみで判定なし）。**
    2026-09-13 の決定で手順を次に固定（実施は `eval-inference`・費用はユーザー承認待ち）:
    (a) 同じ Lite で 10 題 × プロンプト 2 版（`COVER_IMAGE_CUISINE_HINT` off/on）を目視採点し `docs/eval/cover-image/<日付>.md` に残す。改善版が現行以上でなければ本番を変えない（≒¥100）
-   (b) `gemini-3.1-flash-image` の単価を公式料金表で一次確認し出典を残す。¥5.0/枚以下なら、表示先（最大 220px 高）に足る 1 解像度だけで同じ 10 題を比較（≒¥100）。超えたら比較せず Lite 固定と明記。切替は env `COVER_IMAGE_MODEL` のみ
+   (a-2) **10 題の選び方（#313 の実装時に実測した誤爆の型・2026-09-13）。** 語彙は `packages/shared/src/constants/cuisine.ts`。フラグ off なので出荷中の絵は変わらないが、on にする判断は次の型を題に含めないと現行比較にならない:
+   - **「和風〜」接頭**: `和風パスタ` → italian、`和風ハンバーグ`/`和風シチュー` → western。「和風」はタグの完全一致語彙にしかないのでタイトルでは効かない。日本のレシピで最頻の修飾語なので**最低 1 題入れる**
+   - **「〜ステーキ」の部分一致**: `豆腐ステーキ`・`大根ステーキ` → western（白い洋皿）
+   - **汁物・麺に器を指定してしまう**: `味噌ラーメン`・`担々麺` → chinese「大きめの丸皿」、`ミネストローネ` → italian「平皿かパスタ皿」。出自の判定は正しく、ずれているのは `PLATING_LINES` の器の指定。**汁物を 1 題入れる**
+   - **表記ゆれ**: `からあげ`・`カラアゲ`、`ぎょうざ`・`ギョウザ` は当初当たらなかった（語彙が `から揚げ`/`唐揚げ`/`餃子` だけだったため）。`vocabKey` がカナ→かなに落とすので、かな表記を 1 語ずつ足して両方当たるようにした（#313・`diff-critic` の指摘）。**他の料理にも同種の抜けがある前提で題を選ぶこと**
+   - **同点で null**（＝現行行にフォールバック。設計どおり）: `ミートソースドリア`・`キムチチャーハン`・`麻婆パスタ`
+     (b) `gemini-3.1-flash-image` の単価を公式料金表で一次確認し出典を残す。¥5.0/枚以下なら、表示先（最大 220px 高）に足る 1 解像度だけで同じ 10 題を比較（≒¥100）。超えたら比較せず Lite 固定と明記。切替は env `COVER_IMAGE_MODEL` のみ
 3. 見送った代替案も残す: 素材写真ライブラリ（ライセンス管理が要る）・
    カテゴリ別の既定イラスト（描き起こしコスト）。AI 生成が不調ならここへ戻る
 
