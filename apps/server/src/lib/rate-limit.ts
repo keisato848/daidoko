@@ -11,7 +11,12 @@
  *   - INFER_GLOBAL_DAILY_LIMIT   total requests/day across clients (default 30)
  *
  * The global cap is the real cost ceiling — it bounds total Gemini calls/day
- * regardless of how many clients hit the endpoint. Set either to 0 to disable.
+ * regardless of how many clients hit the endpoint.
+ *
+ * **0 以下は「上限なし」であって「機能オフ」ではない。** `checkRateLimit` は `limit > 0` の
+ * ときだけ拒否する（下の実装）ので、コストを止めるつもりで 0（や負数）を入れると
+ * **天井が外れる**。
+ * 機能を止めたいときは 0 ではなく、その機能の env（`GEMINI_API_KEY` など）側で止めること。
  *
  * 既定 30 は「月の上限を ¥1,000 以内に収める」方針から逆算した値
  * （1 推論 ≒ ¥1 の実測 × 30 日）。ユーザーが増えたら上げる。
@@ -147,7 +152,7 @@ export const IDENTIFY_POOL: RateLimitPool = {
  * （§10.10.6-a の逆条件 — 単価が違う用途を 1 本のカウンタで分け合わせては
  * いけない、という他プールと同じ理由）。
  *
- * 既定 10/日（月最大 ¥1,550・MAU 3 に十分・0 で機能オフ）。
+ * 既定 10/日（月最大 ¥1,550・MAU 3 に十分）。**0 以下は上限なし**（機能オフではない・冒頭の注意）。
  * クライアント別は 5（実装既定。設計 §3 が定めるのはサーバー天井 10/日だけで、
  * クライアント別上限は「1 端末が天井の半分を独占しない」ための実装判断）。
  */
@@ -158,6 +163,30 @@ export const COVER_POOL: RateLimitPool = {
   globalDefault: 10,
   clientEnv: 'COVER_IMAGE_DAILY_LIMIT',
   clientDefault: 5,
+};
+
+/**
+ * だいどこの手順のイラスト（`/infer/step-image`）。
+ * `docs/レシピ表紙AI生成設計.md` §8-2。
+ *
+ * **COVER_POOL とは共有しない。** 表紙は 1 レシピに 1 枚だが、手順は
+ * **1 レシピで一度に何枚も**作る（写真の無い手順の数だけ）。同じカウンタに入れると
+ * 一括生成 1 回で表紙の天井を食い尽くし、「イメージを作りたいのに今日はもう作れない」に
+ * なる。単価が同じでも**消費の形が違う**ので分ける（単価が違うから分ける
+ * RECIPE_POOL / COVER_POOL とは別の理由）。
+ *
+ * 既定 10/日（月最大 ¥1,550・両プール合算でも最悪 ¥3,100/月）。**0 以下は上限なし**（冒頭の注意）。
+ * 利用者側の月 30 枚と広告の枠は**端末ローカル**が数える（§8-2）。ここはコストの守衛で、
+ * 広告は原資ではなく摩擦ゲートなので、広告を見た数だけサーバーの天井が上がることはない。
+ * クライアント別も 10 — 一括生成は 1 端末が続けて叩く形なので、表紙（5）より緩く取る。
+ */
+export const STEP_POOL: RateLimitPool = {
+  key: '__global_step_image__',
+  label: 'だいどこ 手順のイラスト生成',
+  globalEnv: 'STEP_IMAGE_GLOBAL_DAILY_LIMIT',
+  globalDefault: 10,
+  clientEnv: 'STEP_IMAGE_DAILY_LIMIT',
+  clientDefault: 10,
 };
 
 interface Bucket {

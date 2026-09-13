@@ -62,6 +62,25 @@ function sharedWordTable(name: string): Record<string, string[]> {
   return table;
 }
 
+const SHARED_STEP_IMAGE = readSource('../../../../packages/shared/src/constants/step-image.ts');
+const SERVER_STEP_IMAGE = readSource('../lib/step-image.ts');
+
+/**
+ * 手順のイラストのプロンプトは shared が正・`lib/step-image.ts` が写し（設計 §8-3）。
+ * 語彙の突合では足りない — 縛りの**文面**と、手順番号を渡す組み立てまで同じである必要がある。
+ * 写しは「`StepImagePromptInput` の宣言から `buildStepImagePrompt` の末尾まで」を
+ * そのまま貼ったものなので、その区画を丸ごと比べる。
+ */
+function stepImagePromptRegion(source: string, label: string): string {
+  const from = source.indexOf('/** プロンプトの材料。');
+  expect(from, `${label}: 区画の先頭が見つからない`).toBeGreaterThanOrEqual(0);
+  const fnAt = source.indexOf('export function buildStepImagePrompt', from);
+  expect(fnAt, `${label}: buildStepImagePrompt が見つからない`).toBeGreaterThan(from);
+  const to = source.indexOf('\n}\n', fnAt);
+  expect(to, `${label}: 区画の終端が見つからない`).toBeGreaterThan(fnAt);
+  return source.slice(from, to);
+}
+
 describe('shared（契約の正）とサーバーの写しの突合', () => {
   it('画像 base64 上限が一致する', () => {
     const match = SHARED_AI_CONSTANTS.match(/MAX_INFER_IMAGE_BASE64_LENGTH = ([\d_]+);/);
@@ -139,6 +158,11 @@ describe('shared（契約の正）とサーバーの写しの突合', () => {
     }
   });
 
+  it('手順のイラストのプロンプトが shared と完全一致する', () => {
+    expect(stepImagePromptRegion(SERVER_STEP_IMAGE, '写し')).toBe(
+      stepImagePromptRegion(SHARED_STEP_IMAGE, 'shared'),
+    );
+  });
   it('カテゴリ語リストが一致する', () => {
     const block = SHARED_AI_CONSTANTS.match(
       /export const CATEGORY_NAME_WORDS = \[([\s\S]*?)\] as const;/,

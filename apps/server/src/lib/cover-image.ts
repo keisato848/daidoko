@@ -168,8 +168,15 @@ export const COVER_IMAGE_RETRY_BUDGET_MS = REQUEST_TIMEOUT_MS * MAX_ATTEMPTS;
 /** モバイル側の待ち時間の想定（設計 §5）。garden-vision.ts と同じ形で公開する。 */
 export const CLIENT_TIMEOUT_MS = 75_000;
 
-/** Google Gemini（Interactions API）による実装。 */
-export class GeminiCoverImageProvider implements CoverImageProvider {
+/**
+ * Google Gemini（Interactions API）による実装。
+ *
+ * 手順のイラスト（`step-image.ts`）はこれを継承し、**`buildPrompt` だけ差し替える**。
+ * 輸送部（エンドポイント・認証ヘッダ・`image_size`・55 秒の予算・応答の解析）は
+ * 1 か所に保つ — 2 つに写すと、Interactions API の応答の形が変わったときに
+ * 片方だけ直す事故（この機能で一度踏んだ形）が起きる。
+ */
+export class GeminiCoverImageProvider<TInput extends CoverImageInput = CoverImageInput> {
   private readonly apiKey: string;
   private readonly model: string;
 
@@ -183,10 +190,18 @@ export class GeminiCoverImageProvider implements CoverImageProvider {
       'gemini-3.1-flash-lite-image';
   }
 
-  async generate(input: CoverImageInput): Promise<CoverImageResult> {
+  /**
+   * プロンプトの組み立て。**ここだけが派生クラスの差し替え点**（設計 §8-3）。
+   * 既定は表紙のプロンプト。
+   */
+  protected buildPrompt(input: TInput): string {
+    return buildCoverImagePrompt(input);
+  }
+
+  async generate(input: TInput): Promise<CoverImageResult> {
     const body = {
       model: this.model,
-      input: [{ type: 'text', text: buildCoverImagePrompt(input) }],
+      input: [{ type: 'text', text: this.buildPrompt(input) }],
       response_format: {
         type: 'image',
         mime_type: 'image/jpeg',

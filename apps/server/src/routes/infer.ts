@@ -41,7 +41,7 @@ import {
   type RefineRecipeSnapshot,
 } from '../lib/recipe-refine.js';
 import { runRecipeRefineAgent } from '../agents/recipe-refine.agent.js';
-import { checkRateLimit, COVER_POOL } from '../lib/rate-limit.js';
+import { checkRateLimit, COVER_POOL, STEP_POOL } from '../lib/rate-limit.js';
 import { parseOutputLocale, parseUnitSystem } from '../lib/output-locale.js';
 import {
   ConsultConfigError,
@@ -85,6 +85,7 @@ import {
   MAX_COVER_TAGS,
   type CoverImageProvider,
 } from '../lib/cover-image.js';
+import { GeminiStepImageProvider, type StepImageProvider } from '../lib/step-image.js';
 import { runCoverImageAgent } from '../agents/cover-image.agent.js';
 
 const inferRouter = new Hono();
@@ -1162,6 +1163,118 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
   );
 
   logEntry(result.ok, result.error?.code ?? '-');
+
+  // Always 200 — errors are in the response body (AgentResult pattern).
+  return c.json(result);
+});
+
+// ─── 手順のイラスト（設計 §8。表紙とは別プール・別プロンプト） ─────────────────
+
+/**
+ * `/cover-image` の `kind` 拡張ではなく**別エンドポイント**にしてある（設計 §8-3）。
+ * 1 本にまとめると、どちらのプール（`COVER_POOL` / `STEP_POOL`）で数えるかの判断が
+ * zod の後にもう一度必要になり、「検証は通ったがプールを取り違える」隙間ができる。
+ */
+const inferStepImageSchema = z
+  .object({
+    title: z.string().min(1, 'タイトルが空です').max(100, 'タイトルが長すぎます'),
+    ingredientNames: z.array(z.string().min(1).max(50)).max(MAX_COVER_INGREDIENTS),
+    /** この手順の本文。**写真は送らない**（§8-4 の開示文と一致させること） */
+    stepBody: z.string().min(1, '手順が空です').max(500, '手順が長すぎます'),
+    stepIndex: z.number().int().min(1),
+    stepCount: z.number().int().min(1).max(50),
+    locale: z.enum(['ja', 'en']).optional(),
+  })
+  /**
+   * 「5 手順のうち 7 番目」は成立しない。範囲だけ見ていると受理してしまい、
+   * **意味の無い 1 枚に課金される**（1 枚 ≒¥5.0）。設計 §8-3 は各フィールドの範囲しか
+   * 定めていないが、組み合わせの不整合はここで止める。
+   */
+  .refine((v) => v.stepIndex <= v.stepCount, {
+    message: '手順の番号が手順数を超えています',
+    path: ['stepIndex'],
+  });
+
+let stepImageProviderOverride: StepImageProvider | null = null;
+
+export function setStepImageProviderForTesting(provider: StepImageProvider | null): void {
+  stepImageProviderOverride = provider;
+}
+
+function resolveStepImageProvider(): StepImageProvider {
+  return stepImageProviderOverride ?? new GeminiStepImageProvider();
+}
+
+inferRouter.post('/step-image', zValidator('json', inferStepImageSchema), async (c) => {
+  const { title, ingredientNames, stepBody, stepIndex, stepCount, locale } = c.req.valid('json');
+
+  const logStep = (ok: boolean, code: string): void => {
+    process.stdout.write(`[infer/step-image] ok=${ok} error=${code}\n`);
+  };
+
+  // 表紙と同じ書式チェックだけ（乱数のインストール UUID・個人情報ではない）。
+  // 月 30 枚と広告で貯めた枚数は**端末ローカル**が数える（§8-2）。サーバーは
+  // 下の STEP_POOL だけでコストを守る。
+  const deviceId = c.req.header('x-device-id');
+  if (!deviceId || !DEVICE_ID_PATTERN.test(deviceId)) {
+    logStep(false, 'UNKNOWN');
+    return c.json({
+      ok: false,
+      error: { code: 'UNKNOWN', message: '端末IDが不正です', retryable: false },
+    });
+  }
+
+  const clientId =
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-real-ip') ||
+    'anonymous';
+  // **STEP_POOL。COVER_POOL と共有しない** — 一括生成 1 回で表紙の天井を食い尽くさない
+  // ため（rate-limit.ts の STEP_POOL コメント）。
+  const rate = checkRateLimit(clientId, STEP_POOL);
+  if (!rate.allowed) {
+    logStep(false, 'RATE_LIMITED');
+    return c.json({
+      ok: false,
+      error: {
+        code: 'RATE_LIMITED',
+        message:
+          rate.scope === 'global'
+            ? '本日の利用上限に達しました。時間をおいてお試しください。'
+            : '本日の利用上限に達しました。',
+        retryable: false,
+      },
+    });
+  }
+
+  let provider: StepImageProvider;
+  try {
+    provider = resolveStepImageProvider();
+  } catch (err) {
+    if (err instanceof CoverImageConfigError) {
+      logStep(false, 'AI_API_UNAVAILABLE');
+      return c.json({
+        ok: false,
+        error: { code: 'AI_API_UNAVAILABLE', message: 'AI 推論が利用できません', retryable: false },
+      });
+    }
+    throw err;
+  }
+
+  const result = await runCoverImageAgent(
+    {
+      title,
+      ingredientNames,
+      // 手順のプロンプトはタグを使わない（§8-3）。型を満たすためだけの空配列
+      tags: [],
+      stepBody,
+      stepIndex,
+      stepCount,
+      outputLocale: parseOutputLocale(locale),
+    },
+    provider,
+  );
+
+  logStep(result.ok, result.error?.code ?? '-');
 
   // Always 200 — errors are in the response body (AgentResult pattern).
   return c.json(result);

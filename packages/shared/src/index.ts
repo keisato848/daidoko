@@ -6,6 +6,7 @@ export * from './types/menu-recipes';
 export * from './types/fridge';
 export * from './constants/ai';
 export * from './constants/cuisine';
+export * from './constants/step-image';
 export * from './bridge/types';
 export * from './bridge/timestamp';
 export { AgentBridge } from './bridge/AgentBridge';
