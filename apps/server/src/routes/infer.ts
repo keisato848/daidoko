@@ -1148,15 +1148,25 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
  * 1 本にまとめると、どちらのプール（`COVER_POOL` / `STEP_POOL`）で数えるかの判断が
  * zod の後にもう一度必要になり、「検証は通ったがプールを取り違える」隙間ができる。
  */
-const inferStepImageSchema = z.object({
-  title: z.string().min(1, 'タイトルが空です').max(100, 'タイトルが長すぎます'),
-  ingredientNames: z.array(z.string().min(1).max(50)).max(MAX_COVER_INGREDIENTS),
-  /** この手順の本文。**写真は送らない**（§8-4 の開示文と一致させること） */
-  stepBody: z.string().min(1, '手順が空です').max(500, '手順が長すぎます'),
-  stepIndex: z.number().int().min(1),
-  stepCount: z.number().int().min(1).max(50),
-  locale: z.enum(['ja', 'en']).optional(),
-});
+const inferStepImageSchema = z
+  .object({
+    title: z.string().min(1, 'タイトルが空です').max(100, 'タイトルが長すぎます'),
+    ingredientNames: z.array(z.string().min(1).max(50)).max(MAX_COVER_INGREDIENTS),
+    /** この手順の本文。**写真は送らない**（§8-4 の開示文と一致させること） */
+    stepBody: z.string().min(1, '手順が空です').max(500, '手順が長すぎます'),
+    stepIndex: z.number().int().min(1),
+    stepCount: z.number().int().min(1).max(50),
+    locale: z.enum(['ja', 'en']).optional(),
+  })
+  /**
+   * 「5 手順のうち 7 番目」は成立しない。範囲だけ見ていると受理してしまい、
+   * **意味の無い 1 枚に課金される**（1 枚 ≒¥5.0）。設計 §8-3 は各フィールドの範囲しか
+   * 定めていないが、組み合わせの不整合はここで止める。
+   */
+  .refine((v) => v.stepIndex <= v.stepCount, {
+    message: '手順の番号が手順数を超えています',
+    path: ['stepIndex'],
+  });
 
 let stepImageProviderOverride: StepImageProvider | null = null;
 

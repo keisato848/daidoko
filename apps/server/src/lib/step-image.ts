@@ -94,8 +94,9 @@ export interface StepImageProvider {
 /**
  * 表紙の provider の輸送部に、手順のプロンプトを載せただけのもの。
  * 時間予算（55 秒・リトライなし）も表紙のまま — クライアントは 1 枚ずつ逐次に呼ぶので、
- * 1 呼び出しあたりの予算は表紙と同じでよい（`cover-image-retry-budget.test.ts` が
- * 両方を同じ定数で見張る）。
+ * 1 呼び出しあたりの予算は表紙と同じでよい。予算の定数そのものは
+ * `cover-image-retry-budget.test.ts` が見張り、**この provider がその定数を使っていること**は
+ * `step-image.provider.test.ts` の fake timer のケースが見張る（別のテストなので混同しないこと）。
  */
 export class GeminiStepImageProvider
   extends GeminiCoverImageProvider<StepImageInput>

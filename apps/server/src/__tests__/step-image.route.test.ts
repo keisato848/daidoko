@@ -281,6 +281,16 @@ describe('POST /api/v1/infer/step-image — zod の境界', () => {
   it('stepCount が 50 ちょうどは通る', () => expectOk({ ...VALID_BODY, stepCount: 50 }));
 
   it('locale は ja/en 以外なら 400', () => expect400({ ...VALID_BODY, locale: 'fr' }));
+
+  /**
+   * 範囲だけ見ていると「5 手順のうち 7 番目」が通ってしまい、**意味の無い 1 枚に課金される**
+   * （1 枚 ≒¥5.0）。各フィールドは範囲内なので、組み合わせを見る refine が要る。
+   */
+  it('stepIndex が stepCount を超えたら 400（範囲は両方とも内側）', () =>
+    expect400({ ...VALID_BODY, stepIndex: 7, stepCount: 5 }));
+
+  it('stepIndex == stepCount（最後の手順）は通る', () =>
+    expectOk({ ...VALID_BODY, stepIndex: 5, stepCount: 5 }));
 });
 
 describe('POST /api/v1/infer/step-image — stdout のログ（4 つの出口すべてで 1 行）', () => {
