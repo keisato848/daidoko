@@ -158,19 +158,11 @@ Note on AI: an AI feature sends what it needs (photo, ingredients, recipe, notes
 
 DAIDOKO does not detect allergens. Always check the ingredients yourself, especially if you have food allergies.
 
-## バージョンごとの新機能（1.13.1）
+## バージョンごとの新機能（1.13.2）
 
-Snap your fridge and AI reads what's inside, ready to add to your pantry — you review every item before anything is added, and you can jump straight to what you can cook with it. Photos are used only for reading and are never stored.
+When planning meals, AI can now fill in the missing days all at once via "Create the missing days in one go," even with an empty recipe book. Previously it only offered one-dish-at-a-time consultations. Batching multiple days still counts as a single use of your free credit.
 
-Sharing, reorganized: choose what each group gets — everything with family, recipes only with a friend. A new Sharing overview screen shows what you are sharing with whom.
-
-Shared recipe links now have a pick-up window: only people who open the link within 7 days of sending can view it. Anyone who opened it in time keeps access.
-
-Meal plans can now be built for breakfast, lunch or dinner. Short on recipes? AI drafts the missing days in one batch — review each one before saving.
-
-Take several photos in a row when importing a cookbook page or consulting AI.
-
-Also fixed: photo reads failing with large images, taps that silently did nothing, and other small bugs.
+When consulting AI to build a recipe, the draft card now shows servings, time, ingredient count, and step count, plus "what just changed" on later requests (e.g. "servings to 4 · added garlic").
 
 ## URL・その他
 
