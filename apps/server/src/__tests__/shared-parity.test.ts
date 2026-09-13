@@ -24,17 +24,23 @@ import {
 } from '../lib/cuisine.js';
 import { MAX_IMAGE_BASE64_LENGTH } from '../routes/infer.js';
 
-const SHARED_AI_CONSTANTS = readFileSync(
-  resolve(__dirname, '../../../../packages/shared/src/constants/ai.ts'),
-  'utf8',
-);
+/**
+ * ソースを読むときは**改行コードを潰す**。このリポジトリには `.gitattributes` が無く、
+ * Windows では `core.autocrlf=true` で CRLF、CI（Linux）では LF で checkout される。
+ * 生のまま比べると「片方だけ CRLF」で割れて、写しの中身は同じなのに赤くなる
+ * （2026-09-13 に実際に踏んだ）。比べたいのは中身であって改行ではない。
+ */
+function readSource(...segments: string[]): string {
+  return readFileSync(resolve(__dirname, ...segments), 'utf8').replace(/\r\n/g, '\n');
+}
 
-const SHARED_CUISINE = readFileSync(
-  resolve(__dirname, '../../../../packages/shared/src/constants/cuisine.ts'),
-  'utf8',
-);
+const SHARED_AI_CONSTANTS = readSource('../../../../packages/shared/src/constants/ai.ts');
 
-const SERVER_CUISINE_SOURCE = readFileSync(resolve(__dirname, '../lib/cuisine.ts'), 'utf8');
+const SHARED_CUISINE = readSource('../../../../packages/shared/src/constants/cuisine.ts');
+
+const SERVER_CUISINE_SOURCE = readSource('../lib/cuisine.ts');
+
+const SERVER_FRIDGE_VISION_SOURCE = readSource('../lib/fridge-vision.ts');
 
 /**
  * shared 側のソースから `Record<Cuisine, readonly string[]>` の語彙表を**テキストとして**
@@ -77,6 +83,26 @@ describe('shared（契約の正）とサーバーの写しの突合', () => {
     expect(shared.length, 'shared の import 行が変わった').toBe(2);
     expect(server.length, '写しの import 行が変わった').toBe(2);
     expect(server[1]).toBe(shared[1]);
+  });
+
+  /**
+   * 語彙表を突き合わせても、**照合キーの作り方**が写しでズレたら意味が無い
+   * （半角カナ変換を片方だけ落とすと `ﾊﾟｽﾀ` が当たらなくなるが、表は一致したまま緑）。
+   * shared の `vocabKey` と server の `nameKey` は同じ変換であることが前提なので、
+   * 関数の本体（`return` から `}` まで）を突き合わせる。
+   */
+  it('照合キー（shared vocabKey / server nameKey）の本体が一致する', () => {
+    const bodyOf = (source: string, name: string): string => {
+      const head = `export function ${name}(name: string): string {`;
+      const from = source.indexOf(head);
+      expect(from, `${name} が見つからない`).toBeGreaterThanOrEqual(0);
+      const to = source.indexOf('\n}', from);
+      expect(to, `${name} の終端が見つからない`).toBeGreaterThan(from);
+      return source.slice(from + head.length, to);
+    };
+    expect(bodyOf(SERVER_FRIDGE_VISION_SOURCE, 'nameKey')).toBe(
+      bodyOf(SHARED_AI_CONSTANTS, 'vocabKey'),
+    );
   });
 
   it('出自（cuisine）の一覧が一致する', () => {
