@@ -54,6 +54,9 @@
 
 **プロンプト（C-1・2026-09-13）**: 盛り付けの 1 行を UI 言語（locale）でなく、**料理名・タグ・材料名からの出自推定**（`packages/shared` の語彙表 `inferCuisine`・NFKC 正規化・タグ優先）で決める。判定不能なら現行の locale 行にフォールバック（今より悪くならない）。server と mobile（BYOK）が同じ関数を使う（「写し」規約）。栓は env `COVER_IMAGE_CUISINE_HINT`（既定 off → §7-2 の評価で現行以上と確認してから on）。API 契約は不変。
 
+> **実装で分かったこと（2026-09-13・#313）**: 「同じ関数を使う」は**直 import ではなく写し**になる。server は tsconfig の `rootDir` が `src` に閉じていて `@daidoko/shared` を import すると TS6059 で型検査を通らない（`__tests__/shared-parity.test.ts` の冒頭に既出の制約）。そのため**正は `packages/shared/src/constants/cuisine.ts`、`apps/server/src/lib/cuisine.ts` が写し**、ズレは parity テストが割る。モバイル（BYOK）は shared を直接 import できる。
+> **BYOK は当面この行を使わない**: 栓がサーバーの env なので、BYOK（端末が直接 Gemini を叩く経路）は判定材料を持たない。#313 は server のみの変更で、BYOK 側の追従は mobile の PR（#315）で行う。それまで BYOK の盛り付け行は現行（locale）のまま — 評価もフラグ on の server 経路で行うので、判断材料は欠けない。
+
 ## 3. ゲート（別勘定・決定変更 G）
 
 - **無料: 月 3 枚**（`app_meta` の端末ローカル月次カウント・成功時のみ加算）

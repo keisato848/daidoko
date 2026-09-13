@@ -1064,6 +1064,13 @@ const inferCoverImageSchema = z.object({
   ingredientNames: z.array(z.string().min(1).max(50)).max(MAX_COVER_INGREDIENTS),
   tags: z.array(z.string().min(1).max(30)).max(MAX_COVER_TAGS),
   locale: z.enum(['ja', 'en']).optional(),
+  /**
+   * どの入口から生成したか（設計 §2-1「計測」）。`form` = レシピフォームの写真欄、
+   * `detail` = レシピ詳細のメニュー。**任意**にしてあるのは旧クライアント互換のため
+   * （zod は既定で未知キーを strip するので、逆に新クライアントが古いサーバーへ
+   * 送っても 400 にはならない）。ログの手がかり用で、振る舞いは変えない。
+   */
+  entry: z.enum(['form', 'detail']).optional(),
 });
 
 let coverImageProviderOverride: CoverImageProvider | null = null;
@@ -1124,7 +1131,7 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
     throw err;
   }
 
-  const { title, ingredientNames, tags, locale } = c.req.valid('json');
+  const { title, ingredientNames, tags, locale, entry } = c.req.valid('json');
 
   const result = await runCoverImageAgent(
     {
@@ -1134,6 +1141,13 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
       outputLocale: parseOutputLocale(locale),
     },
     provider,
+  );
+
+  // 入口別の利用を 1 行だけ残す（設計 §2-1「計測」）。pino は routes に配線されていないので
+  // `routes/report.ts` と同じ stdout 1 行（Railway のログ基盤に載る）。**個人情報は書かない**
+  // — 入口・成否・エラーコードだけで、料理名も端末 ID も出さない。
+  process.stdout.write(
+    `[infer/cover-image] entry=${entry ?? 'unknown'} ok=${result.ok} error=${result.error?.code ?? '-'}\n`,
   );
 
   // Always 200 — errors are in the response body (AgentResult pattern).

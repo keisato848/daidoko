@@ -40,6 +40,7 @@
  * モバイル側は 75 秒で諦める想定なので 20 秒の余裕がある。
  * この不等式は `__tests__/cover-image-retry-budget.test.ts` が見張る。
  */
+import { inferCuisine, platingLineFor } from './cuisine.js';
 import { DEFAULT_OUTPUT_LOCALE, type OutputLocale } from './output-locale.js';
 
 export interface CoverImageInput {
@@ -77,8 +78,31 @@ const PROMPT_CONSTRAINTS = [
 ].join(' ');
 
 /**
+ * 盛り付けの 1 行を出自推定で決めるかどうかの栓（設計 §2-1「プロンプト（C-1）」）。
+ *
+ * **既定 off。** §7-2 の目視評価（10 題 × off/on）で現行以上と確認してから on にする。
+ * env なので Railway の変数を変えるだけでよく、アプリのリリースは要らない。
+ * `'1' | 'true' | 'on'` を真として読む。
+ */
+function cuisineHintEnabled(): boolean {
+  const raw = process.env['COVER_IMAGE_CUISINE_HINT']?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'on';
+}
+
+/** 出自が決まらなかったときの従来どおりの盛り付け行（locale で決める）。 */
+function localePlatingLine(locale: OutputLocale): string {
+  return locale === 'en'
+    ? 'Plate and style it the way it would naturally look on a table in an English-speaking household.'
+    : '日本の家庭の食卓に出てくるような、自然な盛り付けにする。';
+}
+
+/**
  * タイトル・材料名・タグ・言語を、モデルに渡す 1 つのプロンプトにまとめる
  * （テスト・provider から共有するため公開）。
+ *
+ * 可変なのは**盛り付けの 1 行だけ** — `COVER_IMAGE_CUISINE_HINT` が on かつ出自が決まった
+ * ときに `platingLineFor` の行へ差し替わる。フラグ off では現行と 1 文字も変わらない
+ * （`__tests__/cover-image-prompt.test.ts` が見張る）。
  */
 export function buildCoverImagePrompt(input: CoverImageInput): string {
   const locale = input.outputLocale ?? DEFAULT_OUTPUT_LOCALE;
@@ -92,11 +116,10 @@ export function buildCoverImagePrompt(input: CoverImageInput): string {
   lines.push('');
   lines.push('この料理のできあがりを写真のように 1 枚描いてください。');
   lines.push(PROMPT_CONSTRAINTS);
-  lines.push(
-    locale === 'en'
-      ? 'Plate and style it the way it would naturally look on a table in an English-speaking household.'
-      : '日本の家庭の食卓に出てくるような、自然な盛り付けにする。',
-  );
+  const cuisine = cuisineHintEnabled()
+    ? inferCuisine(input.title, input.tags, input.ingredientNames)
+    : null;
+  lines.push(cuisine ? platingLineFor(cuisine, locale) : localePlatingLine(locale));
   return lines.join('\n');
 }
 

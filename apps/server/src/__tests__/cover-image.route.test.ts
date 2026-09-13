@@ -9,7 +9,7 @@
  *    （片方を使い切ってももう片方は生きる — rate-limit-pools.test.ts と同じ観点）。
  * 4. provider 失敗 → ok:false COVER_IMAGE_FAILED、成功 → mimeType/dataBase64 が返る。
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import app from '../index.js';
 import { setCoverImageProviderForTesting } from '../routes/infer.js';
@@ -237,5 +237,100 @@ describe('プロンプトの組み立て', () => {
     const text = buildCoverImagePrompt({ title: '麻婆豆腐', ingredientNames: [], tags: [] });
     expect(text).toContain('材料リストに無い食材を描き足さない');
     expect(text).toContain('文字・ロゴ');
+  });
+});
+
+describe('POST /api/v1/infer/cover-image — entry（入口の計測・Issue #313）', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([['form'], ['detail']])(
+    "entry: '%s' は 200 で通り、provider には渡らず、stdout の 1 行に載る",
+    async (entry) => {
+      const received: CoverImageInput[] = [];
+      setCoverImageProviderForTesting(
+        stub((input) => {
+          received.push(input);
+          return STUB_RESULT;
+        }),
+      );
+      const write = vi.spyOn(process.stdout, 'write');
+
+      const res = await post({ ...VALID_BODY, entry });
+      expect(res.status).toBe(200);
+      const json = (await res.json()) as CoverImageResponse;
+      expect(json.ok).toBe(true);
+
+      // entry はプロンプトの材料ではない — provider の入力に混ざらない
+      expect(received).toHaveLength(1);
+      expect(received[0]).toEqual({
+        title: VALID_BODY.title,
+        ingredientNames: VALID_BODY.ingredientNames,
+        tags: VALID_BODY.tags,
+        outputLocale: 'ja',
+      });
+      expect(received[0]).not.toHaveProperty('entry');
+
+      // 計測の 1 行（個人情報なし: 料理名・端末 ID を含まない）
+      const line = write.mock.calls
+        .map((call) => String(call[0]))
+        .find((s) => s.startsWith('[infer/cover-image]'));
+      expect(line).toBe(`[infer/cover-image] entry=${entry} ok=true error=-\n`);
+      expect(line).not.toContain(VALID_BODY.title);
+      expect(line).not.toContain(DEVICE_ID);
+    },
+  );
+
+  it('entry 無し（旧クライアント）の body も通り、ログは entry=unknown', async () => {
+    setCoverImageProviderForTesting(stub(() => STUB_RESULT));
+    const write = vi.spyOn(process.stdout, 'write');
+
+    const res = await post(VALID_BODY);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as CoverImageResponse).ok).toBe(true);
+
+    const line = write.mock.calls
+      .map((call) => String(call[0]))
+      .find((s) => s.startsWith('[infer/cover-image]'));
+    expect(line).toBe('[infer/cover-image] entry=unknown ok=true error=-\n');
+  });
+
+  it('provider 失敗時のログは ok=false と error コードを載せる', async () => {
+    setCoverImageProviderForTesting({
+      generate: async () => {
+        throw new CoverImageRequestError('boom');
+      },
+    });
+    const write = vi.spyOn(process.stdout, 'write');
+
+    await post({ ...VALID_BODY, entry: 'detail' });
+
+    const line = write.mock.calls
+      .map((call) => String(call[0]))
+      .find((s) => s.startsWith('[infer/cover-image]'));
+    expect(line).toBe('[infer/cover-image] entry=detail ok=false error=COVER_IMAGE_FAILED\n');
+  });
+
+  it("entry: 'sidebar' のような未知の値は zod で 400", async () => {
+    setCoverImageProviderForTesting(stub(() => STUB_RESULT));
+    const res = await post({ ...VALID_BODY, entry: 'sidebar' });
+    expect(res.status).toBe(400);
+  });
+
+  it('未知キー（foo: 1）は strip されて通る（旧/新クライアント互換）', async () => {
+    const received: CoverImageInput[] = [];
+    setCoverImageProviderForTesting(
+      stub((input) => {
+        received.push(input);
+        return STUB_RESULT;
+      }),
+    );
+
+    const res = await post({ ...VALID_BODY, foo: 1 });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as CoverImageResponse).ok).toBe(true);
+    expect(received).toHaveLength(1);
+    expect(received[0]).not.toHaveProperty('foo');
   });
 });
