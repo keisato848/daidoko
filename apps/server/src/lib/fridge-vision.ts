@@ -89,8 +89,11 @@ export const FRIDGE_RESPONSE_SCHEMA = {
   required: ['items'],
 } as const;
 
-/** 品名の重複判定キー。全半角・カナ/かな・大小・空白の差を吸収する軽い正規化。 */
-function nameKey(name: string): string {
+/**
+ * 品名の重複判定キー。全半角・カナ/かな・大小・空白の差を吸収する軽い正規化。
+ * shared の `vocabKey` と同じ変換（写し）。`cuisine.ts` も同じキーで照合するので公開する。
+ */
+export function nameKey(name: string): string {
   return name
     .normalize('NFKC')
     .toLowerCase()

@@ -1064,6 +1064,13 @@ const inferCoverImageSchema = z.object({
   ingredientNames: z.array(z.string().min(1).max(50)).max(MAX_COVER_INGREDIENTS),
   tags: z.array(z.string().min(1).max(30)).max(MAX_COVER_TAGS),
   locale: z.enum(['ja', 'en']).optional(),
+  /**
+   * どの入口から生成したか（設計 §2-1「計測」）。`form` = レシピフォームの写真欄、
+   * `detail` = レシピ詳細のメニュー。**任意**にしてあるのは旧クライアント互換のため
+   * （zod は既定で未知キーを strip するので、逆に新クライアントが古いサーバーへ
+   * 送っても 400 にはならない）。ログの手がかり用で、振る舞いは変えない。
+   */
+  entry: z.enum(['form', 'detail']).optional(),
 });
 
 let coverImageProviderOverride: CoverImageProvider | null = null;
@@ -1077,12 +1084,30 @@ function resolveCoverImageProvider(): CoverImageProvider {
 }
 
 inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), async (c) => {
+  const { title, ingredientNames, tags, locale, entry } = c.req.valid('json');
+
+  /**
+   * 入口別の利用を 1 行だけ残す（設計 §2-1「計測」）。pino は routes に配線されていないので
+   * `routes/report.ts` と同じ stdout 1 行（Railway のログ基盤に載る）。**個人情報は書かない**
+   * — 入口・成否・エラーコードだけで、料理名も端末 ID も出さない。
+   *
+   * **弾いた要求でも必ず書く。** 生成が成功したぶんだけ書くと「入口別の利用」が
+   * 「入口別の成功生成」に縮み、`RATE_LIMITED` で弾かれた試行が入口ごと消える
+   * （日次プールを使い切ったあとに、どの入口から叩かれて当たっているのかが見えなくなる）。
+   */
+  const logEntry = (ok: boolean, code: string): void => {
+    process.stdout.write(
+      `[infer/cover-image] entry=${entry ?? 'unknown'} ok=${ok} error=${code}\n`,
+    );
+  };
+
   // /infer/menu と同じ書式チェックだけ行う（乱数のインストール UUID・個人情報ではない）。
   // 月次枠はここでは使わない — 画像は別勘定で、無料枠（月 3 枚）は
   // **端末ローカルで**数える（docs/フリーミアム設計.md §11）。サーバーは
   // 下の COVER_POOL（日次プール）だけでコストを守る。
   const deviceId = c.req.header('x-device-id');
   if (!deviceId || !DEVICE_ID_PATTERN.test(deviceId)) {
+    logEntry(false, 'UNKNOWN');
     return c.json({
       ok: false,
       error: { code: 'UNKNOWN', message: '端末IDが不正です', retryable: false },
@@ -1098,6 +1123,7 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
   // 高い呼び出しの枠に締め出される（rate-limit.ts の COVER_POOL コメント参照）。
   const rate = checkRateLimit(clientId, COVER_POOL);
   if (!rate.allowed) {
+    logEntry(false, 'RATE_LIMITED');
     return c.json({
       ok: false,
       error: {
@@ -1116,6 +1142,7 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
     provider = resolveCoverImageProvider();
   } catch (err) {
     if (err instanceof CoverImageConfigError) {
+      logEntry(false, 'AI_API_UNAVAILABLE');
       return c.json({
         ok: false,
         error: { code: 'AI_API_UNAVAILABLE', message: 'AI 推論が利用できません', retryable: false },
@@ -1123,8 +1150,6 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
     }
     throw err;
   }
-
-  const { title, ingredientNames, tags, locale } = c.req.valid('json');
 
   const result = await runCoverImageAgent(
     {
@@ -1135,6 +1160,8 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
     },
     provider,
   );
+
+  logEntry(result.ok, result.error?.code ?? '-');
 
   // Always 200 — errors are in the response body (AgentResult pattern).
   return c.json(result);
