@@ -1165,7 +1165,38 @@
           document.getElementById('sb-' + x).setAttribute('aria-pressed', String(x === k)),
         );
       };
-      reset('A');
+
+      // URL の #A / #A.sheet / #A.answer / #C.confirm / #C.toast / #D.answer / #H で
+      // 状態を指定して開ける（レビューのスクショ取得と、口頭で場所を指すため）
+      function boot() {
+        const raw = (location.hash || '#A').slice(1);
+        const [key, step] = raw.split('.');
+        const k = SCEN[key] ? key : 'A';
+        reset(k);
+        if (!step) return;
+        if (step === 'sheet') {
+          openSheet();
+        } else if (step === 'answer') {
+          openSheet();
+          const chips = chipsFor(S.screen);
+          send(k === 'A' ? chips[1] : k === 'D' ? '唐揚げをカラッと揚げるコツは？' : chips[0]);
+        } else if (step === 'confirm') {
+          openSheet();
+          voice();
+          send(S.draft);
+        } else if (step === 'toast') {
+          openSheet();
+          voice();
+          send(S.draft);
+          doMutate();
+        } else if (step === 'search') {
+          openSheet();
+          S.draft = 'レシート';
+          render();
+        }
+      }
+      window.addEventListener('hashchange', boot);
+      boot();
     </script>
   </body>
 </html>
