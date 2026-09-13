@@ -12,7 +12,6 @@ import {
   CoverImageQuotaError,
   CoverImageRequestError,
   type CoverImageInput,
-  type CoverImageProvider,
   type CoverImageResult,
 } from '../lib/cover-image.js';
 import type { AgentErrorCode, AgentResult } from './photo-infer.agent.js';
@@ -25,9 +24,14 @@ function fail(
   return { ok: false, error: { code, message, retryable } };
 }
 
-export async function runCoverImageAgent(
-  input: CoverImageInput,
-  provider: CoverImageProvider,
+/**
+ * 手順のイラスト（`lib/step-image.ts`）も同じ入れ物を使う（設計 §8-3「エラーコードは
+ * `COVER_IMAGE_FAILED` を流用」）。入力の型だけ広げてあり、例外 → `AgentResult` の写像は
+ * 1 か所に保つ — 分けると片方だけ `AI_QUOTA_EXCEEDED` を取りこぼす。
+ */
+export async function runCoverImageAgent<TInput extends CoverImageInput>(
+  input: TInput,
+  provider: { generate(input: TInput): Promise<CoverImageResult> },
 ): Promise<AgentResult<CoverImageResult>> {
   try {
     const data = await provider.generate(input);
