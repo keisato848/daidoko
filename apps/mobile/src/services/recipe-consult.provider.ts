@@ -200,10 +200,24 @@ async function toWireMessages(messages: ConsultMessage[]): Promise<WireMessage[]
       try {
         let processedUri = consultImageCache.get(uri);
         if (processedUri) {
-          // LRU: touch
-          consultImageCache.delete(uri);
-          consultImageCache.set(uri, processedUri);
-        } else {
+          try {
+            const base64 = await FileSystem.readAsStringAsync(processedUri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            // LRU: touch
+            consultImageCache.delete(uri);
+            consultImageCache.set(uri, processedUri);
+            images.push({
+              imageBase64: base64,
+              mimeType: mimeTypeFor(processedUri),
+            });
+            continue;
+          } catch {
+            consultImageCache.delete(uri);
+            processedUri = undefined;
+          }
+        }
+        if (!processedUri) {
           const processed = await preprocessImageForOcr(
             uri,
             expoImageManipulatorPreprocessAdapter,
@@ -218,13 +232,13 @@ async function toWireMessages(messages: ConsultMessage[]): Promise<WireMessage[]
             const first = consultImageCache.keys().next().value;
             if (first !== undefined) consultImageCache.delete(first);
           }
+          images.push({
+            imageBase64: await FileSystem.readAsStringAsync(processedUri, {
+              encoding: FileSystem.EncodingType.Base64,
+            }),
+            mimeType: mimeTypeFor(processedUri),
+          });
         }
-        images.push({
-          imageBase64: await FileSystem.readAsStringAsync(processedUri, {
-            encoding: FileSystem.EncodingType.Base64,
-          }),
-          mimeType: mimeTypeFor(processedUri),
-        });
       } catch {
         consultImageCache.delete(uri);
         // 1 枚読めなくても相談は続けられる。黙って落とす方が会話が止まらない
