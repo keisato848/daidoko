@@ -19,7 +19,10 @@ export interface ImageInfo {
 
 export interface ImagePreprocessAdapter {
   getInfo: (imageUri: string) => Promise<ImageInfo>;
-  resize?: (imageUri: string, options: { maxDimension: number }) => Promise<ImageInfo>;
+  resize?: (
+    imageUri: string,
+    options: { maxDimension: number; width?: number; height?: number },
+  ) => Promise<ImageInfo>;
 }
 
 export interface ImagePreprocessOptions {
@@ -82,7 +85,11 @@ export async function preprocessImageForOcr(
   const needsResize = Math.max(original.width, original.height) > resolvedOptions.maxDimension;
   const processed =
     needsResize && adapter.resize
-      ? await adapter.resize(original.imageUri, { maxDimension: resolvedOptions.maxDimension })
+      ? await adapter.resize(original.imageUri, {
+          maxDimension: resolvedOptions.maxDimension,
+          width: original.width,
+          height: original.height,
+        })
       : original;
 
   return {
