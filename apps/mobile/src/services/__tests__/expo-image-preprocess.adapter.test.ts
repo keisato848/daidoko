@@ -1,5 +1,4 @@
-import { SaveFormat } from 'expo-image-manipulator';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { expoImageManipulatorPreprocessAdapter } from '../expo-image-preprocess.adapter';
 
 jest.mock('expo-image-manipulator', () => {
@@ -26,12 +25,19 @@ jest.mock('expo-image-manipulator', () => {
   };
 });
 
-// @ts-expect-error test mock access
-const { _mocks } = jest.requireMock('expo-image-manipulator');
+const { _mocks } = jest.requireMock<{
+  _mocks: {
+    saveAsyncMock: jest.Mock;
+    renderAsyncMock: jest.Mock;
+    resizeMock: jest.Mock;
+    contextMock: { resize: jest.Mock; renderAsync: jest.Mock };
+  };
+}>('expo-image-manipulator');
 
 describe('expoImageManipulatorPreprocessAdapter', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    _mocks.saveAsyncMock.mockReset();
     _mocks.contextMock.resize.mockReturnValue(_mocks.contextMock);
     _mocks.renderAsyncMock.mockResolvedValue({
       saveAsync: _mocks.saveAsyncMock,
@@ -59,10 +65,8 @@ describe('expoImageManipulatorPreprocessAdapter', () => {
         },
       );
 
-      expect(ImageManipulator.ImageManipulator.manipulate).toHaveBeenCalledTimes(1);
-      expect(ImageManipulator.ImageManipulator.manipulate).toHaveBeenCalledWith(
-        'file:///tmp/in.jpg',
-      );
+      expect(ImageManipulator.manipulate).toHaveBeenCalledTimes(1);
+      expect(ImageManipulator.manipulate).toHaveBeenCalledWith('file:///tmp/in.jpg');
       expect(_mocks.resizeMock).toHaveBeenCalledWith({ width: 1200 });
       expect(_mocks.renderAsyncMock).toHaveBeenCalledTimes(1);
       expect(_mocks.saveAsyncMock).toHaveBeenCalledWith({ compress: 0.9, format: SaveFormat.JPEG });
@@ -90,7 +94,7 @@ describe('expoImageManipulatorPreprocessAdapter', () => {
         height: 2400,
       });
 
-      expect(ImageManipulator.ImageManipulator.manipulate).toHaveBeenCalledTimes(1);
+      expect(ImageManipulator.manipulate).toHaveBeenCalledTimes(1);
       expect(_mocks.resizeMock).toHaveBeenCalledWith({ height: 1200 });
     });
 
@@ -116,7 +120,7 @@ describe('expoImageManipulatorPreprocessAdapter', () => {
       });
 
       // Once in getInfo, once in resize
-      expect(ImageManipulator.ImageManipulator.manipulate).toHaveBeenCalledTimes(2);
+      expect(ImageManipulator.manipulate).toHaveBeenCalledTimes(2);
       expect(_mocks.resizeMock).toHaveBeenCalledWith({ width: 1200 });
     });
   });
