@@ -37,6 +37,7 @@ jest.mock('../../../../src/services/recipe-consult.provider', () => ({
   MAX_CONSULT_IMAGES_PER_MESSAGE: 2,
   ConsultError: class ConsultError extends Error {},
   consultRecipe: (...args: unknown[]) => mockConsultRecipe(...(args as [])),
+  resetConsultImageCache: jest.fn(),
 }));
 
 jest.mock('../../../../src/services/inference-gate.service', () => ({

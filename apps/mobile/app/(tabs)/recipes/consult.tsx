@@ -43,6 +43,7 @@ import {
 import {
   ConsultError,
   consultRecipe,
+  resetConsultImageCache,
   type ConsultMessage,
 } from '../../../src/services/recipe-consult.provider';
 import { dialog } from '../../../src/services/dialog.service';
@@ -147,6 +148,8 @@ export default function ConsultScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
+  useEffect(() => () => resetConsultImageCache(), []);
+
   // 会話が伸びたら最新へ寄せる
   useEffect(() => {
     const id = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
@@ -245,6 +248,7 @@ export default function ConsultScreen() {
     setLastChange(null);
     setReady(false);
     setErrorMsg(null);
+    resetConsultImageCache();
   };
 
   const handleSave = async (data: RecipeFormData) => {
