@@ -268,6 +268,11 @@ const MAX_ATTEMPTS = 4;
 const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
 const BACKOFF_MS = [0, 1_500, 4_000, 8_000];
 
+/** 最悪ケースの所要時間（ミリ秒）。テストが上限を見張るために公開する。 */
+export const CONSULT_RETRY_BUDGET_MS =
+  REQUEST_TIMEOUT_MS * MAX_ATTEMPTS +
+  BACKOFF_MS.slice(0, MAX_ATTEMPTS).reduce((sum, ms) => sum + ms, 0);
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -276,12 +281,14 @@ function sleep(ms: number): Promise<void> {
 export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly log: (line: string) => void;
 
-  constructor(opts?: { apiKey?: string; model?: string }) {
+  constructor(opts?: { apiKey?: string; model?: string; log?: (line: string) => void }) {
     const apiKey = opts?.apiKey ?? process.env['GEMINI_API_KEY'] ?? '';
     if (!apiKey) throw new ConsultConfigError('GEMINI_API_KEY is not configured');
     this.apiKey = apiKey;
     this.model = opts?.model?.trim() || process.env['GEMINI_MODEL']?.trim() || 'gemini-2.5-flash';
+    this.log = opts?.log ?? ((line: string) => process.stdout.write(line + '\n'));
   }
 
   async consult(input: ConsultRecipeInput): Promise<ConsultRecipeRaw> {
@@ -328,11 +335,19 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
       },
     };
 
+    const totalStartMs = Date.now();
     let lastError: Error = new ConsultRequestError('consult failed');
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-      if (BACKOFF_MS[attempt]) await sleep(BACKOFF_MS[attempt] as number);
+    let result: ConsultRecipeRaw | undefined;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      if (BACKOFF_MS[attempt - 1]) await sleep(BACKOFF_MS[attempt - 1] as number);
+
+      const attemptStartMs = Date.now();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      let outcome: 'ok' | 'timeout' | 'http' | 'error' = 'error';
+      let status: number | undefined;
+
       try {
         const res = await fetch(
           `${GEMINI_ENDPOINT}/${this.model}:generateContent?key=${this.apiKey}`,
@@ -344,6 +359,8 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
           },
         );
         if (!res.ok) {
+          outcome = 'http';
+          status = res.status;
           const detail = (await res.text()).slice(0, 300);
           // 429 は「上限」と「一時的な混雑」の両方で返る。上限は再試行しても当面回復しない
           if (res.status === 429 && /quota|billing|exceeded/i.test(detail)) {
@@ -353,21 +370,59 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
             lastError = new ConsultRequestError(`Gemini ${res.status}: ${detail}`);
             continue;
           }
-          throw new ConsultRequestError(`Gemini ${res.status}: ${detail}`);
+          // Non-retryable HTTP errors break the retry loop
+          lastError = new ConsultRequestError(`Gemini ${res.status}: ${detail}`);
+          break;
         }
         const json = (await res.json()) as {
           candidates?: { content?: { parts?: { text?: string }[] } }[];
         };
         const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new ConsultRequestError('Gemini returned no content');
-        return JSON.parse(text) as ConsultRecipeRaw;
+
+        outcome = 'ok';
+        result = JSON.parse(text) as ConsultRecipeRaw;
+        break;
       } catch (err) {
-        if (err instanceof ConsultQuotaError) throw err;
+        if (err instanceof Error && err.name === 'AbortError') {
+          outcome = 'timeout';
+        } else if (outcome !== 'http') {
+          outcome = 'error';
+        }
+
+        if (err instanceof ConsultQuotaError) {
+          throw err;
+        }
         lastError = err instanceof Error ? err : new ConsultRequestError(String(err));
       } finally {
         clearTimeout(timer);
+        this.log(
+          `[infer/consult] ${JSON.stringify({
+            attempt,
+            elapsedMs: Date.now() - attemptStartMs,
+            outcome,
+            ...(status !== undefined && { status }),
+          })}`,
+        );
       }
     }
+
+    if (result !== undefined) {
+      this.log(
+        `[infer/consult] ${JSON.stringify({
+          totalElapsedMs: Date.now() - totalStartMs,
+          finalOutcome: 'ok',
+        })}`,
+      );
+      return result;
+    }
+
+    this.log(
+      `[infer/consult] ${JSON.stringify({
+        totalElapsedMs: Date.now() - totalStartMs,
+        finalOutcome: 'error',
+      })}`,
+    );
     throw lastError;
   }
 }
