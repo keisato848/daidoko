@@ -21,7 +21,19 @@ export interface ImagePreprocessAdapter {
   getInfo: (imageUri: string) => Promise<ImageInfo>;
   resize?: (
     imageUri: string,
-    options: { maxDimension: number; width?: number; height?: number },
+    options: {
+      maxDimension: number;
+      /**
+       * `getInfo(imageUri)` の戻り（回転適用後の実寸）を渡す。
+       * 省略時はアダプタが `getInfo` を呼ぶ（原寸デコードが 1 回増える）。
+       */
+      width?: number;
+      /**
+       * `getInfo(imageUri)` の戻り（回転適用後の実寸）を渡す。
+       * 省略時はアダプタが `getInfo` を呼ぶ（原寸デコードが 1 回増える）。
+       */
+      height?: number;
+    },
   ) => Promise<ImageInfo>;
 }
 
