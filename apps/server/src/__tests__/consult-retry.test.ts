@@ -12,7 +12,7 @@ describe('GeminiRecipeConsultProvider retry logic', () => {
     vi.unstubAllGlobals();
   });
 
-  it('retries on 503 and logs correctly', async () => {
+  it('retries on 502 and logs correctly, with id and detail', async () => {
     const logs: string[] = [];
     const provider = new GeminiRecipeConsultProvider({
       apiKey: 'dummy-key',
@@ -25,8 +25,8 @@ describe('GeminiRecipeConsultProvider retry logic', () => {
       if (fetchCount === 1) {
         return {
           ok: false,
-          status: 503,
-          text: async () => 'busy',
+          status: 502,
+          text: async () => 'Bad Gateway key=SECRET',
         };
       }
       return {
@@ -47,24 +47,33 @@ describe('GeminiRecipeConsultProvider retry logic', () => {
     await vi.advanceTimersByTimeAsync(1500);
     const res = await p;
 
+    expect(fetchCount).toBe(2);
     expect(res.reply).toBe('ok');
     expect(logs).toHaveLength(3);
 
     const log1 = JSON.parse(logs[0].replace('[infer/consult] ', ''));
     expect(log1.attempt).toBe(1);
     expect(log1.outcome).toBe('http');
-    expect(log1.status).toBe(503);
+    expect(log1.status).toBe(502);
+    expect(log1.detail).toBe('Bad Gateway key=***');
+    expect(log1.detail.length).toBeLessThanOrEqual(120);
 
     const log2 = JSON.parse(logs[1].replace('[infer/consult] ', ''));
     expect(log2.attempt).toBe(2);
     expect(log2.outcome).toBe('ok');
+    expect(log2.detail).toBeUndefined();
 
     const log3 = JSON.parse(logs[2].replace('[infer/consult] ', ''));
     expect(log3.finalOutcome).toBe('ok');
     expect(typeof log3.totalElapsedMs).toBe('number');
 
+    const id = log1.id;
+    expect(typeof id).toBe('string');
+    expect(log2.id).toBe(id);
+    expect(log3.id).toBe(id);
+
     for (const line of logs) {
-      expect(line).not.toContain('key=');
+      expect(line).not.toContain('key=SECRET');
       expect(line).not.toContain('dummy-key');
     }
   });
@@ -98,10 +107,86 @@ describe('GeminiRecipeConsultProvider retry logic', () => {
 
     await expect(p).rejects.toThrow();
 
-    expect(logs.length).toBeGreaterThan(0);
+    expect(logs).toHaveLength(5);
+    for (let i = 0; i < 4; i++) {
+      const log = JSON.parse(logs[i].replace('[infer/consult] ', ''));
+      expect(log.attempt).toBe(i + 1);
+      expect(log.outcome).toBe('timeout');
+    }
+    const finalLog = JSON.parse(logs[4].replace('[infer/consult] ', ''));
+    expect(finalLog.finalOutcome).toBe('error');
+  });
+
+  it('logs quota on 429 quota exceeded', async () => {
+    const logs: string[] = [];
+    const provider = new GeminiRecipeConsultProvider({ apiKey: 'dummy', log: (l) => logs.push(l) });
+
+    let fetchCount = 0;
+    vi.stubGlobal('fetch', async () => {
+      fetchCount++;
+      return { ok: false, status: 429, text: async () => 'quota exceeded' };
+    });
+
+    const p = provider.consult({ messages: [{ role: 'user', text: 'hi' }] });
+    await expect(p).rejects.toThrow('quota exceeded');
+
+    expect(fetchCount).toBe(1);
+    expect(logs).toHaveLength(2);
+
     const log1 = JSON.parse(logs[0].replace('[infer/consult] ', ''));
     expect(log1.attempt).toBe(1);
-    expect(log1.outcome).toBe('timeout');
+    expect(log1.outcome).toBe('quota');
+
+    const log2 = JSON.parse(logs[1].replace('[infer/consult] ', ''));
+    expect(log2.finalOutcome).toBe('quota');
+  });
+
+  it('breaks and logs error on 400', async () => {
+    const logs: string[] = [];
+    const provider = new GeminiRecipeConsultProvider({ apiKey: 'dummy', log: (l) => logs.push(l) });
+
+    let fetchCount = 0;
+    vi.stubGlobal('fetch', async () => {
+      fetchCount++;
+      return { ok: false, status: 400, text: async () => 'INVALID_ARGUMENT key=SECRET' };
+    });
+
+    const p = provider.consult({ messages: [{ role: 'user', text: 'hi' }] });
+    await expect(p).rejects.toThrow('INVALID_ARGUMENT');
+
+    expect(fetchCount).toBe(1);
+    expect(logs).toHaveLength(2);
+
+    const log1 = JSON.parse(logs[0].replace('[infer/consult] ', ''));
+    expect(log1.attempt).toBe(1);
+    expect(log1.outcome).toBe('http');
+    expect(log1.status).toBe(400);
+    expect(log1.detail).toBe('INVALID_ARGUMENT key=***');
+
+    const log2 = JSON.parse(logs[1].replace('[infer/consult] ', ''));
+    expect(log2.finalOutcome).toBe('error');
+  });
+
+  it('generates different id for different calls', async () => {
+    const logs: string[] = [];
+    const provider = new GeminiRecipeConsultProvider({ apiKey: 'dummy', log: (l) => logs.push(l) });
+
+    vi.stubGlobal('fetch', async () => ({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          { content: { parts: [{ text: '{"reply":"ok","ready":false,"draft":null}' }] } },
+        ],
+      }),
+    }));
+
+    await provider.consult({ messages: [{ role: 'user', text: 'hi' }] });
+    await provider.consult({ messages: [{ role: 'user', text: 'hi' }] });
+
+    const ids = logs.map((l) => JSON.parse(l.replace('[infer/consult] ', '')).id);
+    expect(ids[0]).toBe(ids[1]);
+    expect(ids[2]).toBe(ids[3]);
+    expect(ids[0]).not.toBe(ids[2]);
   });
 
   it('CONSULT_RETRY_BUDGET_MS is 133_500 (#331 で値を決め直したらこのテストも更新)', () => {

@@ -356,7 +356,8 @@ export function buildContextText(input: ConsultRecipeInput): string {
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 4;
-const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
+// break 化に伴い、Google フロントの一過性の 502/408 も再試行対象に含める
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const BACKOFF_MS = [0, 1_500, 4_000, 8_000];
 
 /** 最悪ケースの所要時間（ミリ秒）。テストが上限を見張るために公開する。 */
@@ -383,6 +384,7 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
   }
 
   async consult(input: ConsultRecipeInput): Promise<ConsultRecipeRaw> {
+    const id = Math.random().toString(36).slice(2, 8);
     const messages = trimMessages(input.messages);
     const context = buildContextText(input);
 
@@ -442,8 +444,9 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
       const attemptStartMs = Date.now();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-      let outcome: 'ok' | 'timeout' | 'http' | 'error' = 'error';
+      let outcome: 'ok' | 'timeout' | 'http' | 'error' | 'quota' = 'error';
       let status: number | undefined;
+      let detail: string | undefined;
 
       try {
         const res = await fetch(
@@ -458,17 +461,20 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
         if (!res.ok) {
           outcome = 'http';
           status = res.status;
-          const detail = (await res.text()).slice(0, 300);
+          const detailRaw = await res.text();
+          detail = detailRaw.replace(/key=[^&\s]+/g, 'key=***').slice(0, 120);
+
           // 429 は「上限」と「一時的な混雑」の両方で返る。上限は再試行しても当面回復しない
-          if (res.status === 429 && /quota|billing|exceeded/i.test(detail)) {
-            throw new ConsultQuotaError(`Gemini quota exceeded: ${detail}`);
+          if (res.status === 429 && /quota|billing|exceeded/i.test(detailRaw)) {
+            outcome = 'quota';
+            throw new ConsultQuotaError(`Gemini quota exceeded: ${detailRaw.slice(0, 300)}`);
           }
           if (RETRYABLE_STATUS.has(res.status)) {
-            lastError = new ConsultRequestError(`Gemini ${res.status}: ${detail}`);
+            lastError = new ConsultRequestError(`Gemini ${res.status}: ${detailRaw.slice(0, 300)}`);
             continue;
           }
           // Non-retryable HTTP errors break the retry loop
-          lastError = new ConsultRequestError(`Gemini ${res.status}: ${detail}`);
+          lastError = new ConsultRequestError(`Gemini ${res.status}: ${detailRaw.slice(0, 300)}`);
           break;
         }
         const json = (await res.json()) as {
@@ -499,22 +505,24 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
           outcome = 'timeout';
-        } else if (outcome !== 'http') {
+        } else if (outcome !== 'http' && outcome !== 'quota') {
           outcome = 'error';
         }
 
-        if (err instanceof ConsultQuotaError) {
-          throw err;
-        }
         lastError = err instanceof Error ? err : new ConsultRequestError(String(err));
+        if (err instanceof ConsultQuotaError) {
+          break;
+        }
       } finally {
         clearTimeout(timer);
         this.log(
           `[infer/consult] ${JSON.stringify({
+            id,
             attempt,
             elapsedMs: Date.now() - attemptStartMs,
             outcome,
             ...(status !== undefined && { status }),
+            ...(detail !== undefined && { detail }),
           })}`,
         );
       }
@@ -523,6 +531,7 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
     if (result !== undefined) {
       this.log(
         `[infer/consult] ${JSON.stringify({
+          id,
           totalElapsedMs: Date.now() - totalStartMs,
           finalOutcome: 'ok',
         })}`,
@@ -532,8 +541,9 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
 
     this.log(
       `[infer/consult] ${JSON.stringify({
+        id,
         totalElapsedMs: Date.now() - totalStartMs,
-        finalOutcome: 'error',
+        finalOutcome: lastError instanceof ConsultQuotaError ? 'quota' : 'error',
       })}`,
     );
     throw lastError;
