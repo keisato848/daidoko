@@ -783,6 +783,17 @@ inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) =
     },
     provider,
   );
+
+  if (!result.ok) {
+    process.stdout.write(
+      `[infer/consult] ${JSON.stringify({
+        outcome: 'agent-error',
+        code: result.error?.code,
+        retryable: result.error?.retryable,
+      })}\n`,
+    );
+  }
+
   // Always 200 — errors are in the response body (AgentResult pattern).
   return c.json(result);
 });
