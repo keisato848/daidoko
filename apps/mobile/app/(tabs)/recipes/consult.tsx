@@ -43,6 +43,7 @@ import {
 import {
   ConsultError,
   consultRecipe,
+  resetConsultImageCache,
   type ConsultMessage,
 } from '../../../src/services/recipe-consult.provider';
 import { dialog } from '../../../src/services/dialog.service';
@@ -245,6 +246,7 @@ export default function ConsultScreen() {
     setLastChange(null);
     setReady(false);
     setErrorMsg(null);
+    resetConsultImageCache();
   };
 
   const handleSave = async (data: RecipeFormData) => {

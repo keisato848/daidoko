@@ -164,6 +164,12 @@ function mimeTypeFor(uri: string): WireImage['mimeType'] {
   return 'image/jpeg';
 }
 
+const consultImageCache = new Map<string, string>();
+
+export function resetConsultImageCache(): void {
+  consultImageCache.clear();
+}
+
 /**
  * 送る写真を**新しい方から** `MAX_CONSULT_IMAGES` 枚だけ base64 にする。
  * 落とす判断はサーバーもやるが、**端末側で先に落とさないと無駄に base64 を作って送ることになる**
@@ -192,16 +198,35 @@ async function toWireMessages(messages: ConsultMessage[]): Promise<WireMessage[]
     const images: WireImage[] = [];
     for (const uri of uris) {
       try {
-        const processed = await preprocessImageForOcr(uri, expoImageManipulatorPreprocessAdapter, {
-          maxDimension: CONSULT_IMAGE_MAX_DIMENSION,
-        });
+        let processedUri = consultImageCache.get(uri);
+        if (processedUri) {
+          // LRU: touch
+          consultImageCache.delete(uri);
+          consultImageCache.set(uri, processedUri);
+        } else {
+          const processed = await preprocessImageForOcr(
+            uri,
+            expoImageManipulatorPreprocessAdapter,
+            {
+              maxDimension: CONSULT_IMAGE_MAX_DIMENSION,
+            },
+          );
+          processedUri = processed.imageUri;
+          consultImageCache.delete(uri);
+          consultImageCache.set(uri, processedUri);
+          if (consultImageCache.size > MAX_CONSULT_IMAGES) {
+            const first = consultImageCache.keys().next().value;
+            if (first !== undefined) consultImageCache.delete(first);
+          }
+        }
         images.push({
-          imageBase64: await FileSystem.readAsStringAsync(processed.imageUri, {
+          imageBase64: await FileSystem.readAsStringAsync(processedUri, {
             encoding: FileSystem.EncodingType.Base64,
           }),
-          mimeType: mimeTypeFor(processed.imageUri),
+          mimeType: mimeTypeFor(processedUri),
         });
       } catch {
+        consultImageCache.delete(uri);
         // 1 枚読めなくても相談は続けられる。黙って落とす方が会話が止まらない
       }
     }
@@ -299,13 +324,20 @@ const GEMINI_RESPONSE_SCHEMA = {
   required: ['reply', 'ready'],
 };
 
+/**
+ * 在庫のリストを最大200件に絞り込み、空の項目を除去する。
+ */
+export function trimPantry(pantry: string[]): string[] {
+  return pantry.filter((name) => name.trim()).slice(0, 200);
+}
+
 /** 下書きと在庫を、最後の user 発言に添える文字列にする（直近ほど効く）。 */
 export function buildContextText(args: ConsultArgs): string {
   const parts: string[] = [];
   if (args.draft) {
     parts.push('## いまの下書き', JSON.stringify(formDataToDraft(args.draft), null, 2));
   }
-  const pantry = (args.pantry ?? []).filter((name) => name.trim()).slice(0, 200);
+  const pantry = trimPantry(args.pantry ?? []);
   if (pantry.length > 0) {
     parts.push(
       '## 手元にある材料（在庫）',
@@ -394,19 +426,22 @@ async function consultViaByok(args: ConsultArgs, apiKey: string): Promise<Consul
 // ─── managed サーバー経由 ────────────────────────────────────────────────────
 
 async function consultViaServer(args: ConsultArgs): Promise<ConsultTurnResult> {
+  const wireMessages = await toWireMessages(trimMessages(args.messages));
+  const bodyPayload = JSON.stringify({
+    messages: wireMessages,
+    ...(args.draft ? { draft: formDataToDraft(args.draft) } : {}),
+    ...(args.pantry && args.pantry.length > 0 ? { pantry: trimPantry(args.pantry) } : {}),
+    locale: requestLocale(),
+    unitSystem: requestUnitSystem(),
+  });
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(`${API_V1}/infer/consult`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: await toWireMessages(trimMessages(args.messages)),
-        ...(args.draft ? { draft: formDataToDraft(args.draft) } : {}),
-        ...(args.pantry && args.pantry.length > 0 ? { pantry: args.pantry } : {}),
-        locale: requestLocale(),
-        unitSystem: requestUnitSystem(),
-      }),
+      body: bodyPayload,
       signal: controller.signal,
     });
     if (!res.ok) {
