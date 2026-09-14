@@ -2,13 +2,18 @@ import { preprocessImageForOcr, type ImagePreprocessAdapter } from '../image-pre
 
 describe('OCR-SVC-01 preprocessImageForOcr', () => {
   it('resizes large images through the adapter', async () => {
+    const getInfoMock = jest
+      .fn()
+      .mockResolvedValue({ imageUri: 'file:///tmp/original.jpg', width: 2400, height: 1800 });
+    const resizeMock = jest.fn().mockResolvedValue({
+      imageUri: 'file:///tmp/original.jpg?max=1200',
+      width: 1200,
+      height: 900,
+    });
+
     const adapter: ImagePreprocessAdapter = {
-      getInfo: async () => ({ imageUri: 'file:///tmp/original.jpg', width: 2400, height: 1800 }),
-      resize: async (imageUri, options) => ({
-        imageUri: `${imageUri}?max=${options.maxDimension}`,
-        width: 1200,
-        height: 900,
-      }),
+      getInfo: getInfoMock,
+      resize: resizeMock,
     };
 
     const result = await preprocessImageForOcr('file:///tmp/original.jpg', adapter);
@@ -19,6 +24,36 @@ describe('OCR-SVC-01 preprocessImageForOcr', () => {
       height: 900,
       warnings: [],
     });
+    expect(getInfoMock).toHaveBeenCalledTimes(1);
+    expect(resizeMock).toHaveBeenCalledTimes(1);
+    expect(resizeMock).toHaveBeenCalledWith('file:///tmp/original.jpg', {
+      maxDimension: 1200,
+      width: 2400,
+      height: 1800,
+    });
+  });
+
+  it('does not call resize if the image is within max dimension', async () => {
+    const getInfoMock = jest
+      .fn()
+      .mockResolvedValue({ imageUri: 'file:///tmp/ok.jpg', width: 1000, height: 1000 });
+    const resizeMock = jest.fn();
+
+    const adapter: ImagePreprocessAdapter = {
+      getInfo: getInfoMock,
+      resize: resizeMock,
+    };
+
+    const result = await preprocessImageForOcr('file:///tmp/ok.jpg', adapter);
+
+    expect(result).toMatchObject({
+      imageUri: 'file:///tmp/ok.jpg',
+      width: 1000,
+      height: 1000,
+      warnings: [],
+    });
+    expect(getInfoMock).toHaveBeenCalledTimes(1);
+    expect(resizeMock).not.toHaveBeenCalled();
   });
 
   it('warns when the processed image is too small', async () => {

@@ -17,11 +17,14 @@ export const expoImageManipulatorPreprocessAdapter: ImagePreprocessAdapter = {
     return toImageInfo(result);
   },
   async resize(imageUri, options) {
-    const info = await this.getInfo(imageUri);
+    let { width, height } = options;
+    if (width === undefined || height === undefined) {
+      const info = await this.getInfo(imageUri);
+      width = info.width;
+      height = info.height;
+    }
     const context = ImageManipulator.manipulate(imageUri).resize(
-      info.width >= info.height
-        ? { width: options.maxDimension }
-        : { height: options.maxDimension },
+      width >= height ? { width: options.maxDimension } : { height: options.maxDimension },
     );
     const ref = await context.renderAsync();
     const result = await ref.saveAsync({ compress: 0.9, format: SaveFormat.JPEG });

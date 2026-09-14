@@ -19,7 +19,22 @@ export interface ImageInfo {
 
 export interface ImagePreprocessAdapter {
   getInfo: (imageUri: string) => Promise<ImageInfo>;
-  resize?: (imageUri: string, options: { maxDimension: number }) => Promise<ImageInfo>;
+  resize?: (
+    imageUri: string,
+    options: {
+      maxDimension: number;
+      /**
+       * `getInfo(imageUri)` の戻り（回転適用後の実寸）を渡す。
+       * 省略時はアダプタが `getInfo` を呼ぶ（原寸デコードが 1 回増える）。
+       */
+      width?: number;
+      /**
+       * `getInfo(imageUri)` の戻り（回転適用後の実寸）を渡す。
+       * 省略時はアダプタが `getInfo` を呼ぶ（原寸デコードが 1 回増える）。
+       */
+      height?: number;
+    },
+  ) => Promise<ImageInfo>;
 }
 
 export interface ImagePreprocessOptions {
@@ -82,7 +97,11 @@ export async function preprocessImageForOcr(
   const needsResize = Math.max(original.width, original.height) > resolvedOptions.maxDimension;
   const processed =
     needsResize && adapter.resize
-      ? await adapter.resize(original.imageUri, { maxDimension: resolvedOptions.maxDimension })
+      ? await adapter.resize(original.imageUri, {
+          maxDimension: resolvedOptions.maxDimension,
+          width: original.width,
+          height: original.height,
+        })
       : original;
 
   return {
