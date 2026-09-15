@@ -43,6 +43,11 @@ node scripts/agent/build-android.mjs --arch x86_64   # app.json/plugins 変更�
 （本番ビルドにテスト広告を出さないための設計 — `apps/mobile/src/config.ts`）。この状態で枠切れにすると
 広告視聴の確認を飛ばして**ペイウォールに直行**するので、「広告フローが壊れた」と読み違える。
 
+**検証端末が無料枠（月 5 回）を使い切っていると、相談・写真レシピの送信で即ペイウォールになる。**
+広告ユニット無しのビルドは広告視聴を飛ばして直行するので、AI 経路（相談・写真からレシピ）の検証は
+`EXPO_PUBLIC_FREE_DAILY_LIMIT=999` を付けて組む（2026-09-15・AQUOS で被弾。§4-0b の「枠切れ」の別パターン）。
+worktree からビルドするなら先に `docs/開発ハーネス.md` §4-0c を読む。
+
 **ビルドスクリプトはリポジトリのルートから叩く。** `apps/mobile` を cwd にしたまま
 `node scripts/agent/build-android.mjs` を叩くと MODULE_NOT_FOUND で即死するが、
 `| tail` などに繋いでいると**パイプ側の終了コード 0 が返って成功に見える**。
