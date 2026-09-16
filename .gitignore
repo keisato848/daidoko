@@ -104,3 +104,6 @@ docs/eval/cover-image/*.jpg
 # Play Console / AdMob のエクスポート（収益・国別データ。growth-analyst が読む。コミットしない）
 analytics/
 >>>>>>> origin/main
+
+# ハーネスの作業用 worktree・レポート（gemini-task）
+.scratch/
