@@ -62,5 +62,20 @@
         ]
       }
     ]
+  },
+  "extraKnownMarketplaces": {
+    "keisato-harness": {
+      "source": {
+        "source": "directory",
+        "path": "C:/Projects/claude-harness"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "harness@keisato-harness": true
+  },
+  "env": {
+    "HARNESS_ROOT": "C:/Projects/claude-harness",
+    "HARNESS_GEMINI_MODE": "geminiwrite"
   }
 }
