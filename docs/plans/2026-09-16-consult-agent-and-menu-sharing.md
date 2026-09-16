@@ -105,3 +105,29 @@
 ---
 
 利用者の合意: **合意（2026-09-16）**
+
+---
+
+## Phase Gate Review（Phase 0: 受付・2026-09-16）
+
+| 項目         | 判定        | 根拠                                                                                                                                                                                                                                                                                                                                                      |
+| ------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 成果物       | Pass        | 票に目的・優先度・影響領域・受入基準（27件・入力→期待結果の形）・スコープ外（18件）・未解決事項・Phase計画が揃っている                                                                                                                                                                                                                                    |
+| 品質         | Pass        | 決定済み4件（R16/R13/R12/週の始まり）と未解決11件が分離されている。仮置きは「仮:」明記。規模の違う献立共有（R17→第3部）は保留として切り分け済み                                                                                                                                                                                                           |
+| リスク       | Conditional | 本票は文書のみでロールバックは自明（コミット revert）。ただし作業ブランチ `chore/enable-claude-harness-daidoko` の upstream 追跡が `origin/main` に誤設定されているのを発見・修正済み（`git config` で `origin/chore/enable-claude-harness-daidoko` へ変更。**push 前に必ず `git push -u origin chore/enable-claude-harness-daidoko` で確定させること**） |
+| 文書同期     | Pass        | `node plugin/scripts/gate-checks.mjs`: 「文書同期: 対象外（実装変更なし）」。本票・ヒアリング記録・設計案・レビュー記録はすべて対応するコミットで揃っている                                                                                                                                                                                               |
+| テスト・証跡 | Pass        | `gate-checks.mjs` は test を Fail 報告（jest 1 件失敗）したが、`pnpm --filter mobile test` を直接再実行した結果 **143 suites / 1433 tests 全て Pass**。転記時点の環境要因（同セッション内の並行バックグラウンド処理によるメモリ競合。既知の類似事象は PR #336 で追跡中）による一過性の失敗と判断。本票自体は docs のみで実装差分はない                    |
+| 禁止操作確認 | Pass        | main 直 push・force push・secret 出力・DROP・外向き公開操作のいずれも無し。今回のセッションで行った操作はコミット・push（別ブランチ `docs/agent-design-detail`）・Issue/PR コメント・クローズのみ                                                                                                                                                         |
+
+### 総合判定
+
+- 判定: **Go**
+- 理由: 受付票は完成しており、利用者の合意（2026-09-16）を得ている。機械検査の Fail 4 件のうち、未コミット・未pushはこのセッション内の正常な作業途中の状態（docs のみ・push 前提のブランチ）、upstream 誤設定は発見して修正済み、test Fail は再実行で解消（環境要因）。禁止操作なし
+- 次アクション: Phase 1（設計）へ進む。app-leader への献立トラック設計・再見積の依頼、`eval-inference` での R1 品質確認、AI コスト試算
+- 条件（Conditional Go 相当のリスク項目）:
+  - [ ] `chore/enable-claude-harness-daidoko` を push するときは `git push -u origin chore/enable-claude-harness-daidoko` を使う（誤って `origin/main` に向かないことを push 前に `git status` の "Your branch is set up to track" 行で確認）
+  - [ ] `docs/agent-design-detail`（PR #330 の上に積んだ設計詳細）と本票の関係を Phase 1 冒頭で整理する（マージ順は未解決事項に記載済み）
+
+### 差し戻し事項
+
+- なし（Go）
