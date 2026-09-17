@@ -405,8 +405,12 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
         };
 
         const { imageReadings: rawImageReadings, ...restRaw } = raw;
+        // モデルが返す順序は originalIndex の昇順とは限らない（一部の写真だけ読み取れた場合など）。
+        // 並べ替えずに使うと、次回送信時「写真${i+1}」のラベルが配列の位置とずれる
         const imageReadings = rawImageReadings
-          ?.map((r) => r.reading?.trim() ?? '')
+          ?.slice()
+          .sort((a, b) => (a.originalIndex ?? 0) - (b.originalIndex ?? 0))
+          .map((r) => r.reading?.trim() ?? '')
           .filter((r): r is string => r.length > 0);
 
         return {
