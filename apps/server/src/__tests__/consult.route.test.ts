@@ -107,6 +107,37 @@ describe('POST /api/v1/infer/consult', () => {
     expect(seen.value?.pantry).toEqual(['卵', '牛乳']);
   });
 
+  it('imageReadings を持つメッセージを受理し、Gemini に送る contents に反映される', async () => {
+    const seen: { value: ConsultRecipeInput | null } = { value: null };
+    setConsultProviderForTesting(
+      stub((input) => {
+        seen.value = input;
+        return { reply: 'はい', ready: false };
+      }),
+    );
+    const res = await post({
+      messages: [{ role: 'user', text: 'これ', imageReadings: ['りんご'] }],
+    });
+    expect(res.status).toBe(200);
+    expect(seen.value?.messages[0]?.imageReadings).toEqual(['りんご']);
+  });
+
+  it('Gemini が imageReadings を返したら戻り値に乗る', async () => {
+    setConsultProviderForTesting(
+      stub(() => ({ reply: 'はい', ready: false, imageReadings: ['みかん'] })),
+    );
+    const res = await post({ messages: [{ role: 'user', text: '何か' }] });
+    const json = (await res.json()) as { data: { imageReadings?: string[] } };
+    expect(json.data.imageReadings).toEqual(['みかん']);
+  });
+
+  it('Gemini が空の imageReadings を返したら戻り値に乗らない', async () => {
+    setConsultProviderForTesting(stub(() => ({ reply: 'はい', ready: false, imageReadings: [] })));
+    const res = await post({ messages: [{ role: 'user', text: '何か' }] });
+    const json = (await res.json()) as { data: { imageReadings?: string[] } };
+    expect(json.data.imageReadings).toBeUndefined();
+  });
+
   it('上流の利用枠切れは「つながらない」と区別する', async () => {
     setConsultProviderForTesting({
       consult: async () => {

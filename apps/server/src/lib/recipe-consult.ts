@@ -35,6 +35,8 @@ export interface ConsultMessage {
    * **user の発言にだけ付く。** assistant 側に来たら載せない。
    */
   images?: ConsultImage[];
+  /** 2 往復目以降に送る AI の読み取りテキスト */
+  imageReadings?: string[];
 }
 
 /**
@@ -94,6 +96,7 @@ export interface ConsultRecipeRaw {
     steps?: { body?: string }[];
     tags?: string[];
   };
+  imageReadings?: string[];
 }
 
 export interface RecipeConsultProvider {
@@ -136,6 +139,24 @@ const SYSTEM_PROMPT = [
   '- 賞味期限・分量・鮮度は写真から確定できない。**見えないことを見えたことにしない。**',
   '- 参考にしたい料理の写真なら、それに寄せた下書きを出す。目分量は推定と分かるように書く。',
   '- 写真が来ていないときは、写真の話をしない。',
+  '',
+  '## imageReadings（写真の読み取り記録）',
+  '写真が添えられたとき、あとで写真を見返せない状態でも会話を続けられるように、',
+  '**写真ごとに 1 件** `imageReadings` に記録する（`originalIndex` は 0 始まりの何枚目か）。',
+  '- 写っている食材・食品・料理・容器の中身を**見えた範囲で漏れなく**列挙する。',
+  '- パッケージに文字があれば、作り方・分量・原材料・人数など**読めた文字はそのまま**書く。',
+  '- 料理の写真なら、具材・麺や米の種類・スープの色や見た目・薬味・盛り付けまで書く。',
+  '- 数や量は数えられた・読めたものだけ書き、見えないことは書かない。',
+  '- **調味料・野菜・飲料のようなカテゴリ語や色だけの表現（例:「紫色の野菜」）を材料名として使わない。**',
+  '  特定できなければ「特定できない食品」と書く。',
+  '- 長さの上限は設けない。',
+  '',
+  '## imageReadings が渡されたとき（2 往復目以降）',
+  '`imageReadings` は**写真そのものではなく、前回あなたが記録したテキスト**である。',
+  '写真は手元に無い。',
+  '- 読み取りに書かれたことだけを根拠にする。',
+  '- 利用者が「読み取りに無いもの」を主張したら、**読み取りに無かったことを一言添えたうえで従う。**',
+  '  見えないことを見えたことにしない。',
   '',
   '## 在庫が渡されたとき',
   '- 使えるものを優先して組み立てる。ただし**在庫だけで無理に作らない**。',
@@ -200,10 +221,22 @@ const GEMINI_RESPONSE_SCHEMA = {
         'tags',
       ],
     },
+    imageReadings: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          originalIndex: { type: 'NUMBER' },
+          reading: { type: 'STRING' },
+        },
+        required: ['originalIndex', 'reading'],
+        propertyOrdering: ['originalIndex', 'reading'],
+      },
+    },
   },
-  // reply は必ず要る（無言だと会話が止まる）。draft は「まだ出せない」が正当な状態なので必須にしない。
+  // reply は必ず要る（無言だと会話が止まる）。draft/imageReadings は写真が無い往復では出ないので必須にしない。
   required: ['reply', 'ready'],
-  propertyOrdering: ['reply', 'ready', 'draft'],
+  propertyOrdering: ['reply', 'ready', 'draft', 'imageReadings'],
 };
 
 /** 構造化出力のスキーマ（テストから必須項目を固定するために公開する）。 */
@@ -293,7 +326,13 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
     const keptImages = pickRecentImages(messages);
     const contents = messages.map((message, index) => {
       const isLast = index === messages.length - 1;
-      const text = isLast && context ? `${message.text}\n\n${context}` : message.text;
+      let text = isLast && context ? `${message.text}\n\n${context}` : message.text;
+      if (message.imageReadings && message.imageReadings.length > 0) {
+        text += '\n\n（添付した写真の内容。前回 AI が読み取ったもの）';
+        message.imageReadings.forEach((reading, i) => {
+          text += `\n写真${i + 1}: ${reading}`;
+        });
+      }
       const images = keptImages.get(index) ?? [];
       return {
         role: message.role === 'assistant' ? 'model' : 'user',
@@ -360,7 +399,20 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
         };
         const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new ConsultRequestError('Gemini returned no content');
-        return JSON.parse(text) as ConsultRecipeRaw;
+
+        const raw = JSON.parse(text) as Omit<ConsultRecipeRaw, 'imageReadings'> & {
+          imageReadings?: { originalIndex?: number; reading?: string }[];
+        };
+
+        const { imageReadings: rawImageReadings, ...restRaw } = raw;
+        const imageReadings = rawImageReadings
+          ?.map((r) => r.reading?.trim() ?? '')
+          .filter((r): r is string => r.length > 0);
+
+        return {
+          ...restRaw,
+          ...(imageReadings && imageReadings.length > 0 ? { imageReadings } : {}),
+        };
       } catch (err) {
         if (err instanceof ConsultQuotaError) throw err;
         lastError = err instanceof Error ? err : new ConsultRequestError(String(err));

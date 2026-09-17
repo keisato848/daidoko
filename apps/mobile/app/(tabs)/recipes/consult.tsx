@@ -213,7 +213,15 @@ export default function ConsultScreen() {
         draft,
         ...(pantry && pantry.length > 0 ? { pantry } : {}),
       });
-      setMessages([...next, { role: 'assistant', text: turn.reply }]);
+      const withReadings =
+        turn.imageReadings && turn.imageReadings.length > 0
+          ? next.map((m, i) =>
+              i === next.length - 1 && m.role === 'user'
+                ? { ...m, imageReadings: turn.imageReadings }
+                : m,
+            )
+          : next;
+      setMessages([...withReadings, { role: 'assistant', text: turn.reply }]);
       if (turn.draft) {
         setLastChange(diffConsultDraft(draft, turn.draft));
         setDraft(turn.draft);
