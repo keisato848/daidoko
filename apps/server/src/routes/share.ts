@@ -146,7 +146,7 @@ function accessFromBody(body: {
 
 function clientIp(headers: { get: (name: string) => string | null | undefined }): string {
   return (
-    headers.get('x-forwarded-for')?.split(',')[0]?.trim() || headers.get('x-real-ip') || 'anonymous'
+    headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() || headers.get('x-real-ip') || 'anonymous'
   );
 }
 

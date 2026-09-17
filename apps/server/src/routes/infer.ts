@@ -128,7 +128,7 @@ function resolveProvider(): VisionRecipeProvider {
 inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
   // Per-client rate limit (best-effort, in-memory). Identify by forwarded IP.
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   const rate = checkRateLimit(clientId);
@@ -238,7 +238,7 @@ export function setRecipePageProviderForTesting(provider: RecipePageProvider | n
 
 inferRouter.post('/recipe-page', zValidator('json', inferRecipePageSchema), async (c) => {
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   const rate = checkRateLimit(clientId);
@@ -284,7 +284,7 @@ inferRouter.post('/recipe-page', zValidator('json', inferRecipePageSchema), asyn
 
 inferRouter.post('/meal', zValidator('json', inferMealSchema), async (c) => {
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   if (!checkRateLimit(clientId).allowed) {
@@ -377,7 +377,7 @@ function resolveReceiptProvider(): ReceiptVisionProvider {
 
 inferRouter.post('/receipt', zValidator('json', inferReceiptSchema), async (c) => {
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   if (!checkRateLimit(clientId).allowed) {
@@ -490,7 +490,7 @@ inferRouter.post('/fridge', zValidator('json', inferFridgeSchema), async (c) => 
   }
 
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   // 専用プールは作らない。RECIPE_POOL（INFER_*）を共有する（視覚推論 1 回ぶん）
@@ -598,7 +598,7 @@ function resolveRefineProvider(): RecipeRefineProvider {
 
 inferRouter.post('/refine', zValidator('json', inferRefineSchema), async (c) => {
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   // 写真レシピと同じ枠を消費する。AI 呼び出しであることに変わりはなく、
@@ -731,7 +731,7 @@ function resolveConsultProvider(): RecipeConsultProvider {
 
 inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) => {
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   // 写真レシピと同じ枠を消費する（AI 呼び出しであることに変わりはない）
@@ -877,7 +877,7 @@ inferRouter.post('/menu', zValidator('json', inferMenuSchema), async (c) => {
   }
 
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   // menu 専用のプールは作らない。RECIPE_POOL（INFER_*）を共有する（§10.10.6-a）
@@ -998,7 +998,7 @@ inferRouter.post('/menu-recipes', zValidator('json', inferMenuRecipesSchema), as
   }
 
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   // 専用プールは作らない。RECIPE_POOL（INFER_*）を共有する（§10.10.6-a と同じ判断 —
@@ -1116,7 +1116,7 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
   }
 
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   // 専用プール（COVER_POOL）。RECIPE_POOL とは共有しない
@@ -1225,7 +1225,7 @@ inferRouter.post('/step-image', zValidator('json', inferStepImageSchema), async 
   }
 
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   // **STEP_POOL。COVER_POOL と共有しない** — 一括生成 1 回で表紙の天井を食い尽くさない

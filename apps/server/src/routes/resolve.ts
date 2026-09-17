@@ -32,7 +32,7 @@ function resolveProvider(): NameResolver {
 
 resolveRouter.post('/names', zValidator('json', namesSchema), async (c) => {
   const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous';
   if (!checkRateLimit(clientId).allowed) {

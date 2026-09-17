@@ -45,7 +45,7 @@ const gardenRouter = new Hono();
 /** レート制限のクライアント識別。Railway は x-forwarded-for を付ける。 */
 function clientIp(c: { req: { header: (name: string) => string | undefined } }): string {
   return (
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
     c.req.header('x-real-ip') ||
     'anonymous'
   );
