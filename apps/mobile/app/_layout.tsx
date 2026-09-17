@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { ActionToast } from '../src/components/ActionToast';
 import { CookingResumeBar } from '../src/components/CookingResumeBar';
 import { DialogHost } from '../src/components/DialogHost';
 import { Colors } from '../src/constants/theme';
@@ -193,6 +194,9 @@ export default function RootLayout() {
           (tabs) の外の階層画面（設定系など）でも文脈を保つため、ルートに 1 つだけ置く。
           出す画面・位置の判断はコンポーネント側が持つ */}
       <CookingResumeBar />
+      {/* 確認付き Toast — 操作結果の表示と取り消し。
+          `CookingResumeBar` と同じくルートに 1 つだけ置く */}
+      <ActionToast />
       {/*
         アプリのデザインのダイアログ（`docs/画面設計.md` §7）。**アプリに 1 つだけ**置く。
         `Stack` の外に出しているのは、どの画面から出した確認でも同じ場所に描くため
