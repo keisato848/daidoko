@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { GeminiNameResolver, ResolveConfigError, type NameResolver } from '../lib/name-resolve.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
 import { parseOutputLocale } from '../lib/output-locale.js';
+import { getClientIp } from '../lib/client-ip.js';
 
 const resolveRouter = new Hono();
 
@@ -31,10 +32,7 @@ function resolveProvider(): NameResolver {
 }
 
 resolveRouter.post('/names', zValidator('json', namesSchema), async (c) => {
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   if (!checkRateLimit(clientId).allowed) {
     return c.json({ items: [] });
   }

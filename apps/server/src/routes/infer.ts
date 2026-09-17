@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { runPhotoInferAgent } from '../agents/photo-infer.agent.js';
 import { resolveThinkingBudget } from '../lib/thinking-budget.js';
+import { getClientIp } from '../lib/client-ip.js';
 import {
   GeminiVisionRecipeProvider,
   VisionConfigError,
@@ -127,10 +128,7 @@ function resolveProvider(): VisionRecipeProvider {
 
 inferRouter.post('/photo', zValidator('json', inferPhotoSchema), async (c) => {
   // Per-client rate limit (best-effort, in-memory). Identify by forwarded IP.
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   const rate = checkRateLimit(clientId);
   if (!rate.allowed) {
     const message =
@@ -237,10 +235,7 @@ export function setRecipePageProviderForTesting(provider: RecipePageProvider | n
 }
 
 inferRouter.post('/recipe-page', zValidator('json', inferRecipePageSchema), async (c) => {
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   const rate = checkRateLimit(clientId);
   if (!rate.allowed) {
     const message =
@@ -283,10 +278,7 @@ inferRouter.post('/recipe-page', zValidator('json', inferRecipePageSchema), asyn
 });
 
 inferRouter.post('/meal', zValidator('json', inferMealSchema), async (c) => {
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   if (!checkRateLimit(clientId).allowed) {
     return c.json({
       ok: false,
@@ -376,10 +368,7 @@ function resolveReceiptProvider(): ReceiptVisionProvider {
 }
 
 inferRouter.post('/receipt', zValidator('json', inferReceiptSchema), async (c) => {
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   if (!checkRateLimit(clientId).allowed) {
     return c.json({
       ok: false,
@@ -489,10 +478,7 @@ inferRouter.post('/fridge', zValidator('json', inferFridgeSchema), async (c) => 
     });
   }
 
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   // 専用プールは作らない。RECIPE_POOL（INFER_*）を共有する（視覚推論 1 回ぶん）
   const rate = checkRateLimit(clientId);
   if (!rate.allowed) {
@@ -597,10 +583,7 @@ function resolveRefineProvider(): RecipeRefineProvider {
 }
 
 inferRouter.post('/refine', zValidator('json', inferRefineSchema), async (c) => {
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   // 写真レシピと同じ枠を消費する。AI 呼び出しであることに変わりはなく、
   // 別枠にすると上限管理が二重になる（docs/お店の味を再現設計.md §5）
   const rate = checkRateLimit(clientId);
@@ -730,10 +713,7 @@ function resolveConsultProvider(): RecipeConsultProvider {
 }
 
 inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) => {
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   // 写真レシピと同じ枠を消費する（AI 呼び出しであることに変わりはない）
   const rate = checkRateLimit(clientId);
   if (!rate.allowed) {
@@ -876,10 +856,7 @@ inferRouter.post('/menu', zValidator('json', inferMenuSchema), async (c) => {
     });
   }
 
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   // menu 専用のプールは作らない。RECIPE_POOL（INFER_*）を共有する（§10.10.6-a）
   const rate = checkRateLimit(clientId);
   if (!rate.allowed) {
@@ -997,10 +974,7 @@ inferRouter.post('/menu-recipes', zValidator('json', inferMenuRecipesSchema), as
     });
   }
 
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   // 専用プールは作らない。RECIPE_POOL（INFER_*）を共有する（§10.10.6-a と同じ判断 —
   // n 品でも呼び出しは 1 回なので、テキスト推論 1 回ぶんとして数えてよい）
   const rate = checkRateLimit(clientId);
@@ -1115,10 +1089,7 @@ inferRouter.post('/cover-image', zValidator('json', inferCoverImageSchema), asyn
     });
   }
 
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   // 専用プール（COVER_POOL）。RECIPE_POOL とは共有しない
   // — 1 枚 ≒¥5.0 はテキスト推論の 11〜17 倍で、共有すると安い呼び出しが
   // 高い呼び出しの枠に締め出される（rate-limit.ts の COVER_POOL コメント参照）。
@@ -1224,10 +1195,7 @@ inferRouter.post('/step-image', zValidator('json', inferStepImageSchema), async 
     });
   }
 
-  const clientId =
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous';
+  const clientId = getClientIp({ get: (n) => c.req.header(n) });
   // **STEP_POOL。COVER_POOL と共有しない** — 一括生成 1 回で表紙の天井を食い尽くさない
   // ため（rate-limit.ts の STEP_POOL コメント）。
   const rate = checkRateLimit(clientId, STEP_POOL);
