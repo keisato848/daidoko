@@ -80,8 +80,23 @@ Play 版と「同じ訴求」で書く方針（上）は保つが、OS 名の並
 
 だいどこ - 献立・レシピ管理・買い物リスト・在庫
 
-> Play の現行名と揃えた。**アプリ枠には旧 ASO 名（だいどこ - レシピ管理・買い物リスト・食材管理）で
-> 登録してしまっているので、この名前に変更する必要がある**（`appInfoLocalizations.name`）。
+> Play の現行名と揃えた。
+>
+> **~~アプリ枠には旧 ASO 名（だいどこ - レシピ管理・買い物リスト・食材管理）で登録してしまっている~~
+> — これは解消済み（2026-09-17 に ASC API で現在値を確認）。** `appInfoLocalizations` の実値は
+> ja が「だいどこ - 献立・レシピ管理・買い物リスト・在庫」／サブタイトル「在庫から献立を。レシピも買い物も1本で」、
+> en-US が "DAIDOKO: Meal Plan & Recipes" ／ "From pantry to shopping list" で、
+> **この原稿と一字一句一致している。**
+>
+> **メモは書いた時点の記録であって、ストアの現在値ではない**（`docs/store/なぜインストールされないか-2026-08-26.md`
+> 末尾の教訓）。この欄を根拠に「まだ直っていない」と判断しないこと。確かめ方は
+> `GET /v1/apps/<ascAppId>/appInfos` → `GET /v1/appInfos/<id>/appInfoLocalizations`
+> （鍵は `apps/mobile/eas.json` の `submit.production.ios`・読み取りのみ）。
+>
+> 併せて分かったこと（2026-09-17 実測）: `appStoreVersions` は 1.13.2 まで**すべて `READY_FOR_SALE`** で
+> `PREPARE_FOR_SUBMISSION` が 1 つも無い。**App 名・サブタイトル・説明・キーワード・スクショは
+> 次のバージョンを作らないと変えられない**（`promotionalText` だけが審査なしで変えられる）。
+> Play は随時反映できるので、**掲載を先行更新できる範囲が Play と iOS で非対称**である点に注意。
 
 ## サブタイトル（19 文字）
 
