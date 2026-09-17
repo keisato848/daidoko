@@ -213,6 +213,20 @@ const recipeImport = {
     restartConfirm: 'これまでの会話と下書きを消して、最初からやり直しますか？',
     disclaimer: 'アレルギーの有無は判定できません。材料はご自身で確認してください。',
 
+    actionAdded: '「{{name}}」を買い物リストに足しました',
+    actionDuplicate: '「{{name}}」は買い物リストにあります',
+    actionConfirmPrefix: '押すまで何も変わりません',
+    actionCancel: 'やめる',
+    actionConfirm: '足す',
+    actionActionLabel: '📋 買い物リストに「{{name}}」を足す',
+    candidateCountLabel: '候補数:',
+    candidateCountOptions: {
+      1: '1件',
+      2: '2件',
+      3: '3件',
+    },
+    candidateChoice: '{{title}}にします',
+
     /** 写真を添えて相談する（冷蔵庫の中身・食材・参考にしたい料理）。 */
     attachPhoto: '写真を添える',
     attachedPhoto: '添えた写真',

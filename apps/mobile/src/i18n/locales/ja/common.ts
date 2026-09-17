@@ -17,6 +17,7 @@ const common = {
   next: '次へ',
   retry: 'もう一度',
   ok: 'OK',
+  undo: '取り消す',
 
   // レシピの構成要素。見出しとしても項目名としても同じ訳になる
   ingredients: '材料',

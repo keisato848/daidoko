@@ -52,6 +52,9 @@ import { ensureInferenceCredit } from '../../../src/services/inference-gate.serv
 import { recordCloudInference } from '../../../src/services/usage.service';
 import type { RecipeFormData } from '../../../src/validation/recipe.schema';
 import { diffConsultDraft, type DraftChange } from '../../../src/utils/consultDraftDiff';
+import { confirmMutate } from '../../../src/assistant/action-runner';
+import { useActionToastStore } from '../../../src/stores/action-toast.store';
+import { removeShoppingItem } from '../../../src/services/shopping-list.service';
 
 type Phase = 'chat' | 'confirm';
 
@@ -125,6 +128,11 @@ export default function ConsultScreen() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [usePantry, setUsePantry] = useState(false);
+  const [actions, setActions] = useState<{ id: string; args: { name: string }; heardAs: string }[]>(
+    [],
+  );
+  const [candidates, setCandidates] = useState<{ title: string; description: string }[]>([]);
+  const [candidateCount, setCandidateCount] = useState<number>(3);
   /** 次の発言に添える写真（端末内パス）。送ったら空に戻す */
   const [pendingPhotos, setPendingPhotos] = useState<CapturedPhoto[]>([]);
   const [pantryGroups, setPantryGroups] = useState<string[]>([]);
@@ -177,68 +185,84 @@ export default function ConsultScreen() {
     setPendingPhotos((current) => current.filter((_, i) => i !== index));
   }, []);
 
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || busy) return;
+  const send = useCallback(
+    async (overrideText?: string) => {
+      const text = (overrideText ?? input).trim();
+      if (!text || busy) return;
 
-    // 枠切れなら、その場で広告視聴を持ちかけてそのまま続行する（2026-08-12）。
-    // ペイウォールは広告を出せないとき（視聴上限・no-fill）の逃げ道
-    const gate = await ensureInferenceCredit();
-    if (gate === 'paywall') {
-      router.push('/recipes/paywall');
-      return;
-    }
-    if (gate !== 'ready') return;
-
-    const photos = pendingPhotos;
-    const next: ConsultMessage[] = [
-      ...messages,
-      photos.length > 0
-        ? { role: 'user', text, imageUris: photos.map((photo) => photo.localPath) }
-        : { role: 'user', text },
-    ];
-    setMessages(next);
-    setInput('');
-    setPendingPhotos([]);
-    setErrorMsg(null);
-    setBusy(true);
-    try {
-      const pantry = usePantry
-        ? await getInStockNormalizedNames(
-            pantryGroupFilter.length > 0 ? pantryGroupFilter : undefined,
-          ).catch(() => [])
-        : undefined;
-      const turn = await consultRecipe({
-        messages: next,
-        draft,
-        ...(pantry && pantry.length > 0 ? { pantry } : {}),
-      });
-      const withReadings =
-        turn.imageReadings && turn.imageReadings.length > 0
-          ? next.map((m, i) =>
-              i === next.length - 1 && m.role === 'user'
-                ? { ...m, imageReadings: turn.imageReadings }
-                : m,
-            )
-          : next;
-      setMessages([...withReadings, { role: 'assistant', text: turn.reply }]);
-      if (turn.draft) {
-        setLastChange(diffConsultDraft(draft, turn.draft));
-        setDraft(turn.draft);
+      // 枠切れなら、その場で広告視聴を持ちかけてそのまま続行する（2026-08-12）。
+      // ペイウォールは広告を出せないとき（視聴上限・no-fill）の逃げ道
+      const gate = await ensureInferenceCredit();
+      if (gate === 'paywall') {
+        router.push('/recipes/paywall');
+        return;
       }
-      setReady(turn.ready);
-      // 成功した往復だけ枠を消費する（写真レシピと同じ数え方）
-      void recordCloudInference().catch(() => undefined);
-    } catch (err) {
-      // 失敗した発言は入力欄に戻す。打ち直させない
-      setMessages(messages);
-      setInput(text);
-      setPendingPhotos(photos);
-      setErrorMsg(err instanceof ConsultError ? err.message : t('error.photoRecipeFailed'));
-    } finally {
-      setBusy(false);
-    }
-  }, [input, busy, messages, draft, usePantry, pantryGroupFilter, pendingPhotos, router]);
+      if (gate !== 'ready') return;
+
+      const photos = pendingPhotos;
+      const next: ConsultMessage[] = [
+        ...messages,
+        photos.length > 0
+          ? { role: 'user', text, imageUris: photos.map((photo) => photo.localPath) }
+          : { role: 'user', text },
+      ];
+      setMessages(next);
+      setInput('');
+      setPendingPhotos([]);
+      setErrorMsg(null);
+      setBusy(true);
+      try {
+        const pantry = usePantry
+          ? await getInStockNormalizedNames(
+              pantryGroupFilter.length > 0 ? pantryGroupFilter : undefined,
+            ).catch(() => [])
+          : undefined;
+        const turn = await consultRecipe({
+          messages: next,
+          draft,
+          ...(pantry && pantry.length > 0 ? { pantry } : {}),
+          candidateCount,
+        });
+        const withReadings =
+          turn.imageReadings && turn.imageReadings.length > 0
+            ? next.map((m, i) =>
+                i === next.length - 1 && m.role === 'user'
+                  ? { ...m, imageReadings: turn.imageReadings }
+                  : m,
+              )
+            : next;
+        setMessages([...withReadings, { role: 'assistant', text: turn.reply }]);
+        setActions(turn.actions ?? []);
+        setCandidates(turn.candidates ?? []);
+        if (turn.draft) {
+          setLastChange(diffConsultDraft(draft, turn.draft));
+          setDraft(turn.draft);
+        }
+        setReady(turn.ready);
+        // 成功した往復だけ枠を消費する（写真レシピと同じ数え方）
+        void recordCloudInference().catch(() => undefined);
+      } catch (err) {
+        // 失敗した発言は入力欄に戻す。打ち直させない
+        setMessages(messages);
+        setInput(text);
+        setPendingPhotos(photos);
+        setErrorMsg(err instanceof ConsultError ? err.message : t('error.photoRecipeFailed'));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      input,
+      busy,
+      messages,
+      draft,
+      usePantry,
+      pantryGroupFilter,
+      pendingPhotos,
+      router,
+      candidateCount,
+    ],
+  );
 
   const handleRestart = async () => {
     const confirmed = await dialog.confirm({
@@ -285,14 +309,40 @@ export default function ConsultScreen() {
           <ChevronLeft size={24} color={Colors.gold} />
         </Pressable>
         <Text style={styles.headerTitle}>{t('recipeImport.consult.title')}</Text>
-        <Pressable
-          onPress={() => void handleRestart()}
-          hitSlop={8}
-          style={styles.headerButton}
-          disabled={messages.length === 0}
-        >
-          <RotateCcw size={20} color={messages.length === 0 ? Colors.muted : Colors.gold} />
-        </Pressable>
+        <View style={styles.headerRight}>
+          <View style={styles.candidateCountSelector}>
+            <Text style={styles.candidateCountLabel}>
+              {t('recipeImport.consult.candidateCountLabel')}
+            </Text>
+            {[1, 2, 3].map((num) => (
+              <Pressable
+                key={num}
+                style={[
+                  styles.candidateCountButton,
+                  candidateCount === num && styles.candidateCountButtonActive,
+                ]}
+                onPress={() => setCandidateCount(num)}
+              >
+                <Text
+                  style={[
+                    styles.candidateCountButtonText,
+                    candidateCount === num && styles.candidateCountButtonTextActive,
+                  ]}
+                >
+                  {num}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable
+            onPress={() => void handleRestart()}
+            hitSlop={8}
+            style={styles.headerButton}
+            disabled={messages.length === 0}
+          >
+            <RotateCcw size={20} color={messages.length === 0 ? Colors.muted : Colors.gold} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -336,7 +386,73 @@ export default function ConsultScreen() {
 
         {errorMsg && <Text style={styles.error}>{errorMsg}</Text>}
 
-        {draft && (
+        {actions.map((action, index) => (
+          <View key={`${action.id}-${index}`} style={styles.actionCard}>
+            <Text style={styles.actionHeard}>〈{action.heardAs}〉</Text>
+            <Text style={styles.actionTitle}>
+              {t('recipeImport.consult.actionActionLabel', { name: action.args.name })}
+            </Text>
+            <Text style={styles.actionPrefix}>{t('recipeImport.consult.actionConfirmPrefix')}</Text>
+            <View style={styles.actionButtons}>
+              <Pressable
+                style={styles.actionButtonCancel}
+                onPress={() => setActions(actions.filter((_, i) => i !== index))}
+              >
+                <Text style={styles.actionButtonTextCancel}>
+                  {t('recipeImport.consult.actionCancel')}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.actionButtonConfirm}
+                onPress={async () => {
+                  const res = await confirmMutate('shopping.add', { name: action.args.name });
+                  setActions(actions.filter((_, i) => i !== index));
+                  if (res.ok) {
+                    useActionToastStore.getState().show({
+                      message: t('recipeImport.consult.actionAdded', { name: action.args.name }),
+                      action: {
+                        label: t('common.undo'),
+                        onPress: () => void removeShoppingItem(res.item.id),
+                      },
+                      durationMs: 8000,
+                    });
+                  } else if (res.reason === 'duplicate') {
+                    useActionToastStore.getState().show({
+                      message: t('recipeImport.consult.actionDuplicate', {
+                        name: action.args.name,
+                      }),
+                    });
+                  }
+                }}
+              >
+                <Text style={styles.actionButtonTextConfirm}>
+                  {t('recipeImport.consult.actionConfirm')}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ))}
+
+        {candidates.length > 0 ? (
+          candidates.map((candidate, index) => (
+            <Pressable
+              key={index}
+              style={styles.candidateCard}
+              onPress={() => {
+                const choice = t('recipeImport.consult.candidateChoice', {
+                  title: candidate.title,
+                });
+                setInput(choice);
+                void send(choice);
+              }}
+            >
+              <Text style={styles.candidateTitle}>{candidate.title}</Text>
+              {candidate.description && (
+                <Text style={styles.candidateDesc}>{candidate.description}</Text>
+              )}
+            </Pressable>
+          ))
+        ) : draft ? (
           <Pressable style={styles.draftCard} onPress={() => setPhase('confirm')}>
             <Text style={styles.draftLabel}>
               {ready
@@ -350,7 +466,7 @@ export default function ConsultScreen() {
             )}
             <Text style={styles.draftAction}>{t('recipeImport.consult.openDraft')}</Text>
           </Pressable>
-        )}
+        ) : null}
 
         <Text style={styles.disclaimer}>{t('recipeImport.consult.disclaimer')}</Text>
         {draft && (
@@ -451,7 +567,7 @@ export default function ConsultScreen() {
         />
         <Pressable
           style={[styles.sendButton, (!input.trim() || busy) && styles.sendButtonDisabled]}
-          onPress={send}
+          onPress={() => void send()}
           disabled={!input.trim() || busy}
           accessibilityLabel={t('recipeImport.consult.send')}
         >
@@ -510,6 +626,53 @@ const styles = StyleSheet.create({
   draftMeta: { fontSize: 14, lineHeight: 20, color: Colors.paperDim },
   draftChange: { fontSize: 14, lineHeight: 20, color: Colors.paper },
   draftAction: { fontSize: 14, color: Colors.gold, marginTop: 4 },
+  actionCard: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 14,
+    gap: 4,
+    backgroundColor: Colors.bgInput,
+  },
+  actionHeard: { fontSize: 13, color: Colors.paperDim },
+  actionTitle: { fontSize: 16, fontWeight: '600', color: Colors.paper, marginVertical: 4 },
+  actionPrefix: { fontSize: 13, color: Colors.muted, marginBottom: 8 },
+  actionButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  actionButtonCancel: { paddingVertical: 8, paddingHorizontal: 12 },
+  actionButtonTextCancel: { fontSize: 15, color: Colors.muted },
+  actionButtonConfirm: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: Colors.gold,
+    borderRadius: 8,
+  },
+  actionButtonTextConfirm: { fontSize: 15, fontWeight: '600', color: Colors.bg },
+  candidateCard: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.gold,
+    borderRadius: 12,
+    padding: 14,
+    gap: 4,
+  },
+  candidateTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
+  candidateDesc: { fontSize: 14, lineHeight: 20, color: Colors.paperDim },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  candidateCountSelector: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  candidateCountLabel: { fontSize: 12, color: Colors.muted, marginRight: 4 },
+  candidateCountButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  candidateCountButtonActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
+  candidateCountButtonText: { fontSize: 12, color: Colors.paperDim },
+  candidateCountButtonTextActive: { color: Colors.bg, fontWeight: '600' },
   disclaimer: { fontSize: 12, lineHeight: 18, color: Colors.muted, marginTop: 8 },
   reportLink: {
     fontSize: 12,

@@ -69,6 +69,8 @@ export interface ConsultTurnResult {
   draft: RecipeFormData | null;
   /** AI が写真から読み取った内容。次回の往復で写真の代わりに送る（R1） */
   imageReadings?: string[];
+  actions?: { id: string; args: { name: string }; heardAs: string }[];
+  candidates?: { title: string; description: string }[];
 }
 
 export class ConsultError extends Error {
@@ -108,6 +110,8 @@ interface ServerAgentResult {
     draft: ServerDraft | null;
     /** AI が写真から読み取った内容（R1） */
     imageReadings?: string[];
+    actions?: { id: string; args: { name: string }; heardAs: string }[];
+    candidates?: { title: string; description: string }[];
   };
   error?: { code: string; message: string; retryable: boolean };
 }
@@ -258,6 +262,7 @@ export interface ConsultArgs {
   draft?: RecipeFormData | null;
   /** 手元の在庫。**「在庫を考慮する」を選んだときだけ**渡す */
   pantry?: string[];
+  candidateCount?: number;
 }
 
 // ─── BYOK（自分のキーで直接） ────────────────────────────────────────────────
@@ -363,8 +368,31 @@ const GEMINI_RESPONSE_SCHEMA = {
         required: ['originalIndex', 'reading'],
       },
     },
+    actions: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          id: { type: 'STRING' },
+          args: { type: 'OBJECT', properties: { name: { type: 'STRING' } } },
+          heardAs: { type: 'STRING' },
+        },
+        required: ['id', 'args', 'heardAs'],
+      },
+    },
+    candidates: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING' },
+          description: { type: 'STRING' },
+        },
+        required: ['title', 'description'],
+      },
+    },
   },
-  // imageReadings は写真が無い往復では出ないので required にしない（draft と同じ理由）
+  // imageReadings/actions/candidates は写真・操作提案が無い往復では出ないので required にしない（draft と同じ理由）
   required: ['reply', 'ready'],
 };
 
@@ -381,6 +409,9 @@ export function buildContextText(args: ConsultArgs): string {
       pantry.join('、'),
       'これらを優先して使ってよい。ただし在庫だけで無理に作らないこと。',
     );
+  }
+  if (args.candidateCount !== undefined) {
+    parts.push(`## 候補数\n利用者は ${args.candidateCount} 個の候補を求めています。`);
   }
   return parts.join('\n');
 }
@@ -442,6 +473,8 @@ async function consultViaByok(args: ConsultArgs, apiKey: string): Promise<Consul
     const raw = JSON.parse(text) as {
       reply?: string;
       ready?: boolean;
+      actions?: { id: string; args: { name: string }; heardAs: string }[];
+      candidates?: { title: string; description: string }[];
       draft?: ServerDraft | null;
       imageReadings?: { originalIndex: number; reading: string }[];
     };
@@ -459,6 +492,8 @@ async function consultViaByok(args: ConsultArgs, apiKey: string): Promise<Consul
       ready: raw.ready === true && usable !== null,
       draft: usable ? toFormData(usable) : null,
       ...(readings && readings.length > 0 ? { imageReadings: readings } : {}),
+      actions: raw.actions,
+      candidates: raw.candidates,
     };
   } catch (err) {
     if (err instanceof ConsultError) throw err;
@@ -489,6 +524,7 @@ async function consultViaServer(args: ConsultArgs): Promise<ConsultTurnResult> {
         messages: wireMessages,
         ...(args.draft ? { draft: formDataToDraft(args.draft) } : {}),
         ...(pantrySlice ? { pantry: pantrySlice } : {}),
+        ...(args.candidateCount !== undefined ? { candidateCount: args.candidateCount } : {}),
         locale: requestLocale(),
         unitSystem: requestUnitSystem(),
       }),
@@ -515,6 +551,8 @@ async function consultViaServer(args: ConsultArgs): Promise<ConsultTurnResult> {
       ...(result.data.imageReadings && result.data.imageReadings.length > 0
         ? { imageReadings: result.data.imageReadings }
         : {}),
+      actions: result.data.actions,
+      candidates: result.data.candidates,
     };
   } catch (err) {
     if (err instanceof ConsultError) throw err;
