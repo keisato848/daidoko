@@ -15,7 +15,8 @@
 | 5   | サーバーが `originalIndex` を破棄し `string[]` にダウングレードしている | **当たり（高）**   | `recipe-consult.ts:407-410` で確認。`imageReadings?.map((r) => r.reading?.trim())` は配列順そのままで、モデルが一部の写真だけ読み取り結果を返した場合（例: 2枚中1枚のみ `originalIndex:1` で返る）、クライアント側の `message.imageReadings.map((r,i) => \`写真${i+1}: ${r}\`)`（provider.ts:396付近）が配列インデックスをそのまま写真番号として使うため、誤ったラベル付けで2往復目以降の会話が食い違う |
 
 - 対応:
-  - #5（originalIndexの破棄）: サーバー側で `originalIndex` 昇順にソートしてから文字列化するよう修正（順序のズレは解消。欠番の穴埋めまではしない — 稀なケースなので今回は見送り、follow-up Issueで扱う）
-  - #4a・#4b（テストの歯の不足）: follow-up Issueとして起票し、次のテスト強化タイミングで対応
+  - #5（originalIndexの破棄）: **修正済み**（コミット `09f1914`）。`originalIndex` 昇順にソートしてから文字列化。順序のズレは解消。欠番の穴埋め（読み取れなかった写真の位置を空文字で埋める）までは見送り、follow-up Issue #347で扱う
+  - #4b（空imageReadingsのパーステストがバイパスされている）: **同コミットで解消**。`GeminiRecipeConsultProvider` を直接叩く新規テストファイル（3件）を追加。ソート処理を消すと2/3が赤くなることを変異検証済み
+  - #4a（`MAX_CONSULT_IMAGES_PER_MESSAGE` の直接テストが定数をなぞっただけ）: follow-up Issue #347で扱う（UIでの実添付動作は今回のスコープ外）
   - #1〜#3: `wontfix`（外れ。上記根拠のとおり実装は正しい）
 - 参照: PR https://github.com/keisato848/daidoko/pull/346
