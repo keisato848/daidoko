@@ -700,6 +700,7 @@ const inferConsultSchema = z.object({
   draft: consultDraftSchema.nullish(),
   /** 手元の在庫。**任意** — 利用者が「在庫を考慮する」を選んだときだけ送られる */
   pantry: z.array(z.string().min(1).max(50)).max(200).optional(),
+  candidateCount: z.number().int().min(1).max(5).optional(),
   locale: z.enum(['ja', 'en']).optional(),
   unitSystem: z.enum(['metric', 'imperial']).optional(),
 });
@@ -732,7 +733,7 @@ inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) =
     });
   }
 
-  const { messages, draft, pantry, locale, unitSystem } = c.req.valid('json');
+  const { messages, draft, pantry, candidateCount, locale, unitSystem } = c.req.valid('json');
 
   let provider: RecipeConsultProvider;
   try {
@@ -776,6 +777,7 @@ inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) =
       })),
       draft: snapshot,
       ...(pantry !== undefined && { pantry }),
+      ...(candidateCount !== undefined && { candidateCount }),
       outputLocale: parseOutputLocale(locale),
       unitSystem: parseUnitSystem(unitSystem),
     },

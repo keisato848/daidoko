@@ -25,6 +25,8 @@ export interface ConsultTurn {
   draft: RecipeDraft | null;
   /** 写真の読み取り結果（あれば） */
   imageReadings?: string[];
+  actions?: { id: string; args: { name: string }; heardAs: string }[];
+  candidates?: { title: string; description: string }[];
 }
 
 const EMPTY_REPLY_MESSAGE =
@@ -139,6 +141,25 @@ export async function runRecipeConsultAgent(
   }
 
   const draft = normalizeDraft(raw.draft);
+
+  const actions = (raw.actions ?? [])
+    .map((a) => ({
+      id: cleanString(a.id, 50),
+      args: { name: cleanString(a.args?.name, 100) },
+      heardAs: cleanString(a.heardAs, 200),
+    }))
+    .filter(
+      (a): a is { id: string; args: { name: string }; heardAs: string } =>
+        !!a.id && !!a.args.name && !!a.heardAs,
+    );
+
+  const candidates = (raw.candidates ?? [])
+    .map((c) => ({
+      title: cleanString(c.title, 100),
+      description: cleanString(c.description, 500),
+    }))
+    .filter((c): c is { title: string; description: string } => !!c.title && !!c.description);
+
   return {
     ok: true,
     data: {
@@ -148,6 +169,8 @@ export async function runRecipeConsultAgent(
       draft,
       ...(raw.imageReadings &&
         raw.imageReadings.length > 0 && { imageReadings: raw.imageReadings }),
+      ...(actions.length > 0 && { actions }),
+      ...(candidates.length > 0 && { candidates }),
     },
   };
 }

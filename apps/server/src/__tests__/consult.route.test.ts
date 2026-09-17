@@ -188,4 +188,39 @@ describe('会話の組み立て', () => {
     expect(schema.required).toContain('ready');
     expect(schema.required).not.toContain('draft');
   });
+
+  it('候補数が指定されたときはプロンプトに伝える', () => {
+    const text = buildContextText({ messages: [], candidateCount: 3 });
+    expect(text).toContain('3 個の候補を求めています');
+  });
+});
+
+describe('actions と candidates の返し方', () => {
+  it('プロバイダが actions を返したらそのまま通る', async () => {
+    setConsultProviderForTesting(
+      stub(() => ({
+        reply: '追加しました',
+        ready: false,
+        actions: [{ id: 'shopping.add', args: { name: '牛乳' }, heardAs: '牛乳追加して' }],
+      })),
+    );
+    const res = await post({ messages: [{ role: 'user', text: '牛乳追加して' }] });
+    const json = (await res.json()) as { data: { actions: unknown[] } };
+    expect(json.data.actions).toEqual([
+      { id: 'shopping.add', args: { name: '牛乳' }, heardAs: '牛乳追加して' },
+    ]);
+  });
+
+  it('プロバイダが candidates を返したらそのまま通る', async () => {
+    setConsultProviderForTesting(
+      stub(() => ({
+        reply: 'どれがいいですか',
+        ready: false,
+        candidates: [{ title: 'カレー', description: 'いつもの' }],
+      })),
+    );
+    const res = await post({ messages: [{ role: 'user', text: '何か' }], candidateCount: 2 });
+    const json = (await res.json()) as { data: { candidates: unknown[] } };
+    expect(json.data.candidates).toEqual([{ title: 'カレー', description: 'いつもの' }]);
+  });
 });

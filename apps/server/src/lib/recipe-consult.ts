@@ -75,6 +75,7 @@ export interface ConsultRecipeInput {
    * 既定では送らない — 何を送ったか利用者に見えている状態を保つため。
    */
   pantry?: string[];
+  candidateCount?: number;
   outputLocale?: OutputLocale;
   unitSystem?: OutputUnitSystem;
 }
@@ -85,6 +86,15 @@ export interface ConsultRecipeRaw {
   reply?: string;
   /** 保存できる状態か（材料と手順が揃っているか）。 */
   ready?: boolean;
+  actions?: {
+    id?: string;
+    args?: { name?: string };
+    heardAs?: string;
+  }[];
+  candidates?: {
+    title?: string;
+    description?: string;
+  }[];
   /** 現時点の下書き。まだ出せないうちは省略される。 */
   draft?: {
     title?: string;
@@ -119,6 +129,23 @@ const SYSTEM_PROMPT = [
   '- あなたは**相談相手**であって、献立を決める人ではない。決めるのは常に利用者。',
   '- 返事は短く。3 文以内を目安にする。長い説明より、次の一手が分かることを優先する。',
   '- **質問は一度に 1 つだけ。** 人数・時間・食べられないもの・好みを一度に並べて聞かない。',
+  '',
+  '## 操作の代行 (actions)',
+  '- 相談の中で「○○を買い物リストに追加」のような依頼が来たら、actions に操作を返す。',
+  '- 1回の返答に載せる操作は最大2つまで。',
+  '- 利用できる操作は買い物リストへの追加のみ: { id: "shopping.add", args: { name: "発話そのまま" }, heardAs: "聞き取った原文" }',
+  '- 品名は利用者の発話をそのまま使い、正規化しない（例：「さとう」を「砂糖」に直さない）。',
+  '',
+  '## 使い方の質問',
+  '- アプリの使い方（「どの画面でやるか」「その機能があるか」）を聞かれたら、知っている範囲で簡潔に文章で答える（在庫・買い物・献立・写真からレシピ・レシート読み取りなどの主要機能について）。',
+  '- 専用の入口は作らない。',
+  '- 返事は3文以内。',
+  '- 料理そのもの（何を作るか・レシピの中身）の質問には、従来どおりレシピの下書きで答える。',
+  '',
+  '## 候補数',
+  '- 候補数（N）が指定されたら、料理の見当がついた時点で candidates に最大N件まで候補を返す。',
+  '- 各候補は title と description のみ。下書きの全体は返さない。',
+  '- 利用者が「これ」と選んだら、その1件を draft に落とす。',
   '',
   '## 下書きを出すタイミング',
   '- 料理の見当がついたら、**聞き切る前に**下書きを出す。',
@@ -179,6 +206,34 @@ const GEMINI_RESPONSE_SCHEMA = {
   properties: {
     reply: { type: 'STRING' },
     ready: { type: 'BOOLEAN' },
+    actions: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          id: { type: 'STRING' },
+          args: {
+            type: 'OBJECT',
+            properties: {
+              name: { type: 'STRING' },
+            },
+          },
+          heardAs: { type: 'STRING' },
+        },
+        propertyOrdering: ['id', 'args', 'heardAs'],
+      },
+    },
+    candidates: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING' },
+          description: { type: 'STRING' },
+        },
+        propertyOrdering: ['title', 'description'],
+      },
+    },
     draft: {
       type: 'OBJECT',
       properties: {
@@ -236,7 +291,7 @@ const GEMINI_RESPONSE_SCHEMA = {
   },
   // reply は必ず要る（無言だと会話が止まる）。draft/imageReadings は写真が無い往復では出ないので必須にしない。
   required: ['reply', 'ready'],
-  propertyOrdering: ['reply', 'ready', 'draft', 'imageReadings'],
+  propertyOrdering: ['reply', 'ready', 'actions', 'candidates', 'draft', 'imageReadings'],
 };
 
 /** 構造化出力のスキーマ（テストから必須項目を固定するために公開する）。 */
@@ -291,6 +346,9 @@ export function buildContextText(input: ConsultRecipeInput): string {
       pantry.join('、'),
       'これらを優先して使ってよい。ただし在庫だけで無理に作らないこと。',
     );
+  }
+  if (input.candidateCount !== undefined) {
+    parts.push(`## 候補数\n利用者は ${input.candidateCount} 個の候補を求めています。`);
   }
   return parts.join('\n');
 }
