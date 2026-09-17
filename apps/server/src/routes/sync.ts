@@ -11,6 +11,7 @@ import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
 
+import { getClientIp } from '../lib/client-ip.js';
 import { parseAuthHeader } from '../lib/sync-auth.js';
 import {
   authenticateDevice,
@@ -92,19 +93,6 @@ export function resetSyncRateLimitForTesting(): void {
   syncBuckets.clear();
 }
 
-/**
- * レート制限の鍵になる呼び出し元。
- *
- * **`X-Forwarded-For` の *最後* を見る。** 先頭は呼び出し側が自由に書ける（好きな値を
- * 入れれば毎回別人になり、端末ごとの上限が意味を失う）。信頼できるのは自分の直前の
- * プロキシが**追記した末尾**だけ。Railway もこの形で実 IP を足す。
- */
-function clientKeyOf(headers: Headers): string {
-  const forwarded = headers.get('x-forwarded-for');
-  const last = forwarded?.split(',').at(-1)?.trim();
-  return last || headers.get('x-real-ip') || 'anonymous';
-}
-
 // ── ルータ ───────────────────────────────────────────────────────────────────
 
 type SyncEnv = { Variables: { device: AuthedDevice } };
@@ -176,7 +164,7 @@ const joinGroupSchema = z.object({
  * 新しい端末は発行されず、deviceSecret は空で返る）。
  */
 syncRouter.post('/groups', zValidator('json', createGroupSchema), async (c) => {
-  if (!takeSyncRateLimit('create', clientKeyOf(c.req.raw.headers))) {
+  if (!takeSyncRateLimit('create', getClientIp(c.req.raw.headers))) {
     return c.json({ ok: false, error: 'RATE_LIMITED' }, 429);
   }
   const authed = await optionalDevice(c.req.header('authorization'));
@@ -192,7 +180,7 @@ syncRouter.post('/groups', zValidator('json', createGroupSchema), async (c) => {
 
 /** 招待コードで参加。Authorization つきなら既存端末の追加参加（§12-2） */
 syncRouter.post('/groups/join', zValidator('json', joinGroupSchema), async (c) => {
-  if (!takeSyncRateLimit('join', clientKeyOf(c.req.raw.headers))) {
+  if (!takeSyncRateLimit('join', getClientIp(c.req.raw.headers))) {
     return c.json({ ok: false, error: 'RATE_LIMITED' }, 429);
   }
   const authed = await optionalDevice(c.req.header('authorization'));

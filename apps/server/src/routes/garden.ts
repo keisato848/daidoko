@@ -39,17 +39,9 @@ import {
 } from '../lib/identify-vision.js';
 import { checkRateLimit, GARDEN_POOL, HARVEST_POOL, IDENTIFY_POOL } from '../lib/rate-limit.js';
 import { parseOutputLocale } from '../lib/output-locale.js';
+import { getClientIp } from '../lib/client-ip.js';
 
 const gardenRouter = new Hono();
-
-/** レート制限のクライアント識別。Railway は x-forwarded-for を付ける。 */
-function clientIp(c: { req: { header: (name: string) => string | undefined } }): string {
-  return (
-    c.req.header('x-forwarded-for')?.split(',').at(-1)?.trim() ||
-    c.req.header('x-real-ip') ||
-    'anonymous'
-  );
-}
 
 // base64 of a ~1024px JPEG is well under this; guard against oversized payloads.
 const MAX_IMAGE_BASE64_LENGTH = 8_000_000; // ~6 MB decoded
@@ -81,7 +73,7 @@ gardenRouter.post('/consult', zValidator('json', gardenConsultSchema), async (c)
   // **グローバル上限もレシピ系と分ける**（GARDEN_POOL）。以前は 1 本のカウンタを
   // 共有していて、だいどこのレシピ推論（¥0.45/回）が使い切ると さいえん手帳の
   // AI 相談（¥0.35/回）まで止まっていた。上限は GARDEN_GLOBAL_DAILY_LIMIT。
-  const rate = checkRateLimit(clientIp(c), GARDEN_POOL);
+  const rate = checkRateLimit(getClientIp({ get: (n) => c.req.header(n) }), GARDEN_POOL);
   if (!rate.allowed) {
     return c.json({
       ok: false,
@@ -163,7 +155,7 @@ function resolveHarvestProvider(): HarvestVisionProvider {
 gardenRouter.post('/harvest', zValidator('json', harvestSchema), async (c) => {
   // **相談とも別のプール。** 単価が 1/5・頻度が桁違いなので、
   // 同じ枠に入れると安い呼び出しが高い呼び出しに締め出される。
-  const rate = checkRateLimit(clientIp(c), HARVEST_POOL);
+  const rate = checkRateLimit(getClientIp({ get: (n) => c.req.header(n) }), HARVEST_POOL);
   if (!rate.allowed) {
     return c.json({
       ok: false,
@@ -247,7 +239,7 @@ gardenRouter.post('/identify', zValidator('json', identifySchema), async (c) => 
   // **相談とも収穫とも別のプール。** 登録はインストール直後に集中し、
   // その後はほとんど呼ばれない。同じ枠に混ぜると初回の一括登録が
   // 日常の相談・収穫を締め出す（プールを分けた元の理由と同じ）。
-  const rate = checkRateLimit(clientIp(c), IDENTIFY_POOL);
+  const rate = checkRateLimit(getClientIp({ get: (n) => c.req.header(n) }), IDENTIFY_POOL);
   if (!rate.allowed) {
     return c.json({
       ok: false,

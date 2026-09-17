@@ -13,6 +13,7 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
+import { getClientIp } from '../lib/client-ip.js';
 import {
   renderBookPage,
   renderExpiredPage,
@@ -144,19 +145,11 @@ function accessFromBody(body: {
   return { expiresAt, passcode: body.passcode ?? null };
 }
 
-function clientIp(headers: { get: (name: string) => string | null | undefined }): string {
-  return (
-    headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() ||
-    headers.get('x-real-ip') ||
-    'anonymous'
-  );
-}
-
 // ── API ──────────────────────────────────────────────────────────────────────
 const shareApiRouter = new Hono();
 
 shareApiRouter.post('/recipes', zValidator('json', shareRecipeSchema), (c) => {
-  const ip = clientIp({ get: (n) => c.req.header(n) });
+  const ip = getClientIp({ get: (n) => c.req.header(n) });
   if (!checkShareRateLimit(`share:${ip}`)) {
     return c.json(
       {
@@ -267,7 +260,7 @@ function decodePhoto(
 }
 
 shareApiRouter.post('/books', zValidator('json', shareBookSchema), (c) => {
-  const ip = clientIp({ get: (n) => c.req.header(n) });
+  const ip = getClientIp({ get: (n) => c.req.header(n) });
   if (!checkShareRateLimit(`share:${ip}`)) {
     return c.json(
       {
@@ -342,7 +335,7 @@ shareApiRouter.patch('/books/:slug', zValidator('json', shareBookSchema), (c) =>
       403,
     );
   }
-  const ip = clientIp({ get: (n) => c.req.header(n) });
+  const ip = getClientIp({ get: (n) => c.req.header(n) });
   if (!checkShareRateLimit(`share:${ip}`)) {
     return c.json(
       {
