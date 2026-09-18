@@ -49,8 +49,10 @@ import {
   type RollableMenuDay,
 } from '../utils/menuPlan';
 import {
+  applyDaysToSlots,
   menuPlanRowToStored,
   parseLegacyMenuPlanJson,
+  rollMenuPlanSlots,
   sanitizeMenuMealTime,
   storedMenuPlanToRows,
   MENU_MEAL_TIMES,
@@ -58,6 +60,7 @@ import {
   type StoredMenuDay,
   type StoredMenuPlan,
 } from '../utils/menuPlanStorage';
+import type { WeekSlotSetting } from '../utils/menuWeek';
 import { buildShoppingPlan, type ShoppingPlanRow } from '../utils/shoppingPlan';
 
 /** v18 までの保存先（`app_meta`）。レイジー移行の読み元としてだけ残る */
@@ -213,15 +216,23 @@ async function writeStoredMenuPlan(plan: StoredMenuPlan): Promise<void> {
     .where(eq(schema.menuPlans.mealTime, plan.mealTime));
   const ids = existing.map((r) => r.id);
   if (ids.length > 0) {
-    // days → plan の順で消す（親を先に消すと外部キー有効時に落ちる）
+    // slots → days → plan の順で消す（親を先に消すと外部キー有効時に落ちる）。
+    // **slots を消し忘れると「組む」が FOREIGN KEY constraint failed で落ちる** —
+    // `menu_plan_slots.plan_id` は `menu_plans.id` を参照していて CASCADE が無い（schema.ts）。
+    // 同期で枠の行を受け取った端末だけで再現する（v20・PR-1 の取りこぼし）
+    await db.delete(schema.menuPlanSlots).where(inArray(schema.menuPlanSlots.planId, ids));
     await db.delete(schema.menuPlanDays).where(inArray(schema.menuPlanDays.planId, ids));
     await db.delete(schema.menuPlans).where(inArray(schema.menuPlans.id, ids));
   }
 
-  const { row, days } = storedMenuPlanToRows(plan, generateId());
+  const { row, days, slots } = storedMenuPlanToRows(plan, generateId());
   await db.insert(schema.menuPlans).values(row);
   if (days.length > 0) {
     await db.insert(schema.menuPlanDays).values(days.map((d) => ({ ...d, planId: row.id })));
+  }
+  // v20: 枠も同時に書く。`slots` は読んだ枠へ `days` を写した結果なので副菜は残る
+  if (slots.length > 0) {
+    await db.insert(schema.menuPlanSlots).values(slots.map((s) => ({ ...s, planId: row.id })));
   }
 }
 
@@ -239,17 +250,34 @@ async function readStoredMenuPlanRows(mealTime: MenuMealTime): Promise<StoredMen
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  const dayRows = await db
-    .select({
-      day: schema.menuPlanDays.day,
-      recipeId: schema.menuPlanDays.recipeId,
-      title: schema.menuPlanDays.title,
-      reason: schema.menuPlanDays.reason,
-      doneAt: schema.menuPlanDays.doneAt,
-    })
-    .from(schema.menuPlanDays)
-    .where(eq(schema.menuPlanDays.planId, row.id));
-  return menuPlanRowToStored(row, dayRows);
+
+  // v20: 枠が正。旧プラン（v19 で作られた・枠がまだ無い）はここで埋める
+  await ensurePlanDaysMigratedToSlots(row.id);
+
+  const [dayRows, slotRows] = await Promise.all([
+    db
+      .select({
+        day: schema.menuPlanDays.day,
+        recipeId: schema.menuPlanDays.recipeId,
+        title: schema.menuPlanDays.title,
+        reason: schema.menuPlanDays.reason,
+        doneAt: schema.menuPlanDays.doneAt,
+      })
+      .from(schema.menuPlanDays)
+      .where(eq(schema.menuPlanDays.planId, row.id)),
+    db
+      .select({
+        day: schema.menuPlanSlots.day,
+        slotId: schema.menuPlanSlots.slotId,
+        recipeId: schema.menuPlanSlots.recipeId,
+        title: schema.menuPlanSlots.title,
+        reason: schema.menuPlanSlots.reason,
+        doneAt: schema.menuPlanSlots.doneAt,
+      })
+      .from(schema.menuPlanSlots)
+      .where(eq(schema.menuPlanSlots.planId, row.id)),
+  ]);
+  return menuPlanRowToStored(row, dayRows, slotRows);
 }
 
 /**
@@ -407,6 +435,29 @@ export async function getStoredMealTimes(): Promise<MenuMealTime[]> {
   return MENU_MEAL_TIMES.filter((mt) => found.has(mt));
 }
 
+/**
+ * 時間帯ごとの枠の定義（v20・`menu_slot_settings`）。**行が無ければ空配列**。
+ * 「設定が無い＝主菜 1 枠」への読み替えは `utils/menuWeek.ts` の `orderedSlots` が持つ
+ * （文言が要る判断なので画面側・純関数側に置く）。
+ */
+export async function getMenuSlotSettings(
+  mealTime: MenuMealTime = 'dinner',
+): Promise<WeekSlotSetting[]> {
+  if (!isNativePlatform) return [];
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  return getDb()
+    .select({
+      slotId: schema.menuSlotSettings.slotId,
+      slotKind: schema.menuSlotSettings.slotKind,
+      label: schema.menuSlotSettings.label,
+      position: schema.menuSlotSettings.position,
+    })
+    .from(schema.menuSlotSettings)
+    .where(eq(schema.menuSlotSettings.mealTime, mealTime));
+}
+
 /** 保存済みの献立を読む（既定は夕）。無ければ null（勝手に組まない・§10.7） */
 export async function getMenuPlan(mealTime: MenuMealTime = 'dinner'): Promise<MenuPlanView | null> {
   if (!isNativePlatform) return null;
@@ -515,7 +566,10 @@ function hydrate(
   // 作り終わった日は引き当てから外す（残すと二重に数える）
   const active = plan.days.filter((d) => d.doneAt === null);
   return {
-    plan,
+    // **枠を `days` に合わせ直してから返す。** 差し替えや「作りました」は `days` だけを
+    // 書き換えて渡してくるので、読んだままの `slots` を返すと**画面に前の料理名が残る**
+    // （保存先は `writeStoredMenuPlan` が同じ `applyDaysToSlots` で揃えている）
+    plan: { ...plan, slots: applyDaysToSlots(plan.days, plan.slots ?? []) },
     days,
     claims: buildClaims(active, recipes, pantry.items, aliases),
     stale: plan.pantrySignature !== pantry.signature,
@@ -851,6 +905,10 @@ export async function clearMenuPlan(): Promise<void> {
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
   const db = getDb();
+  // slots → days → plan の順（`writeStoredMenuPlan` と同じ理由 — CASCADE が無いので
+  // 親を先に消すと `FOREIGN KEY constraint failed`）。**枠を消し忘れると
+  // 「献立を消す」が落ち、画面も戻らない**（menu-settings.tsx は catch していない）
+  await db.delete(schema.menuPlanSlots);
   await db.delete(schema.menuPlanDays);
   await db.delete(schema.menuPlans);
   await setAppMeta(LEGACY_MENU_PLAN_KEY, '');
@@ -971,6 +1029,8 @@ export async function runDailyMenuMaintenance(): Promise<void> {
         ...stored,
         anchorDate: rolled.anchorDate,
         days: rolled.days,
+        // 主菜以外の枠も同じだけ詰める。詰めないと副菜が別の日の主菜と並ぶ（v20）
+        ...(stored.slots ? { slots: rollMenuPlanSlots(stored.slots, rolled.droppedDays) } : {}),
         generatedAt: today.toISOString(),
         pantrySignature: pantry.signature,
         // ローリング後の要求日数は現在の設定値（targetDays と同じ根拠）

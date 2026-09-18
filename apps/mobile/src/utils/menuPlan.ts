@@ -403,6 +403,12 @@ export interface MenuRollResult {
   days: RollableMenuDay[];
   /** 今回**新しく末尾に入った日だけ**（自動追加の対象・§10.11.2）。生存日は含まない */
   addedDays: MenuDay[];
+  /**
+   * 先頭から落とした日数（＝日番号の詰め幅）。生存日は `旧 day - droppedDays` へ移る。
+   * `days` の外に付いているもの（v20 の主菜以外の枠）を同じだけ詰めるために要る
+   * （`rollMenuPlanSlots`）。渡さないと**副菜だけ旧い日番号に残って別の日の主菜と並ぶ**。
+   */
+  droppedDays: number;
 }
 
 /**
@@ -495,6 +501,7 @@ export function rollMenuPlan(
     anchorDate: menuDateKey(today),
     days: [...renumberedSurvivors, ...appendedRollable],
     addedDays: appended,
+    droppedDays: drop,
   };
 }
 

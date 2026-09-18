@@ -13,7 +13,6 @@ import {
   CalendarDays,
   ChefHat,
   Plus,
-  RefreshCw,
   Settings as SettingsIcon,
   ShoppingCart,
   Sparkles,
@@ -24,6 +23,8 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { MenuRecipeProposalSheet } from '../../src/components/MenuRecipeProposalSheet';
+import type { SlotRecipeMeta } from '../../src/components/MenuSlotLine';
+import { MenuWeekRow } from '../../src/components/MenuWeekRow';
 import { ShoppingPickSheet } from '../../src/components/ShoppingPickSheet';
 import { Toast } from '../../src/components/Toast';
 import { Colors } from '../../src/constants/theme';
@@ -45,18 +46,18 @@ import {
   fillMenuPlanShortfall,
   generateMenuPlan,
   getMenuPlan,
+  getMenuSlotSettings,
   getStoredMealTimes,
   MENU_MEAL_TIMES,
   replaceMenuDay,
   undoMenuAutoAddedItems,
-  type MenuDayView,
   type MenuMealTime,
   type MenuPlanView,
 } from '../../src/services/menu-plan.service';
 import { createRecipe } from '../../src/services/recipe.service';
 import { ensureInferenceCredit } from '../../src/services/inference-gate.service';
 import { FREE_MONTHLY_LIMIT, recordCloudInference } from '../../src/services/usage.service';
-import { decodeReason } from '../../src/utils/menuPlan';
+import { buildWeekRows, weekProgress, type WeekSlotSetting } from '../../src/utils/menuWeek';
 import type { ShoppingPlanRow } from '../../src/utils/shoppingPlan';
 import { formatSnapshotTime } from '../../src/utils/widgetSnapshot';
 
@@ -79,20 +80,6 @@ const MEAL_TIME_PLAN_LABEL_KEY = {
   lunch: 'menu.mealTime.planLabel.lunch',
 } as const;
 
-/** 保存された `reason` を文言に戻す。往復は `decodeReason` 側でテストしてある */
-function reasonText(reason: string): string {
-  const { kind, subject } = decodeReason(reason);
-  if (kind === 'expiry' && subject) return t('menu.reason.expiry', { name: subject });
-  if (kind === 'coverage') return t('menu.reason.coverage', { count: subject });
-  if (kind === 'pinned') return t('menu.reason.pinned');
-  if (kind === 'few-missing') return t('menu.reason.fewMissing', { count: subject });
-  // AI（M2）の理由はここでは翻訳しない — subject が AI 出力そのもの（ai-output-locale の世界）
-  if (kind === 'ai') return subject;
-  // M3: 一括生成で新しく作って組み込んだ日
-  if (kind === 'ai-new') return t('menu.reason.aiNew');
-  return '';
-}
-
 export default function MenuScreen() {
   const router = useRouter();
   const [view, setView] = useState<MenuPlanView | null>(null);
@@ -105,6 +92,8 @@ export default function MenuScreen() {
   const [mealTime, setMealTime] = useState<MenuMealTime>('dinner');
   /** プランが保存されている時間帯（チップの「他にもある」ドット用） */
   const [plannedMealTimes, setPlannedMealTimes] = useState<MenuMealTime[]>([]);
+  /** 枠の定義（v20・PR-3）。空 = 主菜 1 枠だけ（`orderedSlots` が既定へ倒す） */
+  const [slotSettings, setSlotSettings] = useState<WeekSlotSetting[]>([]);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   // M2（AI 並べ替え）の状態。plan は常に M1/M2 どちらの並びも表示し続け、
@@ -128,9 +117,14 @@ export default function MenuScreen() {
   const [toastVisible, setToastVisible] = useState(false);
 
   const load = useCallback(async () => {
-    const [next, planned] = await Promise.all([getMenuPlan(mealTime), getStoredMealTimes()]);
+    const [next, planned, slots] = await Promise.all([
+      getMenuPlan(mealTime),
+      getStoredMealTimes(),
+      getMenuSlotSettings(mealTime),
+    ]);
     setView(next);
     setPlannedMealTimes(planned);
+    setSlotSettings(slots);
     setLoaded(true);
   }, [mealTime]);
 
@@ -368,6 +362,27 @@ export default function MenuScreen() {
       : 0;
 
   /**
+   * 週ビューの行（PR-3）。判断は `utils/menuWeek.ts` が済ませていて、ここは渡すだけ。
+   * `plan.slots` は `hydrate` が `days` と揃えて返す（枠が無い旧データでも主菜だけ入る）。
+   */
+  const weekRows = buildWeekRows({
+    slots: view?.plan.slots ?? [],
+    settings: slotSettings,
+    anchorDate: view?.plan.anchorDate ?? null,
+    today: new Date(),
+    defaultSlotLabel: t('menu.week.defaultSlot'),
+  });
+  /**
+   * レシピ ID → 表示に足りない情報。`MenuPlanView.days` だけが持っている
+   * （hydrate が計算する）ので、枠の行と突き合わせるために引き直す。
+   * PR-4 で hydrate が枠ごとに計算するようになったら畳む。
+   */
+  const metaByRecipeId = new Map<string, SlotRecipeMeta>(
+    (view?.days ?? []).map((d) => [d.recipeId, { missing: d.missing, cookTimeMin: d.cookTimeMin }]),
+  );
+  const progress = weekProgress(weekRows);
+
+  /**
    * 要求日数に届かなかったときのバナー（一覧の末尾に 1 つ・空カードは並べない）。
    * 主ボタンは M3 の一括生成（§10.12 — 「AI に相談して作る」はここへ吸収）。
    * 「レシピを追加」は残す（M3 はあくまで提案。手で選びたい人の道を塞がない）。
@@ -568,13 +583,24 @@ export default function MenuScreen() {
 
         {hasPlan ? (
           <>
-            {view.days.map((day) => (
-              <DayCard
-                key={day.day}
-                day={day}
+            {/* 週の進み具合。分母は献立がある日（組めなかった日は数えない） */}
+            {progress.total > 0 ? (
+              <Text style={styles.weekProgress}>
+                {t('menu.week.progress', {
+                  done: String(progress.done),
+                  total: String(progress.total),
+                })}
+              </Text>
+            ) : null}
+
+            {weekRows.map((row) => (
+              <MenuWeekRow
+                key={row.day}
+                row={row}
+                metaByRecipeId={metaByRecipeId}
                 busy={busy}
-                onOpen={() => router.push(`/recipes/${day.recipeId}`)}
-                onSwap={() => void swap(day.day)}
+                onOpenRecipe={(recipeId) => router.push(`/recipes/${recipeId}`)}
+                onSwap={(day) => void swap(day)}
               />
             ))}
 
@@ -639,45 +665,6 @@ export default function MenuScreen() {
   );
 }
 
-function DayCard({
-  day,
-  busy,
-  onOpen,
-  onSwap,
-}: {
-  day: MenuDayView;
-  busy: boolean;
-  onOpen: () => void;
-  onSwap: () => void;
-}) {
-  const reason = reasonText(day.reason);
-  return (
-    <View style={[styles.card, day.doneAt !== null && styles.cardDone]}>
-      <Text style={styles.dayLabel}>{t('menu.day.label', { day: day.day })}</Text>
-      <Text style={styles.dayTitle}>{day.missing ? t('menu.day.missing') : day.title}</Text>
-      {day.cookTimeMin !== null ? (
-        <Text style={styles.dayMeta}>{t('menu.day.minutes', { count: day.cookTimeMin })}</Text>
-      ) : null}
-      {reason ? <Text style={styles.dayReason}>{reason}</Text> : null}
-      {day.doneAt !== null ? <Text style={styles.doneBadge}>{t('menu.day.done')}</Text> : null}
-
-      {!day.missing ? (
-        <View style={styles.cardActions}>
-          <Pressable onPress={onOpen} accessibilityRole="button">
-            <Text style={styles.cardAction}>{t('menu.day.openRecipe')}</Text>
-          </Pressable>
-          <Pressable onPress={onSwap} disabled={busy} accessibilityRole="button">
-            <View style={styles.swapRow}>
-              <RefreshCw size={14} color={Colors.gold} />
-              <Text style={styles.cardAction}>{t('menu.day.replace')}</Text>
-            </View>
-          </Pressable>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.bg },
   scroll: { flex: 1 },
@@ -696,6 +683,8 @@ const styles = StyleSheet.create({
   // 他の時間帯にプランがあることを示す控えめなドット
   mealTimeDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.gold },
   sectionLabel: { fontSize: 13, color: Colors.muted, marginBottom: 8 },
+  /** 週の進み具合（PR-3）。数字だけの控えめな 1 行 */
+  weekProgress: { fontSize: 13, color: Colors.goldDim, marginBottom: 8 },
   dayRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   dayChip: {
     paddingVertical: 8,
@@ -752,22 +741,6 @@ const styles = StyleSheet.create({
   },
   staleText: { fontSize: 14, color: Colors.muted },
   staleAction: { fontSize: 14, color: Colors.gold, fontWeight: '600' },
-  card: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-  },
-  cardDone: { opacity: 0.5 },
-  dayLabel: { fontSize: 12, color: Colors.gold, marginBottom: 4 },
-  dayTitle: { fontSize: 15, color: Colors.paper },
-  dayMeta: { fontSize: 12, color: Colors.muted, marginTop: 2 },
-  dayReason: { fontSize: 13, color: Colors.muted, marginTop: 6 },
-  doneBadge: { fontSize: 12, color: Colors.gold, marginTop: 6 },
-  cardActions: { flexDirection: 'row', gap: 20, marginTop: 12 },
-  cardAction: { fontSize: 14, color: Colors.gold },
-  swapRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   secondary: {
     flexDirection: 'row',
     alignItems: 'center',
