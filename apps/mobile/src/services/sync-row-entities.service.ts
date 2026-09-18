@@ -22,6 +22,7 @@ import { and, eq } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { shouldHideSeedShoppingItem } from '../db/sampleData';
 import * as schema from '../db/schema';
+import { mainSlotsToDays } from '../utils/menuPlanStorage';
 import {
   decideQuantityAdoption,
   legacyBaseline,
@@ -856,6 +857,9 @@ async function applyMenuPlan(payload: RowSyncPayload): Promise<ApplyOutcome> {
 
     const planId = local?.id ?? plan.id;
     await tx.delete(schema.menuPlanSlots).where(eq(schema.menuPlanSlots.planId, planId));
+    // 旧 `menu_plan_days` も一緒に張り替える。**枠だけ入れ替えて days を残すと、
+    // 届いた献立が画面に出ないまま前の献立が居座る**（読みは枠が無いと days へ落ちるため）
+    await tx.delete(schema.menuPlanDays).where(eq(schema.menuPlanDays.planId, planId));
     if (payload.slots.length > 0) {
       await tx.insert(schema.menuPlanSlots).values(
         payload.slots.map((s) => ({
@@ -868,6 +872,10 @@ async function applyMenuPlan(payload: RowSyncPayload): Promise<ApplyOutcome> {
           doneAt: s.doneAt,
         })),
       );
+      const days = mainSlotsToDays(payload.slots);
+      if (days.length > 0) {
+        await tx.insert(schema.menuPlanDays).values(days.map((d) => ({ ...d, planId })));
+      }
     }
   });
 
@@ -1061,7 +1069,10 @@ export async function applyRowTombstone(
       if (!local) return 'skipped';
       if (!incomingChangeWins(clientUpdatedAt, local.generatedAt)) return 'skipped';
       await db.transaction(async (tx) => {
+        // slots → days → plan の順（`PRAGMA foreign_keys = ON` で CASCADE は無い）。
+        // **days を消し忘れると削除がまるごと落ちて、同期が毎回同じ行で詰まる**
         await tx.delete(schema.menuPlanSlots).where(eq(schema.menuPlanSlots.planId, entityId));
+        await tx.delete(schema.menuPlanDays).where(eq(schema.menuPlanDays.planId, entityId));
         await tx.delete(schema.menuPlans).where(eq(schema.menuPlans.id, entityId));
       });
       return 'applied';

@@ -64,6 +64,14 @@ export interface StoredMenuPlan {
    * 次にまた自動追加が走るとこのバッチは丸ごと置き換わる（積み上げない）。
    */
   autoAddedItemIds?: string[];
+  /**
+   * 枠ごとの献立（v20・`menu_plan_slots`）。**読んだままを持ち回って書き戻すための控え**。
+   *
+   * `days` は主菜（`main` 枠）の射影で、既存の呼び出し側はそちらだけを見る。
+   * 保存のたびに `days` から作り直すと、**主菜以外の枠が毎回消える**ので、
+   * 読みで拾った枠をここに載せ、書きで `applyDaysToSlots` に渡して残す。
+   */
+  slots?: MenuPlanSlotRow[];
 }
 
 /** `menu_plans` の 1 行（drizzle の select 結果と同じ形） */
@@ -153,10 +161,14 @@ export function parseLegacyMenuPlanJson(raw: string): StoredMenuPlan | null {
 /**
  * テーブルの行 → メモリ形。未知の `meal_time`・壊れた `requested_days`・
  * 壊れた `auto_added_item_ids` JSON は**夕/無しへ倒して読む**（§10.6 の互換規約）。
+ *
+ * `slotRows` を渡すと `days` は**主菜枠の射影**になり、渡した行は `slots` にそのまま残る
+ * （書き戻しで主菜以外の枠を消さないため）。空配列・省略なら従来どおり `dayRows` から作る。
  */
 export function menuPlanRowToStored(
   row: MenuPlanRow,
   dayRows: readonly MenuPlanDayRow[],
+  slotRows: readonly MenuPlanSlotRow[] = [],
 ): StoredMenuPlan {
   let autoAddedItemIds: string[] | undefined;
   if (row.autoAddedItemIds !== null) {
@@ -170,13 +182,15 @@ export function menuPlanRowToStored(
     }
   }
   const requestedDays = sanitizeRequestedDays(row.requestedDays);
+  // 枠がある（v20 以降）なら主菜枠が正。無ければ旧 `menu_plan_days` から読む
+  const dayList = slotRows.length > 0 ? mainSlotsToDays(slotRows) : dayRows;
   return {
     version: 1,
     mealTime: sanitizeMenuMealTime(row.mealTime),
     generatedAt: row.generatedAt,
     source: row.source === 'ai' ? 'ai' : 'coverage',
     pantrySignature: row.pantrySignature,
-    days: [...dayRows]
+    days: [...dayList]
       .sort((a, b) => a.day - b.day)
       .map((d) => ({
         day: d.day,
@@ -185,6 +199,7 @@ export function menuPlanRowToStored(
         reason: d.reason,
         doneAt: d.doneAt,
       })),
+    ...(slotRows.length > 0 ? { slots: [...slotRows] } : {}),
     ...(row.aiNote !== null && row.aiNote !== '' ? { aiNote: row.aiNote } : {}),
     ...(row.anchorDate !== null && row.anchorDate !== '' ? { anchorDate: row.anchorDate } : {}),
     ...(requestedDays !== undefined ? { requestedDays } : {}),
@@ -192,11 +207,16 @@ export function menuPlanRowToStored(
   };
 }
 
-/** メモリ形 → テーブルの行。`menuPlanRowToStored` と往復する（テストで固定） */
+/**
+ * メモリ形 → テーブルの行。`menuPlanRowToStored` と往復する（テストで固定）。
+ *
+ * `slots` は `days`（主菜）を読み込み済みの枠へ写した結果（`applyDaysToSlots`）。
+ * **主菜以外の枠はここを通っても消えない。**
+ */
 export function storedMenuPlanToRows(
   plan: StoredMenuPlan,
   id: string,
-): { row: MenuPlanRow; days: MenuPlanDayRow[] } {
+): { row: MenuPlanRow; days: MenuPlanDayRow[]; slots: MenuPlanSlotRow[] } {
   return {
     row: {
       id,
@@ -217,6 +237,7 @@ export function storedMenuPlanToRows(
       reason: d.reason,
       doneAt: d.doneAt,
     })),
+    slots: applyDaysToSlots(plan.days, plan.slots ?? []),
   };
 }
 
@@ -230,6 +251,9 @@ export interface MenuPlanSlotRow {
   doneAt: string | null;
 }
 
+/** 主菜の枠 ID。v19 までの献立は「1 日 1 品」＝すべてこの枠に入る */
+export const MAIN_SLOT_ID = 'main';
+
 /**
  * 旧 `menu_plan_days` の行配列を `menu_plan_slots` の行配列（全行 `slotId: 'main'`）へ変換する純関数。
  * v20 のレイジー移行（`services/menu-plan.service.ts`）から呼ばれる。
@@ -237,10 +261,39 @@ export interface MenuPlanSlotRow {
 export function legacyPlanDaysToSlots(days: readonly MenuPlanDayRow[]): MenuPlanSlotRow[] {
   return days.map((d) => ({
     day: d.day,
-    slotId: 'main',
+    slotId: MAIN_SLOT_ID,
     recipeId: d.recipeId,
     title: d.title,
     reason: d.reason,
     doneAt: d.doneAt,
   }));
+}
+
+/** 枠の行から主菜だけを取り出して「1 日 1 品」の形に戻す（`days` の作り元） */
+export function mainSlotsToDays(slots: readonly MenuPlanSlotRow[]): MenuPlanDayRow[] {
+  return slots
+    .filter((s) => s.slotId === MAIN_SLOT_ID)
+    .map((s) => ({
+      day: s.day,
+      recipeId: s.recipeId,
+      title: s.title,
+      reason: s.reason,
+      doneAt: s.doneAt,
+    }));
+}
+
+/**
+ * `days`（主菜）の変更を枠の行へ写す。**主菜以外の枠はそのまま残す。**
+ *
+ * 保存経路（`writeStoredMenuPlan`）は毎回プラン行を作り直すので、ここで枠を組み直さないと
+ * 「作った！」の記録や 1 日の差し替えのたびに**副菜が黙って消える**。
+ * `days` に無くなった日の主菜は消すが、その日の副菜は消さない
+ * （主菜だけ外して副菜を残す操作が PR-4 で入るため、ここで先に潰さない）。
+ */
+export function applyDaysToSlots(
+  days: readonly MenuPlanDayRow[],
+  slots: readonly MenuPlanSlotRow[],
+): MenuPlanSlotRow[] {
+  const others = slots.filter((s) => s.slotId !== MAIN_SLOT_ID);
+  return [...legacyPlanDaysToSlots(days), ...others];
 }

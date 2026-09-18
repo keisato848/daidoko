@@ -7,6 +7,8 @@
  * テーブル行との往復。
  */
 import {
+  applyDaysToSlots,
+  mainSlotsToDays,
   menuPlanRowToStored,
   parseLegacyMenuPlanJson,
   sanitizeMenuMealTime,
@@ -14,6 +16,7 @@ import {
   legacyPlanDaysToSlots,
   type MenuPlanRow,
   type MenuPlanDayRow,
+  type MenuPlanSlotRow,
   type StoredMenuPlan,
 } from '../menuPlanStorage';
 
@@ -206,5 +209,108 @@ describe('legacyPlanDaysToSlots — 旧 `menu_plan_days` の枠対応', () => {
       },
     ];
     expect(legacyPlanDaysToSlots(days)).toEqual(expected);
+  });
+});
+
+describe('mainSlotsToDays / applyDaysToSlots — 枠と「1 日 1 品」の相互変換', () => {
+  const mainDay1: MenuPlanSlotRow = {
+    day: 1,
+    slotId: 'main',
+    recipeId: 'r1',
+    title: '肉じゃが',
+    reason: 'coverage',
+    doneAt: null,
+  };
+  const sideDay1: MenuPlanSlotRow = {
+    day: 1,
+    slotId: 'side',
+    recipeId: 'r9',
+    title: 'ほうれん草のおひたし',
+    reason: '',
+    doneAt: null,
+  };
+
+  it('主菜だけを取り出して日の形に戻す', () => {
+    expect(mainSlotsToDays([mainDay1, sideDay1])).toEqual([
+      { day: 1, recipeId: 'r1', title: '肉じゃが', reason: 'coverage', doneAt: null },
+    ]);
+  });
+
+  it('主菜が無い枠だけなら空配列（副菜を主菜として描かない）', () => {
+    expect(mainSlotsToDays([sideDay1])).toEqual([]);
+  });
+
+  it('days を写しても副菜は残る（保存のたびに副菜が消えない）', () => {
+    const days: MenuPlanDayRow[] = [
+      { day: 1, recipeId: 'r1', title: '肉じゃが', reason: 'coverage', doneAt: 'done' },
+    ];
+    const next = applyDaysToSlots(days, [mainDay1, sideDay1]);
+    expect(next).toContainEqual(sideDay1);
+    expect(next).toContainEqual({ ...mainDay1, doneAt: 'done' });
+    expect(next).toHaveLength(2);
+  });
+
+  it('days から消えた日の主菜は消える', () => {
+    const next = applyDaysToSlots([], [mainDay1, sideDay1]);
+    expect(next).toEqual([sideDay1]);
+  });
+});
+
+describe('menuPlanRowToStored / storedMenuPlanToRows — 枠つきの往復（v20）', () => {
+  const planWithSlots: StoredMenuPlan = {
+    version: 1,
+    mealTime: 'dinner',
+    generatedAt: '2026-09-05T00:00:00.000Z',
+    source: 'coverage',
+    pantrySignature: 'sig',
+    days: [{ day: 1, recipeId: 'r1', title: '肉じゃが', reason: 'coverage', doneAt: null }],
+    slots: [
+      {
+        day: 1,
+        slotId: 'main',
+        recipeId: 'r1',
+        title: '肉じゃが',
+        reason: 'coverage',
+        doneAt: null,
+      },
+      { day: 1, slotId: 'side', recipeId: 'r9', title: 'おひたし', reason: '', doneAt: null },
+    ],
+  };
+
+  it('枠つきのプランが往復する', () => {
+    const { row, days, slots } = storedMenuPlanToRows(planWithSlots, 'plan-1');
+    expect(menuPlanRowToStored(row, days, slots)).toEqual(planWithSlots);
+  });
+
+  it('枠があれば days は主菜枠から作る（旧 menu_plan_days が古くても引きずられない）', () => {
+    const { row, slots } = storedMenuPlanToRows(planWithSlots, 'plan-1');
+    const staleDays: MenuPlanDayRow[] = [
+      { day: 1, recipeId: 'OLD', title: '前の献立', reason: '', doneAt: null },
+    ];
+    expect(menuPlanRowToStored(row, staleDays, slots).days).toEqual(planWithSlots.days);
+  });
+
+  it('枠が無ければ従来どおり menu_plan_days から読む（v19 のデータ）', () => {
+    const { row } = storedMenuPlanToRows(planWithSlots, 'plan-1');
+    const legacyDays: MenuPlanDayRow[] = [
+      { day: 1, recipeId: 'r1', title: '肉じゃが', reason: 'coverage', doneAt: null },
+    ];
+    const stored = menuPlanRowToStored(row, legacyDays);
+    expect(stored.days).toEqual(legacyDays);
+    expect('slots' in stored).toBe(false);
+  });
+
+  it('枠を持たないプランを書くと、主菜だけの枠が出る（新規プランも枠を持つ）', () => {
+    const { slots } = storedMenuPlanToRows({ ...planWithSlots, slots: undefined }, 'plan-1');
+    expect(slots).toEqual([
+      {
+        day: 1,
+        slotId: 'main',
+        recipeId: 'r1',
+        title: '肉じゃが',
+        reason: 'coverage',
+        doneAt: null,
+      },
+    ]);
   });
 });
