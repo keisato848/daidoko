@@ -665,6 +665,41 @@ export const menuPlanDays = sqliteTable(
   }),
 );
 
+// ─── MenuSlot (献立の枠（スロット）対応, v20 — PR-1) ────────────
+// PK変更のため、旧 menu_plan_days はそのまま残し新テーブルを追加する。
+
+// menu_slot_settings: 時間帯ごとの枠構成（v20）。設定が無い時間帯は「mainが1枠だけ」扱い
+export const menuSlotSettings = sqliteTable(
+  'menu_slot_settings',
+  {
+    mealTime: text('meal_time').notNull(), // 'breakfast' | 'lunch' | 'dinner'
+    slotId: text('slot_id').notNull(),
+    slotKind: text('slot_kind').notNull(), // 'main' | 'side'
+    label: text('label').notNull(),
+    position: integer('position').notNull(),
+    autoFill: integer('auto_fill', { mode: 'boolean' }).notNull().default(true),
+  },
+  (table) => ({ pk: primaryKey({ columns: [table.mealTime, table.slotId] }) }),
+);
+
+// menu_plan_slots: 献立の1日1枠ぶん（v20）。menu_plan_days（旧・PK変更不可）の後継。
+// まだ同期対象ではない（PR-2で配線する）。recipe_id は弱参照（menu_plan_days と同じ理由）
+export const menuPlanSlots = sqliteTable(
+  'menu_plan_slots',
+  {
+    planId: text('plan_id')
+      .notNull()
+      .references(() => menuPlans.id),
+    day: integer('day').notNull(),
+    slotId: text('slot_id').notNull(),
+    recipeId: text('recipe_id').notNull(),
+    title: text('title').notNull(),
+    reason: text('reason').notNull().default(''),
+    doneAt: text('done_at'),
+  },
+  (table) => ({ pk: primaryKey({ columns: [table.planId, table.day, table.slotId] }) }),
+);
+
 // ─── EntityGroups（多グループの所属, v18 — docs/クラウド同期設計.md §12-3）────
 /**
  * 「この実体はどの同期グループに属するか」。ローカル行は 1 つのまま、

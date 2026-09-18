@@ -88,6 +88,26 @@ describe('database migrations', () => {
     expect(dayTable).not.toMatch(/recipe_id TEXT NOT NULL REFERENCES/);
   });
 
+  it('v20: 献立の枠対応テーブル（menu_slot_settings / menu_plan_slots）を作る', () => {
+    const statements: string[] = [];
+
+    runMigrations({ execSync: (statement) => statements.push(statement) });
+
+    const createSql = statements[0];
+    expect(createSql).toContain('CREATE TABLE IF NOT EXISTS menu_slot_settings');
+    expect(createSql).toContain('CREATE TABLE IF NOT EXISTS menu_plan_slots');
+
+    const settingsTable = createSql.slice(
+      createSql.indexOf('CREATE TABLE IF NOT EXISTS menu_slot_settings'),
+    );
+    expect(settingsTable).toContain('PRIMARY KEY (meal_time, slot_id)');
+
+    const slotsTable = createSql.slice(
+      createSql.indexOf('CREATE TABLE IF NOT EXISTS menu_plan_slots'),
+    );
+    expect(slotsTable).toContain('PRIMARY KEY (plan_id, day, slot_id)');
+  });
+
   it('v13: 在庫・買い物のグループ、賞味期限、誰が の列を足す', () => {
     const statements: string[] = [];
 

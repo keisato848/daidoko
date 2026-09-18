@@ -300,6 +300,16 @@ export const BACKUP_TABLES = [
     columns: ['plan_id', 'day', 'recipe_id', 'title', 'reason', 'done_at'],
     optional: true,
   },
+  {
+    name: 'menu_slot_settings',
+    columns: ['meal_time', 'slot_id', 'slot_kind', 'label', 'position', 'auto_fill'],
+    optional: true,
+  },
+  {
+    name: 'menu_plan_slots',
+    columns: ['plan_id', 'day', 'slot_id', 'recipe_id', 'title', 'reason', 'done_at'],
+    optional: true,
+  },
 ] as const;
 
 type BackupTableName = (typeof BACKUP_TABLES)[number]['name'];
@@ -455,6 +465,8 @@ function createEmptyBackupTables(): BackupTables {
     recipe_book_items: [],
     menu_plans: [],
     menu_plan_days: [],
+    menu_slot_settings: [],
+    menu_plan_slots: [],
   };
 }
 
