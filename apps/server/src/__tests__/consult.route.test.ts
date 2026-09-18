@@ -13,6 +13,7 @@ import { setConsultProviderForTesting } from '../routes/infer.js';
 import {
   ConsultQuotaError,
   buildConsultResponseSchema,
+  buildConsultSystemPrompt,
   trimMessages,
   buildContextText,
   type ConsultRecipeInput,
@@ -192,6 +193,30 @@ describe('会話の組み立て', () => {
   it('候補数が指定されたときはプロンプトに伝える', () => {
     const text = buildContextText({ messages: [], candidateCount: 3 });
     expect(text).toContain('3 個の候補を求めています');
+  });
+});
+
+/**
+ * 「押すまで実行されない」は**プロンプトの文言でしか守れない**規約。
+ * 2026-09-18 の AQUOS 検証準備中に、実サーバーが「買い物リストに追加しました！」と
+ * 完了形で返すのを観測した（カードを押すまで何も起きない設計なので利用者に嘘をつく）。
+ * 指示が消えたら気づけるようにする。
+ */
+describe('actions のプロンプト規約', () => {
+  it('actions はまだ実行されていない、と明示している', () => {
+    const prompt = buildConsultSystemPrompt();
+    expect(prompt).toContain('まだ実行されていない');
+  });
+
+  it('完了した言い方をしないよう指示している', () => {
+    const prompt = buildConsultSystemPrompt();
+    expect(prompt).toContain('追加しました');
+    expect(prompt).toContain('完了した言い方をしない');
+  });
+
+  it('heardAs を品名に縮めず発話そのままにするよう指示している', () => {
+    const prompt = buildConsultSystemPrompt();
+    expect(prompt).toContain('品名だけに縮めない');
   });
 });
 
