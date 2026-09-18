@@ -233,7 +233,11 @@ export default function ConsultScreen() {
             : next;
         setMessages([...withReadings, { role: 'assistant', text: turn.reply }]);
         setActions(turn.actions ?? []);
-        setCandidates(turn.candidates ?? []);
+        // 下書きが出たら候補は畳む。描画は「候補があれば候補・無ければ下書き」の
+        // 優先順なので、両方来ると**下書きカードが候補に隠れて選べない**
+        // （2026-09-18 AQUOS 実機検証で 5 往復抜け出せなかった）。サーバー側でも
+        // 落としているが、古いサーバーに繋がっても画面が詰まらないようにここでも守る
+        setCandidates(turn.draft ? [] : (turn.candidates ?? []));
         if (turn.draft) {
           setLastChange(diffConsultDraft(draft, turn.draft));
           setDraft(turn.draft);

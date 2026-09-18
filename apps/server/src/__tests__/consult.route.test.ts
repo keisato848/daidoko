@@ -218,6 +218,57 @@ describe('actions のプロンプト規約', () => {
     const prompt = buildConsultSystemPrompt();
     expect(prompt).toContain('品名だけに縮めない');
   });
+
+  it('候補を選ばれたら候補を返さず下書きだけ返すよう指示している', () => {
+    const prompt = buildConsultSystemPrompt();
+    expect(prompt).toContain('candidates を返さず draft だけを返す');
+  });
+});
+
+/**
+ * 2026-09-18 の AQUOS 実機検証で見つけた F1。
+ * 候補数 2 以上だと候補ループから抜けられず、5 往復しても下書きに辿り着けなかった。
+ * 原因は 2 つあり、どちらも**モデルの自己申告に任せていた**こと:
+ * 1. `candidateCount=1` でも 3 件返ってきた（プロンプトの「最大N件」が守られない）
+ * 2. 選んだ往復で draft と candidates が両方返り、画面が候補を出し続けた
+ * どちらも機械で切るようにしたので、その担保をここで固定する。
+ */
+describe('候補は機械で切る（プロンプト任せにしない）', () => {
+  it('candidateCount で候補の件数を切る', async () => {
+    setConsultProviderForTesting(
+      stub(() => ({
+        reply: 'どれがいいですか',
+        ready: false,
+        candidates: [
+          { title: 'A', description: 'a' },
+          { title: 'B', description: 'b' },
+          { title: 'C', description: 'c' },
+        ],
+      })),
+    );
+    const res = await post({ messages: [{ role: 'user', text: '何か' }], candidateCount: 1 });
+    const json = (await res.json()) as { data: { candidates: unknown[] } };
+    expect(json.data.candidates).toHaveLength(1);
+  });
+
+  it('下書きが出たら候補は返さない（選んだのに候補が出続けるのを防ぐ）', async () => {
+    setConsultProviderForTesting(
+      stub(() => ({
+        reply: 'これでどうでしょう',
+        ready: false,
+        candidates: [{ title: 'A', description: 'a' }],
+        draft: {
+          title: '肉じゃが',
+          ingredients: [{ name: 'じゃがいも' }],
+          steps: [{ body: '煮る' }],
+        },
+      })),
+    );
+    const res = await post({ messages: [{ role: 'user', text: 'Aにします' }] });
+    const json = (await res.json()) as { data: { candidates?: unknown[]; draft: unknown } };
+    expect(json.data.draft).not.toBeNull();
+    expect(json.data.candidates).toBeUndefined();
+  });
 });
 
 describe('actions と candidates の返し方', () => {
