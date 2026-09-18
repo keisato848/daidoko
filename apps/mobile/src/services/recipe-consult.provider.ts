@@ -40,10 +40,16 @@ export interface ConsultMessage {
    * （会話が伸びるほど state が重くなるため）。
    */
   imageUris?: string[];
+  /**
+   * 前回の応答で AI が写真を読み取ったテキスト。2 往復目以降はこれを写真の代わりに
+   * 送ることで base64 の再送を避ける（R1）。**サーバーは写真を保持しない**ので、
+   * 端末が保持して次回送る。
+   */
+  imageReadings?: string[];
 }
 
 /** 1 回の発言に添えられる写真。画面もこの数で止める。 */
-export const MAX_CONSULT_IMAGES_PER_MESSAGE = 2;
+export const MAX_CONSULT_IMAGES_PER_MESSAGE = 4;
 
 /** 1 リクエストに載せる写真の総数。サーバー側 `MAX_CONSULT_IMAGES` と揃える。 */
 export const MAX_CONSULT_IMAGES = 4;
@@ -61,6 +67,8 @@ export interface ConsultTurnResult {
   ready: boolean;
   /** 現時点の下書き。まだ出せない往復では null */
   draft: RecipeFormData | null;
+  /** AI が写真から読み取った内容。次回の往復で写真の代わりに送る（R1） */
+  imageReadings?: string[];
 }
 
 export class ConsultError extends Error {
@@ -94,7 +102,13 @@ interface ServerDraft {
 
 interface ServerAgentResult {
   ok: boolean;
-  data?: { reply: string; ready: boolean; draft: ServerDraft | null };
+  data?: {
+    reply: string;
+    ready: boolean;
+    draft: ServerDraft | null;
+    /** AI が写真から読み取った内容（R1） */
+    imageReadings?: string[];
+  };
   error?: { code: string; message: string; retryable: boolean };
 }
 
@@ -155,6 +169,8 @@ interface WireMessage {
   role: ConsultRole;
   text: string;
   images?: WireImage[];
+  /** 2 往復目以降、写真の代わりに送る AI の読み取りテキスト（R1） */
+  imageReadings?: string[];
 }
 
 function mimeTypeFor(uri: string): WireImage['mimeType'] {
@@ -168,8 +184,11 @@ function mimeTypeFor(uri: string): WireImage['mimeType'] {
  * 送る写真を**新しい方から** `MAX_CONSULT_IMAGES` 枚だけ base64 にする。
  * 落とす判断はサーバーもやるが、**端末側で先に落とさないと無駄に base64 を作って送ることになる**
  * （会話が伸びるほど効く）。assistant の発言に付いた写真は載せない。
+ *
+ * R1: `imageReadings` を持つメッセージ（＝前回の応答で AI が読み取った結果を受け取り済み）では
+ * base64 化をスキップし、テキストの `imageReadings` だけを載せる。
  */
-async function toWireMessages(messages: ConsultMessage[]): Promise<WireMessage[]> {
+export async function toWireMessages(messages: ConsultMessage[]): Promise<WireMessage[]> {
   let budget = MAX_CONSULT_IMAGES;
   const keep = new Map<number, string[]>();
   for (let index = messages.length - 1; index >= 0 && budget > 0; index--) {
@@ -185,10 +204,30 @@ async function toWireMessages(messages: ConsultMessage[]): Promise<WireMessage[]
   const wire: WireMessage[] = [];
   for (const [index, message] of messages.entries()) {
     const uris = keep.get(index);
+
+    // 写真が無い or 予算で落とされたメッセージ — imageReadings があっても添える
     if (!uris || uris.length === 0) {
-      wire.push({ role: message.role, text: message.text });
+      wire.push({
+        role: message.role,
+        text: message.text,
+        ...(message.imageReadings && message.imageReadings.length > 0
+          ? { imageReadings: message.imageReadings }
+          : {}),
+      });
       continue;
     }
+
+    // R1: 読み取り結果がある（＝2 往復目以降）なら写真の base64 化をスキップ
+    if (message.imageReadings && message.imageReadings.length > 0) {
+      wire.push({
+        role: message.role,
+        text: message.text,
+        imageReadings: message.imageReadings,
+      });
+      continue;
+    }
+
+    // 初回: 従来どおり base64 を載せる
     const images: WireImage[] = [];
     for (const uri of uris) {
       try {
@@ -250,6 +289,24 @@ const SYSTEM_PROMPT = [
   '- 参考にしたい料理の写真なら、それに寄せた下書きを出す。目分量は推定と分かるように書く。',
   '- 写真が来ていないときは、写真の話をしない。',
   '',
+  '## imageReadings（写真の読み取り記録）',
+  '写真が添えられたとき、あとで写真を見返せない状態でも会話を続けられるように、',
+  '**写真ごとに 1 件** `imageReadings` に記録する（`originalIndex` は 0 始まりの何枚目か）。',
+  '- 写っている食材・食品・料理・容器の中身を**見えた範囲で漏れなく**列挙する。',
+  '- パッケージに文字があれば、作り方・分量・原材料・人数など**読めた文字はそのまま**書く。',
+  '- 料理の写真なら、具材・麺や米の種類・スープの色や見た目・薬味・盛り付けまで書く。',
+  '- 数や量は数えられた・読めたものだけ書き、見えないことは書かない。',
+  '- **調味料・野菜・飲料のようなカテゴリ語や色だけの表現（例:「紫色の野菜」）を材料名として使わない。**',
+  '  特定できなければ「特定できない食品」と書く。',
+  '- 長さの上限は設けない。',
+  '',
+  '## imageReadings が渡されたとき（2 往復目以降）',
+  '`imageReadings` は**写真そのものではなく、前回あなたが記録したテキスト**である。',
+  '写真は手元に無い。',
+  '- 読み取りに書かれたことだけを根拠にする。',
+  '- 利用者が「読み取りに無いもの」を主張したら、**読み取りに無かったことを一言添えたうえで従う。**',
+  '  見えないことを見えたことにしない。',
+  '',
   '## 在庫が渡されたとき',
   '- 使えるものを優先する。ただし**在庫だけで無理に作らない**。足りないものは材料に書く。',
   '- 在庫が渡されていないときは、在庫の話をしない。',
@@ -295,7 +352,19 @@ const GEMINI_RESPONSE_SCHEMA = {
         tags: { type: 'ARRAY', items: { type: 'STRING' } },
       },
     },
+    imageReadings: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          originalIndex: { type: 'NUMBER' },
+          reading: { type: 'STRING' },
+        },
+        required: ['originalIndex', 'reading'],
+      },
+    },
   },
+  // imageReadings は写真が無い往復では出ないので required にしない（draft と同じ理由）
   required: ['reply', 'ready'],
 };
 
@@ -322,13 +391,18 @@ async function consultViaByok(args: ConsultArgs, apiKey: string): Promise<Consul
   const contents = messages.map((message, index) => {
     const isLast = index === messages.length - 1;
     const text = isLast && context ? `${message.text}\n\n${context}` : message.text;
+    // R1: imageReadings がある（＝2 往復目以降）ならテキストとして添える
+    const readingsText =
+      message.imageReadings && message.imageReadings.length > 0
+        ? `\n\n（添付した写真の内容。前回 AI が読み取ったもの）\n${message.imageReadings.map((r, i) => `写真${i + 1}: ${r}`).join('\n')}`
+        : '';
     return {
       role: message.role === 'assistant' ? 'model' : 'user',
       parts: [
         ...(message.images ?? []).map((image) => ({
           inlineData: { mimeType: image.mimeType, data: image.imageBase64 },
         })),
-        { text },
+        { text: text + readingsText },
       ],
     };
   });
@@ -369,16 +443,22 @@ async function consultViaByok(args: ConsultArgs, apiKey: string): Promise<Consul
       reply?: string;
       ready?: boolean;
       draft?: ServerDraft | null;
+      imageReadings?: { originalIndex: number; reading: string }[];
     };
     // サーバー側の正規化（材料/手順が空なら下書きにしない）を再現する
     const usable =
       raw.draft && raw.draft.ingredients?.length > 0 && raw.draft.steps?.length > 0
         ? raw.draft
         : null;
+    // R1: imageReadings を reading 文字列の配列にして返す
+    const readings = raw.imageReadings
+      ?.filter((r) => typeof r.reading === 'string' && r.reading.trim())
+      .map((r) => r.reading);
     return {
       reply: raw.reply?.trim() || t('recipeImport.consult.emptyReply'),
       ready: raw.ready === true && usable !== null,
       draft: usable ? toFormData(usable) : null,
+      ...(readings && readings.length > 0 ? { imageReadings: readings } : {}),
     };
   } catch (err) {
     if (err instanceof ConsultError) throw err;
@@ -394,6 +474,11 @@ async function consultViaByok(args: ConsultArgs, apiKey: string): Promise<Consul
 // ─── managed サーバー経由 ────────────────────────────────────────────────────
 
 async function consultViaServer(args: ConsultArgs): Promise<ConsultTurnResult> {
+  // R5: 画像の前処理（base64 化）をタイムアウト計測から外すため、先に済ませる
+  const wireMessages = await toWireMessages(trimMessages(args.messages));
+  // R6: BYOK 経路の buildContextText と同じ 200 件上限をサーバー経路にも適用する
+  const pantrySlice = args.pantry && args.pantry.length > 0 ? args.pantry.slice(0, 200) : undefined;
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -401,9 +486,9 @@ async function consultViaServer(args: ConsultArgs): Promise<ConsultTurnResult> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: await toWireMessages(trimMessages(args.messages)),
+        messages: wireMessages,
         ...(args.draft ? { draft: formDataToDraft(args.draft) } : {}),
-        ...(args.pantry && args.pantry.length > 0 ? { pantry: args.pantry } : {}),
+        ...(pantrySlice ? { pantry: pantrySlice } : {}),
         locale: requestLocale(),
         unitSystem: requestUnitSystem(),
       }),
@@ -427,6 +512,9 @@ async function consultViaServer(args: ConsultArgs): Promise<ConsultTurnResult> {
       reply: result.data.reply,
       ready: result.data.ready,
       draft: result.data.draft ? toFormData(result.data.draft) : null,
+      ...(result.data.imageReadings && result.data.imageReadings.length > 0
+        ? { imageReadings: result.data.imageReadings }
+        : {}),
     };
   } catch (err) {
     if (err instanceof ConsultError) throw err;

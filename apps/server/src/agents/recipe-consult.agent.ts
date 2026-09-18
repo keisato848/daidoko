@@ -23,6 +23,8 @@ export interface ConsultTurn {
   ready: boolean;
   /** 現時点の下書き。まだ出せない往復では null */
   draft: RecipeDraft | null;
+  /** 写真の読み取り結果（あれば） */
+  imageReadings?: string[];
 }
 
 const EMPTY_REPLY_MESSAGE =
@@ -144,6 +146,8 @@ export async function runRecipeConsultAgent(
       // 下書きが無いのに ready を信じると、保存できないのに保存ボタンが出る
       ready: raw.ready === true && draft !== null,
       draft,
+      ...(raw.imageReadings &&
+        raw.imageReadings.length > 0 && { imageReadings: raw.imageReadings }),
     },
   };
 }

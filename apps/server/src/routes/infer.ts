@@ -690,6 +690,8 @@ const inferConsultSchema = z.object({
           )
           .max(MAX_CONSULT_IMAGES)
           .optional(),
+        /** 2 往復目以降、写真の代わりに端末が送る AI の読み取りテキスト（R1）。images と同時には来ない想定だが、両方来ても落とさない */
+        imageReadings: z.array(z.string().min(1).max(4000)).max(MAX_CONSULT_IMAGES).optional(),
       }),
     )
     .min(1, '相談する内容がありません')
@@ -770,6 +772,7 @@ inferRouter.post('/consult', zValidator('json', inferConsultSchema), async (c) =
         role: message.role,
         text: message.text,
         ...(message.images !== undefined && { images: message.images }),
+        ...(message.imageReadings !== undefined && { imageReadings: message.imageReadings }),
       })),
       draft: snapshot,
       ...(pantry !== undefined && { pantry }),
