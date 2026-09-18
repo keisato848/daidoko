@@ -49,6 +49,7 @@ import {
   type RollableMenuDay,
 } from '../utils/menuPlan';
 import {
+  applyDaysToSlots,
   menuPlanRowToStored,
   parseLegacyMenuPlanJson,
   sanitizeMenuMealTime,
@@ -564,7 +565,10 @@ function hydrate(
   // 作り終わった日は引き当てから外す（残すと二重に数える）
   const active = plan.days.filter((d) => d.doneAt === null);
   return {
-    plan,
+    // **枠を `days` に合わせ直してから返す。** 差し替えや「作りました」は `days` だけを
+    // 書き換えて渡してくるので、読んだままの `slots` を返すと**画面に前の料理名が残る**
+    // （保存先は `writeStoredMenuPlan` が同じ `applyDaysToSlots` で揃えている）
+    plan: { ...plan, slots: applyDaysToSlots(plan.days, plan.slots ?? []) },
     days,
     claims: buildClaims(active, recipes, pantry.items, aliases),
     stale: plan.pantrySignature !== pantry.signature,

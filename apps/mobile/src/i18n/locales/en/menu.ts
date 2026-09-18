@@ -85,6 +85,13 @@ const menu = {
     noTime: 'No time recorded',
     minutes: '{{count}} min',
   },
+  week: {
+    defaultSlot: 'Main',
+    dateLabel: '{{weekday}} {{month}}/{{day}}',
+    today: 'Today',
+    slotEmpty: 'Not decided yet',
+    progress: 'Cooked {{done}} of {{total}} days',
+  },
   reason: {
     expiry: '{{name}} is expiring soon',
     coverage: 'You already have {{count}} of the ingredients',

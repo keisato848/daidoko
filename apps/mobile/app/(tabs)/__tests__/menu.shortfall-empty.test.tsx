@@ -34,6 +34,8 @@ jest.mock('../../../src/services/menu-plan.service', () => ({
   MENU_MEAL_TIMES: ['breakfast', 'lunch', 'dinner'],
   getMenuPlan: (...args: unknown[]) => mockGetMenuPlan(...(args as [])),
   getStoredMealTimes: jest.fn(async () => []),
+  // v20・PR-3: 枠の定義。空 = 主菜 1 枠だけ（`orderedSlots` が既定へ倒す）
+  getMenuSlotSettings: jest.fn(async () => []),
   generateMenuPlan: jest.fn(async () => null),
   buildMenuBulkContext: jest.fn(async () => ({ existingTitles: [], pantryNames: [] })),
   buildMenuArrangeContext: jest.fn(async () => null),
