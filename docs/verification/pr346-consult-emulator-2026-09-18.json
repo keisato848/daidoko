@@ -1,0 +1,26 @@
+{
+  "note": "PR #346 のマージ前機能確認（エミュレータ）。docs/verification/1.13.2-10036.json（AQUOS 実機・リリース記録）を上書きしないよう別名で保存。ストア提出に必要な実機検証はこれとは別に AQUOS で行うこと。",
+  "pr": 346,
+  "branch": "feat/consult-image-readings",
+  "version": "1.13.2",
+  "versionCode": 10036,
+  "verifiedAt": "2026-09-18T01:21:36.967Z",
+  "device": {
+    "serialHash": "04ab3fc382bf",
+    "model": "sdk_gphone64_x86_64",
+    "abi": "x86_64",
+    "isEmulator": true,
+    "avd": "daidoko_e2e_fresh_api36 (API 36, 1080x2400)"
+  },
+  "installedVersionCode": 10036,
+  "serverPath": "ローカル Hono (--env-file=.env, GEMINI 実キー) 経由。EXPO_PUBLIC_SERVER_URL=http://10.0.2.2:3001 の記録用プロキシで実ワイヤを観測",
+  "checked": [
+    "レシピ一覧→追加→『AIと相談しながらつくる』→相談画面。写真4枚(小さめのサンプル料理画像)を添付して1通目送信→AI応答+下書き『鶏の唐揚げ定食』生成。合計3往復成立(2通目=3人分20分以内・3通目=味噌汁追加)。毎往復で下書きが更新(2人前30分→3人前20分→材料15品手順7つ)。最後に下書き(RecipeForm)が正常表示。保存はしていない。",
+    "R1(写真の再送回避)を実ワイヤで確認: 1通目 messages=1 imageBase64Keys=4 imageReadingsKeys=0 [0:user+img4] / 2通目 messages=3 imageBase64Keys=0 imageReadingsKeys=1 [0:user+rd4,1:assistant,2:user] / 3通目 messages=5 imageBase64Keys=0 imageReadingsKeys=1。ペイロード 297KB→3.4KB→3.4KB。サーバー応答は毎回 readings/draft を返却。",
+    "R2(上限4枚): システム Photo Picker が5枚目を『4件まで選択できます』トーストで拒否し4枚のまま。添付4枚で写真追加ボタンが無効化(enabled=false)。",
+    "3往復ともクラッシュなし。"
+  ],
+  "knownEmulatorConstraint": "QEMU user-mode NAT の上り帯域が遅く、フルサイズ写真4枚(約960KB base64)は 45s タイムアウトを超えた(『リクエストがタイムアウトしました』)。小さめ画像(約300KB)では 6.9s で成功。これはエミュレータの回線制約で PR の不具合ではない(実機WiFiでは問題にならない)。",
+  "screenshot": "screenshots/1.13.2-10036-2026-09-18T01-21-36-967Z.png",
+  "headCommit": "09f1914a7b732f9776812146748375928db61915"
+}
