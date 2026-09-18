@@ -31,7 +31,7 @@ import { parsePartEntityId } from './pantry-quantity';
  * v2: S2 で買い物・在庫・辞書の 5 種別を追加（レシピ・帖の形は変えていないので、
  * v1 の payload はそのまま読める）
  */
-export const SYNC_PAYLOAD_SCHEMA_VERSION = 3; // v3: 在庫数量の持ち分（S2-B・§5-3）
+export const SYNC_PAYLOAD_SCHEMA_VERSION = 4; // v4: 献立・枠・調理記録（PR-2）
 
 /**
  * **省略可のフィールドを足すときはバージョンを上げないこと。**
@@ -52,6 +52,9 @@ export const SYNC_ENTITY_JAN_CATALOG = 'jan_catalog';
 export const SYNC_ENTITY_STORE_GROUP_ALIAS = 'store_group_alias';
 /** 在庫数量の持ち分（S2-B・設計 §5-3）。entity_id = `<品目 id>:<端末 id>` */
 export const SYNC_ENTITY_PANTRY_QUANTITY = 'pantry_quantity';
+export const SYNC_ENTITY_MENU_PLAN = 'menu_plan';
+export const SYNC_ENTITY_MENU_SLOT = 'menu_slot';
+export const SYNC_ENTITY_COOKING_LOG = 'cooking_log';
 
 /** 同期対象の種別（S1: レシピ・帖 / S2: 買い物・在庫・辞書） */
 export type SyncEntityType =
@@ -62,7 +65,10 @@ export type SyncEntityType =
   | typeof SYNC_ENTITY_NAME_ALIAS
   | typeof SYNC_ENTITY_JAN_CATALOG
   | typeof SYNC_ENTITY_STORE_GROUP_ALIAS
-  | typeof SYNC_ENTITY_PANTRY_QUANTITY;
+  | typeof SYNC_ENTITY_PANTRY_QUANTITY
+  | typeof SYNC_ENTITY_MENU_PLAN
+  | typeof SYNC_ENTITY_MENU_SLOT
+  | typeof SYNC_ENTITY_COOKING_LOG;
 
 export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = [
   SYNC_ENTITY_RECIPE,
@@ -73,6 +79,9 @@ export const SYNC_ENTITY_TYPES: readonly SyncEntityType[] = [
   SYNC_ENTITY_JAN_CATALOG,
   SYNC_ENTITY_STORE_GROUP_ALIAS,
   SYNC_ENTITY_PANTRY_QUANTITY,
+  SYNC_ENTITY_MENU_PLAN,
+  SYNC_ENTITY_MENU_SLOT,
+  SYNC_ENTITY_COOKING_LOG,
 ];
 
 /**
@@ -86,6 +95,7 @@ export const NATURAL_KEY_ENTITY_TYPES: readonly SyncEntityType[] = [
   SYNC_ENTITY_NAME_ALIAS,
   SYNC_ENTITY_JAN_CATALOG,
   SYNC_ENTITY_STORE_GROUP_ALIAS,
+  SYNC_ENTITY_MENU_PLAN,
 ];
 
 export function isSyncEntityType(value: string): value is SyncEntityType {
@@ -293,6 +303,70 @@ export interface StoreGroupAliasSyncPayload {
   };
 }
 
+export interface MenuPlanSyncPayload {
+  schemaVersion: number;
+  entity: typeof SYNC_ENTITY_MENU_PLAN;
+  plan: {
+    id: string;
+    mealTime: string;
+    generatedAt: string;
+    source: string;
+    pantrySignature: string;
+    anchorDate: string | null;
+    requestedDays: number | null;
+    aiNote: string | null;
+    autoAddedItemIds: string | null;
+  };
+  slots: {
+    day: number;
+    slotId: string;
+    recipeId: string;
+    title: string;
+    reason: string;
+    doneAt: string | null;
+  }[];
+}
+
+export interface MenuSlotSyncPayload {
+  schemaVersion: number;
+  entity: typeof SYNC_ENTITY_MENU_SLOT;
+  item: {
+    mealTime: string;
+    slotId: string;
+    slotKind: string;
+    label: string;
+    position: number;
+    autoFill: boolean;
+  };
+}
+
+/**
+ * 受け取った `kind` を既知の 2 値へ丸める。
+ *
+ * 列は `text` なので型は素通りするが、**新しい版の端末が増やした種類**（将来
+ * 'baked' 等）がそのまま入ると、こちらの画面は既定の分岐に落ちず表示が壊れる。
+ * 知らない値は「家で作った」として読む（`schema.ts` の既定と同じ倒し方）。
+ */
+export function normalizeCookingLogKind(value: string): 'cooked' | 'eaten_out' {
+  return value === 'eaten_out' ? 'eaten_out' : 'cooked';
+}
+
+export interface CookingLogSyncPayload {
+  schemaVersion: number;
+  entity: typeof SYNC_ENTITY_COOKING_LOG;
+  item: {
+    id: string;
+    recipeId: string | null;
+    cookedAt: string;
+    servings: number | null;
+    rating: number | null;
+    memo: string | null;
+    createdAt: string;
+    kind: string;
+    placeName: string | null;
+  };
+}
+
 export type SyncPayload =
   | RecipeSyncPayload
   | RecipeBookSyncPayload
@@ -301,7 +375,10 @@ export type SyncPayload =
   | NameAliasSyncPayload
   | JanCatalogSyncPayload
   | PantryQuantitySyncPayload
-  | StoreGroupAliasSyncPayload;
+  | StoreGroupAliasSyncPayload
+  | MenuPlanSyncPayload
+  | MenuSlotSyncPayload
+  | CookingLogSyncPayload;
 
 /** 行を 1 つ運ぶだけの種別が共通で持つ形（適用側の分岐を薄くするため） */
 export type RowSyncPayload =
@@ -310,7 +387,10 @@ export type RowSyncPayload =
   | NameAliasSyncPayload
   | JanCatalogSyncPayload
   | StoreGroupAliasSyncPayload
-  | PantryQuantitySyncPayload;
+  | PantryQuantitySyncPayload
+  | MenuPlanSyncPayload
+  | MenuSlotSyncPayload
+  | CookingLogSyncPayload;
 
 // ── 受信 payload の検証 ──────────────────────────────────────────────────────
 // 他端末が送ってきた文字列は信用しない。壊れていたら**その 1 件だけ捨てる**
@@ -486,6 +566,61 @@ const storeGroupAliasPayloadSchema = z.object({
   }),
 });
 
+const menuPlanPayloadSchema = z.object({
+  schemaVersion: z.number(),
+  entity: z.literal(SYNC_ENTITY_MENU_PLAN),
+  plan: z.object({
+    id: z.string().min(1),
+    mealTime: z.string().min(1),
+    generatedAt: z.string().min(1),
+    source: z.string().min(1),
+    pantrySignature: z.string().min(1),
+    anchorDate: nullableText,
+    requestedDays: nullableNumber,
+    aiNote: nullableText,
+    autoAddedItemIds: nullableText,
+  }),
+  slots: z.array(
+    z.object({
+      day: z.number(),
+      slotId: z.string().min(1),
+      recipeId: z.string().min(1),
+      title: z.string(),
+      reason: z.string(),
+      doneAt: nullableText,
+    }),
+  ),
+});
+
+const menuSlotPayloadSchema = z.object({
+  schemaVersion: z.number(),
+  entity: z.literal(SYNC_ENTITY_MENU_SLOT),
+  item: z.object({
+    mealTime: z.string().min(1),
+    slotId: z.string().min(1),
+    slotKind: z.string().min(1),
+    label: z.string(),
+    position: z.number(),
+    autoFill: z.boolean(),
+  }),
+});
+
+const cookingLogPayloadSchema = z.object({
+  schemaVersion: z.number(),
+  entity: z.literal(SYNC_ENTITY_COOKING_LOG),
+  item: z.object({
+    id: z.string().min(1),
+    recipeId: nullableText,
+    cookedAt: z.string().min(1),
+    servings: nullableNumber,
+    rating: nullableNumber,
+    memo: nullableText,
+    createdAt: z.string().min(1),
+    kind: z.string().min(1),
+    placeName: nullableText,
+  }),
+});
+
 /** entityType → zod スキーマ。増やすのはここだけで済むようにしておく */
 const PAYLOAD_SCHEMAS = {
   [SYNC_ENTITY_RECIPE]: recipePayloadSchema,
@@ -496,6 +631,9 @@ const PAYLOAD_SCHEMAS = {
   [SYNC_ENTITY_JAN_CATALOG]: janCatalogPayloadSchema,
   [SYNC_ENTITY_STORE_GROUP_ALIAS]: storeGroupAliasPayloadSchema,
   [SYNC_ENTITY_PANTRY_QUANTITY]: pantryQuantityPayloadSchema,
+  [SYNC_ENTITY_MENU_PLAN]: menuPlanPayloadSchema,
+  [SYNC_ENTITY_MENU_SLOT]: menuSlotPayloadSchema,
+  [SYNC_ENTITY_COOKING_LOG]: cookingLogPayloadSchema,
 } as const;
 
 function parseJson(raw: string): unknown {

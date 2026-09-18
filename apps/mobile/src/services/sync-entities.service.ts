@@ -685,7 +685,13 @@ export async function applyIncomingChange(change: IncomingChange): Promise<Apply
         return applyRecipeBookPayload(payload);
       }
       if (isRowSyncPayload(payload)) {
-        if (payload.item.id !== change.entityId) return 'skipped'; // 封筒と中身の食い違い
+        const payloadId =
+          payload.entity === 'menu_plan'
+            ? payload.plan.id
+            : payload.entity === 'menu_slot'
+              ? `${payload.item.mealTime}:${payload.item.slotId}`
+              : payload.item.id;
+        if (payloadId !== change.entityId) return 'skipped'; // 封筒と中身の食い違い
         return applyRowPayload(payload);
       }
       return 'skipped';
