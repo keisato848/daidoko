@@ -12,6 +12,7 @@ import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
 
 import { getClientIp } from '../lib/client-ip.js';
+import { sendExpoPush } from '../lib/expo-push.js';
 import { parseAuthHeader } from '../lib/sync-auth.js';
 import {
   authenticateDevice,
@@ -426,29 +427,16 @@ async function notifyGroupDevices(device: AuthedDevice, urgent: boolean): Promis
     if (!takeNotifySlot(device.groupId, Date.now(), urgent)) return;
     const targets = await getOtherDevicePushTargets(device);
     if (targets.length === 0) return;
-    const res = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(
-        targets.map((target) => ({
-          to: target.token,
-          ...notificationTextFor(target.locale),
-          data: { type: 'sync' },
-        })),
-      ),
-    });
-    // 届かないトークンは消す（#207）。応答の tickets は送った順に並ぶ
-    const body = (await res.json().catch(() => null)) as {
-      data?: { status?: string; details?: { error?: string } }[];
-    } | null;
-    const dead = (body?.data ?? [])
-      .map((ticket, index) =>
-        ticket?.status === 'error' && ticket.details?.error === 'DeviceNotRegistered'
-          ? targets[index]?.token
-          : undefined,
-      )
-      .filter((token): token is string => typeof token === 'string');
-    if (dead.length > 0) await clearDeadPushTokens(dead);
+
+    const { deadTokens } = await sendExpoPush(
+      targets.map((target) => ({
+        to: target.token,
+        ...notificationTextFor(target.locale),
+        data: { type: 'sync' },
+      })),
+    );
+
+    if (deadTokens.length > 0) await clearDeadPushTokens(deadTokens);
   } catch {
     // ベストエフォート
   }
