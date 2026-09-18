@@ -37,6 +37,7 @@ export function MenuWeekRow({
   busy,
   onOpenRecipe,
   onSwap,
+  onEditSlot,
 }: {
   row: WeekDayRow;
   /** レシピ ID → 表示に足りない情報（無くなった・調理時間）。枠の行は持っていない */
@@ -45,6 +46,8 @@ export function MenuWeekRow({
   onOpenRecipe: (recipeId: string) => void;
   /** その日の主菜を次の候補へ差し替える（M1 のまま・AI は呼ばない） */
   onSwap: (day: number) => void;
+  /** 枠を押したとき（空の枠は入れる・埋まっている枠は長押し相当の編集）。PR-4 */
+  onEditSlot: (day: number, slotId: string, slotLabel: string) => void;
 }) {
   // 日付が出せるのは自動モード（anchorDate あり）だけ。手動プランは「N日目」のまま
   const label =
@@ -92,7 +95,16 @@ export function MenuWeekRow({
             key={cell.slotId}
             cell={cell}
             meta={meta}
-            onPress={openable ? () => onOpenRecipe(recipeId) : undefined}
+            // 埋まっている枠を押すとレシピが開く（従来の「レシピを開く」）。
+            // **空の枠を押すと入れる** — 空の行が押せないと、枠を足しても入れる口が無い
+            onPress={
+              openable
+                ? () => onOpenRecipe(recipeId)
+                : cell.entry === null
+                  ? () => onEditSlot(row.day, cell.slotId, cell.label)
+                  : undefined
+            }
+            onEdit={() => onEditSlot(row.day, cell.slotId, cell.label)}
           />
         );
       })}

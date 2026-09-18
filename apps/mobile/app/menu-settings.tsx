@@ -32,10 +32,44 @@ import {
 import { dialog } from '../src/services/dialog.service';
 import {
   clearMenuPlan,
+  getMenuSlotSettings,
+  MENU_MEAL_TIMES,
   refreshMenuNotificationSchedule,
   runDailyMenuMaintenance,
+  saveMenuSlotSettings,
+  type MenuMealTime,
 } from '../src/services/menu-plan.service';
 import { formatMenuAutoNotifyTime, type MenuAutoNotifyTime } from '../src/utils/menuAuto';
+import {
+  addSlot,
+  canRemoveSlot,
+  normalizeSlots,
+  removeSlot,
+  SLOT_KINDS,
+  type SlotKind,
+} from '../src/utils/menuSlots';
+import type { WeekSlotSetting } from '../src/utils/menuWeek';
+
+/**
+ * 時間帯・枠の種類の文言。`t()` はキーをリテラル型で受けるので、
+ * 実行時に決まるものはこの対応表で引く（menu.tsx の MEAL_TIME_LABEL_KEY と同じ作法）。
+ */
+const MEAL_TIME_LABEL_KEY = {
+  breakfast: 'menu.mealTime.breakfast',
+  lunch: 'menu.mealTime.lunch',
+  dinner: 'menu.mealTime.dinner',
+} as const satisfies Record<MenuMealTime, string>;
+
+const SLOT_KIND_LABEL_KEY = {
+  main: 'menu.slotKind.main',
+  side: 'menu.slotKind.side',
+  soup: 'menu.slotKind.soup',
+  salad: 'menu.slotKind.salad',
+  dessert: 'menu.slotKind.dessert',
+} as const satisfies Record<SlotKind, string>;
+
+/** 足せる枠。主菜は最初からあって消せないので、足す側には出さない */
+const ADDABLE_SLOT_KINDS = SLOT_KINDS.filter((k): k is Exclude<SlotKind, 'main'> => k !== 'main');
 
 /** 通知時刻の選択肢。専用の時刻ピッカーは入れず、既存の「日数チップ」と同じ形で選ばせる */
 const NOTIFY_TIME_OPTIONS: readonly MenuAutoNotifyTime[] = [
@@ -61,6 +95,9 @@ export default function MenuSettingsScreen() {
   const [notifyTime, setNotifyTime] = useState<MenuAutoNotifyTime>({ hour: 7, minute: 0 });
   // M3-4: 家族の嗜好メモ（ローカル保存・同期しない）。一括生成にだけ渡す
   const [tasteMemo, setTasteMemo] = useState('');
+  // 枠の構成（PR-4・§10.14）。時間帯ごとに持つので、編集対象の時間帯も状態に持つ
+  const [slotMealTime, setSlotMealTime] = useState<MenuMealTime>('dinner');
+  const [slots, setSlots] = useState<WeekSlotSetting[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -79,6 +116,25 @@ export default function MenuSettingsScreen() {
         setLoaded(true);
       });
     }, []),
+  );
+
+  // 枠は編集対象の時間帯が変わるたびに読み直す。**正規化してから画面へ**
+  // （同期で主菜だけ消えた・重複した状態を受け取っても、開いた時点で直る）
+  useFocusEffect(
+    useCallback(() => {
+      void getMenuSlotSettings(slotMealTime)
+        .then((rows) => setSlots(normalizeSlots(rows, t('menu.slotKind.main'))))
+        .catch(() => setSlots([]));
+    }, [slotMealTime]),
+  );
+
+  /** 枠を保存する。画面へは先に反映し、保存の失敗で操作感を止めない */
+  const persistSlots = useCallback(
+    (next: WeekSlotSetting[]) => {
+      setSlots(next);
+      void saveMenuSlotSettings(slotMealTime, next).catch(() => undefined);
+    },
+    [slotMealTime],
   );
 
   const handleToggleParent = useCallback((next: boolean) => {
@@ -219,6 +275,62 @@ export default function MenuSettingsScreen() {
           />
         </View>
 
+        {/* 枠の構成（PR-4・§10.14）。時間帯ごとに持つ。自動モードとは独立
+          （手で組む人も枠は使う）ので sectionDisabled を掛けない */}
+        <View style={styles.slotSection}>
+          <Text style={styles.rowLabel}>{t('menu.settings.slotsLabel')}</Text>
+          <Text style={styles.rowSubtitle}>{t('menu.settings.slotsSubtitle')}</Text>
+
+          <Text style={styles.chipLabel}>{t('menu.settings.slotsMealTimeLabel')}</Text>
+          <View style={styles.chipRow}>
+            {MENU_MEAL_TIMES.map((option) => (
+              <Pressable
+                key={option}
+                style={[styles.chip, slotMealTime === option && styles.chipActive]}
+                onPress={() => setSlotMealTime(option)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: slotMealTime === option }}
+              >
+                <Text style={[styles.chipText, slotMealTime === option && styles.chipTextActive]}>
+                  {t(MEAL_TIME_LABEL_KEY[option])}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {slots.map((slot) => (
+            <View key={slot.slotId} style={styles.slotRow}>
+              <Text style={styles.slotName}>{slot.label}</Text>
+              {canRemoveSlot(slot.slotId) ? (
+                <Pressable
+                  onPress={() => persistSlots(removeSlot(slots, slot.slotId))}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${slot.label} ${t('menu.settings.slotRemove')}`}
+                >
+                  <Text style={styles.slotRemove}>{t('menu.settings.slotRemove')}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+
+          <View style={styles.chipRow}>
+            {ADDABLE_SLOT_KINDS.map((kind) => {
+              const label = t(SLOT_KIND_LABEL_KEY[kind]);
+              return (
+                <Pressable
+                  key={kind}
+                  style={styles.chip}
+                  onPress={() => persistSlots(addSlot(slots, kind, label))}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.chipText}>{t('menu.settings.slotAdd', { kind: label })}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <Pressable
           style={styles.clearButton}
           onPress={() => void handleClearPlan()}
@@ -234,6 +346,17 @@ export default function MenuSettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
+  slotSection: { marginTop: 24, gap: 6 },
+  slotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  slotName: { fontSize: 16, color: Colors.paper },
+  slotRemove: { fontSize: 14, color: Colors.gold },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

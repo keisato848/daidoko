@@ -7,7 +7,6 @@
  * 老眼のペルソナ（のりこ）を基準に、料理名は 16px・押せる範囲は行ぜんたい
  * （小さな「開く」リンクを狙わせない）。
  */
-import { Check } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '../constants/theme';
@@ -43,11 +42,17 @@ export function MenuSlotLine({
   cell,
   meta,
   onPress,
+  onEdit,
 }: {
   cell: WeekSlotCell;
   meta?: SlotRecipeMeta | undefined;
-  /** 献立が入っている枠だけ押せる。空の枠は押しても何も起きない（PR-4 で足す口になる） */
+  /** 埋まっている枠＝レシピを開く／空の枠＝料理を入れる。渡されなければ押せない */
   onPress?: (() => void) | undefined;
+  /**
+   * 枠の中身を変える。**埋まっている枠でだけ別のボタンとして出す** — 行のタップは
+   * レシピを開く方に使っているので、変える口が無いと入れ替えられない
+   */
+  onEdit?: (() => void) | undefined;
 }) {
   const entry = cell.entry;
   const done = entry?.doneAt != null;
@@ -81,16 +86,23 @@ export function MenuSlotLine({
         ) : null}
         {reason ? <Text style={styles.reason}>{reason}</Text> : null}
       </View>
-      {/* 済みは色だけで示さない（色覚・屋外の明るさで消える）。印を添える。
-        **読み上げにも残す** — 旧 DayCard は「作りました」を文字で出していたので、
-        ラベルを付けないとスクリーンリーダーからは済みが消える */}
-      {done ? (
-        <Check
-          size={16}
-          color={Colors.goldDim}
-          accessibilityRole="image"
-          accessibilityLabel={t('menu.day.done')}
-        />
+      {/* **記号ではなく文字で出す**（受付票 C の受入基準）。✓ だけだと、のりこ（老眼・
+        紙のレシピ帳から移行）には何の印か伝わらない。色だけで示すのも同じ理由で不可
+        （色覚・屋外の明るさで消える）。献立が入っている枠にだけ出す */}
+      {entry !== null && !missing ? (
+        <Text style={[styles.state, done && styles.stateDone]}>
+          {done ? t('menu.week.stateDone') : t('menu.week.statePlanned')}
+        </Text>
+      ) : null}
+      {entry !== null && onEdit ? (
+        <Pressable
+          onPress={onEdit}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={`${cell.label} ${t('menu.slotPick.change')}`}
+        >
+          <Text style={styles.edit}>{t('menu.slotPick.change')}</Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -114,4 +126,8 @@ const styles = StyleSheet.create({
   empty: { color: Colors.muted, fontSize: 14 },
   meta: { fontSize: 12, color: Colors.muted, marginTop: 2 },
   reason: { fontSize: 12, color: Colors.goldDim, marginTop: 2 },
+  // 「予定」「済み」。13px は受入基準の下限（副菜の本文と同じ大きさ）
+  state: { fontSize: 13, color: Colors.muted },
+  stateDone: { color: Colors.gold },
+  edit: { fontSize: 13, color: Colors.gold },
 });

@@ -24,6 +24,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 
 import { MenuRecipeProposalSheet } from '../../src/components/MenuRecipeProposalSheet';
 import type { SlotRecipeMeta } from '../../src/components/MenuSlotLine';
+import { MenuSlotPickSheet, type SlotPickCandidate } from '../../src/components/MenuSlotPickSheet';
 import { MenuWeekRow } from '../../src/components/MenuWeekRow';
 import { ShoppingPickSheet } from '../../src/components/ShoppingPickSheet';
 import { Toast } from '../../src/components/Toast';
@@ -48,6 +49,7 @@ import {
   getMenuPlan,
   getMenuSlotSettings,
   getStoredMealTimes,
+  setMenuPlanSlotEntry,
   MENU_MEAL_TIMES,
   replaceMenuDay,
   undoMenuAutoAddedItems,
@@ -94,6 +96,15 @@ export default function MenuScreen() {
   const [plannedMealTimes, setPlannedMealTimes] = useState<MenuMealTime[]>([]);
   /** 枠の定義（v20・PR-3）。空 = 主菜 1 枠だけ（`orderedSlots` が既定へ倒す） */
   const [slotSettings, setSlotSettings] = useState<WeekSlotSetting[]>([]);
+  /** 枠に料理を入れるシート（PR-4）。null = 閉じている */
+  const [editingSlot, setEditingSlot] = useState<{
+    day: number;
+    slotId: string;
+    slotLabel: string;
+    filled: boolean;
+  } | null>(null);
+  /** シートに出す蔵書。開いたときだけ読む（画面表示のたびに全件読まない） */
+  const [pickCandidates, setPickCandidates] = useState<SlotPickCandidate[]>([]);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   // M2（AI 並べ替え）の状態。plan は常に M1/M2 どちらの並びも表示し続け、
@@ -127,6 +138,36 @@ export default function MenuScreen() {
     setSlotSettings(slots);
     setLoaded(true);
   }, [mealTime]);
+
+  /** 枠を押した。蔵書を読んでからシートを開く（空のシートを一瞬出さない） */
+  const openSlotPicker = useCallback(
+    async (day: number, slotId: string, slotLabel: string, filled: boolean) => {
+      const { getRecipeList } = await import('../../src/services/recipe.service');
+      const list = await getRecipeList().catch((): SlotPickCandidate[] => []);
+      setPickCandidates(
+        list.map((r) => ({ id: r.id, title: r.title, titleReading: r.titleReading ?? null })),
+      );
+      setEditingSlot({ day, slotId, slotLabel, filled });
+    },
+    [],
+  );
+
+  /** シートで選んだ（または外した）。プランを書き換えて閉じる */
+  const commitSlotPick = useCallback(
+    async (recipe: { id: string; title: string } | null) => {
+      const target = editingSlot;
+      setEditingSlot(null);
+      if (!target) return;
+      setBusy(true);
+      try {
+        const next = await setMenuPlanSlotEntry(mealTime, target.day, target.slotId, recipe);
+        if (next) setView(next);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [editingSlot, mealTime],
+  );
 
   const handleUndoAutoAdd = useCallback(async () => {
     setUndoing(true);
@@ -601,6 +642,14 @@ export default function MenuScreen() {
                 busy={busy}
                 onOpenRecipe={(recipeId) => router.push(`/recipes/${recipeId}`)}
                 onSwap={(day) => void swap(day)}
+                onEditSlot={(day, slotId, slotLabel) =>
+                  void openSlotPicker(
+                    day,
+                    slotId,
+                    slotLabel,
+                    row.slots.some((c) => c.slotId === slotId && c.entry !== null),
+                  )
+                }
               />
             ))}
 
@@ -637,6 +686,17 @@ export default function MenuScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* PR-4: 枠に入れる料理を選ぶ。AI は呼ばない（蔵書庫から選ぶだけ） */}
+      <MenuSlotPickSheet
+        visible={editingSlot !== null}
+        slotLabel={editingSlot?.slotLabel ?? ''}
+        recipes={pickCandidates}
+        canClear={editingSlot?.filled === true}
+        onCancel={() => setEditingSlot(null)}
+        onPick={(recipe) => void commitSlotPick({ id: recipe.id, title: recipe.title })}
+        onClear={() => void commitSlotPick(null)}
+      />
 
       {/* M3-1: 提案レビュー。1 品ずつ採用/却下・既定は全採用・ワンタップ確定 */}
       <MenuRecipeProposalSheet

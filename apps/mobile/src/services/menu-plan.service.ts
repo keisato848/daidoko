@@ -50,11 +50,14 @@ import {
 } from '../utils/menuPlan';
 import {
   applyDaysToSlots,
+  MAIN_SLOT_ID,
   menuPlanRowToStored,
   parseLegacyMenuPlanJson,
+  removeSlotEntry,
   rollMenuPlanSlots,
   sanitizeMenuMealTime,
   storedMenuPlanToRows,
+  upsertSlotEntry,
   MENU_MEAL_TIMES,
   type MenuMealTime,
   type StoredMenuDay,
@@ -456,6 +459,124 @@ export async function getMenuSlotSettings(
     })
     .from(schema.menuSlotSettings)
     .where(eq(schema.menuSlotSettings.mealTime, mealTime));
+}
+
+/**
+ * 枠の構成を保存する（S21・PR-4）。渡した並びが**その時間帯の全部**になる。
+ *
+ * 判断（主菜を残す・重複を落とす・position の振り直し）は `utils/menuSlots.ts` の
+ * `normalizeSlots` が済ませている前提で、ここは SQL と同期の積み直しだけ。
+ *
+ * **消えた枠は tombstone として積む**（`menu_slot` の entityId は `<mealTime>:<slotId>`）。
+ * 積まないと、片方の端末で消した枠がもう片方から戻ってくる。
+ * `menu_plan_slots`（献立に入っている料理）は**消さない** — 枠の設定を変えただけで
+ * 料理が黙って消えるのは事故に見える。定義を失った行は週ビューが末尾に出し続ける。
+ */
+export async function saveMenuSlotSettings(
+  mealTime: MenuMealTime,
+  slots: readonly WeekSlotSetting[],
+): Promise<void> {
+  if (!isNativePlatform) return;
+  const { and, eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const { enqueueSyncEntity } = await import('./sync-queue.service');
+  const { SYNC_ENTITY_MENU_SLOT } = await import('./sync-payload');
+  const db = getDb();
+
+  const before = await getMenuSlotSettings(mealTime);
+  const nextIds = new Set(slots.map((s) => s.slotId));
+  const removed = before.filter((s) => !nextIds.has(s.slotId));
+
+  await db.transaction(async (tx) => {
+    for (const slot of removed) {
+      await tx
+        .delete(schema.menuSlotSettings)
+        .where(
+          and(
+            eq(schema.menuSlotSettings.mealTime, mealTime),
+            eq(schema.menuSlotSettings.slotId, slot.slotId),
+          ),
+        );
+    }
+    for (const slot of slots) {
+      await tx
+        .insert(schema.menuSlotSettings)
+        .values({
+          mealTime,
+          slotId: slot.slotId,
+          slotKind: slot.slotKind,
+          label: slot.label,
+          position: slot.position,
+          autoFill: true,
+        })
+        .onConflictDoUpdate({
+          target: [schema.menuSlotSettings.mealTime, schema.menuSlotSettings.slotId],
+          set: { slotKind: slot.slotKind, label: slot.label, position: slot.position },
+        });
+    }
+  });
+
+  for (const slot of [...slots, ...removed]) {
+    await enqueueSyncEntity(SYNC_ENTITY_MENU_SLOT, `${mealTime}:${slot.slotId}`);
+  }
+}
+
+/**
+ * 1 枠に料理を手で入れる／外す（PR-4）。プランが無ければ何もしない。
+ *
+ * **主菜のときは `days` も直す。** 保存経路（`applyDaysToSlots`）は主菜を `days` から
+ * 作り直すので、枠だけ書いても次の保存で元に戻る（`days` が正のまま）。
+ * 副菜以降は枠だけが持ち主なので `slots` だけでよい。
+ */
+export async function setMenuPlanSlotEntry(
+  mealTime: MenuMealTime,
+  day: number,
+  slotId: string,
+  recipe: { id: string; title: string } | null,
+): Promise<MenuPlanView | null> {
+  if (!isNativePlatform) return null;
+  const stored = await readStoredMenuPlan(mealTime);
+  if (!stored) return null;
+
+  const current = stored.slots ?? [];
+  const nextSlots =
+    recipe === null
+      ? removeSlotEntry(current, day, slotId)
+      : upsertSlotEntry(current, {
+          day,
+          slotId,
+          recipeId: recipe.id,
+          title: recipe.title,
+        });
+
+  const nextDays =
+    slotId === MAIN_SLOT_ID
+      ? recipe === null
+        ? stored.days.filter((d) => d.day !== day)
+        : stored.days.some((d) => d.day === day)
+          ? stored.days.map((d) =>
+              d.day === day
+                ? { day, recipeId: recipe.id, title: recipe.title, reason: '', doneAt: null }
+                : d,
+            )
+          : [
+              ...stored.days,
+              { day, recipeId: recipe.id, title: recipe.title, reason: '', doneAt: null },
+            ].sort((a, b) => a.day - b.day)
+      : stored.days;
+
+  const plan: StoredMenuPlan = { ...stored, days: nextDays, slots: nextSlots };
+  await writeStoredMenuPlan(plan);
+  refreshWidgetSnapshot();
+
+  const { getAliasMap } = await import('./name-alias.service');
+  const [recipes, pantry, aliases] = await Promise.all([
+    loadMenuRecipes(),
+    loadPantry(),
+    getAliasMap(),
+  ]);
+  return hydrate(plan, recipes, pantry, aliases);
 }
 
 /** 保存済みの献立を読む（既定は夕）。無ければ null（勝手に組まない・§10.7） */

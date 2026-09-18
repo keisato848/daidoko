@@ -9,7 +9,9 @@
 import {
   applyDaysToSlots,
   mainSlotsToDays,
+  removeSlotEntry,
   rollMenuPlanSlots,
+  upsertSlotEntry,
   menuPlanRowToStored,
   parseLegacyMenuPlanJson,
   sanitizeMenuMealTime,
@@ -254,6 +256,83 @@ describe('mainSlotsToDays / applyDaysToSlots — 枠と「1 日 1 品」の相�
   it('days から消えた日の主菜は消える', () => {
     const next = applyDaysToSlots([], [mainDay1, sideDay1]);
     expect(next).toEqual([sideDay1]);
+  });
+});
+
+describe('upsertSlotEntry / removeSlotEntry — 枠に手で料理を入れる（PR-4）', () => {
+  const main1: MenuPlanSlotRow = {
+    day: 1,
+    slotId: 'main',
+    recipeId: 'r1',
+    title: '肉じゃが',
+    reason: 'coverage',
+    doneAt: '2026-09-18T10:00:00.000Z',
+  };
+  const side1: MenuPlanSlotRow = {
+    day: 1,
+    slotId: 'side',
+    recipeId: 'r9',
+    title: 'おひたし',
+    reason: '',
+    doneAt: null,
+  };
+
+  it('空いている枠に入れる', () => {
+    const next = upsertSlotEntry([main1], {
+      day: 2,
+      slotId: 'side',
+      recipeId: 'r5',
+      title: '豚汁',
+    });
+    expect(next).toContainEqual({
+      day: 2,
+      slotId: 'side',
+      recipeId: 'r5',
+      title: '豚汁',
+      reason: '',
+      doneAt: null,
+    });
+    expect(next).toHaveLength(2);
+  });
+
+  it('埋まっている枠は置き換える（重複させない）', () => {
+    const next = upsertSlotEntry([main1, side1], {
+      day: 1,
+      slotId: 'side',
+      recipeId: 'r7',
+      title: '冷奴',
+    });
+    expect(next.filter((s) => s.day === 1 && s.slotId === 'side')).toHaveLength(1);
+    expect(next.find((s) => s.slotId === 'side')?.title).toBe('冷奴');
+  });
+
+  it('**置き換えたら doneAt を引き継がない**（作っていない物が済みにならない）', () => {
+    const next = upsertSlotEntry([main1], {
+      day: 1,
+      slotId: 'main',
+      recipeId: 'r2',
+      title: '麻婆豆腐',
+    });
+    expect(next.find((s) => s.slotId === 'main')?.doneAt).toBeNull();
+  });
+
+  it('他の日・他の枠は触らない', () => {
+    const next = upsertSlotEntry([main1, side1], {
+      day: 1,
+      slotId: 'soup',
+      recipeId: 'r3',
+      title: 'みそ汁',
+    });
+    expect(next).toContainEqual(main1);
+    expect(next).toContainEqual(side1);
+  });
+
+  it('外すとその枠だけ消える', () => {
+    expect(removeSlotEntry([main1, side1], 1, 'side')).toEqual([main1]);
+  });
+
+  it('無い枠を外しても何も起きない', () => {
+    expect(removeSlotEntry([main1], 1, 'soup')).toEqual([main1]);
   });
 });
 

@@ -106,6 +106,32 @@ describe('MenuWeekRow', () => {
     expect(screen.getByText('今日')).toBeTruthy();
   });
 
+  // 受付票 C:「記号でなく『予定』『済み』の文字が出る」。✓ に戻すとここが赤くなる
+  it('献立が入っている枠に「予定」「済み」を文字で出す', () => {
+    renderRow(
+      rowFor([
+        { day: 1, slotId: 'main', recipeId: 'r1', title: '肉じゃが', doneAt: 'done' },
+        { day: 1, slotId: 'side', recipeId: 'r2', title: '豚汁' },
+      ]),
+    );
+    expect(screen.getByText('済み')).toBeTruthy();
+    expect(screen.getByText('予定')).toBeTruthy();
+  });
+
+  it('空の枠には状態を出さない（まだ決めていないものに「予定」と言わない）', () => {
+    renderRow(rowFor([{ day: 1, slotId: 'main', recipeId: 'r1', title: '肉じゃが' }]));
+    // main は「予定」、side は空なので状態なし
+    expect(screen.getAllByText('予定')).toHaveLength(1);
+  });
+
+  it('無くなったレシピには状態を出さない', () => {
+    renderRow(rowFor([{ day: 1, slotId: 'main', recipeId: 'r1', title: '肉じゃが' }]), [
+      ['r1', { missing: true, cookTimeMin: null }],
+    ]);
+    expect(screen.queryByText('予定')).toBeNull();
+    expect(screen.queryByText('済み')).toBeNull();
+  });
+
   it('調理時間があれば添える', () => {
     renderRow(rowFor([{ day: 1, slotId: 'main', recipeId: 'r1', title: '肉じゃが' }]), [
       ['r1', { missing: false, cookTimeMin: 25 }],

@@ -299,6 +299,30 @@ export function applyDaysToSlots(
 }
 
 /**
+ * 1 枠に料理を入れる／差し替える（v20・PR-4）。同じ `(day, slotId)` があれば置き換える。
+ *
+ * **`doneAt` は引き継がない。** 別の料理に変えたのに「済み」が残ると、作っていない物が
+ * 作ったことになる。`reason` は手で選んだので空（`reasonText` は空文字を出さない）。
+ */
+export function upsertSlotEntry(
+  slots: readonly MenuPlanSlotRow[],
+  entry: { day: number; slotId: string; recipeId: string; title: string },
+): MenuPlanSlotRow[] {
+  const next: MenuPlanSlotRow = { ...entry, reason: '', doneAt: null };
+  const without = slots.filter((s) => !(s.day === entry.day && s.slotId === entry.slotId));
+  return [...without, next];
+}
+
+/** 1 枠を空にする（料理を外す）。その日の他の枠は触らない */
+export function removeSlotEntry(
+  slots: readonly MenuPlanSlotRow[],
+  day: number,
+  slotId: string,
+): MenuPlanSlotRow[] {
+  return slots.filter((s) => !(s.day === day && s.slotId === slotId));
+}
+
+/**
  * 自動モードのローリングで、主菜以外の枠も同じだけ日番号を詰める（v20）。
  *
  * `rollMenuPlan` は生存日を 1 から振り直すが、詰めるのは `days`（主菜）だけ。
