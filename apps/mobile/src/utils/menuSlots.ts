@@ -22,9 +22,14 @@ export const REQUIRED_SLOT_KIND: SlotKind = 'main';
  * 同じ種類を 2 つ目以降足したときの ID。`side` → `side-2` → `side-3`。
  *
  * **ID は同期の突合キー**（`menu_slot` の entityId は `<mealTime>:<slotId>`）なので、
- * 表示名ではなくここで決まる形を使う。連番は**空きを詰めない** — `side-2` を消して
- * また足すと `side-3` になる。詰めると、消した端末と足した端末で**別の枠が同じ ID**に
- * なって混ざる。
+ * 表示名ではなくここで決まる形を使う。
+ *
+ * **空き番号は使い回す**（`side-2` を消して足し直すとまた `side-2`）。手元の状態からは
+ * 「昔 `side-2` があった」ことを知りようがないので、詰めない実装はできない。
+ * 代わりに次を受け入れる: 2 台がオフラインで同じ枠を消し、片方だけ足し直すと、
+ * **同じ ID に墓標と upsert が同時に飛ぶ**。収束は LWW（`incomingChangeWins`）任せで、
+ * どちらか一方に落ち着く。枠の定義は数行の設定なので、取り違えても作り直せる
+ * （献立の料理は `menu_plan_slots` 側にあり、枠の定義を失っても消えない）。
  */
 export function nextSlotId(slots: readonly WeekSlotSetting[], kind: SlotKind): string {
   const used = new Set(slots.map((s) => s.slotId));

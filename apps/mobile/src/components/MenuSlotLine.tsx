@@ -107,10 +107,17 @@ export function MenuSlotLine({
     </View>
   );
 
-  // 無くなったレシピは開かせない（開くと「レシピが見つかりません」になるだけ）
-  if (entry === null || missing || !onPress) return body;
+  // **押せるかどうかは呼び出し側が決める。** ここで `entry === null` を弾くと、
+  // 空の枠に渡された「入れる」が黙って捨てられ、**枠を足しても入れる口が無くなる**
+  // （PR-4 の実機確認で踏んだ）。子が渡された onPress を無視する形にしない
+  //（`docs/品質基準.md` §2.3 の `fireEvent.press` の項と同じ理由）
+  if (!onPress) return body;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={entry.title}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={entry?.title ?? `${cell.label} ${t('menu.week.slotEmpty')}`}
+    >
       {body}
     </Pressable>
   );

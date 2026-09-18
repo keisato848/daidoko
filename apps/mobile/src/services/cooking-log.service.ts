@@ -82,10 +82,21 @@ export async function createCookingLog(input: SaveCookingLogInput): Promise<stri
     );
   }
 
+  // **同期へ積む。** PR-2 が `cooking_log` の送信・受信を入れたのに積む側が無く、
+  // 「作った」が家族へ一度も飛んでいなかった（受入基準 C の「端末 B でも『済み』が出る」）
+  await enqueueCookingLog(id);
+
   // 調理記録は献立の「今日の一品」進行に効く — ウィジェットへ反映
   // （ウィジェット設計 §1 の 5 フックのうち「調理記録保存」— 2026-09-04 配線）
   refreshWidgetSnapshot();
   return id;
+}
+
+/** 調理記録 1 件を同期へ積む。写真は同期しない（本文だけ・クラウド同期設計 §6） */
+async function enqueueCookingLog(id: string): Promise<void> {
+  const { enqueueSyncEntity } = await import('./sync-queue.service');
+  const { SYNC_ENTITY_COOKING_LOG } = await import('./sync-payload');
+  await enqueueSyncEntity(SYNC_ENTITY_COOKING_LOG, id);
 }
 
 export async function deleteCookingLog(logId: string): Promise<void> {
@@ -101,6 +112,8 @@ export async function deleteCookingLog(logId: string): Promise<void> {
 
   await db.delete(schema.cookingPhotos).where(eq(schema.cookingPhotos.logId, logId));
   await db.delete(schema.cookingLogs).where(eq(schema.cookingLogs.id, logId));
+  // 消したことも積む（行が無い = 墓標として飛ぶ）。積まないと家族側に残り続ける
+  await enqueueCookingLog(logId);
   refreshWidgetSnapshot();
 }
 

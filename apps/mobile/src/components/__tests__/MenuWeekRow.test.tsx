@@ -36,6 +36,7 @@ function rowFor(
 function renderRow(row: WeekDayRow, meta: [string, SlotRecipeMeta][] = []) {
   const onOpenRecipe = jest.fn();
   const onSwap = jest.fn();
+  const onEditSlot = jest.fn();
   render(
     <MenuWeekRow
       row={row}
@@ -43,9 +44,10 @@ function renderRow(row: WeekDayRow, meta: [string, SlotRecipeMeta][] = []) {
       busy={false}
       onOpenRecipe={onOpenRecipe}
       onSwap={onSwap}
+      onEditSlot={onEditSlot}
     />,
   );
-  return { onOpenRecipe, onSwap };
+  return { onOpenRecipe, onSwap, onEditSlot };
 }
 
 describe('MenuWeekRow', () => {
@@ -130,6 +132,40 @@ describe('MenuWeekRow', () => {
     ]);
     expect(screen.queryByText('予定')).toBeNull();
     expect(screen.queryByText('済み')).toBeNull();
+  });
+
+  // PR-4 の実機確認で踏んだ: MenuSlotLine が entry===null を早期 return していて、
+  // 空の枠に渡した「入れる」が黙って捨てられ、枠を足しても入れる口が無かった
+  it('空の枠を押すと「入れる」が呼ばれる（枠を足しても入れられないままにしない）', () => {
+    const onEditSlot = jest.fn();
+    render(
+      <MenuWeekRow
+        row={rowFor([{ day: 1, slotId: 'main', recipeId: 'r1', title: '肉じゃが' }])}
+        metaByRecipeId={new Map()}
+        busy={false}
+        onOpenRecipe={jest.fn()}
+        onSwap={jest.fn()}
+        onEditSlot={onEditSlot}
+      />,
+    );
+    fireEvent.press(screen.getByText('まだ決めていません'));
+    expect(onEditSlot).toHaveBeenCalledWith(1, 'side', '副菜');
+  });
+
+  it('埋まっている枠の「変える」を押すとその枠が渡る', () => {
+    const onEditSlot = jest.fn();
+    render(
+      <MenuWeekRow
+        row={rowFor([{ day: 2, slotId: 'main', recipeId: 'r1', title: '肉じゃが' }])}
+        metaByRecipeId={new Map()}
+        busy={false}
+        onOpenRecipe={jest.fn()}
+        onSwap={jest.fn()}
+        onEditSlot={onEditSlot}
+      />,
+    );
+    fireEvent.press(screen.getByText('変える'));
+    expect(onEditSlot).toHaveBeenCalledWith(2, 'main', '主菜');
   });
 
   it('調理時間があれば添える', () => {

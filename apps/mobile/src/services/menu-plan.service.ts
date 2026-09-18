@@ -228,7 +228,12 @@ async function writeStoredMenuPlan(plan: StoredMenuPlan): Promise<void> {
     await db.delete(schema.menuPlans).where(inArray(schema.menuPlans.id, ids));
   }
 
-  const { row, days, slots } = storedMenuPlanToRows(plan, generateId());
+  // **id は時間帯ごとに使い回す。** 毎回 `generateId()` で作り直すと、同期の
+  // entityId（= プラン id）が書くたびに変わる。積んだ id の行は次の保存で消えるので、
+  // 送信時には「行が無い」= **墓標**として飛ぶ（`buildMenuPlanChange`）。
+  // つまり献立を 2 回いじると、家族には削除が届きうる
+  const planId = ids[0] ?? generateId();
+  const { row, days, slots } = storedMenuPlanToRows(plan, planId);
   await db.insert(schema.menuPlans).values(row);
   if (days.length > 0) {
     await db.insert(schema.menuPlanDays).values(days.map((d) => ({ ...d, planId: row.id })));
@@ -237,6 +242,14 @@ async function writeStoredMenuPlan(plan: StoredMenuPlan): Promise<void> {
   if (slots.length > 0) {
     await db.insert(schema.menuPlanSlots).values(slots.map((s) => ({ ...s, planId: row.id })));
   }
+
+  // **献立そのものを同期へ積む。** PR-2 は送信・受信の仕組みだけ入れて、積む側が
+  // 一度も呼ばれていなかった（`enqueueSyncEntity(SYNC_ENTITY_MENU_PLAN, …)` が
+  // モバイル全体に存在しなかった）。そのため受入基準の 1 行目
+  // 「端末 A で夕の献立を変えると、端末 B を開いたとき同じ献立が出る」が成立していない
+  const { enqueueSyncEntity } = await import('./sync-queue.service');
+  const { SYNC_ENTITY_MENU_PLAN } = await import('./sync-payload');
+  await enqueueSyncEntity(SYNC_ENTITY_MENU_PLAN, planId);
 }
 
 /** 1 時間帯のプランを読む。無ければ null（レイジー移行は呼び出し側で済ませておく） */

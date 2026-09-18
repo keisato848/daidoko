@@ -692,7 +692,10 @@ export default function MenuScreen() {
         visible={editingSlot !== null}
         slotLabel={editingSlot?.slotLabel ?? ''}
         recipes={pickCandidates}
-        canClear={editingSlot?.filled === true}
+        // **主菜は空にできない。** 空にすると days に穴が空き、その日の行ごと消えて
+        // 戻す口が無くなるうえ、翌朝のローリング（days は詰め直す・枠はずらすだけ）で
+        // 副菜が別の日の主菜と並ぶ。主菜は「変える」＝差し替えだけにする
+        canClear={editingSlot?.filled === true && editingSlot.slotId !== 'main'}
         onCancel={() => setEditingSlot(null)}
         onPick={(recipe) => void commitSlotPick({ id: recipe.id, title: recipe.title })}
         onClear={() => void commitSlotPick(null)}

@@ -20,7 +20,7 @@ describe('nextSlotId', () => {
     expect(nextSlotId([MAIN, SIDE], 'side')).toBe('side-2');
   });
 
-  it('空きがあっても詰めない（消した端末と足した端末で ID が衝突しないように）', () => {
+  it('空き番号を使い回す（手元の状態からは「昔あった ID」を知りようがない）', () => {
     const slots = [MAIN, SIDE, { ...SIDE, slotId: 'side-3', position: 2 }];
     expect(nextSlotId(slots, 'side')).toBe('side-2');
     const afterAdd = [...slots, { ...SIDE, slotId: 'side-2', position: 3 }];

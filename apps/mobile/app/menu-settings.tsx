@@ -128,11 +128,19 @@ export default function MenuSettingsScreen() {
     }, [slotMealTime]),
   );
 
-  /** 枠を保存する。画面へは先に反映し、保存の失敗で操作感を止めない */
+  /**
+   * 枠を保存する。画面へは先に反映し、保存の失敗で操作感を止めない。
+   *
+   * **保存の直前に必ず `normalizeSlots` を通す。** 読み込み前や時間帯を切り替えた直後は
+   * `slots` が空・前の時間帯のままで、そこへ「足す」を押すと主菜の無い並びを渡してしまう。
+   * `saveMenuSlotSettings` は渡した並びを「その時間帯の全部」として扱うので、
+   * **主菜が removed 扱いで消え、墓標が家族にも飛ぶ**
+   */
   const persistSlots = useCallback(
     (next: WeekSlotSetting[]) => {
-      setSlots(next);
-      void saveMenuSlotSettings(slotMealTime, next).catch(() => undefined);
+      const normalized = normalizeSlots(next, t('menu.slotKind.main'));
+      setSlots(normalized);
+      void saveMenuSlotSettings(slotMealTime, normalized).catch(() => undefined);
     },
     [slotMealTime],
   );

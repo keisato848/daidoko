@@ -4,10 +4,11 @@
  * **AI は呼ばない。** 蔵書庫から選ぶだけの即時・¥0・オフライン可の操作
  * （献立の「差し替え」と同じ性格）。埋まっている枠には「外す」を出す。
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { Colors } from '../constants/theme';
 import { t } from '../i18n';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
@@ -39,6 +40,12 @@ export function MenuSlotPickSheet({
 }) {
   const [query, setQuery] = useState('');
 
+  // 開くたびに検索語を捨てる。残すと、別の枠を開いたのに前回の絞り込みのままで
+  // 「レシピが数件しか無い」ように見える
+  useEffect(() => {
+    if (visible) setQuery('');
+  }, [visible]);
+
   // 蔵書が増えると選べないので絞り込みを付ける。既存の検索と同じ正規化を使う
   // （ひらがな・カタカナ・全角半角の揺れを画面ごとに書き分けない）
   const shown = useMemo(() => {
@@ -58,43 +65,48 @@ export function MenuSlotPickSheet({
       onClose={onCancel}
       title={t('menu.slotPick.title', { slot: slotLabel })}
     >
-      <TextInput
-        style={styles.search}
-        value={query}
-        onChangeText={setQuery}
-        placeholder={t('menu.slotPick.searchPlaceholder')}
-        placeholderTextColor={Colors.muted}
-        accessibilityLabel={t('menu.slotPick.searchPlaceholder')}
-      />
-
-      {shown.length === 0 ? (
-        <Text style={styles.empty}>{t('menu.slotPick.noMatch')}</Text>
-      ) : (
-        <FlatList
-          data={shown}
-          keyExtractor={(item) => item.id}
-          style={styles.list}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <Pressable
-              style={styles.row}
-              onPress={() => onPick(item)}
-              accessibilityRole="button"
-              accessibilityLabel={item.title}
-            >
-              <Text style={styles.rowTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-            </Pressable>
-          )}
+      {/* 検索欄にフォーカスすると、包まないと一覧と「空にする」がキーボードに隠れる
+        （この構成では adjustResize が効かない — `keyboard-covers-buttons` の教訓）。
+        `app/` 配下しか見ない横断テスト（#172）はこのシートを拾わないので手で包む */}
+      <KeyboardAvoider>
+        <TextInput
+          style={styles.search}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('menu.slotPick.searchPlaceholder')}
+          placeholderTextColor={Colors.muted}
+          accessibilityLabel={t('menu.slotPick.searchPlaceholder')}
         />
-      )}
 
-      {canClear ? (
-        <Pressable style={styles.clear} onPress={onClear} accessibilityRole="button">
-          <Text style={styles.clearText}>{t('menu.slotPick.clear')}</Text>
-        </Pressable>
-      ) : null}
+        {shown.length === 0 ? (
+          <Text style={styles.empty}>{t('menu.slotPick.noMatch')}</Text>
+        ) : (
+          <FlatList
+            data={shown}
+            keyExtractor={(item) => item.id}
+            style={styles.list}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <Pressable
+                style={styles.row}
+                onPress={() => onPick(item)}
+                accessibilityRole="button"
+                accessibilityLabel={item.title}
+              >
+                <Text style={styles.rowTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              </Pressable>
+            )}
+          />
+        )}
+
+        {canClear ? (
+          <Pressable style={styles.clear} onPress={onClear} accessibilityRole="button">
+            <Text style={styles.clearText}>{t('menu.slotPick.clear')}</Text>
+          </Pressable>
+        ) : null}
+      </KeyboardAvoider>
     </BottomSheet>
   );
 }
