@@ -42,9 +42,13 @@ import {
   SYNC_ENTITY_PANTRY_ITEM,
   SYNC_ENTITY_PANTRY_QUANTITY,
   SYNC_ENTITY_SHOPPING_ITEM,
+  SYNC_ENTITY_MENU_PLAN,
+  SYNC_ENTITY_MENU_SLOT,
+  SYNC_ENTITY_COOKING_LOG,
   SYNC_ENTITY_STORE_GROUP_ALIAS,
   SYNC_PAYLOAD_SCHEMA_VERSION,
   incomingChangeWins,
+  normalizeCookingLogKind,
   serializeSyncPayload,
   type RowSyncPayload,
   type SyncEntityType,
@@ -62,7 +66,10 @@ export function isRowEntityType(entityType: string): boolean {
     entityType === SYNC_ENTITY_NAME_ALIAS ||
     entityType === SYNC_ENTITY_JAN_CATALOG ||
     entityType === SYNC_ENTITY_STORE_GROUP_ALIAS ||
-    entityType === SYNC_ENTITY_PANTRY_QUANTITY
+    entityType === SYNC_ENTITY_PANTRY_QUANTITY ||
+    entityType === SYNC_ENTITY_MENU_PLAN ||
+    entityType === SYNC_ENTITY_MENU_SLOT ||
+    entityType === SYNC_ENTITY_COOKING_LOG
   );
 }
 
@@ -292,6 +299,121 @@ async function buildStoreGroupAliasChange(id: string, deletedAt: string): Promis
 }
 
 /** 送信 1 件分を組み立てる（この種別のみ。呼び出し側で種別を絞ってから呼ぶ） */
+
+async function buildMenuPlanChange(id: string, deletedAt: string): Promise<OutgoingChange> {
+  const rows = await getDb()
+    .select()
+    .from(schema.menuPlans)
+    .where(eq(schema.menuPlans.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return tombstone(SYNC_ENTITY_MENU_PLAN, id, deletedAt);
+
+  const slots = await getDb()
+    .select()
+    .from(schema.menuPlanSlots)
+    .where(eq(schema.menuPlanSlots.planId, row.id));
+
+  return {
+    entityType: SYNC_ENTITY_MENU_PLAN,
+    entityId: id,
+    payload: serializeSyncPayload({
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: SYNC_ENTITY_MENU_PLAN,
+      plan: {
+        id: row.id,
+        mealTime: row.mealTime,
+        generatedAt: row.generatedAt,
+        source: row.source,
+        pantrySignature: row.pantrySignature,
+        anchorDate: row.anchorDate,
+        requestedDays: row.requestedDays,
+        aiNote: row.aiNote,
+        autoAddedItemIds: row.autoAddedItemIds,
+      },
+      slots: slots.map((s) => ({
+        day: s.day,
+        slotId: s.slotId,
+        recipeId: s.recipeId,
+        title: s.title,
+        reason: s.reason,
+        doneAt: s.doneAt,
+      })),
+    }),
+    clientUpdatedAt: row.generatedAt,
+    deleted: false,
+  };
+}
+
+async function buildMenuSlotChange(entityId: string, deletedAt: string): Promise<OutgoingChange> {
+  const parts = entityId.split(':');
+  if (parts.length !== 2) return tombstone(SYNC_ENTITY_MENU_SLOT, entityId, deletedAt);
+  const mealTime = parts[0] as string;
+  const slotId = parts[1] as string;
+  const rows = await getDb()
+    .select()
+    .from(schema.menuSlotSettings)
+    .where(
+      and(
+        eq(schema.menuSlotSettings.mealTime, mealTime),
+        eq(schema.menuSlotSettings.slotId, slotId),
+      ),
+    )
+    .limit(1);
+  const row = rows[0];
+  if (!row) return tombstone(SYNC_ENTITY_MENU_SLOT, entityId, deletedAt);
+
+  return {
+    entityType: SYNC_ENTITY_MENU_SLOT,
+    entityId,
+    payload: serializeSyncPayload({
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: SYNC_ENTITY_MENU_SLOT,
+      item: {
+        mealTime: row.mealTime,
+        slotId: row.slotId,
+        slotKind: row.slotKind,
+        label: row.label,
+        position: row.position,
+        autoFill: row.autoFill,
+      },
+    }),
+    clientUpdatedAt: deletedAt,
+    deleted: false,
+  };
+}
+
+async function buildCookingLogChange(id: string, deletedAt: string): Promise<OutgoingChange> {
+  const rows = await getDb()
+    .select()
+    .from(schema.cookingLogs)
+    .where(eq(schema.cookingLogs.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return tombstone(SYNC_ENTITY_COOKING_LOG, id, deletedAt);
+
+  return {
+    entityType: SYNC_ENTITY_COOKING_LOG,
+    entityId: id,
+    payload: serializeSyncPayload({
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: SYNC_ENTITY_COOKING_LOG,
+      item: {
+        id: row.id,
+        recipeId: row.recipeId,
+        cookedAt: row.cookedAt,
+        servings: row.servings,
+        rating: row.rating,
+        memo: row.memo,
+        createdAt: row.createdAt,
+        kind: row.kind,
+        placeName: row.placeName,
+      },
+    }),
+    clientUpdatedAt: row.createdAt,
+    deleted: false,
+  };
+}
 export async function buildRowOutgoingChange(
   entityType: string,
   entityId: string,
@@ -311,6 +433,12 @@ export async function buildRowOutgoingChange(
         return { kind: 'change', change: await buildStoreGroupAliasChange(entityId, deletedAt) };
       case SYNC_ENTITY_PANTRY_QUANTITY:
         return buildPantryQuantityChange(entityId);
+      case SYNC_ENTITY_MENU_PLAN:
+        return { kind: 'change', change: await buildMenuPlanChange(entityId, deletedAt) };
+      case SYNC_ENTITY_MENU_SLOT:
+        return { kind: 'change', change: await buildMenuSlotChange(entityId, deletedAt) };
+      case SYNC_ENTITY_COOKING_LOG:
+        return { kind: 'change', change: await buildCookingLogChange(entityId, deletedAt) };
       default:
         return { kind: 'unsupported' };
     }
@@ -325,17 +453,26 @@ export async function listRowSyncableEntities(): Promise<
   { entityType: SyncEntityType; entityId: string }[]
 > {
   const db = getDb();
-  const [shopping, pantry, aliases, jan, storeGroups] = await Promise.all([
-    db
-      .select({ id: schema.shoppingItems.id, shared: schema.shoppingItems.shared })
-      .from(schema.shoppingItems),
-    db
-      .select({ id: schema.pantryItems.id, shared: schema.pantryItems.shared })
-      .from(schema.pantryItems),
-    db.select({ id: schema.nameAliases.id }).from(schema.nameAliases),
-    db.select({ id: schema.janCatalog.id }).from(schema.janCatalog),
-    db.select({ id: schema.storeGroupAliases.id }).from(schema.storeGroupAliases),
-  ]);
+  const [shopping, pantry, aliases, jan, storeGroups, menuPlans, menuSlots, cookingLogs] =
+    await Promise.all([
+      db
+        .select({ id: schema.shoppingItems.id, shared: schema.shoppingItems.shared })
+        .from(schema.shoppingItems),
+      db
+        .select({ id: schema.pantryItems.id, shared: schema.pantryItems.shared })
+        .from(schema.pantryItems),
+      db.select({ id: schema.nameAliases.id }).from(schema.nameAliases),
+      db.select({ id: schema.janCatalog.id }).from(schema.janCatalog),
+      db.select({ id: schema.storeGroupAliases.id }).from(schema.storeGroupAliases),
+      db.select({ id: schema.menuPlans.id }).from(schema.menuPlans),
+      db
+        .select({
+          mealTime: schema.menuSlotSettings.mealTime,
+          slotId: schema.menuSlotSettings.slotId,
+        })
+        .from(schema.menuSlotSettings),
+      db.select({ id: schema.cookingLogs.id }).from(schema.cookingLogs),
+    ]);
 
   // 共有中の行の持ち分を**全部**（自端末分も他端末分も）積む（§5-3-2 参加時）。
   // 他端末の持ち分を元の updated_at のまま押すのは LWW で冪等。別グループへ移ったとき Σ が欠けない
@@ -371,6 +508,14 @@ export async function listRowSyncableEntities(): Promise<
     ...jan.map((row) => ({ entityType: SYNC_ENTITY_JAN_CATALOG, entityId: row.id }) as const),
     ...storeGroups.map(
       (row) => ({ entityType: SYNC_ENTITY_STORE_GROUP_ALIAS, entityId: row.id }) as const,
+    ),
+    ...menuPlans.map((row) => ({ entityType: SYNC_ENTITY_MENU_PLAN, entityId: row.id }) as const),
+    ...menuSlots.map(
+      (row) =>
+        ({ entityType: SYNC_ENTITY_MENU_SLOT, entityId: `${row.mealTime}:${row.slotId}` }) as const,
+    ),
+    ...cookingLogs.map(
+      (row) => ({ entityType: SYNC_ENTITY_COOKING_LOG, entityId: row.id }) as const,
     ),
   ];
 }
@@ -666,6 +811,142 @@ async function applyStoreGroupAlias(payload: RowSyncPayload): Promise<ApplyOutco
   return 'applied';
 }
 
+const USER_ID = 'user-kei';
+
+async function applyMenuPlan(payload: RowSyncPayload): Promise<ApplyOutcome> {
+  if (payload.entity !== SYNC_ENTITY_MENU_PLAN) return 'skipped';
+  const db = getDb();
+  const plan = payload.plan;
+
+  const localRows = await db
+    .select({ id: schema.menuPlans.id, generatedAt: schema.menuPlans.generatedAt })
+    .from(schema.menuPlans)
+    .where(eq(schema.menuPlans.mealTime, plan.mealTime))
+    .limit(1);
+  const local = localRows[0];
+  if (local && !incomingChangeWins(plan.generatedAt, local.generatedAt)) return 'skipped';
+
+  await db.transaction(async (tx) => {
+    if (local) {
+      await tx
+        .update(schema.menuPlans)
+        .set({
+          generatedAt: plan.generatedAt,
+          source: plan.source,
+          pantrySignature: plan.pantrySignature,
+          anchorDate: plan.anchorDate,
+          requestedDays: plan.requestedDays,
+          aiNote: plan.aiNote,
+          autoAddedItemIds: plan.autoAddedItemIds,
+        })
+        .where(eq(schema.menuPlans.id, local.id));
+    } else {
+      await tx.insert(schema.menuPlans).values({
+        id: plan.id,
+        mealTime: plan.mealTime,
+        generatedAt: plan.generatedAt,
+        source: plan.source,
+        pantrySignature: plan.pantrySignature,
+        anchorDate: plan.anchorDate,
+        requestedDays: plan.requestedDays,
+        aiNote: plan.aiNote,
+        autoAddedItemIds: plan.autoAddedItemIds,
+      });
+    }
+
+    const planId = local?.id ?? plan.id;
+    await tx.delete(schema.menuPlanSlots).where(eq(schema.menuPlanSlots.planId, planId));
+    if (payload.slots.length > 0) {
+      await tx.insert(schema.menuPlanSlots).values(
+        payload.slots.map((s) => ({
+          planId,
+          day: s.day,
+          slotId: s.slotId,
+          recipeId: s.recipeId,
+          title: s.title,
+          reason: s.reason,
+          doneAt: s.doneAt,
+        })),
+      );
+    }
+  });
+
+  return 'applied';
+}
+
+async function applyMenuSlot(payload: RowSyncPayload): Promise<ApplyOutcome> {
+  if (payload.entity !== SYNC_ENTITY_MENU_SLOT) return 'skipped';
+  const db = getDb();
+  const item = payload.item;
+
+  await db
+    .insert(schema.menuSlotSettings)
+    .values({
+      mealTime: item.mealTime,
+      slotId: item.slotId,
+      slotKind: item.slotKind,
+      label: item.label,
+      position: item.position,
+      autoFill: item.autoFill,
+    })
+    .onConflictDoUpdate({
+      target: [schema.menuSlotSettings.mealTime, schema.menuSlotSettings.slotId],
+      set: {
+        slotKind: item.slotKind,
+        label: item.label,
+        position: item.position,
+        autoFill: item.autoFill,
+      },
+    });
+
+  return 'applied';
+}
+
+async function applyCookingLog(payload: RowSyncPayload): Promise<ApplyOutcome> {
+  if (payload.entity !== SYNC_ENTITY_COOKING_LOG) return 'skipped';
+  const db = getDb();
+  const item = payload.item;
+
+  const localRows = await db
+    .select({ createdAt: schema.cookingLogs.createdAt })
+    .from(schema.cookingLogs)
+    .where(eq(schema.cookingLogs.id, item.id))
+    .limit(1);
+  const local = localRows[0];
+  if (local && !incomingChangeWins(item.createdAt, local.createdAt)) return 'skipped';
+
+  if (local) {
+    await db
+      .update(schema.cookingLogs)
+      .set({
+        recipeId: item.recipeId,
+        cookedAt: item.cookedAt,
+        servings: item.servings,
+        rating: item.rating,
+        memo: item.memo,
+        kind: normalizeCookingLogKind(item.kind),
+        placeName: item.placeName,
+      })
+      .where(eq(schema.cookingLogs.id, item.id));
+  } else {
+    await db.insert(schema.cookingLogs).values({
+      id: item.id,
+      familyId: FAMILY_ID,
+      recipeId: item.recipeId,
+      revisionId: null, // as per design
+      cookedBy: USER_ID, // fallback local user id
+      cookedAt: item.cookedAt,
+      servings: item.servings,
+      rating: item.rating,
+      memo: item.memo,
+      createdAt: item.createdAt,
+      kind: normalizeCookingLogKind(item.kind),
+      placeName: item.placeName,
+    });
+  }
+  return 'applied';
+}
+
 export async function applyRowPayload(payload: RowSyncPayload): Promise<ApplyOutcome> {
   switch (payload.entity) {
     case SYNC_ENTITY_SHOPPING_ITEM:
@@ -680,6 +961,12 @@ export async function applyRowPayload(payload: RowSyncPayload): Promise<ApplyOut
       return applyStoreGroupAlias(payload);
     case SYNC_ENTITY_PANTRY_QUANTITY:
       return applyPantryQuantity(payload);
+    case SYNC_ENTITY_MENU_PLAN:
+      return applyMenuPlan(payload);
+    case SYNC_ENTITY_MENU_SLOT:
+      return applyMenuSlot(payload);
+    case SYNC_ENTITY_COOKING_LOG:
+      return applyCookingLog(payload);
     default:
       return 'skipped';
   }
@@ -764,6 +1051,46 @@ export async function applyRowTombstone(
     case SYNC_ENTITY_STORE_GROUP_ALIAS:
       await db.delete(schema.storeGroupAliases).where(eq(schema.storeGroupAliases.id, entityId));
       return 'applied';
+    case SYNC_ENTITY_MENU_PLAN: {
+      const rows = await db
+        .select({ generatedAt: schema.menuPlans.generatedAt })
+        .from(schema.menuPlans)
+        .where(eq(schema.menuPlans.id, entityId))
+        .limit(1);
+      const local = rows[0];
+      if (!local) return 'skipped';
+      if (!incomingChangeWins(clientUpdatedAt, local.generatedAt)) return 'skipped';
+      await db.transaction(async (tx) => {
+        await tx.delete(schema.menuPlanSlots).where(eq(schema.menuPlanSlots.planId, entityId));
+        await tx.delete(schema.menuPlans).where(eq(schema.menuPlans.id, entityId));
+      });
+      return 'applied';
+    }
+    case SYNC_ENTITY_MENU_SLOT: {
+      const [mealTime, slotId] = entityId.split(':');
+      if (!mealTime || !slotId) return 'skipped';
+      await db
+        .delete(schema.menuSlotSettings)
+        .where(
+          and(
+            eq(schema.menuSlotSettings.mealTime, mealTime),
+            eq(schema.menuSlotSettings.slotId, slotId),
+          ),
+        );
+      return 'applied';
+    }
+    case SYNC_ENTITY_COOKING_LOG: {
+      const rows = await db
+        .select({ createdAt: schema.cookingLogs.createdAt })
+        .from(schema.cookingLogs)
+        .where(eq(schema.cookingLogs.id, entityId))
+        .limit(1);
+      const local = rows[0];
+      if (!local) return 'skipped';
+      if (!incomingChangeWins(clientUpdatedAt, local.createdAt)) return 'skipped';
+      await db.delete(schema.cookingLogs).where(eq(schema.cookingLogs.id, entityId));
+      return 'applied';
+    }
     default:
       return 'skipped';
   }

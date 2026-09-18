@@ -617,7 +617,8 @@ export const recipeBookItems = sqliteTable(
  * （オーナー決定・2026-09-05）。旧 JSON は**読み側でレイジーに取り込む**
  * （`menu-plan.service.ts` — 旧バックアップの復元後も同じ経路で移行される）。
  *
- * 献立は**ローカル専用**（同期対象外）。バックアップには入れる（`backup.service.ts`）。
+ * **同期対象（v20・PR-2）。** ただし写真は運ばない（S3 の領分）。
+ * バックアップにも入れる（`backup.service.ts`）。
  */
 export const menuPlans = sqliteTable('menu_plans', {
   id: text('id').primaryKey(),

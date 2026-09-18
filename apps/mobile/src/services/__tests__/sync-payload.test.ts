@@ -22,6 +22,7 @@ import {
   parseSyncPayload,
   planPushFanout,
   resolveCurrentGroupId,
+  normalizeCookingLogKind,
   resolveDefaultGroupForType,
   serializeSyncPayload,
   shouldAssignDefaultGroup,
@@ -195,8 +196,8 @@ describe('sync-payload — 買い物の recipeId（v4 相当・版は上げな�
     expect((parsed as { item: { recipeId?: string | null } }).item.recipeId).toBeNull();
   });
 
-  it('版は 3 のまま。上げると公開済みの 1.11.0 が買い物の変更を丸ごと捨てる', () => {
-    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(3);
+  it('版は 4。上げると公開済みの 1.11.0 が買い物の変更を丸ごと捨てる', () => {
+    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(4);
   });
 });
 
@@ -235,9 +236,9 @@ describe('sync-payload — 壊れた入力', () => {
   });
 
   it('知らないエンティティ種別は捨てる', () => {
-    // cooking_log は S3 の種別。いまのアプリは知らない
-    expect(parseSyncPayload('cooking_log', serializeSyncPayload(recipePayload()))).toBeNull();
-    expect(isSyncEntityType('cooking_log')).toBe(false);
+    // unknown_type はいまのアプリは知らない
+    expect(parseSyncPayload('unknown_type', serializeSyncPayload(recipePayload()))).toBeNull();
+    expect(isSyncEntityType('unknown_type')).toBe(false);
     expect(isSyncEntityType(SYNC_ENTITY_RECIPE)).toBe(true);
     expect(isSyncEntityType('pantry_item')).toBe(true);
   });
@@ -390,6 +391,100 @@ describe('sync-payload — 買い物・在庫・辞書（S2）', () => {
   });
 });
 
+describe('sync-payload — 献立・枠・調理記録（PR-2）', () => {
+  function menuPlanPayload() {
+    return {
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: 'menu_plan' as const,
+      plan: {
+        id: 'plan-1',
+        mealTime: 'dinner',
+        generatedAt: '2026-09-16T10:00:00.000Z',
+        source: 'coverage',
+        pantrySignature: 'sig',
+        anchorDate: null,
+        requestedDays: null,
+        aiNote: null,
+        autoAddedItemIds: null,
+      },
+      slots: [
+        {
+          day: 1,
+          slotId: 'main',
+          recipeId: 'recipe-1',
+          title: '肉じゃが',
+          reason: '余り物',
+          doneAt: null,
+        },
+      ],
+    } as const;
+  }
+
+  function menuSlotPayload() {
+    return {
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: 'menu_slot' as const,
+      item: {
+        mealTime: 'dinner',
+        slotId: 'main',
+        slotKind: 'main',
+        label: '主菜',
+        position: 1,
+        autoFill: true,
+      },
+    } as const;
+  }
+
+  function cookingLogPayload() {
+    return {
+      schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
+      entity: 'cooking_log' as const,
+      item: {
+        id: 'log-1',
+        recipeId: 'recipe-1',
+        cookedAt: '2026-09-16T10:00:00.000Z',
+        servings: 2,
+        rating: 5,
+        memo: 'おいしい',
+        createdAt: '2026-09-16T10:00:00.000Z',
+        kind: 'cooked',
+        placeName: null,
+      },
+    } as const;
+  }
+
+  it('往復しても中身が変わらない', () => {
+    const plan = menuPlanPayload();
+    expect(parseSyncPayload('menu_plan', serializeSyncPayload(plan))).toEqual(plan);
+
+    const slot = menuSlotPayload();
+    expect(parseSyncPayload('menu_slot', serializeSyncPayload(slot))).toEqual(slot);
+
+    const log = cookingLogPayload();
+    expect(parseSyncPayload('cooking_log', serializeSyncPayload(log))).toEqual(log);
+  });
+
+  it('cooking_log は revisionId・cookedBy・写真を運ばない', () => {
+    const json = serializeSyncPayload(cookingLogPayload());
+    expect(json).not.toContain('revisionId');
+    expect(json).not.toContain('cookedBy');
+    expect(json).not.toContain('photoPath');
+  });
+
+  it('menu_plan は familyId・createdBy・写真を運ばない', () => {
+    const json = serializeSyncPayload(menuPlanPayload());
+    expect(json).not.toContain('familyId');
+    expect(json).not.toContain('createdBy');
+    expect(json).not.toContain('photoPath');
+  });
+
+  it('menu_plan が自然キーを持つ', () => {
+    expect(hasNaturalKey('menu_plan')).toBe(true);
+    expect(hasNaturalKey('menu_slot')).toBe(false);
+    expect(hasNaturalKey('cooking_log')).toBe(false);
+  });
+});
+
 describe('sync-payload — 版を上げても古い payload が読めること', () => {
   it('v1 のレシピ payload は v2 のアプリでもそのまま読める', () => {
     const v1 = JSON.stringify({ ...recipePayload(), schemaVersion: 1 });
@@ -400,8 +495,8 @@ describe('sync-payload — 版を上げても古い payload が読めること',
     expect(parsed && 'recipe' in parsed ? parsed.recipe.title : null).toBe('肉じゃが');
   });
 
-  it('版は 3（S2-B で在庫数量の持ち分を足したため — 上げると全端末がカーソル 0 から取り直す）', () => {
-    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(3);
+  it('版は 4（PR-2 献立・枠・調理記録）', () => {
+    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(4);
   });
 });
 
@@ -431,7 +526,7 @@ describe('AI 由来の印（#266）', () => {
   it('版は据え置き（上げると旧端末がレシピを 1 件も受け取れなくなる）', () => {
     // 省略可のフィールド追加は破壊的変更ではない。上げるとカーソルが 0 に戻り、
     // 旧端末は `schemaVersion` が自分より新しい payload を全部捨てる
-    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(3);
+    expect(SYNC_PAYLOAD_SCHEMA_VERSION).toBe(4);
   });
 });
 
@@ -695,5 +790,21 @@ describe('多グループ: scope によるファンアウト除外（planPushFan
     );
 
     expect(plan.groups).toEqual([{ groupId: 'g-main', indices: [0] }]);
+  });
+});
+
+/**
+ * 列は `text` なので型では止まらない。**新しい版の端末が増やした種類**が
+ * そのまま入ると、こちらの画面が既定の分岐に落ちず表示が壊れる。
+ */
+describe('normalizeCookingLogKind — 知らない kind は既定へ倒す', () => {
+  it('既知の 2 値はそのまま通す', () => {
+    expect(normalizeCookingLogKind('cooked')).toBe('cooked');
+    expect(normalizeCookingLogKind('eaten_out')).toBe('eaten_out');
+  });
+
+  it('知らない値・空文字は cooked として読む（schema の既定と同じ倒し方）', () => {
+    expect(normalizeCookingLogKind('baked')).toBe('cooked');
+    expect(normalizeCookingLogKind('')).toBe('cooked');
   });
 });
