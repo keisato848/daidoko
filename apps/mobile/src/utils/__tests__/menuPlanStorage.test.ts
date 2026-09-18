@@ -9,6 +9,7 @@
 import {
   applyDaysToSlots,
   mainSlotsToDays,
+  rollMenuPlanSlots,
   menuPlanRowToStored,
   parseLegacyMenuPlanJson,
   sanitizeMenuMealTime,
@@ -253,6 +254,29 @@ describe('mainSlotsToDays / applyDaysToSlots — 枠と「1 日 1 品」の相�
   it('days から消えた日の主菜は消える', () => {
     const next = applyDaysToSlots([], [mainDay1, sideDay1]);
     expect(next).toEqual([sideDay1]);
+  });
+});
+
+describe('rollMenuPlanSlots — 自動モードのローリングで枠も同じだけ詰める', () => {
+  const slots: MenuPlanSlotRow[] = [
+    { day: 1, slotId: 'side', recipeId: 'a', title: '1日目の副菜', reason: '', doneAt: null },
+    { day: 2, slotId: 'side', recipeId: 'b', title: '2日目の副菜', reason: '', doneAt: null },
+    { day: 3, slotId: 'side', recipeId: 'c', title: '3日目の副菜', reason: '', doneAt: null },
+  ];
+
+  it('落ちた日の枠は捨て、残りの日番号を詰める', () => {
+    expect(rollMenuPlanSlots(slots, 1)).toEqual([
+      { day: 1, slotId: 'side', recipeId: 'b', title: '2日目の副菜', reason: '', doneAt: null },
+      { day: 2, slotId: 'side', recipeId: 'c', title: '3日目の副菜', reason: '', doneAt: null },
+    ]);
+  });
+
+  it('経過日が無ければそのまま（生き残った日は触らない・§10.11.1）', () => {
+    expect(rollMenuPlanSlots(slots, 0)).toEqual(slots);
+  });
+
+  it('全部落ちたら空になる（旧い副菜を day 1 に残さない）', () => {
+    expect(rollMenuPlanSlots(slots, 3)).toEqual([]);
   });
 });
 

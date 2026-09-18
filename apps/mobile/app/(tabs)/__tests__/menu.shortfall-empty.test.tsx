@@ -164,3 +164,86 @@ describe('S20 献立 — レシピ 0 件からの一括生成（§10.12.2）', (
     expect(screen.getByText(t('menu.emptyDays.noRecipes'))).toBeTruthy();
   });
 });
+
+/**
+ * 献立がある状態の週ビュー（PR-3）。**空プランのテストだけでは、画面が料理名を
+ * 1 つも描かなくなっても全部緑のまま**になるので、描画側をここで押さえる。
+ *
+ * **守れる範囲は画面だけ。** `getMenuPlan` はモックなので、サービス層の `hydrate` が
+ * `plan.slots` を `days` に揃えるのをやめても、ここは緑のままになる（差し替え後に
+ * 前の料理名が残る類）。その規則は `applyDaysToSlots` の純関数テストが持っていて、
+ * 「`hydrate` がそれを呼ぶ」ところだけはテストの外（§2.3 の動的 import の制約）。
+ */
+describe('S20 献立 — 週ビュー（PR-3）', () => {
+  const planWithDays = () =>
+    ({
+      plan: {
+        version: 1,
+        mealTime: 'dinner',
+        generatedAt: '2026-09-18T09:00:00.000Z',
+        source: 'coverage',
+        pantrySignature: '',
+        requestedDays: 2,
+        days: [
+          { day: 1, recipeId: 'r1', title: '肉じゃが', reason: '', doneAt: null },
+          { day: 2, recipeId: 'r2', title: '麻婆豆腐', reason: '', doneAt: 'done' },
+        ],
+        slots: [
+          { day: 1, slotId: 'main', recipeId: 'r1', title: '肉じゃが', reason: '', doneAt: null },
+          { day: 2, slotId: 'main', recipeId: 'r2', title: '麻婆豆腐', reason: '', doneAt: 'done' },
+        ],
+      },
+      days: [
+        {
+          day: 1,
+          recipeId: 'r1',
+          title: '肉じゃが',
+          reason: '',
+          doneAt: null,
+          missing: false,
+          heroPhotoUri: null,
+          cookTimeMin: 30,
+        },
+        {
+          day: 2,
+          recipeId: 'r2',
+          title: '麻婆豆腐',
+          reason: '',
+          doneAt: 'done',
+          missing: false,
+          heroPhotoUri: null,
+          cookTimeMin: null,
+        },
+      ],
+      stale: false,
+    }) as unknown as MenuPlanView;
+
+  beforeEach(() => {
+    mockGetMenuPlan.mockReset().mockResolvedValue(planWithDays());
+    mockPush.mockReset();
+  });
+
+  it('枠に入っている料理名を出す', async () => {
+    render(<MenuScreen />);
+
+    await waitFor(() => expect(screen.getByText('肉じゃが')).toBeTruthy());
+    expect(screen.getByText('麻婆豆腐')).toBeTruthy();
+    expect(screen.getByText(t('menu.day.minutes', { count: 30 }))).toBeTruthy();
+  });
+
+  it('週の進み具合を出す（分母は献立がある日）', async () => {
+    render(<MenuScreen />);
+
+    await waitFor(() =>
+      expect(screen.getByText(t('menu.week.progress', { done: '1', total: '2' }))).toBeTruthy(),
+    );
+  });
+
+  it('料理名を押すとそのレシピへ遷移する', async () => {
+    render(<MenuScreen />);
+
+    await waitFor(() => expect(screen.getByText('肉じゃが')).toBeTruthy());
+    fireEvent.press(screen.getByText('肉じゃが'));
+    expect(mockPush).toHaveBeenCalledWith('/recipes/r1');
+  });
+});

@@ -95,6 +95,34 @@ export function dateKeyForDay(anchorDate: string | null, day: number): string | 
   return menuDateKey(d);
 }
 
+/**
+ * 献立の行にあるのに枠の定義が無い `slotId` を、末尾の枠として足す。
+ *
+ * **定義に無い枠を黙って落とすと、画面が嘘をつく。** 同期は献立（`menu_plan`）と
+ * 枠の定義（`menu_slot`）を別の実体として送るので、**副菜の行だけ先に届く**ことがある。
+ * 落とすとその副菜は表示されないうえ、`isDayDone` の数にも入らないので
+ * 「副菜が残っているのに済み」になる。ラベルは引ける名前が無いので `slotId` を出す —
+ * 見慣れない名前が出る方が、作る物が消えるよりましである。
+ */
+function withUnknownSlots(
+  defs: readonly WeekSlotSetting[],
+  rows: readonly WeekSlotRow[],
+): WeekSlotSetting[] {
+  const known = new Set(defs.map((d) => d.slotId));
+  const extra: WeekSlotSetting[] = [];
+  for (const row of rows) {
+    if (known.has(row.slotId)) continue;
+    known.add(row.slotId);
+    extra.push({
+      slotId: row.slotId,
+      slotKind: 'side',
+      label: row.slotId,
+      position: Number.MAX_SAFE_INTEGER,
+    });
+  }
+  return [...defs, ...extra];
+}
+
 /** 週ビューに出す日数の上限。7 日を超える献立も、今週ぶんだけ出す */
 export const WEEK_MAX_DAYS = 7;
 
@@ -114,7 +142,7 @@ export function buildWeekRows(args: {
   /** 枠が未設定のときに使う既定枠の文言（`t('menu.slot.main')`） */
   defaultSlotLabel: string;
 }): WeekDayRow[] {
-  const slotDefs = orderedSlots(args.settings, args.defaultSlotLabel);
+  const slotDefs = withUnknownSlots(orderedSlots(args.settings, args.defaultSlotLabel), args.slots);
   const todayKey = menuDateKey(args.today);
 
   const byDay = new Map<number, Map<string, WeekSlotRow>>();

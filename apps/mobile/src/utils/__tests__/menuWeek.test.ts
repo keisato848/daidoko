@@ -140,6 +140,27 @@ describe('buildWeekRows', () => {
     expect(row.slots).toHaveLength(1);
     expect(row.slots[0]?.label).toBe(FALLBACK);
   });
+
+  // 同期は献立と枠の定義を別の実体で送るので、定義より先に副菜の行だけ届くことがある。
+  // 落とすと献立が消えるうえ、isDayDone の数からも外れて「済み」が嘘になる
+  it('定義に無い slotId の行も末尾の枠として出す（黙って落とさない）', () => {
+    const row = firstRow(
+      build([slot(1, 'main'), slot(1, 'soup', { title: 'みそ汁' })], { settings: [] }),
+    );
+    expect(row.slots.map((s) => s.slotId)).toEqual(['main', 'soup']);
+    expect(row.slots[1]?.entry?.title).toBe('みそ汁');
+    // 引ける名前が無いので slotId をそのまま出す
+    expect(row.slots[1]?.label).toBe('soup');
+  });
+
+  it('定義に無い枠が未完了なら、その日は済みにならない', () => {
+    const row = firstRow(
+      build([slot(1, 'main', { doneAt: '2026-09-18T10:00:00.000Z' }), slot(1, 'soup')], {
+        settings: [],
+      }),
+    );
+    expect(isDayDone(row)).toBe(false);
+  });
 });
 
 describe('isDayDone', () => {

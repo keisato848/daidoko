@@ -81,8 +81,17 @@ export function MenuSlotLine({
         ) : null}
         {reason ? <Text style={styles.reason}>{reason}</Text> : null}
       </View>
-      {/* 済みは色だけで示さない（色覚・屋外の明るさで消える）。印を添える */}
-      {done ? <Check size={16} color={Colors.goldDim} /> : null}
+      {/* 済みは色だけで示さない（色覚・屋外の明るさで消える）。印を添える。
+        **読み上げにも残す** — 旧 DayCard は「作りました」を文字で出していたので、
+        ラベルを付けないとスクリーンリーダーからは済みが消える */}
+      {done ? (
+        <Check
+          size={16}
+          color={Colors.goldDim}
+          accessibilityRole="image"
+          accessibilityLabel={t('menu.day.done')}
+        />
+      ) : null}
     </View>
   );
 

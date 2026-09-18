@@ -297,3 +297,21 @@ export function applyDaysToSlots(
   const others = slots.filter((s) => s.slotId !== MAIN_SLOT_ID);
   return [...legacyPlanDaysToSlots(days), ...others];
 }
+
+/**
+ * 自動モードのローリングで、主菜以外の枠も同じだけ日番号を詰める（v20）。
+ *
+ * `rollMenuPlan` は生存日を 1 から振り直すが、詰めるのは `days`（主菜）だけ。
+ * 枠をそのまま持ち回ると、**副菜だけ旧い日番号に残って別の日の主菜と並ぶ**
+ * （1 日経つごとにずれ、落ちた日の副菜は day 1 に孤児として残る）。
+ *
+ * 落ちた日（`day <= droppedDays`）の枠は捨て、残りを `day - droppedDays` へ移す。
+ * 主菜は `applyDaysToSlots` が `days` から作り直すので、ここでは触らなくてよい。
+ */
+export function rollMenuPlanSlots(
+  slots: readonly MenuPlanSlotRow[],
+  droppedDays: number,
+): MenuPlanSlotRow[] {
+  if (droppedDays <= 0) return [...slots];
+  return slots.filter((s) => s.day > droppedDays).map((s) => ({ ...s, day: s.day - droppedDays }));
+}

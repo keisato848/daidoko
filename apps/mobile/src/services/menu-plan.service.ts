@@ -52,6 +52,7 @@ import {
   applyDaysToSlots,
   menuPlanRowToStored,
   parseLegacyMenuPlanJson,
+  rollMenuPlanSlots,
   sanitizeMenuMealTime,
   storedMenuPlanToRows,
   MENU_MEAL_TIMES,
@@ -904,6 +905,10 @@ export async function clearMenuPlan(): Promise<void> {
   const { getDb } = await import('../db/client');
   const schema = await import('../db/schema');
   const db = getDb();
+  // slots → days → plan の順（`writeStoredMenuPlan` と同じ理由 — CASCADE が無いので
+  // 親を先に消すと `FOREIGN KEY constraint failed`）。**枠を消し忘れると
+  // 「献立を消す」が落ち、画面も戻らない**（menu-settings.tsx は catch していない）
+  await db.delete(schema.menuPlanSlots);
   await db.delete(schema.menuPlanDays);
   await db.delete(schema.menuPlans);
   await setAppMeta(LEGACY_MENU_PLAN_KEY, '');
@@ -1024,6 +1029,8 @@ export async function runDailyMenuMaintenance(): Promise<void> {
         ...stored,
         anchorDate: rolled.anchorDate,
         days: rolled.days,
+        // 主菜以外の枠も同じだけ詰める。詰めないと副菜が別の日の主菜と並ぶ（v20）
+        ...(stored.slots ? { slots: rollMenuPlanSlots(stored.slots, rolled.droppedDays) } : {}),
         generatedAt: today.toISOString(),
         pantrySignature: pantry.signature,
         // ローリング後の要求日数は現在の設定値（targetDays と同じ根拠）

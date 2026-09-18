@@ -11,6 +11,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Colors } from '../constants/theme';
 import { t } from '../i18n';
 import { weekdayLabels } from '../utils/calendar';
+import { MAIN_SLOT_ID } from '../utils/menuPlanStorage';
 import { isDayDone, type WeekDayRow } from '../utils/menuWeek';
 
 import { MenuSlotLine, type SlotRecipeMeta } from './MenuSlotLine';
@@ -48,8 +49,11 @@ export function MenuWeekRow({
   // 日付が出せるのは自動モード（anchorDate あり）だけ。手動プランは「N日目」のまま
   const label =
     (row.dateKey !== null ? dateLabel(row.dateKey) : null) ?? t('menu.day.label', { day: row.day });
-  // 差し替えは主菜がある日だけ。無くなったレシピの日は候補計算の元が無いので出さない
-  const main = row.slots.find((s) => s.entry !== null);
+  // 差し替えは**主菜がある日だけ**。`replaceMenuDay` が触るのは `days`＝主菜なので、
+  // 「最初に埋まっている枠」で判定すると、副菜だけの日にボタンが出て
+  // 押しても何も起きない（P5 の「押したのに変化ゼロ」）。
+  // 無くなったレシピの日も出さない（候補計算の元が無い）
+  const main = row.slots.find((s) => s.slotId === MAIN_SLOT_ID);
   const canSwap = main?.entry != null && metaByRecipeId.get(main.entry.recipeId)?.missing !== true;
 
   return (
