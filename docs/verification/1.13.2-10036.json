@@ -1,7 +1,7 @@
 {
   "version": "1.13.2",
   "versionCode": 10036,
-  "verifiedAt": "2026-09-18T14:56:25.903Z",
+  "verifiedAt": "2026-09-18T23:11:31.535Z",
   "device": {
     "serialHash": "04ab3fc382bf",
     "model": "sdk_gphone64_x86_64",
@@ -10,8 +10,8 @@
   },
   "installedVersionCode": 10036,
   "checked": [
-    "週ビュー(PR-3): 3日分を組んで週ビューが出る(主菜行・調理時間・理由・差し替え)。枠の定義が無い side 行も末尾の枠として出る(withUnknownSlots)。menu_slot_settings を入れると副菜ラベルになり position 順に並ぶ。主菜だけ済みで副菜が残る日は進捗 0/3 のまま(isDayDone)。料理名タップでレシピ詳細へ遷移。差し替えで day3 が入れ替わり、day1 の副菜と day1 主菜の done_at は保持された(applyDaysToSlots)。外部キー修正: 枠がある状態で献立を組み直しても FK 落ちなし、設定→献立を消すで plans/slots/days が 0 件になり画面も戻る(修正前は FOREIGN KEY constraint failed)。sqlite3 で親先削除が実際に落ちることを対照として確認済み。"
+    "枠の設定と手入力(PR-4): 設定(S21)で汁物を足す/2つ目の副菜が side-2 になる/枠を消しても menu_plan_slots の料理が残ることを確認。週ビューで空枠タップ→シートが全件出る→選ぶと枠に入る。「予定」「済み」が記号でなく文字で出る(受付票 C)。設定から消した枠の空行が他の日に並ばない。同期: menu_plan が sync_queue に積まれること(PR-2 まで一度も積まれていなかった)と、2 回編集してもプラン id が変わらず墓標にならないことを sqlite で確認。BottomSheet を KeyboardAvoider で包む変更の巻き添えが無いことを AppDialog(献立を消す の確認ダイアログ)で確認。**2 台での同期は未確認**。"
   ],
-  "screenshot": "screenshots/1.13.2-10036-2026-09-18T14-56-25-903Z.png",
-  "headCommit": "9d9ad6c1fe6e72c2a733ef9194040adf8eafac1e"
+  "screenshot": "screenshots/1.13.2-10036-2026-09-18T23-11-31-535Z.png",
+  "headCommit": "acb171ff4f422d1f9de79f56de0529f2cc4f6ac3"
 }

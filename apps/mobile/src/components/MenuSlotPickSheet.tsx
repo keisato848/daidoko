@@ -8,7 +8,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
-import { KeyboardAvoider } from './KeyboardAvoider';
 import { Colors } from '../constants/theme';
 import { t } from '../i18n';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
@@ -65,48 +64,43 @@ export function MenuSlotPickSheet({
       onClose={onCancel}
       title={t('menu.slotPick.title', { slot: slotLabel })}
     >
-      {/* 検索欄にフォーカスすると、包まないと一覧と「空にする」がキーボードに隠れる
-        （この構成では adjustResize が効かない — `keyboard-covers-buttons` の教訓）。
-        `app/` 配下しか見ない横断テスト（#172）はこのシートを拾わないので手で包む */}
-      <KeyboardAvoider>
-        <TextInput
-          style={styles.search}
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t('menu.slotPick.searchPlaceholder')}
-          placeholderTextColor={Colors.muted}
-          accessibilityLabel={t('menu.slotPick.searchPlaceholder')}
+      <TextInput
+        style={styles.search}
+        value={query}
+        onChangeText={setQuery}
+        placeholder={t('menu.slotPick.searchPlaceholder')}
+        placeholderTextColor={Colors.muted}
+        accessibilityLabel={t('menu.slotPick.searchPlaceholder')}
+      />
+
+      {shown.length === 0 ? (
+        <Text style={styles.empty}>{t('menu.slotPick.noMatch')}</Text>
+      ) : (
+        <FlatList
+          data={shown}
+          keyExtractor={(item) => item.id}
+          style={styles.list}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item }) => (
+            <Pressable
+              style={styles.row}
+              onPress={() => onPick(item)}
+              accessibilityRole="button"
+              accessibilityLabel={item.title}
+            >
+              <Text style={styles.rowTitle} numberOfLines={2}>
+                {item.title}
+              </Text>
+            </Pressable>
+          )}
         />
+      )}
 
-        {shown.length === 0 ? (
-          <Text style={styles.empty}>{t('menu.slotPick.noMatch')}</Text>
-        ) : (
-          <FlatList
-            data={shown}
-            keyExtractor={(item) => item.id}
-            style={styles.list}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <Pressable
-                style={styles.row}
-                onPress={() => onPick(item)}
-                accessibilityRole="button"
-                accessibilityLabel={item.title}
-              >
-                <Text style={styles.rowTitle} numberOfLines={2}>
-                  {item.title}
-                </Text>
-              </Pressable>
-            )}
-          />
-        )}
-
-        {canClear ? (
-          <Pressable style={styles.clear} onPress={onClear} accessibilityRole="button">
-            <Text style={styles.clearText}>{t('menu.slotPick.clear')}</Text>
-          </Pressable>
-        ) : null}
-      </KeyboardAvoider>
+      {canClear ? (
+        <Pressable style={styles.clear} onPress={onClear} accessibilityRole="button">
+          <Text style={styles.clearText}>{t('menu.slotPick.clear')}</Text>
+        </Pressable>
+      ) : null}
     </BottomSheet>
   );
 }
