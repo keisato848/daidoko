@@ -12,6 +12,7 @@ const common: typeof ja = {
   next: 'Next',
   retry: 'Try again',
   ok: 'OK',
+  undo: 'Undo',
 
   ingredients: 'Ingredients',
   steps: 'Steps',

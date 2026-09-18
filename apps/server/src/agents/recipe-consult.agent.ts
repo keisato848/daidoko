@@ -25,10 +25,15 @@ export interface ConsultTurn {
   draft: RecipeDraft | null;
   /** 写真の読み取り結果（あれば） */
   imageReadings?: string[];
+  actions?: { id: string; args: { name: string }; heardAs: string }[];
+  candidates?: { title: string; description: string }[];
 }
 
 const EMPTY_REPLY_MESSAGE =
   'うまく聞き取れませんでした。作りたいものを、ひとことで教えてください。';
+
+/** 候補数が指定されていないときの上限（受付票 R13: 既定 3・上限 5）。 */
+const DEFAULT_CANDIDATE_LIMIT = 3;
 
 function fail(code: AgentErrorCode, message: string, retryable: boolean): AgentResult<ConsultTurn> {
   return { ok: false, error: { code, message, retryable } };
@@ -139,6 +144,40 @@ export async function runRecipeConsultAgent(
   }
 
   const draft = normalizeDraft(raw.draft);
+
+  const actions = (raw.actions ?? [])
+    .map((a) => ({
+      id: cleanString(a.id, 50),
+      args: { name: cleanString(a.args?.name, 100) },
+      heardAs: cleanString(a.heardAs, 200),
+    }))
+    .filter(
+      (a): a is { id: string; args: { name: string }; heardAs: string } =>
+        !!a.id && !!a.args.name && !!a.heardAs,
+    );
+
+  /**
+   * 候補は **N 件に機械で切る**。プロンプトの「最大N件」は守られなかった
+   * （2026-09-18 AQUOS 実機検証: `candidateCount=1` でも 3 件返ってきた）。
+   * 上限は文言ではなくここで担保する。
+   */
+  const candidateLimit = input.candidateCount ?? DEFAULT_CANDIDATE_LIMIT;
+  const candidates = (raw.candidates ?? [])
+    .map((c) => ({
+      title: cleanString(c.title, 100),
+      description: cleanString(c.description, 500),
+    }))
+    .filter((c): c is { title: string; description: string } => !!c.title && !!c.description)
+    .slice(0, candidateLimit);
+
+  /**
+   * **下書きが出たら候補は返さない。** 利用者が候補を選んだ往復では draft と
+   * candidates の両方が返ることがあり、そのまま通すと画面が候補を出し続けて
+   * 「選んでも下書きにならない」状態になる（同検証で 5 往復抜け出せなかった）。
+   * 選んだあとに見せるものは下書きなので、ここで候補を落とす。
+   */
+  const showCandidates = draft === null ? candidates : [];
+
   return {
     ok: true,
     data: {
@@ -148,6 +187,8 @@ export async function runRecipeConsultAgent(
       draft,
       ...(raw.imageReadings &&
         raw.imageReadings.length > 0 && { imageReadings: raw.imageReadings }),
+      ...(actions.length > 0 && { actions }),
+      ...(showCandidates.length > 0 && { candidates: showCandidates }),
     },
   };
 }

@@ -75,6 +75,7 @@ export interface ConsultRecipeInput {
    * 既定では送らない — 何を送ったか利用者に見えている状態を保つため。
    */
   pantry?: string[];
+  candidateCount?: number;
   outputLocale?: OutputLocale;
   unitSystem?: OutputUnitSystem;
 }
@@ -85,6 +86,15 @@ export interface ConsultRecipeRaw {
   reply?: string;
   /** 保存できる状態か（材料と手順が揃っているか）。 */
   ready?: boolean;
+  actions?: {
+    id?: string;
+    args?: { name?: string };
+    heardAs?: string;
+  }[];
+  candidates?: {
+    title?: string;
+    description?: string;
+  }[];
   /** 現時点の下書き。まだ出せないうちは省略される。 */
   draft?: {
     title?: string;
@@ -119,6 +129,29 @@ const SYSTEM_PROMPT = [
   '- あなたは**相談相手**であって、献立を決める人ではない。決めるのは常に利用者。',
   '- 返事は短く。3 文以内を目安にする。長い説明より、次の一手が分かることを優先する。',
   '- **質問は一度に 1 つだけ。** 人数・時間・食べられないもの・好みを一度に並べて聞かない。',
+  '',
+  '## 操作の代行 (actions)',
+  '- 相談の中で「○○を買い物リストに追加」のような依頼が来たら、actions に操作を返す。',
+  '- 1回の返答に載せる操作は最大2つまで。',
+  '- 利用できる操作は買い物リストへの追加のみ: { id: "shopping.add", args: { name: "発話そのまま" }, heardAs: "聞き取った原文" }',
+  '- 品名は利用者の発話をそのまま使い、正規化しない（例：「さとう」を「砂糖」に直さない）。',
+  '- `heardAs` には**利用者の発話をそのまま**入れる（品名だけに縮めない）。どう聞き取ったかを利用者が確かめるための欄。',
+  '- **actions を返しても、その操作はまだ実行されていない。** 利用者が確認カードを押して初めて実行される。',
+  '  そのため reply では「追加しました」「入れておきました」のような**完了した言い方をしない**。',
+  '  「買い物リストに追加しますか？」「よければ下のボタンから追加できます」のように、**まだ起きていない**ことが分かる書き方にする。',
+  '',
+  '## 使い方の質問',
+  '- アプリの使い方（「どの画面でやるか」「その機能があるか」）を聞かれたら、知っている範囲で簡潔に文章で答える（在庫・買い物・献立・写真からレシピ・レシート読み取りなどの主要機能について）。',
+  '- 専用の入口は作らない。',
+  '- 返事は3文以内。',
+  '- 料理そのもの（何を作るか・レシピの中身）の質問には、従来どおりレシピの下書きで答える。',
+  '',
+  '## 候補数',
+  '- 候補数（N）が指定されたら、料理の見当がついた時点で candidates に最大N件まで候補を返す。',
+  '- 各候補は title と description のみ。下書きの全体は返さない。',
+  '- **利用者が候補を 1 つ選んだら、その往復では candidates を返さず draft だけを返す。**',
+  '  選んだのに候補を出し続けると、いつまでも下書きに辿り着けない。',
+  '- 候補を出すのは「まだ何を作るか決まっていない」ときだけ。決まったら候補は出さない。',
   '',
   '## 下書きを出すタイミング',
   '- 料理の見当がついたら、**聞き切る前に**下書きを出す。',
@@ -179,6 +212,34 @@ const GEMINI_RESPONSE_SCHEMA = {
   properties: {
     reply: { type: 'STRING' },
     ready: { type: 'BOOLEAN' },
+    actions: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          id: { type: 'STRING' },
+          args: {
+            type: 'OBJECT',
+            properties: {
+              name: { type: 'STRING' },
+            },
+          },
+          heardAs: { type: 'STRING' },
+        },
+        propertyOrdering: ['id', 'args', 'heardAs'],
+      },
+    },
+    candidates: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING' },
+          description: { type: 'STRING' },
+        },
+        propertyOrdering: ['title', 'description'],
+      },
+    },
     draft: {
       type: 'OBJECT',
       properties: {
@@ -236,12 +297,24 @@ const GEMINI_RESPONSE_SCHEMA = {
   },
   // reply は必ず要る（無言だと会話が止まる）。draft/imageReadings は写真が無い往復では出ないので必須にしない。
   required: ['reply', 'ready'],
-  propertyOrdering: ['reply', 'ready', 'draft', 'imageReadings'],
+  propertyOrdering: ['reply', 'ready', 'actions', 'candidates', 'draft', 'imageReadings'],
 };
 
 /** 構造化出力のスキーマ（テストから必須項目を固定するために公開する）。 */
 export function buildConsultResponseSchema(): typeof GEMINI_RESPONSE_SCHEMA {
   return GEMINI_RESPONSE_SCHEMA;
+}
+
+/**
+ * 系統プロンプト（テストから**約束**を固定するために公開する）。
+ *
+ * 特に「actions を返しても、押すまで実行されない」は**文言で守るしかない**規約。
+ * AQUOS 実機検証の準備中に、実サーバーの応答が「買い物リストに追加しました！」と
+ * 完了形で返すことを観測した（2026-09-18）。カードを押すまで何も起きない設計なので、
+ * この文言は利用者に嘘をつく。指示が消えたらテストで気づけるようにする。
+ */
+export function buildConsultSystemPrompt(): string {
+  return SYSTEM_PROMPT;
 }
 
 /**
@@ -292,14 +365,23 @@ export function buildContextText(input: ConsultRecipeInput): string {
       'これらを優先して使ってよい。ただし在庫だけで無理に作らないこと。',
     );
   }
+  if (input.candidateCount !== undefined) {
+    parts.push(`## 候補数\n利用者は ${input.candidateCount} 個の候補を求めています。`);
+  }
   return parts.join('\n');
 }
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_ATTEMPTS = 4;
-const RETRYABLE_STATUS = new Set([429, 500, 503, 504]);
+// break 化に伴い、Google フロントの一過性の 502/408 も再試行対象に含める
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const BACKOFF_MS = [0, 1_500, 4_000, 8_000];
+
+/** 最悪ケースの所要時間（ミリ秒）。テストが上限を見張るために公開する。 */
+export const CONSULT_RETRY_BUDGET_MS =
+  REQUEST_TIMEOUT_MS * MAX_ATTEMPTS +
+  BACKOFF_MS.slice(0, MAX_ATTEMPTS).reduce((sum, ms) => sum + ms, 0);
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -309,15 +391,18 @@ function sleep(ms: number): Promise<void> {
 export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly log: (line: string) => void;
 
-  constructor(opts?: { apiKey?: string; model?: string }) {
+  constructor(opts?: { apiKey?: string; model?: string; log?: (line: string) => void }) {
     const apiKey = opts?.apiKey ?? process.env['GEMINI_API_KEY'] ?? '';
     if (!apiKey) throw new ConsultConfigError('GEMINI_API_KEY is not configured');
     this.apiKey = apiKey;
     this.model = opts?.model?.trim() || process.env['GEMINI_MODEL']?.trim() || 'gemini-2.5-flash';
+    this.log = opts?.log ?? ((line: string) => process.stdout.write(line + '\n'));
   }
 
   async consult(input: ConsultRecipeInput): Promise<ConsultRecipeRaw> {
+    const id = Math.random().toString(36).slice(2, 8);
     const messages = trimMessages(input.messages);
     const context = buildContextText(input);
 
@@ -367,11 +452,20 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
       },
     };
 
+    const totalStartMs = Date.now();
     let lastError: Error = new ConsultRequestError('consult failed');
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-      if (BACKOFF_MS[attempt]) await sleep(BACKOFF_MS[attempt] as number);
+    let result: ConsultRecipeRaw | undefined;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      if (BACKOFF_MS[attempt - 1]) await sleep(BACKOFF_MS[attempt - 1] as number);
+
+      const attemptStartMs = Date.now();
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      let outcome: 'ok' | 'timeout' | 'http' | 'error' | 'quota' = 'error';
+      let status: number | undefined;
+      let detail: string | undefined;
+
       try {
         const res = await fetch(
           `${GEMINI_ENDPOINT}/${this.model}:generateContent?key=${this.apiKey}`,
@@ -383,16 +477,23 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
           },
         );
         if (!res.ok) {
-          const detail = (await res.text()).slice(0, 300);
+          outcome = 'http';
+          status = res.status;
+          const detailRaw = await res.text();
+          detail = detailRaw.replace(/key=[^&\s]+/g, 'key=***').slice(0, 120);
+
           // 429 は「上限」と「一時的な混雑」の両方で返る。上限は再試行しても当面回復しない
-          if (res.status === 429 && /quota|billing|exceeded/i.test(detail)) {
-            throw new ConsultQuotaError(`Gemini quota exceeded: ${detail}`);
+          if (res.status === 429 && /quota|billing|exceeded/i.test(detailRaw)) {
+            outcome = 'quota';
+            throw new ConsultQuotaError(`Gemini quota exceeded: ${detailRaw.slice(0, 300)}`);
           }
           if (RETRYABLE_STATUS.has(res.status)) {
-            lastError = new ConsultRequestError(`Gemini ${res.status}: ${detail}`);
+            lastError = new ConsultRequestError(`Gemini ${res.status}: ${detailRaw.slice(0, 300)}`);
             continue;
           }
-          throw new ConsultRequestError(`Gemini ${res.status}: ${detail}`);
+          // Non-retryable HTTP errors break the retry loop
+          lastError = new ConsultRequestError(`Gemini ${res.status}: ${detailRaw.slice(0, 300)}`);
+          break;
         }
         const json = (await res.json()) as {
           candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -413,17 +514,56 @@ export class GeminiRecipeConsultProvider implements RecipeConsultProvider {
           .map((r) => r.reading?.trim() ?? '')
           .filter((r): r is string => r.length > 0);
 
-        return {
+        outcome = 'ok';
+        result = {
           ...restRaw,
           ...(imageReadings && imageReadings.length > 0 ? { imageReadings } : {}),
         };
+        break;
       } catch (err) {
-        if (err instanceof ConsultQuotaError) throw err;
+        if (err instanceof Error && err.name === 'AbortError') {
+          outcome = 'timeout';
+        } else if (outcome !== 'http' && outcome !== 'quota') {
+          outcome = 'error';
+        }
+
         lastError = err instanceof Error ? err : new ConsultRequestError(String(err));
+        if (err instanceof ConsultQuotaError) {
+          break;
+        }
       } finally {
         clearTimeout(timer);
+        this.log(
+          `[infer/consult] ${JSON.stringify({
+            id,
+            attempt,
+            elapsedMs: Date.now() - attemptStartMs,
+            outcome,
+            ...(status !== undefined && { status }),
+            ...(detail !== undefined && { detail }),
+          })}`,
+        );
       }
     }
+
+    if (result !== undefined) {
+      this.log(
+        `[infer/consult] ${JSON.stringify({
+          id,
+          totalElapsedMs: Date.now() - totalStartMs,
+          finalOutcome: 'ok',
+        })}`,
+      );
+      return result;
+    }
+
+    this.log(
+      `[infer/consult] ${JSON.stringify({
+        id,
+        totalElapsedMs: Date.now() - totalStartMs,
+        finalOutcome: lastError instanceof ConsultQuotaError ? 'quota' : 'error',
+      })}`,
+    );
     throw lastError;
   }
 }

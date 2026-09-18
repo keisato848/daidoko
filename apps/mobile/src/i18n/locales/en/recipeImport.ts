@@ -178,6 +178,20 @@ const recipeImport: typeof ja = {
     disclaimer:
       'This cannot tell you whether a dish contains allergens. Always check the ingredients yourself.',
 
+    actionAdded: 'Added "{{name}}" to shopping list',
+    actionDuplicate: '"{{name}}" is already on your shopping list',
+    actionConfirmPrefix: 'Nothing happens until you tap',
+    actionCancel: 'Cancel',
+    actionConfirm: 'Add',
+    actionActionLabel: '📋 Add "{{name}}" to shopping list',
+    candidateCountLabel: 'Candidates:',
+    candidateCountOptions: {
+      1: '1',
+      2: '2',
+      3: '3',
+    },
+    candidateChoice: "I'll have {{title}}",
+
     attachPhoto: 'Attach a photo',
     attachedPhoto: 'Attached photos',
     removePhoto: 'Remove this photo',

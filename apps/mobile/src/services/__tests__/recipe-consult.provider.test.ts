@@ -65,6 +65,11 @@ describe('buildContextText', () => {
     const text = buildContextText({ messages: [], draft: FORM });
     expect(text).toContain('鶏むねの照り焼き');
   });
+
+  it('候補数が指定されたときは文脈に含める', () => {
+    const text = buildContextText({ messages: [], candidateCount: 3 });
+    expect(text).toContain('3 個の候補を求めています');
+  });
 });
 
 describe('formDataToDraft', () => {

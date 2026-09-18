@@ -13,6 +13,7 @@ import { setConsultProviderForTesting } from '../routes/infer.js';
 import {
   ConsultQuotaError,
   buildConsultResponseSchema,
+  buildConsultSystemPrompt,
   trimMessages,
   buildContextText,
   type ConsultRecipeInput,
@@ -187,5 +188,115 @@ describe('会話の組み立て', () => {
     expect(schema.required).toContain('reply');
     expect(schema.required).toContain('ready');
     expect(schema.required).not.toContain('draft');
+  });
+
+  it('候補数が指定されたときはプロンプトに伝える', () => {
+    const text = buildContextText({ messages: [], candidateCount: 3 });
+    expect(text).toContain('3 個の候補を求めています');
+  });
+});
+
+/**
+ * 「押すまで実行されない」は**プロンプトの文言でしか守れない**規約。
+ * 2026-09-18 の AQUOS 検証準備中に、実サーバーが「買い物リストに追加しました！」と
+ * 完了形で返すのを観測した（カードを押すまで何も起きない設計なので利用者に嘘をつく）。
+ * 指示が消えたら気づけるようにする。
+ */
+describe('actions のプロンプト規約', () => {
+  it('actions はまだ実行されていない、と明示している', () => {
+    const prompt = buildConsultSystemPrompt();
+    expect(prompt).toContain('まだ実行されていない');
+  });
+
+  it('完了した言い方をしないよう指示している', () => {
+    const prompt = buildConsultSystemPrompt();
+    expect(prompt).toContain('追加しました');
+    expect(prompt).toContain('完了した言い方をしない');
+  });
+
+  it('heardAs を品名に縮めず発話そのままにするよう指示している', () => {
+    const prompt = buildConsultSystemPrompt();
+    expect(prompt).toContain('品名だけに縮めない');
+  });
+
+  it('候補を選ばれたら候補を返さず下書きだけ返すよう指示している', () => {
+    const prompt = buildConsultSystemPrompt();
+    expect(prompt).toContain('candidates を返さず draft だけを返す');
+  });
+});
+
+/**
+ * 2026-09-18 の AQUOS 実機検証で見つけた F1。
+ * 候補数 2 以上だと候補ループから抜けられず、5 往復しても下書きに辿り着けなかった。
+ * 原因は 2 つあり、どちらも**モデルの自己申告に任せていた**こと:
+ * 1. `candidateCount=1` でも 3 件返ってきた（プロンプトの「最大N件」が守られない）
+ * 2. 選んだ往復で draft と candidates が両方返り、画面が候補を出し続けた
+ * どちらも機械で切るようにしたので、その担保をここで固定する。
+ */
+describe('候補は機械で切る（プロンプト任せにしない）', () => {
+  it('candidateCount で候補の件数を切る', async () => {
+    setConsultProviderForTesting(
+      stub(() => ({
+        reply: 'どれがいいですか',
+        ready: false,
+        candidates: [
+          { title: 'A', description: 'a' },
+          { title: 'B', description: 'b' },
+          { title: 'C', description: 'c' },
+        ],
+      })),
+    );
+    const res = await post({ messages: [{ role: 'user', text: '何か' }], candidateCount: 1 });
+    const json = (await res.json()) as { data: { candidates: unknown[] } };
+    expect(json.data.candidates).toHaveLength(1);
+  });
+
+  it('下書きが出たら候補は返さない（選んだのに候補が出続けるのを防ぐ）', async () => {
+    setConsultProviderForTesting(
+      stub(() => ({
+        reply: 'これでどうでしょう',
+        ready: false,
+        candidates: [{ title: 'A', description: 'a' }],
+        draft: {
+          title: '肉じゃが',
+          ingredients: [{ name: 'じゃがいも' }],
+          steps: [{ body: '煮る' }],
+        },
+      })),
+    );
+    const res = await post({ messages: [{ role: 'user', text: 'Aにします' }] });
+    const json = (await res.json()) as { data: { candidates?: unknown[]; draft: unknown } };
+    expect(json.data.draft).not.toBeNull();
+    expect(json.data.candidates).toBeUndefined();
+  });
+});
+
+describe('actions と candidates の返し方', () => {
+  it('プロバイダが actions を返したらそのまま通る', async () => {
+    setConsultProviderForTesting(
+      stub(() => ({
+        reply: '追加しました',
+        ready: false,
+        actions: [{ id: 'shopping.add', args: { name: '牛乳' }, heardAs: '牛乳追加して' }],
+      })),
+    );
+    const res = await post({ messages: [{ role: 'user', text: '牛乳追加して' }] });
+    const json = (await res.json()) as { data: { actions: unknown[] } };
+    expect(json.data.actions).toEqual([
+      { id: 'shopping.add', args: { name: '牛乳' }, heardAs: '牛乳追加して' },
+    ]);
+  });
+
+  it('プロバイダが candidates を返したらそのまま通る', async () => {
+    setConsultProviderForTesting(
+      stub(() => ({
+        reply: 'どれがいいですか',
+        ready: false,
+        candidates: [{ title: 'カレー', description: 'いつもの' }],
+      })),
+    );
+    const res = await post({ messages: [{ role: 'user', text: '何か' }], candidateCount: 2 });
+    const json = (await res.json()) as { data: { candidates: unknown[] } };
+    expect(json.data.candidates).toEqual([{ title: 'カレー', description: 'いつもの' }]);
   });
 });
