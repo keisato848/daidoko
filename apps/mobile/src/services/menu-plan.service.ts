@@ -285,6 +285,60 @@ async function doMigrateLegacyMenuPlan(): Promise<void> {
 }
 
 /**
+ * v20: 旧 `menu_plan_days` を `menu_plan_slots` へレイジー移行する。
+ * 対象プランの `menu_plan_slots` に1行も無く、`menu_plan_days` に行がある場合のみコピー。
+ */
+let planDaysMigrationChain: Promise<void> = Promise.resolve();
+
+export function ensurePlanDaysMigratedToSlots(planId: string): Promise<void> {
+  const run = planDaysMigrationChain.then(() => doMigratePlanDaysToSlots(planId));
+  // 失敗しても待ち行列は止めない。読み自体は進める（次の読みで再挑戦）
+  planDaysMigrationChain = run.catch(() => undefined);
+  return run.catch(() => undefined);
+}
+
+async function doMigratePlanDaysToSlots(planId: string): Promise<void> {
+  const { eq } = await import('drizzle-orm');
+  const { getDb } = await import('../db/client');
+  const schema = await import('../db/schema');
+  const { legacyPlanDaysToSlots } = await import('../utils/menuPlanStorage');
+  const db = getDb();
+
+  const existingSlots = await db
+    .select({ slotId: schema.menuPlanSlots.slotId })
+    .from(schema.menuPlanSlots)
+    .where(eq(schema.menuPlanSlots.planId, planId))
+    .limit(1);
+
+  if (existingSlots.length > 0) return;
+
+  const dayRows = await db
+    .select({
+      day: schema.menuPlanDays.day,
+      recipeId: schema.menuPlanDays.recipeId,
+      title: schema.menuPlanDays.title,
+      reason: schema.menuPlanDays.reason,
+      doneAt: schema.menuPlanDays.doneAt,
+    })
+    .from(schema.menuPlanDays)
+    .where(eq(schema.menuPlanDays.planId, planId));
+
+  if (dayRows.length === 0) return;
+
+  const slotRows = legacyPlanDaysToSlots(dayRows).map((s) => ({
+    planId,
+    day: s.day,
+    slotId: s.slotId,
+    recipeId: s.recipeId,
+    title: s.title,
+    reason: s.reason,
+    doneAt: s.doneAt,
+  }));
+
+  await db.insert(schema.menuPlanSlots).values(slotRows);
+}
+
+/**
  * X 日分を組んで保存する。**AI は呼ばない**（M1）。
  *
  * `mealTime`（既定は夕）ごとに独立したプランを持つ（設計 §10.6）——**置き換えるのは

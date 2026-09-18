@@ -11,7 +11,9 @@ import {
   parseLegacyMenuPlanJson,
   sanitizeMenuMealTime,
   storedMenuPlanToRows,
+  legacyPlanDaysToSlots,
   type MenuPlanRow,
+  type MenuPlanDayRow,
   type StoredMenuPlan,
 } from '../menuPlanStorage';
 
@@ -172,5 +174,37 @@ describe('menuPlanRowToStored / storedMenuPlanToRows — テーブル行との�
       { day: 1, recipeId: 'r1', title: 'a', reason: '', doneAt: null },
     ]);
     expect(stored.days.map((d) => d.day)).toEqual([1, 2]);
+  });
+});
+
+describe('legacyPlanDaysToSlots — 旧 `menu_plan_days` の枠対応', () => {
+  it('空配列を渡すと空配列が返る', () => {
+    expect(legacyPlanDaysToSlots([])).toEqual([]);
+  });
+
+  it("旧形式の行配列を渡すと、全行に slotId: 'main' が付いた新形式になる", () => {
+    const days: MenuPlanDayRow[] = [
+      { day: 1, recipeId: 'r1', title: '肉じゃが', reason: 'coverage', doneAt: null },
+      { day: 2, recipeId: 'r2', title: '麻婆豆腐', reason: '', doneAt: '2026-09-05T10:00:00Z' },
+    ];
+    const expected = [
+      {
+        day: 1,
+        slotId: 'main',
+        recipeId: 'r1',
+        title: '肉じゃが',
+        reason: 'coverage',
+        doneAt: null,
+      },
+      {
+        day: 2,
+        slotId: 'main',
+        recipeId: 'r2',
+        title: '麻婆豆腐',
+        reason: '',
+        doneAt: '2026-09-05T10:00:00Z',
+      },
+    ];
+    expect(legacyPlanDaysToSlots(days)).toEqual(expected);
   });
 });

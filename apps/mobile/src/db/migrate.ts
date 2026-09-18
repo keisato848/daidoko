@@ -35,7 +35,8 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 // v19: 献立のテーブル化 menu_plans / menu_plan_days（時間帯ごとに 1 プラン —
 //      docs/買い物リスト・在庫設計.md §10.6。旧 app_meta 'menu_plan' JSON は
 //      menu-plan.service.ts が読み側でレイジーに取り込む）
-export const CURRENT_SCHEMA_VERSION = 19;
+// v20: 献立の枠（スロット）対応 menu_slot_settings / menu_plan_slots を追加。menu_plan_days は互換のため残し、レイジー移行する
+export const CURRENT_SCHEMA_VERSION = 20;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -417,6 +418,28 @@ const CREATE_TABLES_SQL = `
     reason TEXT NOT NULL DEFAULT '',
     done_at TEXT,
     PRIMARY KEY (plan_id, day)
+  );
+
+  -- v20: menu_slot_settings / menu_plan_slots for menu slot support.
+  CREATE TABLE IF NOT EXISTS menu_slot_settings (
+    meal_time TEXT NOT NULL,
+    slot_id TEXT NOT NULL,
+    slot_kind TEXT NOT NULL,
+    label TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    auto_fill INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (meal_time, slot_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS menu_plan_slots (
+    plan_id TEXT NOT NULL REFERENCES menu_plans(id),
+    day INTEGER NOT NULL,
+    slot_id TEXT NOT NULL,
+    recipe_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    done_at TEXT,
+    PRIMARY KEY (plan_id, day, slot_id)
   );
 `;
 

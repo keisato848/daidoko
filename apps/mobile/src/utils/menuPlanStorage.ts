@@ -219,3 +219,28 @@ export function storedMenuPlanToRows(
     })),
   };
 }
+
+/** `menu_plan_slots` の 1 行（`planId` を除く、v20） */
+export interface MenuPlanSlotRow {
+  day: number;
+  slotId: string;
+  recipeId: string;
+  title: string;
+  reason: string;
+  doneAt: string | null;
+}
+
+/**
+ * 旧 `menu_plan_days` の行配列を `menu_plan_slots` の行配列（全行 `slotId: 'main'`）へ変換する純関数。
+ * v20 のレイジー移行（`services/menu-plan.service.ts`）から呼ばれる。
+ */
+export function legacyPlanDaysToSlots(days: readonly MenuPlanDayRow[]): MenuPlanSlotRow[] {
+  return days.map((d) => ({
+    day: d.day,
+    slotId: 'main',
+    recipeId: d.recipeId,
+    title: d.title,
+    reason: d.reason,
+    doneAt: d.doneAt,
+  }));
+}
