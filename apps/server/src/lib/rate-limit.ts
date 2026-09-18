@@ -222,24 +222,25 @@ export function checkRateLimit(
   clientId: string,
   pool: RateLimitPool = RECIPE_POOL,
   now = Date.now(),
+  count = 1,
 ): RateLimitResult {
   const clientLimit = limitFromEnv(pool.clientEnv, pool.clientDefault);
   const globalLimit = limitFromEnv(pool.globalEnv, pool.globalDefault);
 
   const globalBucket = currentBucket(pool.key, now);
-  if (globalLimit > 0 && globalBucket.count >= globalLimit) {
+  if (globalLimit > 0 && globalBucket.count + count > globalLimit) {
     return { allowed: false, scope: 'global' };
   }
 
   // クライアント別カウンタもプールで分ける。同じ IP がレシピと相談を
   // 両方使ったとき、片方の消費でもう片方が止まらないように。
   const clientBucket = currentBucket(`${pool.key}:client:${clientId}`, now);
-  if (clientLimit > 0 && clientBucket.count >= clientLimit) {
+  if (clientLimit > 0 && clientBucket.count + count > clientLimit) {
     return { allowed: false, scope: 'client' };
   }
 
-  globalBucket.count += 1;
-  clientBucket.count += 1;
+  globalBucket.count += count;
+  clientBucket.count += count;
   notifyGlobalUsage(globalBucket.count, globalLimit, globalBucket.resetAt, pool);
   return { allowed: true };
 }

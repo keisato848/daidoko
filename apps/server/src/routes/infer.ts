@@ -69,7 +69,6 @@ import {
 } from '../lib/menu-arrange.js';
 import { runMenuArrangeAgent } from '../agents/menu-arrange.agent.js';
 import {
-  GeminiMenuRecipesProvider,
   MAX_MENU_RECIPES_DAYS,
   MAX_MENU_RECIPES_PANTRY,
   MAX_MENU_RECIPES_PREFERENCES,
@@ -88,6 +87,15 @@ import {
 } from '../lib/cover-image.js';
 import { GeminiStepImageProvider, type StepImageProvider } from '../lib/step-image.js';
 import { runCoverImageAgent } from '../agents/cover-image.agent.js';
+import {
+  DEVICE_ID_PATTERN,
+  QUOTA_CATEGORY,
+  monthlyFreeLimit,
+  resolveMenuRecipesProvider,
+  setMenuRecipesProviderForTesting,
+} from '../lib/infer-guards.js';
+
+export { setMenuRecipesProviderForTesting };
 
 const inferRouter = new Hono();
 
@@ -815,20 +823,6 @@ function resolveMenuProvider(): MenuArrangeProvider {
   return menuProviderOverride ?? new GeminiMenuArrangeProvider();
 }
 
-/** `x-device-id` の書式チェックだけ行う（乱数のインストール UUID・個人情報ではない）。 */
-const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
-
-/** 月次無料枠の N。既定 5（2026-08-28 利用者決定）。0 = 枠管理を無効化。 */
-function monthlyFreeLimit(): number {
-  const raw = process.env['INFER_MONTHLY_FREE_LIMIT'];
-  if (raw === undefined || raw.trim() === '') return 5;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : 5;
-}
-
-/** 全体枠のカテゴリ。将来 infer 全体で 1 本にする方針のため最初から 'infer'。 */
-const QUOTA_CATEGORY = 'infer';
-
 inferRouter.post('/menu', zValidator('json', inferMenuSchema), async (c) => {
   const deviceId = c.req.header('x-device-id');
   if (!deviceId || !DEVICE_ID_PATTERN.test(deviceId)) {
@@ -937,16 +931,6 @@ const inferMenuRecipesSchema = z.object({
   // 分量を書かせる推論なので consult と同様 unitSystem を受ける（/menu との意図的な差分）
   unitSystem: z.enum(['metric', 'imperial']).optional(),
 });
-
-let menuRecipesProviderOverride: MenuRecipesProvider | null = null;
-
-export function setMenuRecipesProviderForTesting(provider: MenuRecipesProvider | null): void {
-  menuRecipesProviderOverride = provider;
-}
-
-function resolveMenuRecipesProvider(): MenuRecipesProvider {
-  return menuRecipesProviderOverride ?? new GeminiMenuRecipesProvider();
-}
 
 inferRouter.post('/menu-recipes', zValidator('json', inferMenuRecipesSchema), async (c) => {
   // /infer/menu と同じ認可・枠の作法（§10.10.1 の順序が本質）。
