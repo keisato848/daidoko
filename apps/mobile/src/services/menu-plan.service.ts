@@ -63,6 +63,7 @@ import {
   upsertSlotEntry,
   MENU_MEAL_TIMES,
   type MenuMealTime,
+  type MenuPlanSlotRow,
   type StoredMenuDay,
   type StoredMenuPlan,
 } from '../utils/menuPlanStorage';
@@ -1023,6 +1024,37 @@ export interface MenuShoppingPlan {
   rows: ShoppingPlanRow[];
   /** 材料名 → 由来レシピ id（買い物リスト行の「献立から」バッジのタップ先・M3-6） */
   recipeIdByName: Record<string, string>;
+}
+
+/**
+ * 副菜以降の枠へまとめて料理を入れる（PR-5b・一括 AI 生成の確定時）。
+ * **空いている枠にだけ**入れる — 提案シートを開いている間に手で入れた料理を上書きしない。
+ * どの枠へ何を入れるかは `utils/menuBulkJob.ts` の `assignGeneratedToSlots` が決めている。
+ */
+export async function addMenuPlanSlotEntries(
+  mealTime: MenuMealTime,
+  rows: readonly MenuPlanSlotRow[],
+): Promise<MenuPlanView | null> {
+  if (!isNativePlatform || rows.length === 0) return null;
+  const stored = await readStoredMenuPlan(mealTime);
+  if (!stored) return null;
+
+  const current = stored.slots ?? [];
+  const taken = new Set(current.map((s) => `${s.day}:${s.slotId}`));
+  const added = rows.filter((r) => r.slotId !== MAIN_SLOT_ID && !taken.has(`${r.day}:${r.slotId}`));
+  if (added.length === 0) return null;
+
+  const plan: StoredMenuPlan = { ...stored, slots: [...current, ...added] };
+  await writeStoredMenuPlan(plan);
+  refreshWidgetSnapshot();
+
+  const { getAliasMap } = await import('./name-alias.service');
+  const [recipes, pantry, aliases] = await Promise.all([
+    loadMenuRecipes(),
+    loadPantry(),
+    getAliasMap(),
+  ]);
+  return hydrate(plan, recipes, pantry, aliases);
 }
 
 /**

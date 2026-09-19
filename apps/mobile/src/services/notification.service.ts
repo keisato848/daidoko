@@ -11,6 +11,7 @@ import { Platform } from 'react-native';
 
 import { isNativePlatform } from '../db/client';
 import { t } from '../i18n';
+import { withTimeout } from '../utils/withTimeout';
 
 const TIMER_CHANNEL_ID = 'timer';
 const LOW_STOCK_CHANNEL_ID = 'low-stock';
@@ -230,6 +231,19 @@ export async function cancelTimerNotification(id: string | null): Promise<void> 
 // 文言は静的（料理名は載せない・予約後の在庫変化で嘘になるため）。
 
 /**
+ * 献立の通知チャネル（Android）を作っておく。**サーバーから届く push（一括生成の完了・R34）は
+ * `channelId: 'menu'` を指す**ので、投入の前に呼ぶ — 無いと既定チャネルへ落ちる。
+ * 朝の献立通知と同じチャネルなので、利用者が止める場所は 1 つのまま。
+ */
+export async function ensureMenuChannel(): Promise<void> {
+  if (!isNativePlatform || Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(MENU_CHANNEL_ID, {
+    name: t('notification.menuChannel'),
+    importance: Notifications.AndroidImportance.DEFAULT,
+  }).catch(() => undefined);
+}
+
+/**
  * 翌朝の献立通知を `seconds` 秒後に 1 本だけ予約する。
  * 呼び出し側（`menu-plan.service.ts`）が毎回、`cancelAllMenuNotifications` で
  * 既存の献立通知を掃いてから呼ぶ責務を持つ — ここでは予約するだけ。
@@ -237,13 +251,8 @@ export async function cancelTimerNotification(id: string | null): Promise<void> 
 export async function scheduleMenuNotification(seconds: number): Promise<string | null> {
   if (!isNativePlatform || seconds <= 0) return null;
   if (!(await ensureNotificationPermission())) return null;
-  if (Platform.OS === 'android') {
-    // SCHEDULE_EXACT_ALARM は足さない（朝の案内は数分ずれてよい・審査面の負債にしない）
-    await Notifications.setNotificationChannelAsync(MENU_CHANNEL_ID, {
-      name: t('notification.menuChannel'),
-      importance: Notifications.AndroidImportance.DEFAULT,
-    });
-  }
+  // SCHEDULE_EXACT_ALARM は足さない（朝の案内は数分ずれてよい・審査面の負債にしない）
+  await ensureMenuChannel();
   try {
     return await Notifications.scheduleNotificationAsync({
       content: {
@@ -323,6 +332,20 @@ export async function getExpoPushToken(): Promise<string | null> {
   if (!isNativePlatform) return null;
   if (!(await ensureNotificationPermission())) return null;
   return readExpoPushToken();
+}
+
+/**
+ * 許可を求めたうえでトークンを取る。ただし**トークンの取得は `ms` で打ち切る**（R34）。
+ *
+ * 許可ダイアログは待つ（利用者が考える時間）。打ち切るのはその後の取得だけ —
+ * FCM が応答しない端末では `getExpoPushTokenAsync` が返ってこないことがあり、待つと
+ * 「通知を頼んでから投入する」処理が投入まで辿り着かない（2026-09-19 エミュレータで検出）。
+ * 通知は「あれば嬉しい」側。取れなければ null で先へ進み、画面は「戻ってきて確認」を出す。
+ */
+export async function getExpoPushTokenWithin(ms: number): Promise<string | null> {
+  if (!isNativePlatform) return null;
+  if (!(await ensureNotificationPermission().catch(() => false))) return null;
+  return withTimeout(readExpoPushToken(), ms, null);
 }
 
 /**
