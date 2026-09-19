@@ -1,8 +1,16 @@
+/**
+ * Expo のプッシュトークンの書式。**これ以外は保存も送信もしない** — 任意の文字列を
+ * `to` に入れて Expo へ投げると、他人のトークンや不正な宛先を中継できてしまう（sync と共用）
+ */
+export const EXPO_PUSH_TOKEN_PATTERN = /^Expo(nent)?PushToken\[[A-Za-z0-9_-]+\]$/;
+
 export interface ExpoPushMessage {
   to: string;
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  channelId?: string;
+  priority?: string;
 }
 
 export interface ExpoPushResult {

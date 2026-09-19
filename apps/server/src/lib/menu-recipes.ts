@@ -30,6 +30,9 @@ export const MAX_MENU_RECIPES_PREFERENCES = 400;
 
 /** 献立の時間帯（shared `menuRecipesMealTimeSchema` の写し）。省略 = 夕。 */
 export type MenuRecipesMealTime = 'breakfast' | 'lunch' | 'dinner';
+/** 枠の種類（Track C PR-5b）。モバイル `utils/menuSlots.ts` の `SLOT_KINDS` と同じ並び */
+export const MENU_SLOT_KINDS = ['main', 'side', 'soup', 'salad', 'dessert'] as const;
+export type MenuSlotKind = (typeof MENU_SLOT_KINDS)[number];
 
 export interface MenuRecipesInput {
   /** 不足日数 = 生成する品数（1〜7） */
@@ -45,6 +48,8 @@ export interface MenuRecipesInput {
    * プロンプトが朝/昼向けに出し分けられる。夕のプロンプトは従来と 1 文字も変えない。
    */
   mealTime?: MenuRecipesMealTime;
+  slotKind?: MenuSlotKind;
+  mainTitles?: string[];
   outputLocale?: OutputLocale;
   unitSystem?: OutputUnitSystem;
 }
@@ -103,23 +108,74 @@ const MEAL_TIME_GUIDE: Record<MenuRecipesMealTime, readonly string[]> = {
 };
 
 /**
+ * 主菜以外の枠の指示。**「主菜に添える物」であることを必ず書く** — 書かないと、副菜を頼んだのに
+ * 肉じゃがのような主菜級が返る。副菜・汁物は毎日作る物なので軽さ（時間・材料数）も縛る。
+ */
+const SLOT_KIND_GUIDE: Record<
+  Exclude<MenuSlotKind, 'main'>,
+  { label: string; guide: readonly string[] }
+> = {
+  side: {
+    label: '副菜',
+    guide: [
+      '- **主菜ではなく副菜**（小鉢・和え物・おひたし・炒め物の小皿）。1 品で食事にならない量でよい。',
+      '- 調理は 15 分以内・材料は 5 つ前後を目安にする。',
+      '- 「合わせる主菜」が渡されたら、味付け・主材料・調理法が被らないものにする。',
+    ],
+  },
+  soup: {
+    label: '汁物',
+    guide: [
+      '- **汁物**（味噌汁・スープ・吸い物）。具だくさんにして主菜の代わりにしない。',
+      '- 調理は 15 分以内・材料は 5 つ前後を目安にする。',
+      '- 「合わせる主菜」が渡されたら、和洋中の系統をそれに合わせる。',
+    ],
+  },
+  salad: {
+    label: 'サラダ',
+    guide: [
+      '- **サラダ**（生野菜・温野菜・マリネ）。ドレッシングも材料と手順に含める。',
+      '- 「合わせる主菜」が渡されたら、主材料が被らないものにする。',
+    ],
+  },
+  dessert: {
+    label: 'デザート',
+    guide: [
+      '- **食後のデザート**。家庭の台所で作れるもの。オーブン必須の焼き菓子ばかりにしない。',
+      '- 「合わせる主菜」は無視してよい。',
+    ],
+  },
+};
+
+/**
  * 時間帯で出し分けたシステムプロンプト（正典 — モバイルは写しを持つ。片方だけ直さないこと）。
  * 省略 = 夕（旧クライアント互換）。テストから分岐を固定するために公開する。
  */
-export function buildMenuRecipesSystemPrompt(mealTime: MenuRecipesMealTime = 'dinner'): string {
+export function buildMenuRecipesSystemPrompt(
+  mealTime: MenuRecipesMealTime = 'dinner',
+  slotKind: MenuSlotKind = 'main',
+): string {
+  // **主菜（省略時）の出力は従来と 1 文字も変えない**（旧クライアント互換・テストで固定）。
+  // 主菜以外で差し替えるのは「何を作るか」の 1 行と、品同士の散らし方の 1 行だけ
+  const side = slotKind === 'main' ? null : SLOT_KIND_GUIDE[slotKind];
   return [
     MEAL_TIME_ROLE[mealTime],
-    '利用者の献立に足りない品数ぶんのレシピを、指定の品数だけまとめて作ります。',
+    side
+      ? `献立の主菜に添える${side.label}を、指定の品数だけまとめて作ります。`
+      : '利用者の献立に足りない品数ぶんのレシピを、指定の品数だけまとめて作ります。',
     '',
     '## 前提',
     ...MEAL_TIME_GUIDE[mealTime],
+    ...(side ? side.guide : []),
     '- 作るのは**平日の家庭料理**。特別な道具・技法・長時間の仕込みを要求しない。',
     '- 材料は**日本の一般的なスーパーで揃うもの**だけを使う。取り寄せ・専門店の材料を出さない。',
     '- 渡された「手持ちのレシピ」と**同じ料理・よく似た料理は作らない**。',
     '  タイトルが違っても中身が同じ（例: 肉じゃがとじゃがいもと牛肉の煮物）は重複とみなす。',
     '- 渡された在庫の品を**活かす**。ただし在庫だけで無理に作らない。',
     '  足りない材料は足りないものとして材料に書く。隠さない。',
-    '- 生成する品同士も系統を散らす（主菜の食材・和洋中が偏らないようにする）。',
+    side
+      ? `- 生成する${side.label}同士も系統を散らす（食材・味付けが偏らないようにする）。`
+      : '- 生成する品同士も系統を散らす（主菜の食材・和洋中が偏らないようにする）。',
     '',
     '## 家族の好みが渡されたとき',
     '- 避けたいと書かれた食材・系統は使わない。好みと書かれたものへ寄せてよい。',
@@ -203,16 +259,24 @@ export function buildMenuRecipesResponseSchema(): typeof GEMINI_RESPONSE_SCHEMA 
  */
 export function buildMenuRecipesContext(input: MenuRecipesInput): string {
   const preferences = input.preferences?.trim();
-  return [
-    '## 作る品数',
-    String(input.days),
+  const contextLines = ['## 作る品数', String(input.days)];
+  if (
+    input.slotKind &&
+    input.slotKind !== 'main' &&
+    input.mainTitles &&
+    input.mainTitles.length > 0
+  ) {
+    contextLines.push('## 合わせる主菜', input.mainTitles.slice(0, 7).join('、'));
+  }
+  contextLines.push(
     '## 手持ちのレシピ（これと被らないこと）',
     input.existingTitles.slice(0, MAX_MENU_RECIPES_TITLES).join('、') || '（まだ無い）',
     '## 在庫にある品名',
     input.pantry.slice(0, MAX_MENU_RECIPES_PANTRY).join('、') || '（在庫は空）',
     '## 家族の好み・避けたいもの',
     preferences || '（指定なし）',
-  ].join('\n');
+  );
+  return contextLines.join('\n');
 }
 
 /**
@@ -336,7 +400,7 @@ export class GeminiMenuRecipesProvider implements MenuRecipesProvider {
           {
             text: withUnitSystem(
               withOutputLanguage(
-                buildMenuRecipesSystemPrompt(input.mealTime),
+                buildMenuRecipesSystemPrompt(input.mealTime, input.slotKind),
                 input.outputLocale ?? DEFAULT_OUTPUT_LOCALE,
               ),
               input.unitSystem ?? DEFAULT_UNIT_SYSTEM,
