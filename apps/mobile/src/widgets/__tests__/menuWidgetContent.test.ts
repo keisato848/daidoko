@@ -32,9 +32,15 @@ function asWeek(content: ReturnType<typeof buildMenuWidgetContent>): MenuWidgetW
 }
 
 describe('menuWidgetSize', () => {
-  it('高さが十分（250dp+）なら large（週間）', () => {
+  it('高さ 250dp 以上かつ幅 400dp 以上なら xlarge（特大）', () => {
+    expect(menuWidgetSize(400, 250)).toBe('xlarge');
+    expect(menuWidgetSize(500, 320)).toBe('xlarge');
+  });
+
+  it('高さが十分（250dp+）でも幅が 400dp 未満なら large（週間）', () => {
     expect(menuWidgetSize(180, 250)).toBe('large');
     expect(menuWidgetSize(320, 320)).toBe('large');
+    expect(menuWidgetSize(399, 250)).toBe('large');
   });
 
   it('低いときは幅で small / medium を分ける', () => {
@@ -257,5 +263,157 @@ describe('buildMenuWidgetContent — en ロケール', () => {
       menuDays: [{ title: 'Nikujaga', doneAt: null, recipeId: 'r1', day: 1 }],
     });
     expect(asWeek(buildMenuWidgetContent(snap, 'large')).heading).toBe('This week');
+  });
+});
+
+describe('buildMenuWidgetContent — 副菜（小/中・特大）', () => {
+  it('小は最大 2 行、溢れたら「ほか◯品」', () => {
+    const snap = snapshot({
+      menuDays: [{ title: '主菜', doneAt: null, day: 1 }],
+      menuSlots: [
+        {
+          day: 1,
+          slotId: 's1',
+          label: '副菜',
+          title: 'A',
+          recipeId: '',
+          doneAt: null,
+          position: 1,
+        },
+        {
+          day: 1,
+          slotId: 's2',
+          label: '副菜',
+          title: 'B',
+          recipeId: '',
+          doneAt: null,
+          position: 2,
+        },
+        {
+          day: 1,
+          slotId: 's3',
+          label: '副菜',
+          title: 'C',
+          recipeId: '',
+          doneAt: null,
+          position: 3,
+        },
+      ],
+    });
+    const content = asToday(buildMenuWidgetContent(snap, 'small'));
+    expect(content.sides).toHaveLength(2);
+    expect(content.sidesOverflowText).toBe('ほか1品');
+    expect(content.sidesOverflowCount).toBe(1);
+    expect(content.sides[0].text).toBe('副菜  A');
+  });
+
+  it('中は最大 4 行。スナップショット自体が 1 日 4 枠までなので、5 つ目は書き出し時に落ちて溢れない', () => {
+    const snap = snapshot({
+      menuDays: [{ title: '主菜', doneAt: null, day: 1 }],
+      menuSlots: [
+        {
+          day: 1,
+          slotId: 's1',
+          label: '副菜',
+          title: 'A',
+          recipeId: '',
+          doneAt: null,
+          position: 1,
+        },
+        {
+          day: 1,
+          slotId: 's2',
+          label: '副菜',
+          title: 'B',
+          recipeId: '',
+          doneAt: null,
+          position: 2,
+        },
+        {
+          day: 1,
+          slotId: 's3',
+          label: '副菜',
+          title: 'C',
+          recipeId: '',
+          doneAt: null,
+          position: 3,
+        },
+        {
+          day: 1,
+          slotId: 's4',
+          label: '副菜',
+          title: 'D',
+          recipeId: '',
+          doneAt: null,
+          position: 4,
+        },
+        {
+          day: 1,
+          slotId: 's5',
+          label: '副菜',
+          title: 'E',
+          recipeId: '',
+          doneAt: null,
+          position: 5,
+        },
+      ],
+    });
+    // 契約（WIDGET_MENU_SIDES_MAX = 4）で切るのは書く側。iOS も同じ JSON を読むので、
+    // 表示側ではなくスナップショットで上限を持つ
+    expect(snap.menu.sides).toHaveLength(4);
+    const content = asToday(buildMenuWidgetContent(snap, 'medium'));
+    expect(content.sides.map((x) => x.text)).toEqual(['副菜  A', '副菜  B', '副菜  C', '副菜  D']);
+    expect(content.sidesOverflowText).toBeNull();
+  });
+
+  it('特大サイズ（xlarge）は週間の各行に副菜を連結して出す', () => {
+    const snap = snapshot({
+      anchorDate: '2026-08-28',
+      menuDays: [{ title: '今日の分', doneAt: null, recipeId: 'r1', day: 1 }],
+      menuSlots: [
+        {
+          day: 1,
+          slotId: 's1',
+          label: '汁物',
+          title: '味噌汁',
+          recipeId: '',
+          doneAt: null,
+          position: 1,
+        },
+        {
+          day: 1,
+          slotId: 's2',
+          label: '副菜',
+          title: '冷奴',
+          recipeId: '',
+          doneAt: null,
+          position: 2,
+        },
+      ],
+    });
+    const content = asWeek(buildMenuWidgetContent(snap, 'xlarge'));
+    expect(content.isXLarge).toBe(true);
+    expect(content.rows[0].sidesText).toBe('汁物 味噌汁・副菜 冷奴');
+  });
+
+  it('大サイズ（large）では副菜を出さない（sidesText が null）', () => {
+    const snap = snapshot({
+      anchorDate: '2026-08-28',
+      menuDays: [{ title: '今日の分', doneAt: null, recipeId: 'r1', day: 1 }],
+      menuSlots: [
+        {
+          day: 1,
+          slotId: 's1',
+          label: '汁物',
+          title: '味噌汁',
+          recipeId: '',
+          doneAt: null,
+          position: 1,
+        },
+      ],
+    });
+    const content = asWeek(buildMenuWidgetContent(snap, 'large'));
+    expect(content.isXLarge).toBe(false);
+    expect(content.rows[0].sidesText).toBeNull();
   });
 });

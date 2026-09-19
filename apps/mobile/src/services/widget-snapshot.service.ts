@@ -60,9 +60,32 @@ async function collect(): Promise<WidgetSnapshot | null> {
   ]);
   const menu = today?.view ?? null;
 
+  const { getMenuSlotSettings } = await import('./menu-plan.service');
+  const mealTime = today?.mealTime ?? 'dinner';
+  const slotSettings = await getMenuSlotSettings(mealTime).catch(() => []);
+
+  // 無くなったレシピの副菜は出さない（主菜は title を null にして「—」にするが、
+  // 副菜は行ごと落とす — 押しても開けない行を増やさない）
+  const menuSlots =
+    menu?.plan?.slots
+      ?.filter((s) => menu.recipeMeta.get(s.recipeId)?.missing !== true)
+      .map((s) => {
+        const def = slotSettings.find((d) => d.slotId === s.slotId);
+        return {
+          day: s.day,
+          slotId: s.slotId,
+          label: def?.label ?? s.slotId,
+          title: s.title,
+          recipeId: s.recipeId,
+          doneAt: s.doneAt,
+          position: def?.position ?? Number.MAX_SAFE_INTEGER,
+        };
+      }) ?? [];
+
   return buildWidgetSnapshot({
     shoppingItems,
     menuDays: menu?.days ?? [],
+    menuSlots,
     // 自動モード（§10.11）で組まれたプランだけが anchorDate を持つ。
     // 手動プランは null のまま = 「次の一品」（ホームカードと同じ規約・§2）
     anchorDate: menu?.plan.anchorDate ?? null,
