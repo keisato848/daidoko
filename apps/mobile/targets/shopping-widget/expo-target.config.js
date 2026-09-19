@@ -1,5 +1,13 @@
 /**
- * 買い物リストウィジェット（W1-iOS・`docs/ウィジェット設計.md` §2）のターゲット定義。
+ * だいどこのウィジェット拡張（`docs/ウィジェット設計.md` §2）のターゲット定義。
+ *
+ * **このターゲットは 2 つのウィジェットを載せている**（買い物リスト W1-iOS ＋ 献立 W2-iOS）。
+ * エントリポイントは `DaidokoWidgetBundle.swift` の `@main` だけで、
+ * 個々の `Widget` には `@main` を付けない。**ウィジェットを足すときも
+ * ターゲットは増やさずバンドルに足す**（拡張が増えるほど App Group・entitlements・
+ * 署名まわりで §8 の「静かに壊れる」罠を踏む面が広がるため）。
+ *
+ * `name` は Xcode のターゲット名なので変えない（`ios/` の生成物・ディレクトリ名と結び付く）。
  *
  * `@bacons/apple-targets` はこのファイルを見て Xcode のターゲットを生やす。
  * **`ios/` は生成物**なので、ここと `*.swift` を直すのが正しい（README「Development」）。
@@ -17,8 +25,10 @@
 module.exports = {
   type: 'widget',
   name: 'ShoppingWidget',
-  // ウィジェットギャラリーに出る名前。ここは Android の label と揃える
-  displayName: '買い物リスト',
+  // 拡張そのものの表示名。**ギャラリーに並ぶ個々の名前は各 Widget の
+  // `configurationDisplayName`**（「買い物リスト」「献立」）なので、ここはアプリ名にする。
+  // 2 つ載せた時点で「買い物リスト」は実態と合わなくなった。
+  displayName: 'だいどこ',
   // 本体と同じ下限に合わせる（app.json の ios.deploymentTarget 相当）
   deploymentTarget: '16.0',
   entitlements: {},

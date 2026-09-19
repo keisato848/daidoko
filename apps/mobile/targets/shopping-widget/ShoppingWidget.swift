@@ -293,7 +293,8 @@ private struct ShoppingWidgetView: View {
 
 // MARK: - Widget
 
-@main
+// `@main` は DaidokoWidgetBundle.swift へ移した（1 ターゲットに 2 つのウィジェットを
+// 載せるため。エントリポイントはバンドル 1 つだけ・`docs/ウィジェット設計.md` §6）。
 struct ShoppingWidget: Widget {
   private let kind = "ShoppingWidget"
 
