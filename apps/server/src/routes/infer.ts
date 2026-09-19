@@ -68,14 +68,7 @@ import {
   type MenuArrangeProvider,
 } from '../lib/menu-arrange.js';
 import { runMenuArrangeAgent } from '../agents/menu-arrange.agent.js';
-import {
-  MAX_MENU_RECIPES_DAYS,
-  MAX_MENU_RECIPES_PANTRY,
-  MAX_MENU_RECIPES_PREFERENCES,
-  MAX_MENU_RECIPES_TITLES,
-  MenuRecipesConfigError,
-  type MenuRecipesProvider,
-} from '../lib/menu-recipes.js';
+import { MenuRecipesConfigError, type MenuRecipesProvider } from '../lib/menu-recipes.js';
 import { runMenuRecipesAgent } from '../agents/menu-recipes.agent.js';
 import { peekMonthlyQuota, recordMonthlyUse } from '../lib/quota-store.js';
 import {
@@ -90,6 +83,7 @@ import { runCoverImageAgent } from '../agents/cover-image.agent.js';
 import {
   DEVICE_ID_PATTERN,
   QUOTA_CATEGORY,
+  menuRecipesRequestSchema,
   monthlyFreeLimit,
   resolveMenuRecipesProvider,
   setMenuRecipesProviderForTesting,
@@ -931,24 +925,9 @@ inferRouter.post('/menu', zValidator('json', inferMenuSchema), async (c) => {
 
 // ─── 献立の不足分レシピの一括生成（M3・docs/買い物リスト・在庫設計.md §10.12） ──
 
-/**
- * 契約の正は `packages/shared/src/types/menu-recipes.ts`（サーバーは実行時に
- * shared を取り込まない方針のため、ここは同じ形の写し。片方だけ直さないこと）。
- */
-const inferMenuRecipesSchema = z.object({
-  days: z.number().int().min(1).max(MAX_MENU_RECIPES_DAYS),
-  // 献立の時間帯（v19・§10.13）。**省略 = 夕（旧クライアント互換）**。
-  // プロンプトの出し分けは lib/menu-recipes.ts の buildMenuRecipesSystemPrompt
-  mealTime: z.enum(['breakfast', 'lunch', 'dinner']).optional(),
-  existingTitles: z.array(z.string().min(1).max(100)).max(MAX_MENU_RECIPES_TITLES),
-  pantry: z.array(z.string().min(1).max(50)).max(MAX_MENU_RECIPES_PANTRY),
-  preferences: z.string().max(MAX_MENU_RECIPES_PREFERENCES).optional(),
-  locale: z.enum(['ja', 'en']).optional(),
-  // 分量を書かせる推論なので consult と同様 unitSystem を受ける（/menu との意図的な差分）
-  unitSystem: z.enum(['metric', 'imperial']).optional(),
-});
+// 要求の形は `lib/infer-guards.ts` の `menuRecipesRequestSchema`（非同期ジョブと共用）
 
-inferRouter.post('/menu-recipes', zValidator('json', inferMenuRecipesSchema), async (c) => {
+inferRouter.post('/menu-recipes', zValidator('json', menuRecipesRequestSchema), async (c) => {
   // /infer/menu と同じ認可・枠の作法（§10.10.1 の順序が本質）。
   const deviceId = c.req.header('x-device-id');
   if (!deviceId || !DEVICE_ID_PATTERN.test(deviceId)) {
@@ -1005,8 +984,17 @@ inferRouter.post('/menu-recipes', zValidator('json', inferMenuRecipesSchema), as
     throw err;
   }
 
-  const { days, mealTime, existingTitles, pantry, preferences, locale, unitSystem } =
-    c.req.valid('json');
+  const {
+    days,
+    mealTime,
+    existingTitles,
+    pantry,
+    preferences,
+    locale,
+    unitSystem,
+    slotKind,
+    mainTitles,
+  } = c.req.valid('json');
 
   const result = await runMenuRecipesAgent(
     {
@@ -1017,6 +1005,8 @@ inferRouter.post('/menu-recipes', zValidator('json', inferMenuRecipesSchema), as
       ...(preferences !== undefined && { preferences }),
       // 時間帯（省略 = 夕）。プロンプトの出し分けは provider 側
       ...(mealTime !== undefined && { mealTime }),
+      ...(slotKind !== undefined && { slotKind }),
+      ...(mainTitles !== undefined && { mainTitles }),
       outputLocale: parseOutputLocale(locale),
       unitSystem: parseUnitSystem(unitSystem),
     },

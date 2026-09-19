@@ -12,7 +12,7 @@ import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
 
 import { getClientIp } from '../lib/client-ip.js';
-import { sendExpoPush } from '../lib/expo-push.js';
+import { EXPO_PUSH_TOKEN_PATTERN, sendExpoPush } from '../lib/expo-push.js';
 import { parseAuthHeader } from '../lib/sync-auth.js';
 import {
   authenticateDevice,
@@ -492,12 +492,7 @@ const deviceUpdateSchema = z.object({
    * Expo の形式だけ受ける。任意の文字列を通すと、グループの誰かが登録した
    * 無関係なトークンへ（固定文言とはいえ）通知を中継する装置になる
    */
-  expoPushToken: z
-    .string()
-    .max(200)
-    .regex(/^Expo(nent)?PushToken\[[A-Za-z0-9_-]+\]$/)
-    .nullable()
-    .optional(),
+  expoPushToken: z.string().max(200).regex(EXPO_PUSH_TOKEN_PATTERN).nullable().optional(),
   /** 通知の文面の言語だけに使う。他の用途には持たない */
   locale: z.enum(['ja', 'en']).optional(),
 });
