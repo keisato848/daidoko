@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { ThemeProvider } from '../src/theme';
+
 import { ActionToast } from '../src/components/ActionToast';
 import { CookingResumeBar } from '../src/components/CookingResumeBar';
 import { DialogHost } from '../src/components/DialogHost';
@@ -180,29 +182,31 @@ export default function RootLayout() {
     // キーボードの位置・高さを全画面で扱えるようにする土台（`KeyboardAvoider` が使う）。
     // **アプリのルートに 1 つだけ**置く決まりで、これが無いと配下の
     // KeyboardAvoidingView / KeyboardAwareScrollView は黙って何もしない。
-    <KeyboardProvider>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: Colors.bg },
-        }}
-      >
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
-      </Stack>
-      {/* Now Cooking バー — 調理中はどの画面からも 1 タップで続きに戻れる。
-          (tabs) の外の階層画面（設定系など）でも文脈を保つため、ルートに 1 つだけ置く。
-          出す画面・位置の判断はコンポーネント側が持つ */}
-      <CookingResumeBar />
-      {/* 確認付き Toast — 操作結果の表示と取り消し。
-          `CookingResumeBar` と同じくルートに 1 つだけ置く */}
-      <ActionToast />
-      {/*
-        アプリのデザインのダイアログ（`docs/画面設計.md` §7）。**アプリに 1 つだけ**置く。
-        `Stack` の外に出しているのは、どの画面から出した確認でも同じ場所に描くため
-      */}
-      <DialogHost />
-    </KeyboardProvider>
+    <ThemeProvider>
+      <KeyboardProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: Colors.bg },
+          }}
+        >
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="recipes/[id]/edit" options={{ presentation: 'modal' }} />
+        </Stack>
+        {/* Now Cooking バー — 調理中はどの画面からも 1 タップで続きに戻れる。
+            (tabs) の外の階層画面（設定系など）でも文脈を保つため、ルートに 1 つだけ置く。
+            出す画面・位置の判断はコンポーネント側が持つ */}
+        <CookingResumeBar />
+        {/* 確認付き Toast — 操作結果の表示と取り消し。
+            `CookingResumeBar` と同じくルートに 1 つだけ置く */}
+        <ActionToast />
+        {/*
+          アプリのデザインのダイアログ（`docs/画面設計.md` §7）。**アプリに 1 つだけ**置く。
+          `Stack` の外に出しているのは、どの画面から出した確認でも同じ場所に描くため
+        */}
+        <DialogHost />
+      </KeyboardProvider>
+    </ThemeProvider>
   );
 }
 

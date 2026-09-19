@@ -43,7 +43,7 @@ function StarRow({ value, onChange }: { value: number; onChange: (v: number) => 
 
 const starStyles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 8 },
-  star: { fontSize: 32, color: Colors.border },
+  star: { fontSize: 32, color: Colors.starOff },
   starFilled: { color: Colors.gold },
 });
 

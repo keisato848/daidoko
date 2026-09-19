@@ -19,6 +19,7 @@ import {
 
 const CLOUD_INFERENCE_CONSENT_KEY = 'cloud_inference_consent';
 const LAUNCH_CAMERA_KEY = 'launch_camera';
+const THEME_MODE_KEY = 'theme_mode';
 const INSTALLATION_ID_KEY = 'installation_id';
 const MENU_AUTO_KEY = 'menu_auto_enabled';
 const MENU_AUTO_ADD_KEY = 'menu_auto_add_enabled';
@@ -81,6 +82,23 @@ export async function setCloudInferenceConsent(granted: boolean): Promise<void> 
  * 店を出た直後には最適だが、レシピを見に来た人には邪魔になるので既定にはしない
  * （`docs/お店の味を再現設計.md` §4.4）。
  */
+/**
+ * 表示テーマ（`'system' | 'light' | 'dark'`。既定は `'system'` = 端末の設定に追従）。
+ *
+ * **秘密ではないので `expo-secure-store` には置かない** — あちらは BYOK の API キーと
+ * 同期の認証情報だけ。ここはコーチマークの既読と同じ `app_meta`（SQLite）に置く。
+ */
+export type ThemeModeSetting = 'system' | 'light' | 'dark';
+
+export async function getThemeMode(): Promise<ThemeModeSetting> {
+  const v = await getAppMeta(THEME_MODE_KEY);
+  return v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
+}
+
+export async function setThemeMode(mode: ThemeModeSetting): Promise<void> {
+  await setAppMeta(THEME_MODE_KEY, mode);
+}
+
 export async function isLaunchCameraEnabled(): Promise<boolean> {
   return (await getAppMeta(LAUNCH_CAMERA_KEY)) === 'on';
 }
