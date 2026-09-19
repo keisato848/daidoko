@@ -1,0 +1,557 @@
+<title>だいどこ 配色の前後</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&display=swap">
+<style>
+  :root {
+    --ground: #F7F5F1;
+    --panel: #FFFFFF;
+    --ink: #23201B;
+    --ink-soft: #6A6155;
+    --rule: #E2DCD0;
+    --accent: #8A6A3A;
+    --bad: #A13A2E;
+    --good: #3C6B4C;
+    --bad-bg: #F6E7E4;
+    --good-bg: #E6EFE8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #15130F;
+      --panel: #1D1A15;
+      --ink: #EDE7DC;
+      --ink-soft: #A79C8A;
+      --rule: #322D24;
+      --accent: #D0A96E;
+      --bad: #E8897B;
+      --good: #8FC0A0;
+      --bad-bg: #38221E;
+      --good-bg: #1F3025;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #15130F;
+    --panel: #1D1A15;
+    --ink: #EDE7DC;
+    --ink-soft: #A79C8A;
+    --rule: #322D24;
+    --accent: #D0A96E;
+    --bad: #E8897B;
+    --good: #8FC0A0;
+    --bad-bg: #38221E;
+    --good-bg: #1F3025;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", system-ui, sans-serif;
+    line-height: 1.7;
+    margin: 0;
+  }
+  .wrap {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    padding-block: 32px 56px;
+  }
+
+  h1 { font-size: 22px; margin: 0 0 4px; text-wrap: balance; }
+  .sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 28px; max-width: 60ch; }
+  h2 { font-size: 15px; margin: 40px 0 12px; }
+
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  .cap { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .cap b { font-size: 13px; font-weight: 600; }
+  .chip {
+    font-size: 11px; padding: 1px 7px; border-radius: 3px;
+    letter-spacing: .04em; font-variant-numeric: tabular-nums;
+  }
+  .chip.ng { background: var(--bad-bg); color: var(--bad); }
+  .chip.ok { background: var(--good-bg); color: var(--good); }
+  .note { font-size: 11.5px; color: var(--ink-soft); }
+
+  /* ---- 端末モック ---- */
+  .screen {
+    border-radius: 10px; overflow: hidden; border: 1px solid var(--rule);
+    font-size: 13px; line-height: 1.6;
+  }
+  .bar { padding: 10px 14px 8px; }
+  .mark { font-family: "Cormorant Garamond", Georgia, serif; font-style: italic; font-size: 15px; letter-spacing: .12em; }
+  .card { margin: 0 10px 10px; border-radius: 8px; padding: 12px 13px 13px; }
+  .name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .meta { font-size: 11.5px; }
+  .stars { letter-spacing: 3px; font-size: 17px; margin-top: 9px; }
+  .label { font-size: 11px; letter-spacing: .08em; margin: 11px 0 5px; }
+  .btn { display: block; text-align: center; border-radius: 6px; padding: 8px; font-size: 12.5px; font-weight: 600; }
+
+  /* 現行ダーク */
+  .s1 { background: #0A0805; }
+  .s1 .mark, .s1 .label { color: #C9A16A; }
+  .s1 .card { background: #130C06; border: 1px solid #2E2418; }
+  .s1 .name { color: #F0E6D2; }
+  .s1 .meta { color: #5A4A34; }
+  .s1 .star-on { color: #C9A16A; } .s1 .star-off { color: #2E2418; }
+  .s1 .btn { background: #1C1409; color: #C9A16A; border: 1px solid #2E2418; }
+
+  /* ダーク是正後 */
+  .s2 { background: #0A0805; }
+  .s2 .mark, .s2 .label { color: #C9A16A; }
+  .s2 .card { background: #130C06; border: 1px solid #3D3020; }
+  .s2 .name { color: #F0E6D2; }
+  .s2 .meta { color: #9A8A6C; }
+  .s2 .star-on { color: #C9A16A; } .s2 .star-off { color: #7A664A; }
+  .s2 .btn { background: #1C1409; color: #C9A16A; border: 1px solid #3D3020; }
+
+  /* ライト */
+  .s3 { background: #FAF7F0; }
+  .s3 .mark, .s3 .label { color: #8A6A3A; }
+  .s3 .card { background: #FFFFFF; border: 1px solid #E0D8C8; }
+  .s3 .name { color: #2A2118; }
+  .s3 .meta { color: #6B5D4A; }
+  .s3 .star-on { color: #8A6A3A; } .s3 .star-off { color: #B8A88C; }
+  .s3 .btn { background: #F2ECE0; color: #7A5C2E; border: 1px solid #E0D8C8; }
+
+  /* ---- 金の小さい文字 ---- */
+  .screen[class^="g"] { background: #0A0805; padding: 13px; display: flex; flex-direction: column; gap: 9px; }
+  .glabel { letter-spacing: .1em; }
+  .gbody { font-size: 15px; color: #F0E6D2; margin: 0; line-height: 1.6; }
+  .grow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .gchip { border: 1px solid #3D3020; border-radius: 3px; padding: 2px 7px; }
+  .gbadge { font-weight: 700; letter-spacing: .05em; border: 1px solid #3D3020; border-radius: 3px; padding: 2px 5px; }
+
+  .g1 .glabel { font-size: 12px; color: #C9A16A; }
+  .g1 .gchip  { font-size: 12px; color: #C9A16A; }
+  .g1 .gbadge { font-size: 10px; color: #C9A16A; }
+  .g1 .gnote  { font-size: 11px; color: #A07A44; }
+
+  .g2 .glabel { font-size: 14px; color: #C9A16A; }
+  .g2 .gchip  { font-size: 14px; color: #C9A16A; }
+  .g2 .gbadge { font-size: 12px; color: #C9A16A; }
+  .g2 .gnote  { font-size: 13px; color: #A07A44; }
+
+  /* ---- 採用案をほかの画面へ ---- */
+  .b { --s10:10px; --s11:11px; --s12:12px; --s13:13px; }
+  .a { --s10:12px; --s11:13px; --s12:14px; --s13:15px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 6px; }
+  @media (max-width: 560px) { .pair { grid-template-columns: 1fr; } }
+  .ph { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 5px; }
+  .sc { background: #0A0805; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+        border-radius: 10px; border: 1px solid var(--rule); }
+  .sc .hd { font-size: var(--s12); color: #A07A44; letter-spacing: .12em; }
+  .sc .ttl { font-size: 15px; color: #F0E6D2; font-weight: 600; }
+  .sc .sub2 { font-size: 13px; color: #9A8A6C; }
+  .sc .gl { font-size: var(--s12); color: #C9A16A; letter-spacing: .05em; }
+  .sc .gs { font-size: var(--s11); color: #A07A44; letter-spacing: .08em; }
+  .sc .gt { font-size: var(--s13); color: #C9A16A; }
+  .sc .gx { font-size: var(--s10); color: #A07A44; }
+  .sc .big { font-size: 24px; color: #F0E6D2; font-weight: 600; line-height: 1.1;
+             font-variant-numeric: tabular-nums; }
+  .sc .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .sc .stats { display: flex; gap: 20px; }
+  .sc .chipr { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sc .cp { font-size: var(--s12); color: #C9A16A; border: 1px solid #3D3020;
+            border-radius: 3px; padding: 2px 7px; }
+  .sc .div { border-top: 1px solid #2E2418; padding-top: 8px; }
+  .sc .amt { font-size: var(--s12); color: #DCC9A8; font-variant-numeric: tabular-nums; }
+
+  .g3 .glabel { font-size: 12px; color: #DCC9A8; }
+  .g3 .gchip  { font-size: 12px; color: #DCC9A8; }
+  .g3 .gbadge { font-size: 10px; color: #DCC9A8; }
+  .g3 .gnote  { font-size: 11px; color: #9A8A6C; }
+
+  /* ---- 料理中モード（色はダーク是正後で固定。サイズだけ振る） ---- */
+  .cook { background: #0A0805; padding: 12px 13px 13px; display: flex; flex-direction: column; gap: 10px; }
+  .cbar { display: flex; align-items: baseline; gap: 9px; }
+  .cnum {
+    font-size: var(--step); color: #C9A16A; font-weight: 600; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .chint { font-size: var(--hint); color: #9A8A6C; }
+  .cstep { font-size: var(--step); color: #F0E6D2; line-height: 1.5; margin: 0; }
+  .cing {
+    display: flex; justify-content: space-between; gap: 10px;
+    font-size: var(--ing); color: #DCC9A8;
+    border-top: 1px solid #3D3020; padding-top: 7px;
+  }
+  .cfoot { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 2px; }
+  .ctimer { font-size: var(--ing); color: #C9A16A; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  /* ---- 一覧（高さを固定して件数を比べる） ---- */
+  .list { background: #0A0805; height: 310px; overflow: hidden; display: flex; flex-direction: column; }
+  .lbar {
+    font-size: var(--l); color: #C9A16A; letter-spacing: .08em;
+    padding: 11px 13px 9px; border-bottom: 1px solid #3D3020; flex: none;
+  }
+  .li { padding: 11px 13px; border-bottom: 1px solid #2E2418; flex: none; }
+  .lt { font-size: var(--t); color: #F0E6D2; font-weight: 600; line-height: 1.35; }
+  .lm { font-size: var(--m); color: #9A8A6C; margin-top: 3px; line-height: 1.4; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 600; font-size: 11.5px; color: var(--ink-soft); letter-spacing: .04em; }
+  td code { font-family: ui-monospace, "SF Mono", Consolas, monospace; font-size: 11.5px; }
+  .tw { overflow-x: auto; }
+  .num { text-align: right; }
+  .f { color: var(--bad); font-weight: 600; }
+  .p { color: var(--good); font-weight: 600; }
+  ul { padding-left: 1.1em; font-size: 13px; color: var(--ink); max-width: 62ch; }
+  li { margin-bottom: 5px; }
+  .src { font-size: 11.5px; color: var(--ink-soft); margin-top: 28px; }
+</style>
+
+<div class="wrap">
+  <h1>だいどこ 配色の前後</h1>
+  <p class="sub">
+    同じ画面を 3 通りで描いたもの。数字は背景に対するコントラスト比で、WCAG AA は本文 4.5:1・アイコン 3:1。
+    色は実測値で、モック用に作った色ではない。
+  </p>
+
+  <div class="cols">
+    <!-- 1 -->
+    <div class="col">
+      <div class="cap"><b>現行ダーク</b><span class="chip ng">2.35:1 NG</span></div>
+      <div class="screen s1">
+        <div class="bar"><span class="mark">DAIDOKO</span></div>
+        <div class="card">
+          <div class="name">鶏の照り焼き</div>
+          <div class="meta">材料 6 ・ 25 分 ・ 2 人分</div>
+          <div class="stars"><span class="star-on">★★★</span><span class="star-off">★★</span></div>
+          <div class="label">つくりかた</div>
+          <a class="btn">作った！を記録</a>
+        </div>
+      </div>
+      <p class="note">補助文字が沈む。星の未選択は 1.32:1 で、いくつあるか数えられない。</p>
+    </div>
+
+    <!-- 2 -->
+    <div class="col">
+      <div class="cap"><b>ダーク是正後</b><span class="chip ok">5.93:1 OK</span></div>
+      <div class="screen s2">
+        <div class="bar"><span class="mark">DAIDOKO</span></div>
+        <div class="card">
+          <div class="name">鶏の照り焼き</div>
+          <div class="meta">材料 6 ・ 25 分 ・ 2 人分</div>
+          <div class="stars"><span class="star-on">★★★</span><span class="star-off">★★</span></div>
+          <div class="label">つくりかた</div>
+          <a class="btn">作った！を記録</a>
+        </div>
+      </div>
+      <p class="note">変更は定数 2 行。黒基調とブランドの印象はそのまま。</p>
+    </div>
+
+    <!-- 3 -->
+    <div class="col">
+      <div class="cap"><b>ライト（新規）</b><span class="chip ok">5.97:1 OK</span></div>
+      <div class="screen s3">
+        <div class="bar"><span class="mark">DAIDOKO</span></div>
+        <div class="card">
+          <div class="name">鶏の照り焼き</div>
+          <div class="meta">材料 6 ・ 25 分 ・ 2 人分</div>
+          <div class="stars"><span class="star-on">★★★</span><span class="star-off">★★</span></div>
+          <div class="label">つくりかた</div>
+          <a class="btn">作った！を記録</a>
+        </div>
+      </div>
+      <p class="note">金は <code>#8A6A3A</code> に差し替え。現行の <code>#C9A16A</code> は白の上で 2.39:1 で使えない。</p>
+    </div>
+  </div>
+
+  <h2>本題: テーマカラーの小さい文字（90 箇所）</h2>
+  <p class="sub" style="margin-bottom:16px">
+    読みづらいのはここ、という指摘を受けて作った列。<b>金 <code>#C9A16A</code> は 8.37:1、<code>goldDim</code> は 5.11:1 で、
+    どちらも WCAG AA を通る。</b>つまりコントラスト是正をやり切っても、この 90 箇所は 1 つも変わらない。
+    効くのはサイズか、色の役割を変えるかのどちらか。
+  </p>
+
+  <div class="cols">
+    <div class="col">
+      <div class="cap"><b>現行</b><span class="chip ng">AA は通る</span></div>
+      <div class="screen g1">
+        <div class="glabel">つくりかた</div>
+        <p class="gbody">鶏もも肉は 30 分前に冷蔵庫から出しておく。</p>
+        <div class="grow"><span class="gchip">和食</span><span class="gchip">作りおき</span><span class="gbadge">AI</span></div>
+        <div class="gnote">在庫にあります ・ 前回 8 月 12 日</div>
+      </div>
+      <p class="note">金 10〜12px。数字の上では合格しているのに読みにくい。</p>
+    </div>
+
+    <div class="col">
+      <div class="cap"><b>金のままサイズを上げる</b></div>
+      <div class="screen g2">
+        <div class="glabel">つくりかた</div>
+        <p class="gbody">鶏もも肉は 30 分前に冷蔵庫から出しておく。</p>
+        <div class="grow"><span class="gchip">和食</span><span class="gchip">作りおき</span><span class="gbadge">AI</span></div>
+        <div class="gnote">在庫にあります ・ 前回 8 月 12 日</div>
+      </div>
+      <p class="note">10→13px、11→14px、12→15px。金の量は変わらないので印象は保てる。</p>
+    </div>
+
+    <div class="col">
+      <div class="cap"><b>小さい文字は白系にする</b></div>
+      <div class="screen g3">
+        <div class="glabel">つくりかた</div>
+        <p class="gbody">鶏もも肉は 30 分前に冷蔵庫から出しておく。</p>
+        <div class="grow"><span class="gchip">和食</span><span class="gchip">作りおき</span><span class="gbadge">AI</span></div>
+        <div class="gnote">在庫にあります ・ 前回 8 月 12 日</div>
+      </div>
+      <p class="note">サイズは現行のまま。金は見出し・大きい要素だけに残す。密度を失わない。</p>
+    </div>
+  </div>
+
+  <ul style="margin-top:14px">
+    <li><b>これはコントラストの問題ではない。</b> 金は 8.37:1 で合格している。WCAG の式は線の細さも彩度も見ていないので、10px の細い金文字が読みにくいことを検出できない。<b>基準を AA に置いても、この 90 箇所は素通りする。</b></li>
+    <li><b>3 列目は密度を一切失わない。</b> サイズを触らないので、カード高さも余白も一覧の件数も変わらない。変えるのは色の役割だけ。</li>
+    <li><b>2 列目は金の量が変わらないので、ブランドの印象は保たれる。</b> ただし文字が大きくなる分、余白とカード高さに連動する。</li>
+    <li><b>3 列目は「金＝装飾」への降格でもある。</b> だいどこは金が主役の配色なので、どこまで減らせるかはブランド判断（CLAUDE.md §4）。</li>
+  </ul>
+
+  <h2>料理中モードを離れた位置から見る</h2>
+  <p class="sub" style="margin-bottom:16px">
+    手順テキストは既に 20px に上げてある。取り残されているのは<b>材料オーバーレイ 15px・タイマー 13px・ヒント 12px</b>で、
+    料理中に離れて確認したいのはむしろ材料のほう。色は 3 案とも「ダーク是正後」で揃えてある（サイズだけの比較）。
+  </p>
+
+  <div class="cols">
+    <div class="col">
+      <div class="cap"><b>現行</b><span class="note">手順 20 / 材料 15 / 補助 12</span></div>
+      <div class="screen cook" style="--step:20px;--ing:15px;--hint:12px">
+        <div class="cbar"><span class="cnum">3</span><span class="chint">ステップ 3 / 7</span></div>
+        <p class="cstep">鶏肉は皮目から入れて、動かさずに 5 分焼く。</p>
+        <div class="cing"><span>鶏もも肉</span><span>300 g</span></div>
+        <div class="cing"><span>しょうゆ</span><span>大さじ 2</span></div>
+        <div class="cfoot"><span class="chint">画面をタップで材料を表示</span><span class="ctimer">5:00</span></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="cap"><b>OS「大」に追従</b><span class="note">手順 26 / 材料 20 / 補助 16</span></div>
+      <div class="screen cook" style="--step:26px;--ing:20px;--hint:16px">
+        <div class="cbar"><span class="cnum">3</span><span class="chint">ステップ 3 / 7</span></div>
+        <p class="cstep">鶏肉は皮目から入れて、動かさずに 5 分焼く。</p>
+        <div class="cing"><span>鶏もも肉</span><span>300 g</span></div>
+        <div class="cing"><span>しょうゆ</span><span>大さじ 2</span></div>
+        <div class="cfoot"><span class="chint">画面をタップで材料を表示</span><span class="ctimer">5:00</span></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="cap"><b>離れて見る用に振る</b><span class="note">手順 32 / 材料 24 / 補助 17</span></div>
+      <div class="screen cook" style="--step:32px;--ing:24px;--hint:17px">
+        <div class="cbar"><span class="cnum">3</span><span class="chint">ステップ 3 / 7</span></div>
+        <p class="cstep">鶏肉は皮目から入れて、動かさずに 5 分焼く。</p>
+        <div class="cing"><span>鶏もも肉</span><span>300 g</span></div>
+        <div class="cing"><span>しょうゆ</span><span>大さじ 2</span></div>
+        <div class="cfoot"><span class="chint">画面をタップで材料を表示</span><span class="ctimer">5:00</span></div>
+      </div>
+    </div>
+  </div>
+
+  <ul style="margin-top:14px">
+    <li><b>2 列目は今日でも見られる絵。</b> <code>allowFontScaling</code> を落としている箇所が 0 件なので、端末の文字サイズを「大」にすれば既にこう表示されるはず。<b>ただし固定高さで見切れないかは未検証。</b></li>
+    <li><b>既定を上げる案は、2 列目とほぼ同じ絵になる。</b> つまり論点は「どう見せるか」ではなく<b>「誰に手間を負わせるか」</b> — 端末設定を変えてもらうか、既定で全員に出すか。</li>
+    <li><b>3 列目は密度を捨てている。</b> 1 画面に入る材料が減る。離れて見る用途には効くが、手元で見る人には情報が減る。</li>
+  </ul>
+
+  <h2>料理中のサイズを、ほかの画面にも当てると</h2>
+  <p class="sub" style="margin-bottom:16px">
+    蔵書（レシピ一覧）で試したもの。<b>画面の高さを同じに固定</b>してあるので、1 画面に入る件数がそのまま比較できる。
+    色は 3 列とも「ダーク是正後」。
+  </p>
+
+  <div class="cols">
+    <div class="col">
+      <div class="cap"><b>現行</b><span class="note">名前 15 / 補助 11</span></div>
+      <div class="screen list" style="--t:15px;--m:11px;--l:11px">
+        <div class="lbar">蔵書庫</div>
+        <div class="li"><div class="lt">鶏の照り焼き</div><div class="lm">材料 6 ・ 25 分 ・ 作った 4 回</div></div>
+        <div class="li"><div class="lt">母のポテトサラダ</div><div class="lm">材料 8 ・ 30 分 ・ 作った 12 回</div></div>
+        <div class="li"><div class="lt">かぼちゃの煮物</div><div class="lm">材料 5 ・ 20 分 ・ 作った 2 回</div></div>
+        <div class="li"><div class="lt">豚汁</div><div class="lm">材料 10 ・ 40 分 ・ 作った 7 回</div></div>
+        <div class="li"><div class="lt">だし巻き卵</div><div class="lm">材料 4 ・ 10 分 ・ 作った 21 回</div></div>
+        <div class="li"><div class="lt">きんぴらごぼう</div><div class="lm">材料 5 ・ 15 分 ・ 作った 3 回</div></div>
+      </div>
+      <p class="note">6 件見える。手元で持って見る前提の密度。</p>
+    </div>
+
+    <div class="col">
+      <div class="cap"><b>1 段階上げる</b><span class="note">名前 17 / 補助 13</span></div>
+      <div class="screen list" style="--t:17px;--m:13px;--l:12px">
+        <div class="lbar">蔵書庫</div>
+        <div class="li"><div class="lt">鶏の照り焼き</div><div class="lm">材料 6 ・ 25 分 ・ 作った 4 回</div></div>
+        <div class="li"><div class="lt">母のポテトサラダ</div><div class="lm">材料 8 ・ 30 分 ・ 作った 12 回</div></div>
+        <div class="li"><div class="lt">かぼちゃの煮物</div><div class="lm">材料 5 ・ 20 分 ・ 作った 2 回</div></div>
+        <div class="li"><div class="lt">豚汁</div><div class="lm">材料 10 ・ 40 分 ・ 作った 7 回</div></div>
+        <div class="li"><div class="lt">だし巻き卵</div><div class="lm">材料 4 ・ 10 分 ・ 作った 21 回</div></div>
+        <div class="li"><div class="lt">きんぴらごぼう</div><div class="lm">材料 5 ・ 15 分 ・ 作った 3 回</div></div>
+      </div>
+      <p class="note">5 件。補助が読める大きさになる。落とす密度は 1 件分。</p>
+    </div>
+
+    <div class="col">
+      <div class="cap"><b>料理中と同じサイズ</b><span class="note">名前 20 / 補助 15</span></div>
+      <div class="screen list" style="--t:20px;--m:15px;--l:13px">
+        <div class="lbar">蔵書庫</div>
+        <div class="li"><div class="lt">鶏の照り焼き</div><div class="lm">材料 6 ・ 25 分 ・ 作った 4 回</div></div>
+        <div class="li"><div class="lt">母のポテトサラダ</div><div class="lm">材料 8 ・ 30 分 ・ 作った 12 回</div></div>
+        <div class="li"><div class="lt">かぼちゃの煮物</div><div class="lm">材料 5 ・ 20 分 ・ 作った 2 回</div></div>
+        <div class="li"><div class="lt">豚汁</div><div class="lm">材料 10 ・ 40 分 ・ 作った 7 回</div></div>
+        <div class="li"><div class="lt">だし巻き卵</div><div class="lm">材料 4 ・ 10 分 ・ 作った 21 回</div></div>
+        <div class="li"><div class="lt">きんぴらごぼう</div><div class="lm">材料 5 ・ 15 分 ・ 作った 3 回</div></div>
+      </div>
+      <p class="note">4 件。一覧というより、1 件ずつ差し出す画面に近づく。</p>
+    </div>
+  </div>
+
+  <ul style="margin-top:14px">
+    <li><b>料理中と同じサイズにすると、一覧が一覧でなくなる。</b> 6 件 → 4 件。探す画面としては弱くなり、蔵書が増えるほど効いてくる。</li>
+    <li><b>料理中モードが大きいのは、画面の役割が違うから。</b> あちらは 1 度に 1 手順しか出さないので、大きくしても失うものが無い。一覧は件数が価値なので、同じ理屈が通らない。</li>
+    <li><b>中央の「1 段階上げる」は落としどころになりうる。</b> 失うのは 1 件分で、補助文字は読める大きさになる。ただしこれは<b>全画面の余白・カード高さ・タブの文字まで連動する</b>変更で、コントラスト是正（定数 2 行）とは規模が違う。</li>
+  </ul>
+
+  <h2>採用案をほかの画面に当てる</h2>
+  <p class="sub" style="margin-bottom:16px">
+    <b>金はそのまま、小さい文字だけ 1 段階上げる</b>（10→12 / 11→13 / 12→14 / 13→15px）。
+    金の小さい文字に加えて、<b>分量・個数（白系 <code>paperDim</code>）も対象に含めた</b> —
+    <code>shopping.tsx:414</code> の 12px と <code>consume-meal.tsx:311</code> の 13px。
+    レシピ名・本文・統計の数値は現行のまま触っていない。左が現行、右が採用案。
+    金の量も色も変えていないので、ブランドの印象はそのまま残る。
+  </p>
+
+  <div class="pair">
+    <div><p class="ph">ホーム（現行）</p>
+      <div class="sc b">
+        <div class="hd">こんげつ</div>
+        <div class="stats"><div><div class="big">18</div><div class="gx">作った回数</div></div>
+          <div><div class="big">7</div><div class="gx">新しい料理</div></div></div>
+        <div class="div"><div class="gl">きょうの献立</div>
+          <div class="ttl">鶏の照り焼き</div>
+          <div class="gt">ゆうべ 家族が作りました</div></div>
+      </div></div>
+    <div><p class="ph">ホーム（採用案）</p>
+      <div class="sc a">
+        <div class="hd">こんげつ</div>
+        <div class="stats"><div><div class="big">18</div><div class="gx">作った回数</div></div>
+          <div><div class="big">7</div><div class="gx">新しい料理</div></div></div>
+        <div class="div"><div class="gl">きょうの献立</div>
+          <div class="ttl">鶏の照り焼き</div>
+          <div class="gt">ゆうべ 家族が作りました</div></div>
+      </div></div>
+  </div>
+
+  <div class="pair">
+    <div><p class="ph">蔵書庫（現行）</p>
+      <div class="sc b">
+        <div class="gs">わたしの棚</div>
+        <div><div class="ttl">母のポテトサラダ</div><div class="sub2">材料 8 ・ 30 分 ・ 作った 12 回</div></div>
+        <div class="chipr"><span class="cp">和食</span><span class="cp">作りおき</span></div>
+        <div class="div"><div class="ttl">かぼちゃの煮物</div><div class="sub2">材料 5 ・ 20 分 ・ 作った 2 回</div></div>
+      </div></div>
+    <div><p class="ph">蔵書庫（採用案）</p>
+      <div class="sc a">
+        <div class="gs">わたしの棚</div>
+        <div><div class="ttl">母のポテトサラダ</div><div class="sub2">材料 8 ・ 30 分 ・ 作った 12 回</div></div>
+        <div class="chipr"><span class="cp">和食</span><span class="cp">作りおき</span></div>
+        <div class="div"><div class="ttl">かぼちゃの煮物</div><div class="sub2">材料 5 ・ 20 分 ・ 作った 2 回</div></div>
+      </div></div>
+  </div>
+
+  <div class="pair">
+    <div><p class="ph">買い物リスト（現行）</p>
+      <div class="sc b">
+        <div class="row"><span class="gs">かいもの</span><span class="gt">まとめて追加</span></div>
+        <div class="row"><span class="ttl">たまねぎ</span><span class="amt">2 個</span></div>
+        <div class="gx">スーパーA ・ 在庫から</div>
+        <div class="div row"><span class="ttl">しょうゆ</span><span class="amt">1 本</span></div>
+        <div class="gx">スーパーA</div>
+      </div></div>
+    <div><p class="ph">買い物リスト（採用案）</p>
+      <div class="sc a">
+        <div class="row"><span class="gs">かいもの</span><span class="gt">まとめて追加</span></div>
+        <div class="row"><span class="ttl">たまねぎ</span><span class="amt">2 個</span></div>
+        <div class="gx">スーパーA ・ 在庫から</div>
+        <div class="div row"><span class="ttl">しょうゆ</span><span class="amt">1 本</span></div>
+        <div class="gx">スーパーA</div>
+      </div></div>
+  </div>
+
+  <div class="pair">
+    <div><p class="ph">設定（現行）</p>
+      <div class="sc b">
+        <div class="hd">アカウント</div>
+        <div><div class="ttl">プロフィール</div><div class="sub2">さとう けい</div></div>
+        <div class="div hd">データ</div>
+        <div><div class="ttl">バックアップ</div><div class="sub2">最後の保存 8 月 12 日</div></div>
+      </div></div>
+    <div><p class="ph">設定（採用案）</p>
+      <div class="sc a">
+        <div class="hd">アカウント</div>
+        <div><div class="ttl">プロフィール</div><div class="sub2">さとう けい</div></div>
+        <div class="div hd">データ</div>
+        <div><div class="ttl">バックアップ</div><div class="sub2">最後の保存 8 月 12 日</div></div>
+      </div></div>
+  </div>
+
+  <ul style="margin-top:14px">
+    <li><b>一覧の件数は変わらない。</b> 触るのは金の小さい文字だけで、レシピ名・本文・数値は現行のまま。カード高さがわずかに伸びるが、1 件分を落とすほどではない。</li>
+    <li><b>効きが大きいのは設定とホームの見出し。</b> 12px＋字間の大文字ラベルは、字間が広い分だけ小さく見えていた。</li>
+    <li><b>買い物リストの「スーパーA ・ 在庫から」は 10px だった。</b> ここが一番変わる。</li>
+    <li><b>分量・個数も上げた。</b>「2 個」「1 本」は白系だが 12px で、金と同じく小さかった。対象が金だけでなくなったので、<b>「金のときだけ上げる」規則ではなく、段階そのものを上げる方向に寄る。</b></li>
+    <li><b>残る判断</b>: <code>Typography</code> の xxs/xs/sm を上げると、白の小さい文字も一緒に動く。どこまで巻き込むか（例: タイムスタンプ・注釈・ライセンス表記）は実画面で見て決める必要がある。</li>
+  </ul>
+
+  <h2>色の変更点</h2>
+  <div class="tw">
+    <table>
+      <tr>
+        <th>役割</th><th>現行</th><th class="num">比</th>
+        <th>ダーク是正後</th><th class="num">比</th>
+        <th>ライト</th><th class="num">比</th>
+      </tr>
+      <tr>
+        <td>補助文字 <code>muted</code></td>
+        <td><code>#5A4A34</code></td><td class="num f">2.35</td>
+        <td><code>#9A8A6C</code></td><td class="num p">5.93</td>
+        <td><code>#6B5D4A</code></td><td class="num p">5.97</td>
+      </tr>
+      <tr>
+        <td>星（未選択）</td>
+        <td><code>#2E2418</code></td><td class="num f">1.32</td>
+        <td><code>#7A664A</code></td><td class="num p">3.65</td>
+        <td><code>#B8A88C</code></td><td class="num p">3.1</td>
+      </tr>
+      <tr>
+        <td>金 <code>gold</code></td>
+        <td><code>#C9A16A</code></td><td class="num p">8.37</td>
+        <td><code>#C9A16A</code></td><td class="num p">8.37</td>
+        <td><code>#8A6A3A</code></td><td class="num p">4.67</td>
+      </tr>
+      <tr>
+        <td>本文 <code>paper</code></td>
+        <td><code>#F0E6D2</code></td><td class="num p">16.15</td>
+        <td><code>#F0E6D2</code></td><td class="num p">16.15</td>
+        <td><code>#2A2118</code></td><td class="num p">14.77</td>
+      </tr>
+      <tr>
+        <td>背景 / カード</td>
+        <td><code>#0A0805</code></td><td class="num">—</td>
+        <td><code>#0A0805</code></td><td class="num">—</td>
+        <td><code>#FAF7F0</code></td><td class="num">—</td>
+      </tr>
+    </table>
+  </div>
+
+  <h2>読み取れること</h2>
+  <ul>
+    <li><b>2 列目と 3 列目は違う問題を解いている。</b> 2 列目は「文字が薄くて読めない」を、3 列目は「黒背景そのものが見づらい」を解く。片方はもう片方の代わりにならない。</li>
+    <li><b>2 列目は安い。</b> <code>theme.ts</code> の定数 2 行で、使用箇所 138 か所が同時に直る。ブランドの黒と金はそのまま残る。</li>
+    <li><b>3 列目は高い。</b> 75 ファイルの色参照を実行時に切り替わる形へ直し、<code>Colors</code> を通らないハードコード 125 か所を回収する必要がある。金も差し替えになるので、CLAUDE.md §4 の改訂を伴う。</li>
+  </ul>
+
+  <p class="src">
+    値の出どころ: <code>apps/mobile/src/constants/theme.ts</code>、星は
+    <code>apps/mobile/app/(tabs)/recipes/[id]/log.tsx:46</code>。
+    比は WCAG 2.1 の相対輝度で計算。ライトの星 3.1 は目安で、Phase 1 で確定する。
+  </p>
+</div>
