@@ -38,6 +38,7 @@ import {
   buildMenu,
   encodeReason,
   fillSlotsFromLibrary,
+  mainCandidatePool,
   menuDateKey,
   mergeMenuIngredients,
   mergeMissingIngredients,
@@ -443,10 +444,16 @@ export async function generateMenuPlan(
   ]);
 
   const today = new Date();
-  const built = buildMenu(recipes, pantry.items, days, today, aliases);
-  // 主菜以外の枠（PR-5a・§10.15）: 手入力は引き継ぎ、自動の枠は組み直す。
-  // 判断は純関数側（`carryManualSlotEntries` / `fillSlotsFromLibrary`）。ここは繋ぐだけ
+  // 主菜以外の枠（PR-5a・§10.16）: 手入力は引き継ぎ、自動の枠は組み直す。判断は純関数側
+  // （`carryManualSlotEntries` / `mainCandidatePool` / `fillSlotsFromLibrary`）。ここは繋ぐだけ
   const carried = carryManualSlotEntries(previous?.slots ?? []);
+  const mainPool = mainCandidatePool({
+    recipes,
+    slotDefs,
+    excludeIds: carried.map((s) => s.recipeId),
+    days,
+  });
+  const built = buildMenu(mainPool, pantry.items, days, today, aliases);
   const filled = fillSlotsFromLibrary({
     days: built.days,
     slotDefs,
@@ -916,6 +923,9 @@ export async function applyMenuArrangement(
     generatedAt: new Date().toISOString(),
     source: 'ai',
     days: nextDays,
+    // 副菜以降は日番号のまま引き継ぐ（PR-5a）。落とすと S21 の「手で入れた料理は残ります」が嘘になる。
+    // 主菜の行は保存時に `applyDaysToSlots` が `nextDays` から作り直す
+    ...(current.plan.slots ? { slots: current.plan.slots } : {}),
     pantrySignature: current.plan.pantrySignature,
     // anchorDate は引き継ぐ（自動モードの並びが AI で差し替わっても、ローリング対象で
     // あることまでは変えない）。autoAddedItemIds は引き継がない — 直前の自動追加バッチが
@@ -1229,10 +1239,12 @@ export async function runDailyMenuMaintenance(): Promise<void> {
     if (rolled) {
       // 主菜以外の枠も同じだけ詰める。詰めないと副菜が別の日の主菜と並ぶ（v20）
       const rolledSlots = rollMenuPlanSlots(stored.slots ?? [], rolled.droppedDays);
-      // 新しく入った日の副菜以降を蔵書庫から埋める（PR-5a）。生き残った日の空き枠も
-      // 対象になるが、既に料理が入っている枠は触らない（`fillSlotsFromLibrary` の規則）
+      // **新しく入った日だけ**副菜以降を蔵書庫から埋める（PR-5a）。生き残った日の空き枠は
+      // 触らない — 利用者が「外した」枠が翌朝黙って戻る（§10.11.1）。`days` は全日を渡す
+      // （重複除外と在庫の計算用）
       const filled = fillSlotsFromLibrary({
         days: rolled.days,
+        onlyDays: rolled.addedDays.map((d) => d.day),
         slotDefs,
         existingSlots: rolledSlots,
         recipes,

@@ -1,4 +1,10 @@
-import { buildMenu, fillSlotsFromLibrary, type MenuPantryItem, type MenuRecipe } from '../menuPlan';
+import {
+  buildMenu,
+  fillSlotsFromLibrary,
+  mainCandidatePool,
+  type MenuPantryItem,
+  type MenuRecipe,
+} from '../menuPlan';
 import type { MenuPlanSlotRow } from '../menuPlanStorage';
 
 /**
@@ -177,18 +183,179 @@ describe('fillSlotsFromLibrary', () => {
     expect(out.map((s) => s.recipeId)).toEqual(['r-tonjiru']);
   });
 
-  it('buildMenu の結果（主菜）にそのまま繋げられる', () => {
-    const built = buildMenu([MAIN_KARAAGE, SOUP_MISO, SIDE_OHITASHI], pantry, 1, TODAY);
+  it('手入力で使われているレシピは、別の日の枠にも置かない', () => {
+    const existing: MenuPlanSlotRow[] = [
+      { day: 1, slotId: 'soup', recipeId: 'r-miso', title: '味噌汁', reason: '', doneAt: null },
+    ];
+    const out = fillSlotsFromLibrary({
+      days: [
+        { day: 1, recipeId: 'r-main' },
+        { day: 2, recipeId: 'r-main2' },
+      ],
+      slotDefs: [
+        { slotId: 'main', slotKind: 'main' },
+        { slotId: 'soup', slotKind: 'soup' },
+      ],
+      existingSlots: existing,
+      recipes: [SOUP_MISO, SOUP_TONJIRU],
+      pantry,
+      today: TODAY,
+    });
+    expect(out.map((s) => [s.day, s.recipeId])).toEqual([[2, 'r-tonjiru']]);
+  });
+
+  it('日は番号順に埋める（渡す順に依らない — 候補が足りないとき 1 日目が先）', () => {
+    const out = fillSlotsFromLibrary({
+      days: [
+        { day: 2, recipeId: 'r-main2' },
+        { day: 1, recipeId: 'r-main' },
+      ],
+      slotDefs: [
+        { slotId: 'main', slotKind: 'main' },
+        { slotId: 'soup', slotKind: 'soup' },
+      ],
+      existingSlots: [],
+      recipes: [SOUP_MISO],
+      pantry,
+      today: TODAY,
+    });
+    expect(out.map((s) => s.day)).toEqual([1]);
+  });
+
+  it('材料の無いレシピは候補にしない（buildMenu と同じ扱い）', () => {
+    const out = fillSlotsFromLibrary({
+      days: [{ day: 1, recipeId: 'r-main' }],
+      slotDefs: DEFS,
+      existingSlots: [],
+      recipes: [recipe('r-empty', 'コーンスープ', [])],
+      pantry,
+      today: TODAY,
+    });
+    expect(out).toEqual([]);
+  });
+
+  it('理由は主菜と同じ kind:subject 形で入る（在庫が全部揃う → coverage）', () => {
+    const out = fillSlotsFromLibrary({
+      days: [{ day: 1, recipeId: 'r-main' }],
+      slotDefs: [
+        { slotId: 'main', slotKind: 'main' },
+        { slotId: 'soup', slotKind: 'soup' },
+      ],
+      existingSlots: [],
+      recipes: [SOUP_MISO],
+      pantry,
+      today: TODAY,
+    });
+    expect(out[0]?.reason).toBe('coverage:2');
+  });
+
+  it('onlyDays: 渡した日だけ埋める（ローリングで生き残った日の「外した」枠を戻さない）', () => {
+    const out = fillSlotsFromLibrary({
+      days: [
+        { day: 1, recipeId: 'r-main' },
+        { day: 2, recipeId: 'r-main2' },
+      ],
+      onlyDays: [2],
+      slotDefs: [
+        { slotId: 'main', slotKind: 'main' },
+        { slotId: 'soup', slotKind: 'soup' },
+      ],
+      existingSlots: [],
+      recipes: [SOUP_MISO, SOUP_TONJIRU],
+      pantry,
+      today: TODAY,
+    });
+    expect(out.map((s) => s.day)).toEqual([2]);
+  });
+
+  it('usesPantryItemIds を持たない日（保存形）は、主菜の材料から在庫の引き当てを引き直す', () => {
+    // 主菜が 麻婆豆腐（豆腐・ねぎ）。保存形なので usesPantryItemIds は無い。
+    // 引き直さなければ 冷奴（豆腐・ねぎ）が在庫一致で勝つ。引き直せば おひたし が勝つ
+    const mabo = recipe('r-mabo', '麻婆豆腐', ['豆腐', 'ねぎ']);
+    const out = fillSlotsFromLibrary({
+      days: [{ day: 1, recipeId: 'r-mabo' }],
+      slotDefs: [
+        { slotId: 'main', slotKind: 'main' },
+        { slotId: 'side', slotKind: 'side' },
+      ],
+      existingSlots: [],
+      recipes: [mabo, SIDE_HIYAYAKKO, SIDE_OHITASHI],
+      pantry,
+      today: TODAY,
+    });
+    expect(out[0]?.recipeId).toBe('r-ohitashi');
+  });
+
+  it('同じ slotId が定義に 2 回あっても (day, slotId) は 1 行（PK で「組む」が落ちない）', () => {
+    const out = fillSlotsFromLibrary({
+      days: [{ day: 1, recipeId: 'r-main' }],
+      slotDefs: [
+        { slotId: 'soup', slotKind: 'soup' },
+        { slotId: 'soup', slotKind: 'soup' },
+      ],
+      existingSlots: [],
+      recipes: [SOUP_MISO, SOUP_TONJIRU],
+      pantry,
+      today: TODAY,
+    });
+    expect(out).toHaveLength(1);
+  });
+});
+
+describe('mainCandidatePool + buildMenu — 主菜が副菜・汁物の候補を先に食わない', () => {
+  const ALL = [MAIN_KARAAGE, SOUP_MISO, SIDE_OHITASHI];
+
+  it('在庫が揃った味噌汁を主菜にせず、汁物・副菜の両方が埋まる', () => {
+    // 外さなければ 味噌汁（豆腐・ねぎが在庫に全部ある）が主菜の最高点になり、汁物枠が空になる
+    const pool = mainCandidatePool({ recipes: ALL, slotDefs: DEFS, excludeIds: [], days: 1 });
+    const built = buildMenu(pool, pantry, 1, TODAY);
+    expect(built.days[0]?.recipeId).toBe('r-main');
     const out = fillSlotsFromLibrary({
       days: built.days,
       slotDefs: DEFS,
       existingSlots: [],
-      recipes: [MAIN_KARAAGE, SOUP_MISO, SIDE_OHITASHI],
+      recipes: ALL,
       pantry,
       today: TODAY,
     });
-    // 主菜が何を取っても、汁物・副菜のどちらかは埋まる（候補は各 1 品）
-    expect(out.length).toBeGreaterThan(0);
-    expect(out.every((s) => s.recipeId !== built.days[0]?.recipeId)).toBe(true);
+    expect(out.map((s) => s.slotId)).toEqual(['soup', 'side']);
+  });
+
+  it('主菜 1 枠の設定では何も外さない（既存利用者の主菜の並びは変わらない）', () => {
+    const pool = mainCandidatePool({
+      recipes: ALL,
+      slotDefs: [{ slotId: 'main', slotKind: 'main' }],
+      excludeIds: [],
+      days: 3,
+    });
+    expect(pool).toEqual(ALL);
+  });
+
+  it('autoFill:false の種類は外さない（その枠は埋めないので、主菜に回してよい）', () => {
+    const pool = mainCandidatePool({
+      recipes: ALL,
+      slotDefs: [
+        { slotId: 'main', slotKind: 'main' },
+        { slotId: 'soup', slotKind: 'soup', autoFill: false },
+      ],
+      excludeIds: [],
+      days: 1,
+    });
+    expect(pool.map((r) => r.id)).toContain('r-miso');
+  });
+
+  it('外すと日数に足りなくなるなら外さない（蔵書が少ない人の主菜を削らない）', () => {
+    const pool = mainCandidatePool({ recipes: ALL, slotDefs: DEFS, excludeIds: [], days: 2 });
+    expect(pool).toEqual(ALL);
+  });
+
+  it('引き継ぐ手入力のレシピは常に主菜候補から外す（足りなくても重複させない）', () => {
+    const pool = mainCandidatePool({
+      recipes: ALL,
+      slotDefs: DEFS,
+      excludeIds: ['r-main'],
+      days: 3,
+    });
+    expect(pool.map((r) => r.id)).not.toContain('r-main');
   });
 });
