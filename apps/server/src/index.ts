@@ -12,10 +12,12 @@ export { app };
 
 if (process.argv[1]?.endsWith('index.ts') || process.argv[1]?.endsWith('index.js')) {
   const { serve } = await import('@hono/node-server');
+  const { startMenuJobRunner } = await import('./lib/menu-job-runner.js');
   const port = Number(process.env['PORT'] ?? 3000);
   serve({ fetch: app.fetch, port }, () => {
     process.stdout.write(`🍳 だいどこ API サーバー起動 → http://localhost:${port}\n`);
   });
+  startMenuJobRunner();
 }
 
 export default app;
