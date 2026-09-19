@@ -200,6 +200,136 @@ describe('buildWidgetSnapshot — 献立の recipeId と週間（W2）', () => {
   );
 });
 
+describe('buildWidgetSnapshot — 副菜（W2 特大・小中）', () => {
+  it('主菜以外の枠（副菜など）があれば sides に写す（最大 4）', () => {
+    const snapshot = buildWidgetSnapshot(
+      input({
+        anchorDate: '2026-08-28',
+        menuDays: [{ title: '主菜', doneAt: null, day: 1, recipeId: 'main-rec' }],
+        menuSlots: [
+          {
+            day: 1,
+            slotId: 'main',
+            label: '主菜',
+            title: '主菜',
+            recipeId: 'main-rec',
+            doneAt: null,
+            position: 0,
+          },
+          {
+            day: 1,
+            slotId: 'side1',
+            label: '副菜',
+            title: '冷奴',
+            recipeId: 's1',
+            doneAt: null,
+            position: 1,
+          },
+          {
+            day: 1,
+            slotId: 'side2',
+            label: '汁物',
+            title: '味噌汁',
+            recipeId: 's2',
+            doneAt: null,
+            position: 2,
+          },
+          {
+            day: 1,
+            slotId: 'side3',
+            label: '小鉢',
+            title: '納豆',
+            recipeId: 's3',
+            doneAt: null,
+            position: 3,
+          },
+          {
+            day: 1,
+            slotId: 'side4',
+            label: 'デザート',
+            title: 'りんご',
+            recipeId: 's4',
+            doneAt: null,
+            position: 4,
+          },
+          {
+            day: 1,
+            slotId: 'side5',
+            label: 'あふれる',
+            title: '麦茶',
+            recipeId: 's5',
+            doneAt: null,
+            position: 5,
+          },
+        ],
+      }),
+    );
+    // 今日の sides（最大 4）
+    expect(snapshot.menu.sides).toHaveLength(4);
+    expect(snapshot.menu.sides?.[0]).toEqual({
+      label: '副菜',
+      title: '冷奴',
+      recipeId: 's1',
+      doneAt: null,
+    });
+    // 週間の sides（最大 4、label と title のみ）
+    expect(snapshot.menu.week?.[0].sides).toHaveLength(4);
+    expect(snapshot.menu.week?.[0].sides?.[0]).toEqual({ label: '副菜', title: '冷奴' });
+  });
+
+  it('副菜なしのスナップショットは従来とバイト単位で同じ（sides を書かない）', () => {
+    const withoutSides = buildWidgetSnapshot(
+      input({
+        anchorDate: '2026-08-28',
+        menuDays: [{ title: '主菜', doneAt: null, day: 1, recipeId: 'main-rec' }],
+        menuSlots: [
+          {
+            day: 1,
+            slotId: 'main',
+            label: '主菜',
+            title: '主菜',
+            recipeId: 'main-rec',
+            doneAt: null,
+            position: 0,
+          },
+        ],
+      }),
+    );
+    expect('sides' in withoutSides.menu).toBe(false);
+    expect('sides' in (withoutSides.menu.week?.[0] || {})).toBe(false);
+
+    // バイト単位の比較用（旧実装と同等）
+    const legacySnapshot = buildWidgetSnapshot(
+      input({
+        anchorDate: '2026-08-28',
+        menuDays: [{ title: '主菜', doneAt: null, day: 1, recipeId: 'main-rec' }],
+      }),
+    );
+    expect(JSON.stringify(withoutSides)).toBe(JSON.stringify(legacySnapshot));
+  });
+
+  it('title が空の副菜は落とす（未定の枠など）', () => {
+    const snapshot = buildWidgetSnapshot(
+      input({
+        anchorDate: '2026-08-28',
+        menuDays: [{ title: '主菜', doneAt: null, day: 1, recipeId: 'main-rec' }],
+        menuSlots: [
+          {
+            day: 1,
+            slotId: 'side1',
+            label: '副菜',
+            title: '',
+            recipeId: '',
+            doneAt: null,
+            position: 1,
+          },
+        ],
+      }),
+    );
+    expect('sides' in snapshot.menu).toBe(false);
+  });
+});
+
 describe('parseWidgetSnapshot — 読む側の防御', () => {
   const valid = buildWidgetSnapshot(
     input({
@@ -298,6 +428,58 @@ describe('parseWidgetSnapshot — 読む側の防御', () => {
     };
     const round = parseWidgetSnapshot(JSON.stringify(dirty));
     expect(round?.menu.week).toEqual([{ title: 'a', recipeId: 'r1', doneAt: null, isToday: true }]);
+  });
+
+  it('sides の往復と壊れた要素の除去', () => {
+    const withSides = buildWidgetSnapshot(
+      input({
+        anchorDate: '2026-08-28',
+        menuDays: [{ title: '主菜', doneAt: null, day: 1, recipeId: 'main' }],
+        menuSlots: [
+          {
+            day: 1,
+            slotId: 'side1',
+            label: '副菜',
+            title: '冷奴',
+            recipeId: 's1',
+            doneAt: null,
+            position: 1,
+          },
+        ],
+      }),
+    );
+    const round = parseWidgetSnapshot(JSON.stringify(withSides));
+    expect(round?.menu.sides).toEqual([
+      { label: '副菜', title: '冷奴', recipeId: 's1', doneAt: null },
+    ]);
+    expect(round?.menu.week?.[0].sides).toEqual([{ label: '副菜', title: '冷奴' }]);
+
+    const dirty = {
+      ...valid,
+      menu: {
+        ...valid.menu,
+        sides: [
+          { label: '副菜', title: '冷奴', recipeId: 's1', doneAt: null },
+          42,
+          { label: '汁物', title: '' },
+        ],
+        week: [
+          {
+            title: 'a',
+            recipeId: 'r1',
+            doneAt: null,
+            isToday: true,
+            sides: [null, { label: '副菜', title: '冷奴' }, 'wrong'],
+          },
+        ],
+      },
+    };
+    const dirtyRound = parseWidgetSnapshot(JSON.stringify(dirty));
+    // title が空のものや不正な型は除去される
+    expect(dirtyRound?.menu.sides).toEqual([
+      { label: '副菜', title: '冷奴', recipeId: 's1', doneAt: null },
+    ]);
+    expect(dirtyRound?.menu.week?.[0].sides).toEqual([{ label: '副菜', title: '冷奴' }]);
   });
 });
 

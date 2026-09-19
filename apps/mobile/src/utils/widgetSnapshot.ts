@@ -19,6 +19,9 @@ export const WIDGET_SHOPPING_PREVIEW = 6;
 /** 週間表示（W2 大サイズ）で出す上限。7 日分（設計 §2・ペルソナ確定） */
 export const WIDGET_MENU_WEEK_MAX = 7;
 
+/** 1 日に出す主菜以外の枠の上限（今日・週の各日とも）。iOS 側（MenuWidget.swift）も同じ前提で描く */
+export const WIDGET_MENU_SIDES_MAX = 4;
+
 /**
  * 週間表示（大サイズ）の 1 日分。**省略可フィールドで足したもの**（版は上げない・§1）。
  * `title`/`recipeId` が null の日は「未定」（—）として描く。`isToday` は
@@ -32,6 +35,15 @@ export interface WidgetMenuWeekDay {
   doneAt: string | null;
   /** 今日の行。金色で強調するのに使う */
   isToday: boolean;
+  /** 週の各日の主菜以外。最大 4 */
+  sides?: { label: string; title: string }[];
+}
+
+export interface WidgetMenuSide {
+  label: string;
+  title: string;
+  recipeId: string | null;
+  doneAt: string | null;
 }
 
 export interface WidgetSnapshot {
@@ -80,6 +92,8 @@ export interface WidgetSnapshot {
      * 見出しに「（昼）」等を付ける（`menuWidgetContent`）。
      */
     mealTime?: 'breakfast' | 'lunch';
+    /** 今日（または次）の日の、主菜以外の枠。枠の並び順。最大 4 */
+    sides?: WidgetMenuSide[];
   };
 }
 
@@ -97,6 +111,16 @@ export interface SnapshotInput {
     missing?: boolean;
     recipeId?: string;
     day?: number;
+  }[];
+  /** 主菜以外の枠（副菜・汁物など）を含む全ての枠 */
+  menuSlots?: readonly {
+    day: number;
+    slotId: string;
+    label: string;
+    title: string;
+    recipeId: string;
+    doneAt: string | null;
+    position: number;
   }[];
   /** 自動モードの起点日。**あるときだけ「今日」と言える**（§10.11 で入る） */
   anchorDate: string | null;
@@ -140,6 +164,22 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot {
   // 週間表示（大サイズ）用に先頭 7 日分を写す。「今日」は anchorDate（自動モード）が
   // あるときだけ日番号から暦日を割り当てて判定する（手動プランは日付が無い・§2）。
   const todayKey = localDateKey(input.now);
+  const slots = input.menuSlots ?? [];
+  const sortedSlots = [...slots].sort((a, b) => a.position - b.position);
+
+  const todaySides =
+    nextDay && nextDay.day != null
+      ? sortedSlots
+          .filter((s) => s.day === nextDay.day && s.slotId !== 'main' && s.title)
+          .slice(0, WIDGET_MENU_SIDES_MAX)
+          .map((s) => ({
+            label: s.label,
+            title: s.title,
+            recipeId: s.recipeId,
+            doneAt: s.doneAt,
+          }))
+      : [];
+
   const week: WidgetMenuWeekDay[] = input.menuDays.slice(0, WIDGET_MENU_WEEK_MAX).map((day) => {
     const missing = day.missing === true;
     let isToday = false;
@@ -147,11 +187,19 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot {
       const key = addDaysToDateKey(input.anchorDate, day.day - 1);
       isToday = key !== null && key === todayKey;
     }
+    const daySides =
+      day.day != null
+        ? sortedSlots
+            .filter((s) => s.day === day.day && s.slotId !== 'main' && s.title)
+            .slice(0, WIDGET_MENU_SIDES_MAX)
+            .map((s) => ({ label: s.label, title: s.title }))
+        : [];
     return {
       title: missing ? null : day.title,
       recipeId: missing ? null : (day.recipeId ?? null),
       doneAt: day.doneAt,
       isToday,
+      ...(daySides.length > 0 ? { sides: daySides } : {}),
     };
   });
 
@@ -178,6 +226,7 @@ export function buildWidgetSnapshot(input: SnapshotInput): WidgetSnapshot {
       ...(input.mealTime === 'breakfast' || input.mealTime === 'lunch'
         ? { mealTime: input.mealTime }
         : {}),
+      ...(todaySides.length > 0 ? { sides: todaySides } : {}),
     },
   };
 }
@@ -214,6 +263,10 @@ export function parseWidgetSnapshot(raw: string): WidgetSnapshot | null {
   if (typeof menu !== 'object' || menu === null) return null;
   if (menu.kind !== null && menu.kind !== 'today' && menu.kind !== 'next') return null;
 
+  const parsedSides = Array.isArray(menu.sides)
+    ? menu.sides.map(sanitizeMenuSide).filter((s): s is WidgetMenuSide => s !== null)
+    : [];
+
   return {
     version: snapshot.version,
     writtenAt: snapshot.writtenAt,
@@ -240,7 +293,20 @@ export function parseWidgetSnapshot(raw: string): WidgetSnapshot | null {
       ...(menu.mealTime === 'breakfast' || menu.mealTime === 'lunch'
         ? { mealTime: menu.mealTime }
         : {}),
+      ...(parsedSides.length > 0 ? { sides: parsedSides } : {}),
     },
+  };
+}
+
+function sanitizeMenuSide(value: unknown): WidgetMenuSide | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const side = value as Record<string, unknown>;
+  if (typeof side.title !== 'string' || !side.title) return null;
+  return {
+    label: typeof side.label === 'string' ? side.label : '',
+    title: side.title,
+    recipeId: typeof side.recipeId === 'string' ? side.recipeId : null,
+    doneAt: typeof side.doneAt === 'string' ? side.doneAt : null,
   };
 }
 
@@ -248,11 +314,25 @@ export function parseWidgetSnapshot(raw: string): WidgetSnapshot | null {
 function sanitizeWeekDay(value: unknown): WidgetMenuWeekDay | null {
   if (typeof value !== 'object' || value === null) return null;
   const day = value as Record<string, unknown>;
+  const parsedSides = Array.isArray(day.sides)
+    ? (day.sides
+        .map((s) => {
+          if (typeof s !== 'object' || s === null) return null;
+          const side = s as Record<string, unknown>;
+          if (typeof side.title !== 'string' || !side.title) return null;
+          return {
+            label: typeof side.label === 'string' ? side.label : '',
+            title: side.title,
+          };
+        })
+        .filter((s) => s !== null) as { label: string; title: string }[])
+    : [];
   return {
     title: typeof day.title === 'string' ? day.title : null,
     recipeId: typeof day.recipeId === 'string' ? day.recipeId : null,
     doneAt: typeof day.doneAt === 'string' ? day.doneAt : null,
     isToday: day.isToday === true,
+    ...(parsedSides.length > 0 ? { sides: parsedSides as { label: string; title: string }[] } : {}),
   };
 }
 

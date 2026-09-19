@@ -17,8 +17,8 @@
 import { formatSnapshotTime } from '../utils/widgetSnapshot';
 import type { WidgetSnapshot } from '../utils/widgetSnapshot';
 
-/** 小/中=今日の一品、大=週間一覧（設計 §2） */
-export type MenuWidgetSize = 'small' | 'medium' | 'large';
+/** 小/中=今日の一品、大/特大=週間一覧（設計 §2） */
+export type MenuWidgetSize = 'small' | 'medium' | 'large' | 'xlarge';
 
 /** タップ先のスキーム（設計 §9: いずれもタブ残置画面で再編の影響なし） */
 export const MENU_URI = 'daidoko://menu';
@@ -29,16 +29,17 @@ export function recipeUri(recipeId: string): string {
 /**
  * ウィジェットの幅・高さ（dp）から表示サイズを決める。
  *
- * **週間（大）は縦に 7 行積む**ので高さで判定する（横幅だけ広げても週間には
- * しない — 1 行の今日を大きく出す方がペルソナの既定）。中は横幅が広いとき
- * （写真サムネの余地がある想定）、それ未満は小。plugin の
- * `maxResizeHeight`（app.json）まで伸ばすと大に入る。
+ * **週間（大/特大）は縦に 7 行積む**ので高さで判定する。特大はさらに幅が必要。
+ * 中は横幅が広いとき、それ未満は小。
  */
 const LARGE_MIN_HEIGHT_DP = 250;
 const MEDIUM_MIN_WIDTH_DP = 250;
+export const MENU_WIDGET_XL_MIN_WIDTH_DP = 400; // 仮
 
 export function menuWidgetSize(widthDp: number, heightDp: number): MenuWidgetSize {
-  if (heightDp >= LARGE_MIN_HEIGHT_DP) return 'large';
+  if (heightDp >= LARGE_MIN_HEIGHT_DP) {
+    return widthDp >= MENU_WIDGET_XL_MIN_WIDTH_DP ? 'xlarge' : 'large';
+  }
   return widthDp >= MEDIUM_MIN_WIDTH_DP ? 'medium' : 'small';
 }
 
@@ -57,6 +58,7 @@ const MENU_DICT = {
     // 時間帯の印（v19・§10.13）。**朝/昼のときだけ**見出しに付ける — 夕は無印のまま
     // 1 文字も変えない（snapshot に mealTime が無い = 夕）
     mealSuffix: { breakfast: '（朝）', lunch: '（昼）' },
+    otherSides: (count: number) => `ほか${count}品`,
   },
   en: {
     today: "Today's dish",
@@ -71,6 +73,7 @@ const MENU_DICT = {
         ? 'Not enough recipes for 1 more day'
         : `Not enough recipes for ${count} more days`,
     mealSuffix: { breakfast: ' (breakfast)', lunch: ' (lunch)' },
+    otherSides: (count: number) => `+${count} more`,
   },
 } as const;
 
@@ -94,6 +97,8 @@ export interface MenuWidgetWeekRow {
   isUndecided: boolean;
   /** タップ先。レシピがあればその詳細、無ければ献立画面 */
   uri: string;
+  /** 副菜（特大サイズ用）。「汁物 味噌汁・副菜 冷奴」のように連結済み。無ければ null */
+  sidesText: string | null;
 }
 
 /** 「今日の一品」表示（小/中） */
@@ -104,6 +109,12 @@ export interface MenuWidgetTodayContent {
   heading: string;
   /** 料理名。無ければ null（案内文を出す） */
   dishName: string | null;
+  /** 副菜のリスト（小は最大 2 件、中は最大 4 件） */
+  sides: { text: string; uri: string; isDone: boolean }[];
+  /** 切り捨てた副菜の数。無ければ 0 */
+  sidesOverflowCount: number;
+  /** 溢れたときに出す「ほか◯品」の文言。無ければ null */
+  sidesOverflowText: string | null;
   /** 献立が無い/未定のときの案内。無ければ null */
   emptyMessage: string | null;
   /** 「HH:mm 時点」。スナップショット無しのときは null */
@@ -118,6 +129,8 @@ export interface MenuWidgetWeekContent {
   locale: 'ja' | 'en';
   heading: string;
   rows: MenuWidgetWeekRow[];
+  /** 特大サイズか（副菜を各行に出す） */
+  isXLarge: boolean;
   /** 献立が 1 件も無いときの案内。無ければ null */
   emptyMessage: string | null;
   /**
@@ -145,12 +158,13 @@ export function buildMenuWidgetContent(
 ): MenuWidgetContent {
   if (!snapshot) {
     const dict = MENU_DICT.ja;
-    if (size === 'large') {
+    if (size === 'large' || size === 'xlarge') {
       return {
         mode: 'week',
         locale: 'ja',
         heading: dict.week,
         rows: [],
+        isXLarge: size === 'xlarge',
         emptyMessage: dict.noSnapshot,
         shortfallMessage: null,
         timeLabel: null,
@@ -162,6 +176,9 @@ export function buildMenuWidgetContent(
       locale: 'ja',
       heading: dict.today,
       dishName: null,
+      sides: [],
+      sidesOverflowCount: 0,
+      sidesOverflowText: null,
       emptyMessage: dict.noSnapshot,
       timeLabel: null,
       uri: MENU_URI,
@@ -173,16 +190,22 @@ export function buildMenuWidgetContent(
   // 朝/昼のときだけ見出しに印（§10.13）。夕（mealTime 無し）は空文字で従来どおり
   const suffix = mealTimeSuffix(dict, snapshot.menu.mealTime);
 
-  if (size === 'large') {
+  if (size === 'large' || size === 'xlarge') {
     const week = snapshot.menu.week ?? [];
+    const isXLarge = size === 'xlarge';
     const rows: MenuWidgetWeekRow[] = week.map((day) => {
       const isUndecided = day.title === null;
+      const sidesText =
+        isXLarge && day.sides && day.sides.length > 0
+          ? day.sides.map((s) => `${s.label} ${s.title}`).join('・')
+          : null;
       return {
         label: day.title ?? '—',
         isToday: day.isToday,
         isDone: day.doneAt !== null,
         isUndecided,
         uri: day.recipeId ? recipeUri(day.recipeId) : MENU_URI,
+        sidesText,
       };
     });
     // 要求日数に満たない分の末尾 1 行。要求日数が無い（旧アプリ・旧プラン）なら出さない。
@@ -195,6 +218,7 @@ export function buildMenuWidgetContent(
       locale: snapshot.locale,
       heading: dict.week + suffix,
       rows,
+      isXLarge,
       // 実の献立が 1 つも無い（全部未定 or 空）なら案内を出す
       emptyMessage: hasAnyDish ? null : dict.noMenu,
       shortfallMessage: hasAnyDish && shortfall > 0 ? dict.shortfall(shortfall) : null,
@@ -207,11 +231,24 @@ export function buildMenuWidgetContent(
   const heading = (snapshot.menu.kind === 'next' ? dict.next : dict.today) + suffix;
   const dishName = snapshot.menu.title;
   const recipeId = snapshot.menu.recipeId ?? null;
+  const maxSides = size === 'small' ? 2 : 4;
+  const rawSides = snapshot.menu.sides ?? [];
+  const sides = rawSides.slice(0, maxSides).map((s) => ({
+    text: `${s.label}  ${s.title}`,
+    uri: s.recipeId ? recipeUri(s.recipeId) : MENU_URI,
+    isDone: s.doneAt !== null,
+  }));
+  const sidesOverflowCount = Math.max(0, rawSides.length - maxSides);
+  const sidesOverflowText = sidesOverflowCount > 0 ? dict.otherSides(sidesOverflowCount) : null;
+
   return {
     mode: 'today',
     locale: snapshot.locale,
     heading,
     dishName,
+    sides,
+    sidesOverflowCount,
+    sidesOverflowText,
     emptyMessage: dishName ? null : dict.noMenu,
     timeLabel,
     uri: recipeId ? recipeUri(recipeId) : MENU_URI,

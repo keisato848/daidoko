@@ -79,26 +79,46 @@ export function MenuWidget({ snapshot, size }: MenuWidgetProps) {
         ) : null}
 
         {content.rows.map((row, index) => (
-          <TextWidget
+          <FlexWidget
             key={`${index}-${row.label}`}
-            text={row.label}
-            clickAction="OPEN_URI"
-            clickActionData={{ uri: row.uri }}
             style={{
-              color: row.isToday
-                ? COLORS.gold
-                : row.isUndecided
-                  ? COLORS.undecided
-                  : row.isDone
-                    ? COLORS.done
-                    : COLORS.text,
-              fontSize: 12,
-              fontWeight: row.isToday ? 'bold' : 'normal',
-              marginTop: index === 0 ? 6 : 2,
+              flexDirection: 'column',
+              marginTop: index === 0 ? 6 : content.isXLarge ? 4 : 2,
             }}
-            truncate="END"
-            maxLines={1}
-          />
+          >
+            <TextWidget
+              text={row.label}
+              clickAction="OPEN_URI"
+              clickActionData={{ uri: row.uri }}
+              style={{
+                color: row.isToday
+                  ? COLORS.gold
+                  : row.isUndecided
+                    ? COLORS.undecided
+                    : row.isDone
+                      ? COLORS.done
+                      : COLORS.text,
+                fontSize: 12,
+                fontWeight: row.isToday ? 'bold' : 'normal',
+              }}
+              truncate="END"
+              maxLines={1}
+            />
+            {row.sidesText ? (
+              <TextWidget
+                text={row.sidesText}
+                clickAction="OPEN_URI"
+                clickActionData={{ uri: row.uri }}
+                style={{
+                  color: COLORS.text,
+                  fontSize: 10,
+                  marginTop: 2,
+                }}
+                truncate="END"
+                maxLines={1}
+              />
+            ) : null}
+          </FlexWidget>
         ))}
 
         {/* 要求日数に満たないとき末尾に 1 行（省略可の requestedDays が無ければ出ない） */}
@@ -141,6 +161,30 @@ export function MenuWidget({ snapshot, size }: MenuWidgetProps) {
           style={{ color: COLORS.text, fontSize: 18, fontWeight: 'bold', marginTop: 6 }}
           truncate="END"
           maxLines={2}
+        />
+      ) : null}
+
+      {content.sides.map((side, i) => (
+        <TextWidget
+          key={`side-${i}`}
+          text={side.text}
+          clickAction="OPEN_URI"
+          clickActionData={{ uri: side.uri }}
+          style={{
+            color: side.isDone ? COLORS.done : COLORS.text,
+            fontSize: 14,
+            marginTop: 4,
+          }}
+          truncate="END"
+          maxLines={1}
+        />
+      ))}
+
+      {content.sidesOverflowText ? (
+        <TextWidget
+          text={content.sidesOverflowText}
+          style={{ color: COLORS.text, fontSize: 14, marginTop: 4 }}
+          maxLines={1}
         />
       ) : null}
 
