@@ -12,7 +12,7 @@ import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
 
 import { getClientIp } from '../lib/client-ip.js';
-import { EXPO_PUSH_TOKEN_PATTERN, sendExpoPush } from '../lib/expo-push.js';
+import { EXPO_PUSH_TOKEN_PATTERN, sendExpoPush, type ExpoPushMessage } from '../lib/expo-push.js';
 import { parseAuthHeader } from '../lib/sync-auth.js';
 import {
   authenticateDevice,
@@ -365,6 +365,36 @@ export function notificationTextFor(locale: string | null): { title: string; bod
   return locale === 'en' ? SYNC_NOTIFICATION_TEXT.en : SYNC_NOTIFICATION_TEXT.ja;
 }
 
+/** 見えない通知の種類。モバイル `utils/syncBackgroundPush.ts` の `SYNC_BACKGROUND_PUSH_TYPE` と同じ値 */
+export const SYNC_BACKGROUND_PUSH_TYPE = 'sync-bg';
+
+/**
+ * 家族の変更を知らせる push。**1 台につき 2 通**（受付票 D-3）:
+ *
+ * 1. 見える通知（固定文・`type: 'sync'`）— 従来どおり
+ * 2. **見えない通知（題名も本文も無い・`type: 'sync-bg'`）** — アプリが終了していても端末の
+ *    背景タスクを起こし、同期 → ウィジェットの書き直しをさせる。Android は **data だけの push でないと
+ *    背景タスクが走らない**（題名・本文があると OS が表示するだけで JS は動かない）。iOS は
+ *    `_contentAvailable` が要る（Expo の仕様）。だから 1 通にまとめられない
+ *
+ * 見えない方にも内容は載せない（種類だけ）。回数は `takeNotifySlot`（5 分に 1 回）が絞っている —
+ * Apple の目安（見えない通知は 1 時間に 2〜3 通）に対しては多いので、**iOS は間引かれる前提**
+ * （もともとベストエフォートの決定）。届かなくても、アプリを開けば従来どおり同期する。
+ */
+export function buildSyncPushMessages(
+  targets: readonly { token: string; locale: string | null }[],
+): ExpoPushMessage[] {
+  return targets.flatMap((target) => [
+    { to: target.token, ...notificationTextFor(target.locale), data: { type: 'sync' } },
+    {
+      to: target.token,
+      data: { type: SYNC_BACKGROUND_PUSH_TYPE },
+      _contentAvailable: true,
+      priority: 'high',
+    },
+  ]);
+}
+
 /**
  * 通知のデバウンス（グループ単位）。
  *
@@ -428,15 +458,10 @@ async function notifyGroupDevices(device: AuthedDevice, urgent: boolean): Promis
     const targets = await getOtherDevicePushTargets(device);
     if (targets.length === 0) return;
 
-    const { deadTokens } = await sendExpoPush(
-      targets.map((target) => ({
-        to: target.token,
-        ...notificationTextFor(target.locale),
-        data: { type: 'sync' },
-      })),
-    );
+    const { deadTokens } = await sendExpoPush(buildSyncPushMessages(targets));
 
-    if (deadTokens.length > 0) await clearDeadPushTokens(deadTokens);
+    // 1 台に 2 通送るので、同じトークンが 2 回返ることがある
+    if (deadTokens.length > 0) await clearDeadPushTokens([...new Set(deadTokens)]);
   } catch {
     // ベストエフォート
   }

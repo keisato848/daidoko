@@ -19,7 +19,8 @@
       "buildNumber": "10037",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "CFBundleLocalizations": ["ja", "en"]
+        "CFBundleLocalizations": ["ja", "en"],
+        "UIBackgroundModes": ["remote-notification"]
       },
       "associatedDomains": ["applinks:daidoko-production.up.railway.app"],
       "appleTeamId": "VY7SNHS2BY",

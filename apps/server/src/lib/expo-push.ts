@@ -6,9 +6,12 @@ export const EXPO_PUSH_TOKEN_PATTERN = /^Expo(nent)?PushToken\[[A-Za-z0-9_-]+\]$
 
 export interface ExpoPushMessage {
   to: string;
-  title: string;
-  body: string;
+  /** 題名と本文。**両方とも無い push は「見えない通知」**（data だけ）で、端末の背景タスクを起こす */
+  title?: string;
+  body?: string;
   data?: Record<string, unknown>;
+  /** iOS で背景タスクを起こすための印（Expo が `content-available: 1` に直す） */
+  _contentAvailable?: boolean;
   channelId?: string;
   priority?: string;
 }

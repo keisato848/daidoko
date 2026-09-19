@@ -16,7 +16,9 @@ import app from '../index.js';
 import { closeSyncStoreForTesting } from '../lib/sync-store.js';
 import {
   SYNC_NOTIFICATION_TEXT,
+  buildSyncPushMessages,
   notificationTextFor,
+  SYNC_BACKGROUND_PUSH_TYPE,
   isUrgentChange,
   resetSyncNotifyDebounceForTesting,
   resetSyncRateLimitForTesting,
@@ -842,6 +844,39 @@ describe('変更通知の文面と間引き', () => {
     expect(notificationTextFor('en')).toEqual(SYNC_NOTIFICATION_TEXT.en);
     expect(notificationTextFor('ja')).toEqual(SYNC_NOTIFICATION_TEXT.ja);
     expect(notificationTextFor(null)).toEqual(SYNC_NOTIFICATION_TEXT.ja);
+  });
+
+  /**
+   * 見えない通知（受付票 D-3）。Android は **data だけの push でないと端末の背景タスクが走らない**ので、
+   * 見える通知と 1 通にまとめてはいけない。まとめると「届くが何も起きない」になり、実機でしか気づけない。
+   */
+  it('1 台につき 2 通: 見える通知（固定文）と、題名も本文も無い見えない通知', () => {
+    const messages = buildSyncPushMessages([
+      { token: 'ExponentPushToken[a]', locale: 'ja' },
+      { token: 'ExponentPushToken[b]', locale: 'en' },
+    ]);
+    expect(messages).toHaveLength(4);
+
+    const [visibleJa, silentJa, visibleEn, silentEn] = messages;
+    expect(visibleJa).toEqual({
+      to: 'ExponentPushToken[a]',
+      ...SYNC_NOTIFICATION_TEXT.ja,
+      data: { type: 'sync' },
+    });
+    expect(visibleEn?.title).toBe(SYNC_NOTIFICATION_TEXT.en.title);
+
+    for (const silent of [silentJa, silentEn]) {
+      expect(silent).not.toHaveProperty('title');
+      expect(silent).not.toHaveProperty('body');
+      expect(silent?.data).toEqual({ type: SYNC_BACKGROUND_PUSH_TYPE }); // 種類だけ。内容は載せない
+      expect(silent?._contentAvailable).toBe(true); // iOS で背景タスクを起こす印
+    }
+    expect(silentJa?.to).toBe('ExponentPushToken[a]');
+    expect(silentEn?.to).toBe('ExponentPushToken[b]');
+  });
+
+  it('宛先が無ければ 1 通も作らない', () => {
+    expect(buildSyncPushMessages([])).toEqual([]);
   });
 
   it('同じグループへは 5 分に 1 回まで（通知疲れを作らない）', () => {
