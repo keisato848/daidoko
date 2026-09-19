@@ -176,6 +176,9 @@ const menu = {
     slotsMealTimeLabel: 'Which meal',
     slotAdd: 'Add {{kind}}',
     slotRemove: 'Remove',
+    slotAutoFill: 'Auto-fill',
+    slotAutoFillNote:
+      'When you build a plan, dishes of a matching kind (judged by title or tags) are picked from your library. Slots with no match stay empty. Dishes you added by hand survive a rebuild. Turn this off to make a slot manual-only.',
     clearAction: 'Clear meal plan',
     clearConfirmTitle: 'Clear this meal plan?',
     clearConfirmBody: "Your pantry and shopping list won't change. This can't be undone.",

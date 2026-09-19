@@ -413,14 +413,8 @@ export default function MenuScreen() {
     today: new Date(),
     defaultSlotLabel: t('menu.week.defaultSlot'),
   });
-  /**
-   * レシピ ID → 表示に足りない情報。`MenuPlanView.days` だけが持っている
-   * （hydrate が計算する）ので、枠の行と突き合わせるために引き直す。
-   * PR-4 で hydrate が枠ごとに計算するようになったら畳む。
-   */
-  const metaByRecipeId = new Map<string, SlotRecipeMeta>(
-    (view?.days ?? []).map((d) => [d.recipeId, { missing: d.missing, cookTimeMin: d.cookTimeMin }]),
-  );
+  /** レシピ ID → 表示に足りない情報。`hydrate` が枠ごと（副菜以降も）に計算する（PR-5a） */
+  const metaByRecipeId: ReadonlyMap<string, SlotRecipeMeta> = view?.recipeMeta ?? new Map();
   const progress = weekProgress(weekRows);
 
   /**

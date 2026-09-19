@@ -43,8 +43,10 @@ import { formatMenuAutoNotifyTime, type MenuAutoNotifyTime } from '../src/utils/
 import {
   addSlot,
   canRemoveSlot,
+  isAutoFillSlot,
   normalizeSlots,
   removeSlot,
+  setSlotAutoFill,
   SLOT_KINDS,
   type SlotKind,
 } from '../src/utils/menuSlots';
@@ -309,18 +311,35 @@ export default function MenuSettingsScreen() {
           {slots.map((slot) => (
             <View key={slot.slotId} style={styles.slotRow}>
               <Text style={styles.slotName}>{slot.label}</Text>
+              {/* 主菜は「自動で埋める」を切れない（切ると「組む」が何も組まない）ので
+                  スイッチも消すも出さない。`canRemoveSlot` と `setSlotAutoFill` が同じ判断を持つ */}
               {canRemoveSlot(slot.slotId) ? (
-                <Pressable
-                  onPress={() => persistSlots(removeSlot(slots, slot.slotId))}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${slot.label} ${t('menu.settings.slotRemove')}`}
-                >
-                  <Text style={styles.slotRemove}>{t('menu.settings.slotRemove')}</Text>
-                </Pressable>
+                <View style={styles.slotActions}>
+                  <Text style={styles.slotAutoFillLabel}>{t('menu.settings.slotAutoFill')}</Text>
+                  <Switch
+                    value={isAutoFillSlot(slot)}
+                    onValueChange={(next) =>
+                      persistSlots(setSlotAutoFill(slots, slot.slotId, next))
+                    }
+                    trackColor={{ false: Colors.border, true: Colors.gold }}
+                    thumbColor={Colors.paper}
+                    accessibilityLabel={`${slot.label} ${t('menu.settings.slotAutoFill')}`}
+                  />
+                  <Pressable
+                    onPress={() => persistSlots(removeSlot(slots, slot.slotId))}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${slot.label} ${t('menu.settings.slotRemove')}`}
+                  >
+                    <Text style={styles.slotRemove}>{t('menu.settings.slotRemove')}</Text>
+                  </Pressable>
+                </View>
               ) : null}
             </View>
           ))}
+          {slots.some((s) => canRemoveSlot(s.slotId)) ? (
+            <Text style={styles.rowSubtitle}>{t('menu.settings.slotAutoFillNote')}</Text>
+          ) : null}
 
           <View style={styles.chipRow}>
             {ADDABLE_SLOT_KINDS.map((kind) => {
@@ -364,6 +383,8 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   slotName: { fontSize: 16, color: Colors.paper },
+  slotActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  slotAutoFillLabel: { fontSize: 13, color: Colors.paperDim },
   slotRemove: { fontSize: 14, color: Colors.gold },
   header: {
     flexDirection: 'row',
