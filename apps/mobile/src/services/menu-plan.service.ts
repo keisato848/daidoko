@@ -218,32 +218,36 @@ async function writeStoredMenuPlan(plan: StoredMenuPlan): Promise<void> {
     .from(schema.menuPlans)
     .where(eq(schema.menuPlans.mealTime, plan.mealTime));
   const ids = existing.map((r) => r.id);
-  if (ids.length > 0) {
-    // slots → days → plan の順で消す（親を先に消すと外部キー有効時に落ちる）。
-    // **slots を消し忘れると「組む」が FOREIGN KEY constraint failed で落ちる** —
-    // `menu_plan_slots.plan_id` は `menu_plans.id` を参照していて CASCADE が無い（schema.ts）。
-    // 同期で枠の行を受け取った端末だけで再現する（v20・PR-1 の取りこぼし）
-    await db.delete(schema.menuPlanSlots).where(inArray(schema.menuPlanSlots.planId, ids));
-    await db.delete(schema.menuPlanDays).where(inArray(schema.menuPlanDays.planId, ids));
-    await db.delete(schema.menuPlans).where(inArray(schema.menuPlans.id, ids));
-  }
-
   // **id は時間帯ごとに使い回す。** 毎回 `generateId()` で作り直すと、同期の
   // entityId（= プラン id）が書くたびに変わる。積んだ id の行は次の保存で消えるので、
   // 送信時には「行が無い」= **墓標**として飛ぶ（`buildMenuPlanChange`）。
   // つまり献立を 2 回いじると、家族には削除が届きうる
   const planId = ids[0] ?? generateId();
   const { row, days, slots } = storedMenuPlanToRows(plan, planId);
-  // **`updated_at` は書くたびに今の時刻。** 同期の LWW の鍵（v21）。`generated_at` は
-  // 「いつ組んだか」で編集では動かないので、それを鍵にすると枠の編集が家族へ届かない
-  await db.insert(schema.menuPlans).values({ ...row, updatedAt: new Date().toISOString() });
-  if (days.length > 0) {
-    await db.insert(schema.menuPlanDays).values(days.map((d) => ({ ...d, planId: row.id })));
-  }
-  // v20: 枠も同時に書く。`slots` は読んだ枠へ `days` を写した結果なので副菜は残る
-  if (slots.length > 0) {
-    await db.insert(schema.menuPlanSlots).values(slots.map((s) => ({ ...s, planId: row.id })));
-  }
+
+  // **消してから書き直すまでを 1 トランザクションに。** 消した直後に落ちると献立が丸ごと
+  // 消える（v19 から素の直列だった。Gemini レビュー 2026-09-19 の指摘）
+  await db.transaction(async (tx) => {
+    if (ids.length > 0) {
+      // slots → days → plan の順で消す（親を先に消すと外部キー有効時に落ちる）。
+      // **slots を消し忘れると「組む」が FOREIGN KEY constraint failed で落ちる** —
+      // `menu_plan_slots.plan_id` は `menu_plans.id` を参照していて CASCADE が無い（schema.ts）。
+      // 同期で枠の行を受け取った端末だけで再現する（v20・PR-1 の取りこぼし）
+      await tx.delete(schema.menuPlanSlots).where(inArray(schema.menuPlanSlots.planId, ids));
+      await tx.delete(schema.menuPlanDays).where(inArray(schema.menuPlanDays.planId, ids));
+      await tx.delete(schema.menuPlans).where(inArray(schema.menuPlans.id, ids));
+    }
+    // **`updated_at` は書くたびに今の時刻。** 同期の LWW の鍵（v21）。`generated_at` は
+    // 「いつ組んだか」で編集では動かないので、それを鍵にすると枠の編集が家族へ届かない
+    await tx.insert(schema.menuPlans).values({ ...row, updatedAt: new Date().toISOString() });
+    if (days.length > 0) {
+      await tx.insert(schema.menuPlanDays).values(days.map((d) => ({ ...d, planId: row.id })));
+    }
+    // v20: 枠も同時に書く。`slots` は読んだ枠へ `days` を写した結果なので副菜は残る
+    if (slots.length > 0) {
+      await tx.insert(schema.menuPlanSlots).values(slots.map((s) => ({ ...s, planId: row.id })));
+    }
+  });
 
   // **献立そのものを同期へ積む。** PR-2 は送信・受信の仕組みだけ入れて、積む側が
   // 一度も呼ばれていなかった（`enqueueSyncEntity(SYNC_ENTITY_MENU_PLAN, …)` が
@@ -551,6 +555,9 @@ export async function setMenuPlanSlotEntry(
   recipe: { id: string; title: string } | null,
 ): Promise<MenuPlanView | null> {
   if (!isNativePlatform) return null;
+  // **主菜は空にしない**（画面も出さないが、サービスでも止める）。空にすると `days` に穴が空き、
+  // その日の行ごと消えて戻せず、翌朝のローリングで副菜が別の日の主菜と並ぶ
+  if (slotId === MAIN_SLOT_ID && recipe === null) return null;
   const stored = await readStoredMenuPlan(mealTime);
   if (!stored) return null;
 

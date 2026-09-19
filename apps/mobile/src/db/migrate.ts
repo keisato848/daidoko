@@ -581,8 +581,10 @@ function backfillShoppingUpdatedAt(expoDb: { execSync: (sql: string) => void }):
 /**
  * v21: 献立の `updated_at` を埋める。
  *
- * 同期の勝敗（LWW）はこの列で決まるので、列を足しただけだと既存の行が全部 null になり、
- * 「ローカルに時刻が無い＝受信が常に勝つ」形になる（v15 の shopping_items と同じ罠）。
+ * 同期の勝敗（LWW）はこの列で決まる。**読み書きは `menuPlanEffectiveUpdatedAt` で
+ * `generated_at` へ倒すので、埋めなくても壊れはしない**（v15 の shopping_items と違い、
+ * null がそのまま比較に渡ることは無い — Gemini レビュー 2026-09-19 で指摘）。
+ * それでも埋めるのは、行を自己記述にして将来この倒し込みを外しても安全にするため。
  * 一番近い時刻＝組んだ時刻で埋める。**冪等**（null の行だけ触る）。
  */
 function backfillMenuPlanUpdatedAt(expoDb: { execSync: (sql: string) => void }): void {

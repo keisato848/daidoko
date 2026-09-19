@@ -77,7 +77,7 @@ describe('database migrations', () => {
     expect(
       statements.some((s) => s.includes('ALTER TABLE menu_plans ADD COLUMN updated_at TEXT')),
     ).toBe(true);
-    // 列を足しただけだと既存の行が全部 null になり「受信が常に勝つ」形になる（v15 と同じ罠）
+    // 読みは generated_at へ倒すので無くても壊れないが、行を自己記述にするために埋める
     expect(
       statements.some((s) =>
         /UPDATE menu_plans\s+SET updated_at = generated_at\s+WHERE updated_at IS NULL/.test(s),
