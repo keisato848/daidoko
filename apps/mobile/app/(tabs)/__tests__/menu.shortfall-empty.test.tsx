@@ -19,6 +19,8 @@ const mockGetMenuPlan = jest.fn();
 const mockGenerateMenuRecipes = jest.fn();
 const mockEnsureInferenceCredit = jest.fn();
 const mockPush = jest.fn();
+const mockSubmitMenuBulkJob = jest.fn();
+const mockCheckPendingMenuBulkJob = jest.fn();
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
@@ -43,6 +45,7 @@ jest.mock('../../../src/services/menu-plan.service', () => ({
   addMenuShoppingRows: jest.fn(async () => 0),
   applyMenuArrangement: jest.fn(async () => null),
   fillMenuPlanShortfall: jest.fn(async () => null),
+  addMenuPlanSlotEntries: jest.fn(async () => null),
   replaceMenuDay: jest.fn(async () => ({ outcome: 'no-candidates' })),
   undoMenuAutoAddedItems: jest.fn(async () => undefined),
 }));
@@ -51,6 +54,14 @@ jest.mock('../../../src/services/menu-recipes.provider', () => ({
   // menu.tsx は同じモジュールから受け取るので instanceof は一致する
   MenuRecipesError: class MenuRecipesError extends Error {},
   generateMenuRecipes: (...args: unknown[]) => mockGenerateMenuRecipes(...(args as [])),
+  usesManagedMenuRecipes: jest.fn(async () => true),
+}));
+
+// 非同期ジョブ（R34）。既定は「控えなし」「サーバーがジョブ経路を持たない」= 従来の同期経路へ倒れる
+jest.mock('../../../src/services/menu-bulk-job.service', () => ({
+  submitMenuBulkJob: (...args: unknown[]) => mockSubmitMenuBulkJob(...(args as [])),
+  checkPendingMenuBulkJob: (...args: unknown[]) => mockCheckPendingMenuBulkJob(...(args as [])),
+  discardMenuBulkResult: jest.fn(async () => undefined),
 }));
 
 jest.mock('../../../src/services/menu-arrange.provider', () => ({
@@ -98,6 +109,8 @@ describe('S20 献立 — レシピ 0 件からの一括生成（§10.12.2）', (
     mockGenerateMenuRecipes.mockReset().mockResolvedValue([]);
     mockEnsureInferenceCredit.mockReset().mockResolvedValue('ready');
     mockPush.mockReset();
+    mockSubmitMenuBulkJob.mockReset().mockResolvedValue({ outcome: 'unsupported' });
+    mockCheckPendingMenuBulkJob.mockReset().mockResolvedValue({ state: 'none' });
   });
 
   it('1 日も組めなかったプランでも「足りない◯日分をまとめて作る」を出す', async () => {
@@ -128,7 +141,7 @@ describe('S20 献立 — レシピ 0 件からの一括生成（§10.12.2）', (
     expect(mockPush).toHaveBeenCalledWith('/recipes/consult');
   });
 
-  it('押すと不足日数ぶんの一括生成が実際に走る（0 日でも下流へ届く）', async () => {
+  it('**サーバーがジョブ経路を持たない（未デプロイ）ときは、従来の同期経路で最後まで動く**', async () => {
     render(<MenuScreen />);
     await waitFor(() =>
       expect(screen.getByText(tCount('menu.shortfall.bulkGenerate', 7))).toBeTruthy(),
@@ -228,6 +241,8 @@ describe('S20 献立 — 週ビュー（PR-3）', () => {
   beforeEach(() => {
     mockGetMenuPlan.mockReset().mockResolvedValue(planWithDays());
     mockPush.mockReset();
+    mockSubmitMenuBulkJob.mockReset().mockResolvedValue({ outcome: 'unsupported' });
+    mockCheckPendingMenuBulkJob.mockReset().mockResolvedValue({ state: 'none' });
   });
 
   it('枠に入っている料理名を出す', async () => {
@@ -252,5 +267,101 @@ describe('S20 献立 — 週ビュー（PR-3）', () => {
     await waitFor(() => expect(screen.getByText('肉じゃが')).toBeTruthy());
     fireEvent.press(screen.getByText('肉じゃが'));
     expect(mockPush).toHaveBeenCalledWith('/recipes/r1');
+  });
+});
+
+/**
+ * 一括生成の非同期ジョブ（R34）。**受理されたら画面を塞がない**ことと、
+ * 画面を離れて戻っても（＝再マウントしても）状態が消えないことを押さえる。
+ * 控えは app_meta にあり、画面は `checkPendingMenuBulkJob` の返事だけを映す。
+ */
+describe('S20 献立 — 一括生成の非同期ジョブ（R34）', () => {
+  const PENDING = {
+    jobId: 'job-1',
+    mealTime: 'dinner',
+    submittedAt: '2026-09-19T09:00:00.000Z',
+    hasPushToken: true,
+  };
+  const draft = (title: string) => ({
+    title,
+    ingredients: [{ name: '鶏むね肉' }],
+    steps: [{ body: '焼く' }],
+  });
+
+  beforeEach(() => {
+    mockGetMenuPlan.mockReset().mockResolvedValue(emptyPlanView(7));
+    mockGenerateMenuRecipes.mockReset().mockResolvedValue([]);
+    mockEnsureInferenceCredit.mockReset().mockResolvedValue('ready');
+    mockSubmitMenuBulkJob.mockReset().mockResolvedValue({ outcome: 'queued', job: PENDING });
+    mockCheckPendingMenuBulkJob.mockReset().mockResolvedValue({ state: 'none' });
+  });
+
+  it('受理されたら「できたらお知らせします」を出し、同期の生成は呼ばない（待たない）', async () => {
+    render(<MenuScreen />);
+    await waitFor(() =>
+      expect(screen.getByText(tCount('menu.shortfall.bulkGenerate', 7))).toBeTruthy(),
+    );
+    fireEvent.press(screen.getByText(tCount('menu.shortfall.bulkGenerate', 7)));
+
+    await waitFor(() => expect(screen.getByText(t('menu.bulk.queued'))).toBeTruthy());
+    expect(mockGenerateMenuRecipes).not.toHaveBeenCalled();
+    // 主菜の不足 7 日ぶんを 1 part で頼んでいる（主菜 1 枠の設定では副菜の part は無い）
+    const parts = mockSubmitMenuBulkJob.mock.calls[0]?.[0] as {
+      key: string;
+      request: { days: number };
+    }[];
+    expect(parts.map((p) => [p.key, p.request.days])).toEqual([['main', 7]]);
+    // 無料枠のゲートは投入の前に通す
+    expect(mockEnsureInferenceCredit).toHaveBeenCalled();
+  });
+
+  it('**再マウントしても「生成中」が出て、二重に投入できない**（控えは画面の state ではない）', async () => {
+    mockCheckPendingMenuBulkJob.mockResolvedValue({ state: 'pending', job: PENDING });
+    render(<MenuScreen />);
+
+    await waitFor(() => expect(screen.getByText(t('menu.bulk.queued'))).toBeTruthy());
+    fireEvent.press(screen.getByText(tCount('menu.shortfall.bulkGenerate', 7)));
+    expect(mockSubmitMenuBulkJob).not.toHaveBeenCalled();
+  });
+
+  it('通知を頼めなかったときは「戻ってきて確認してください」側の文言', async () => {
+    mockCheckPendingMenuBulkJob.mockResolvedValue({
+      state: 'pending',
+      job: { ...PENDING, hasPushToken: false },
+    });
+    render(<MenuScreen />);
+    await waitFor(() => expect(screen.getByText(t('menu.bulk.queuedNoPush'))).toBeTruthy());
+    expect(screen.queryByText(t('menu.bulk.queued'))).toBeNull();
+  });
+
+  it('結果が届いていたら提案シートが開き、作れなかった種類を 1 行で言う', async () => {
+    mockCheckPendingMenuBulkJob.mockResolvedValue({
+      state: 'ready',
+      result: {
+        mealTime: 'dinner',
+        parts: [{ key: 'main', drafts: [draft('鶏の照り焼き')] }],
+        failedKinds: ['soup'],
+      },
+    });
+    render(<MenuScreen />);
+
+    await waitFor(() => expect(screen.getByText('鶏の照り焼き')).toBeTruthy());
+    expect(screen.getByText(t('menu.bulk.sheetTitle'))).toBeTruthy();
+    expect(
+      screen.getByText(t('menu.bulk.partFailed', { kinds: t('menu.slotKind.soup') })),
+    ).toBeTruthy();
+    expect(screen.queryByText(t('menu.bulk.queued'))).toBeNull();
+  });
+
+  it.each([
+    ['failed', 'menu.bulk.jobFailed'],
+    ['expired', 'menu.bulk.jobExpired'],
+  ] as const)('%s は理由を言って、ボタンをもう一度押せる状態に戻す', async (state, key) => {
+    mockCheckPendingMenuBulkJob.mockResolvedValue(
+      state === 'failed' ? { state, retryable: true } : { state },
+    );
+    render(<MenuScreen />);
+    await waitFor(() => expect(screen.getByText(t(key))).toBeTruthy());
+    expect(screen.queryByText(t('menu.bulk.queued'))).toBeNull();
   });
 });
