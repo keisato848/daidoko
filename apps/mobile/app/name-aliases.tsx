@@ -10,7 +10,7 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 
 import { HeaderBackButton } from '../src/components/HeaderBackButton';
 import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t } from '../src/i18n';
 import {
   deleteAlias,
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '500', color: Colors.paper },
   headerSpacer: { width: 36 },
   description: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: Colors.paperDim,
     lineHeight: 19,
     paddingHorizontal: 20,
@@ -172,9 +172,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
   },
-  sourceName: { fontSize: 15, color: Colors.paperDim, flexShrink: 1 },
-  arrow: { fontSize: 13, color: Colors.muted },
-  canonicalName: { fontSize: 15, color: Colors.paper, fontWeight: '500', flexShrink: 1 },
+  sourceName: { fontSize: Typography.size.base, color: Colors.paperDim, flexShrink: 1 },
+  arrow: { fontSize: Typography.size.sm, color: Colors.muted },
+  canonicalName: {
+    fontSize: Typography.size.base,
+    color: Colors.paper,
+    fontWeight: '500',
+    flexShrink: 1,
+  },
   editor: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -198,5 +203,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: Colors.gold,
   },
-  editSaveText: { fontSize: 13, color: Colors.bg, fontWeight: '600' },
+  editSaveText: { fontSize: Typography.size.sm, color: Colors.bg, fontWeight: '600' },
 });

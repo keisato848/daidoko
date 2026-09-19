@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { API_V1 } from '../../../src/config';
 import { t, tCount } from '../../../src/i18n';
 import { dialog } from '../../../src/services/dialog.service';
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
   // 詳細画面の aiRecipeNote と同じ見せ方に揃える（#266）
   aiNote: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     lineHeight: 17,
     color: Colors.paper,
     marginBottom: 10,
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
   },
-  muted: { color: Colors.muted, fontSize: 12 },
+  muted: { color: Colors.muted, fontSize: Typography.size.xs },
   errorText: { color: '#FF6B6B', fontSize: 14, textAlign: 'center' },
   passcodeInput: {
     width: 190,
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 10,
     color: Colors.paper,
-    fontSize: 24,
+    fontSize: Typography.size.xl,
     textAlign: 'center',
     letterSpacing: 8,
     backgroundColor: Colors.bgInput,
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
   },
-  primaryBtnText: { color: Colors.bg, fontSize: 15, fontWeight: '600' },
+  primaryBtnText: { color: Colors.bg, fontSize: Typography.size.base, fontWeight: '600' },
   secondaryBtn: {
     borderWidth: 1,
     borderColor: Colors.gold,
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   secondaryBtnText: { color: Colors.gold, fontSize: 14 },
   disabled: { opacity: 0.4 },
   bookContent: { padding: 20, gap: 8 },
-  bookTitle: { color: Colors.paper, fontSize: 20, fontWeight: '600' },
+  bookTitle: { color: Colors.paper, fontSize: Typography.size.lg, fontWeight: '600' },
   bookRow: { borderBottomWidth: 1, borderBottomColor: Colors.border, paddingVertical: 10 },
-  bookRowTitle: { color: Colors.paper, fontSize: 15 },
+  bookRowTitle: { color: Colors.paper, fontSize: Typography.size.base },
 });

@@ -14,7 +14,7 @@ import { Camera, ImageIcon, Sparkles, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { isAiGeneratedPhoto } from '../utils/aiGeneratedPhoto';
 import { ensureCoverImageCredit, recordCoverImageUse } from '../services/cover-image-gate.service';
 import { generateCoverImage, type CoverImageResult } from '../services/cover-image.provider';
@@ -278,11 +278,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.gold,
   },
-  aiBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.gold, letterSpacing: 0.5 },
-  aiNote: { fontSize: 11, color: Colors.muted },
+  aiBadgeText: {
+    fontSize: Typography.size.xs,
+    fontWeight: '700',
+    color: Colors.gold,
+    letterSpacing: 0.5,
+  },
+  aiNote: { fontSize: Typography.size.xs, color: Colors.muted },
   buttonRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   generatingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  generatingText: { fontSize: 13, color: Colors.paperDim },
+  generatingText: { fontSize: Typography.size.sm, color: Colors.paperDim },
   pickButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -295,9 +300,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgInput,
   },
   pickButtonDisabled: { opacity: 0.5 },
-  pickButtonText: { fontSize: 13, color: Colors.goldDim },
+  pickButtonText: { fontSize: Typography.size.sm, color: Colors.goldDim },
   pickButtonTextDisabled: { color: Colors.muted },
-  aiHint: { fontSize: 11, color: Colors.muted },
+  aiHint: { fontSize: Typography.size.xs, color: Colors.muted },
   // 開示は読めて初めて開示になる。import-photo の disclosureText と同じ色・大きさ
-  disclosureText: { fontSize: 12, color: Colors.paperDim, lineHeight: 17 },
+  disclosureText: { fontSize: Typography.size.xs, color: Colors.paperDim, lineHeight: 17 },
 });

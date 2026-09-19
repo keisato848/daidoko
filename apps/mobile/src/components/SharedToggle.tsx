@@ -9,7 +9,7 @@
 import { User, Users } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 import { useSyncStore } from '../stores/sync.store';
 
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   label: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
   },
   labelOn: {
     color: Colors.bg,

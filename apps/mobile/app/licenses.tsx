@@ -6,7 +6,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { HeaderBackButton } from '../src/components/HeaderBackButton';
 import { LICENSE_ITEMS } from '../src/constants/licenses';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t } from '../src/i18n';
 
 export default function LicensesScreen() {
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     color: Colors.paper,
   },
   summaryText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
     lineHeight: 20,
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   },
   packageName: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.paper,
   },
@@ -113,12 +113,12 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   licenseBadgeText: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     fontWeight: '600',
     color: Colors.gold,
   },
   purpose: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
     lineHeight: 19,

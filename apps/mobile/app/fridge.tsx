@@ -21,7 +21,7 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 
 import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { Loading } from '../src/components/Loading';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { expoImagePickerPhotoCaptureAdapter } from '../src/services/expo-photo-capture.adapter';
 import { FridgeInferError, inferFridgeItems } from '../src/services/fridge-vision.provider';
@@ -352,7 +352,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
+  headerTitle: {
+    fontSize: Typography.size.base,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 0.5,
+  },
   headerSpacer: { width: 20 },
   selectArea: {
     flex: 1,
@@ -366,7 +371,7 @@ const styles = StyleSheet.create({
     // 開示は読めて初めて開示になる（muted だと背景と同化する — レシートの知見をそのまま）
     color: Colors.paperDim,
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     lineHeight: 18,
     marginTop: 4,
   },
@@ -378,21 +383,21 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   quotaText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '600',
     color: Colors.gold,
     textAlign: 'center',
     lineHeight: 19,
   },
   quotaHint: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.gold,
     textAlign: 'center',
     lineHeight: 17,
     marginTop: 2,
   },
   quotaPremium: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.gold,
     textAlign: 'center',
     fontWeight: '600',
@@ -408,7 +413,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
   },
-  bigButtonText: { color: Colors.bg, fontSize: 15, fontWeight: '600' },
+  bigButtonText: { color: Colors.bg, fontSize: Typography.size.base, fontWeight: '600' },
   bigButtonOutline: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -420,12 +425,16 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
   },
-  bigButtonOutlineText: { color: Colors.gold, fontSize: 15, fontWeight: '600' },
+  bigButtonOutlineText: { color: Colors.gold, fontSize: Typography.size.base, fontWeight: '600' },
   manualLink: { paddingVertical: 8 },
-  manualLinkText: { color: Colors.muted, fontSize: 13, textDecorationLine: 'underline' },
+  manualLinkText: {
+    color: Colors.muted,
+    fontSize: Typography.size.sm,
+    textDecorationLine: 'underline',
+  },
   reviewHint: {
     color: Colors.paperDim,
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     paddingHorizontal: 20,
     paddingVertical: 12,
     lineHeight: 19,
@@ -452,7 +461,7 @@ const styles = StyleSheet.create({
   nameColumn: { flex: 1, gap: 2 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   uncertainBadge: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     color: '#E0A85C',
     borderWidth: 1,
     borderColor: '#8A6A3A',
@@ -462,7 +471,7 @@ const styles = StyleSheet.create({
   },
   nameInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     paddingVertical: 6,
     paddingHorizontal: 8,
@@ -483,7 +492,7 @@ const styles = StyleSheet.create({
   // opacity 0.5 は背景 #0A0805 に沈んで視認不能だった）。#9A8A6C は背景に対して
   // 約 5.4:1（WCAG AA）。「無効」はチェックなし＋入力背景の消灯で伝える
   nameInputOff: { color: '#9A8A6C', backgroundColor: 'transparent' },
-  inPantryNote: { fontSize: 11, color: Colors.goldDim },
+  inPantryNote: { fontSize: Typography.size.xs, color: Colors.goldDim },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -503,7 +512,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButtonDisabled: { opacity: 0.45 },
-  addButtonText: { color: Colors.bg, fontSize: 15, fontWeight: '600' },
+  addButtonText: { color: Colors.bg, fontSize: Typography.size.base, fontWeight: '600' },
   doneIcon: {
     width: 64,
     height: 64,
@@ -515,5 +524,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1108',
   },
   doneText: { color: Colors.paper, fontSize: 16, fontWeight: '500', textAlign: 'center' },
-  doneFailedText: { color: '#C97A4A', fontSize: 13, textAlign: 'center' },
+  doneFailedText: { color: '#C97A4A', fontSize: Typography.size.sm, textAlign: 'center' },
 });

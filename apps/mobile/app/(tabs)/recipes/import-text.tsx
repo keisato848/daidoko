@@ -11,7 +11,7 @@ import { RecipeForm } from '../../../src/components/RecipeForm';
 import { SourceBanner } from '../../../src/components/SourceBanner';
 import { Toast } from '../../../src/components/Toast';
 import { KeyboardAwareScroll } from '../../../src/components/KeyboardAwareScroll';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
 import { createRecipe } from '../../../src/services/recipe.service';
 import { RECIPE_TEXT_AI_PROMPT, type ParsedRecipeText } from '../../../src/utils/recipeTextParser';
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 0.5,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 17,
+    fontSize: Typography.size.md,
     fontWeight: '500',
     color: Colors.paper,
   },
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgInput,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paper,
     lineHeight: 22,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   headerActionText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '600',
     color: Colors.bg,
     letterSpacing: 1,

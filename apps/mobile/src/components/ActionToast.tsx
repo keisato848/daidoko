@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { useActionToastStore } from '../stores/action-toast.store';
 
 /** 既定の自動消去ミリ秒 */
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   text: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: Colors.paper,
     flex: 1,
   },
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   actionLabel: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '700',
     color: Colors.gold,
   },

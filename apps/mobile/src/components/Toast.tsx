@@ -4,7 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 
 interface ToastProps {
   message: string;
@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   text: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: Colors.paper,
   },
 });

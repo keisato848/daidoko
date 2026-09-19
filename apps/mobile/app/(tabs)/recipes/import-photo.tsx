@@ -25,7 +25,7 @@ import {
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { Toast } from '../../../src/components/Toast';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { t, tCount } from '../../../src/i18n';
 import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import {
@@ -535,7 +535,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'rgba(10, 8, 5, 0.75)',
   },
-  reportFloatingText: { fontSize: 11, color: Colors.muted, textDecorationLine: 'underline' },
+  reportFloatingText: {
+    fontSize: Typography.size.xs,
+    color: Colors.muted,
+    textDecorationLine: 'underline',
+  },
   placeToggle: {
     flexDirection: 'row',
     gap: 8,
@@ -553,7 +557,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.gold,
   },
   placeChipText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: Colors.paperDim,
   },
   placeChipTextActive: {
@@ -585,7 +589,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 0.5,
@@ -611,13 +615,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    fontSize: 17,
+    fontSize: Typography.size.md,
     fontWeight: '500',
     color: Colors.paper,
     textAlign: 'center',
   },
   description: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
     textAlign: 'center',
@@ -657,13 +661,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: Typography.size.md,
     fontWeight: '600',
     color: Colors.paper,
     marginBottom: 4,
   },
   modalHint: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
     lineHeight: 18,
@@ -679,7 +683,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     textAlignVertical: 'top',
   },
@@ -697,7 +701,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalCancelText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.paperDim,
   },
@@ -709,18 +713,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalConfirmText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
   },
   errorText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: '#F2A07B',
     textAlign: 'center',
     lineHeight: 20,
   },
   noticeText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     textAlign: 'center',
     lineHeight: 18,
@@ -729,27 +733,27 @@ const styles = StyleSheet.create({
     // 「サーバーに送信・保存されない」は写真を渡す前の判断材料そのもの。
     // muted(#5A4A34) だと背景と同化して読めない（ペルソナレビュー #2 — 63歳は
     // 「読めなかった」と明言）。開示は読めて初めて開示になる
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.paperDim,
     textAlign: 'center',
     lineHeight: 17,
   },
   quotaText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '600',
     color: Colors.gold,
     textAlign: 'center',
     lineHeight: 19,
   },
   quotaHint: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.gold,
     textAlign: 'center',
     lineHeight: 17,
     marginTop: 2,
   },
   quotaPremium: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.gold,
     textAlign: 'center',
     fontWeight: '600',
@@ -761,7 +765,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   processingText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: Colors.paperDim,
   },
   actionGrid: {
@@ -778,7 +782,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   primaryButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
   },
@@ -794,7 +798,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
   },
   secondaryButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.gold,
   },
@@ -817,7 +821,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   manualButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
   },
@@ -828,7 +832,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   retryButtonText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
   },
 });

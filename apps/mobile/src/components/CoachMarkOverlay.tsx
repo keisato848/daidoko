@@ -5,7 +5,7 @@
  */
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 
 export interface CoachMarkStep {
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   bubbleTitle: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.gold,
     marginBottom: 6,
@@ -185,14 +185,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 14,
   },
-  progress: { fontSize: 12, color: Colors.muted },
+  progress: { fontSize: Typography.size.xs, color: Colors.muted },
   buttons: { flexDirection: 'row', alignItems: 'center', gap: 18 },
-  skipText: { fontSize: 13, color: Colors.muted },
+  skipText: { fontSize: Typography.size.sm, color: Colors.muted },
   nextButton: {
     backgroundColor: Colors.gold,
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 8,
   },
-  nextText: { fontSize: 13, fontWeight: '600', color: Colors.bg },
+  nextText: { fontSize: Typography.size.sm, fontWeight: '600', color: Colors.bg },
 });

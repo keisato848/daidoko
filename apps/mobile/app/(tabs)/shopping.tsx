@@ -17,7 +17,7 @@ import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { Toast } from '../../src/components/Toast';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
-import { Colors } from '../../src/constants/theme';
+import { Colors, Typography } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { moveShoppingItemToPantry, UNGROUPED } from '../../src/services/pantry.service';
@@ -355,8 +355,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
-  headerLink: { fontSize: 13, color: Colors.gold },
+  headerTitle: {
+    fontSize: Typography.size.base,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 0.5,
+  },
+  headerLink: { fontSize: Typography.size.sm, color: Colors.gold },
   headerSpacer: { width: 20 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   addRow: {
@@ -374,7 +379,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
   },
   addButton: {
@@ -408,13 +413,13 @@ const styles = StyleSheet.create({
   },
   rowText: { flex: 1, gap: 2 },
   checkboxOn: { backgroundColor: Colors.gold, borderColor: Colors.gold },
-  itemName: { fontSize: 15, color: Colors.paper },
+  itemName: { fontSize: Typography.size.base, color: Colors.paper },
   itemNameChecked: { color: Colors.muted, textDecorationLine: 'line-through' },
   rowBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  itemAmount: { fontSize: 12, color: Colors.paperDim },
-  storeBadge: { fontSize: 11, color: Colors.goldDim, maxWidth: 120 },
+  itemAmount: { fontSize: Typography.size.xs, color: Colors.paperDim },
+  storeBadge: { fontSize: Typography.size.xs, color: Colors.goldDim, maxWidth: 120 },
   menuBadge: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     color: Colors.gold,
     maxWidth: 120,
     textDecorationLine: 'underline',
@@ -426,5 +431,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 10,
   },
-  addStoreText: { fontSize: 12, color: Colors.muted, flexShrink: 1 },
+  addStoreText: { fontSize: Typography.size.xs, color: Colors.muted, flexShrink: 1 },
 });

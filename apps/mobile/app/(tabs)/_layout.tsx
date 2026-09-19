@@ -4,7 +4,7 @@ import { Home, BookOpen, Plus, Refrigerator, ShoppingCart } from 'lucide-react-n
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, TAB_BAR_CONTENT_HEIGHT } from '../../src/constants/theme';
+import { Colors, TAB_BAR_CONTENT_HEIGHT, Typography } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 
 /**
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   tabLabel: {
-    fontSize: 9,
+    fontSize: Typography.size.wordmark,
     letterSpacing: 0.5,
   },
   addButton: {

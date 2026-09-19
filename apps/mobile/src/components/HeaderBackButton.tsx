@@ -15,7 +15,7 @@ import { useNavigation, useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 
 /** 戻り先のルート名 → 表示名（このアプリで階層画面の push 元になるルートだけ載せる）。 */
@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
   },
   backLabel: {
     color: Colors.goldDim,
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     marginLeft: 2,
   },
 });

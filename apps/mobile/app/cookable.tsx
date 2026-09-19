@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GroupChips } from '../src/components/GroupChips';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { getAdRewardProvider, isAdRewardAvailable } from '../src/services/ad-reward.service';
 import type { PreparedRewardedAd } from '../src/services/ad-reward.types';
@@ -215,7 +215,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
+  headerTitle: {
+    fontSize: Typography.size.base,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 0.5,
+  },
   headerSpacer: { width: 20 },
   banner: {
     flexDirection: 'row',
@@ -227,7 +232,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  bannerText: { fontSize: 13, color: Colors.gold },
+  bannerText: { fontSize: Typography.size.sm, color: Colors.gold },
   listContent: { paddingHorizontal: 20, paddingVertical: 8 },
   empty: { color: Colors.muted, textAlign: 'center', marginTop: 48, lineHeight: 22, fontSize: 14 },
   row: {
@@ -237,10 +242,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  title: { flex: 1, fontSize: 15, color: Colors.paper },
-  fraction: { fontSize: 13, color: Colors.paperDim },
+  title: { flex: 1, fontSize: Typography.size.base, color: Colors.paper },
+  fraction: { fontSize: Typography.size.sm, color: Colors.paperDim },
   fractionFull: { color: Colors.gold, fontWeight: '600' },
   barTrack: { height: 4, borderRadius: 2, backgroundColor: '#2A2114', overflow: 'hidden' },
   barFill: { height: 4, borderRadius: 2, backgroundColor: Colors.gold },
-  missing: { fontSize: 12, color: Colors.muted },
+  missing: { fontSize: Typography.size.xs, color: Colors.muted },
 });

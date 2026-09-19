@@ -27,7 +27,7 @@ import { Loading } from '../../src/components/Loading';
 import { MonthlyStats } from '../../src/components/MonthlyStats';
 import { PressableScale } from '../../src/components/PressableScale';
 import { Stars } from '../../src/components/Stars';
-import { Colors } from '../../src/constants/theme';
+import { Colors, Typography } from '../../src/constants/theme';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { useSyncRefresh } from '../../src/hooks/useSyncRefresh';
 import { t, tCount } from '../../src/i18n';
@@ -580,9 +580,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
   },
   menuCardHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  menuCardLabel: { fontSize: 12, color: Colors.gold, letterSpacing: 0.5 },
-  menuCardBody: { fontSize: 15, color: Colors.paper, lineHeight: 21 },
-  menuCardMeta: { fontSize: 11, color: Colors.muted, marginTop: 4 },
+  menuCardLabel: { fontSize: Typography.size.xs, color: Colors.gold, letterSpacing: 0.5 },
+  menuCardBody: { fontSize: Typography.size.base, color: Colors.paper, lineHeight: 21 },
+  menuCardMeta: { fontSize: Typography.size.xs, color: Colors.muted, marginTop: 4 },
   eatenOutBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
     maxWidth: 140,
   },
   eatenOutText: {
-    fontSize: 10,
+    fontSize: Typography.size.xs,
     color: Colors.goldDim,
   },
   container: {
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   headerActionLabel: {
-    fontSize: 9,
+    fontSize: Typography.size.wordmark,
     fontWeight: '400',
     color: Colors.muted,
     letterSpacing: 0.5,
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 4,
     paddingBottom: 8,
-    fontSize: 13, // sm: フィルタータブ
+    fontSize: Typography.size.sm, // フィルタータブ
     fontWeight: '400',
   },
   tabActive: {
@@ -662,7 +662,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 4,
-    fontSize: 12, // xs: タイムスタンプ・日付ヘッダー
+    fontSize: Typography.size.xs, // タイムスタンプ・日付ヘッダー
     color: Colors.paperDim,
     letterSpacing: 2,
   },
@@ -678,8 +678,13 @@ const styles = StyleSheet.create({
   },
   resumeTextBlock: { flex: 1 },
   resumeTitle: { color: Colors.bg, fontSize: 14, fontWeight: '700' },
-  resumeStep: { color: Colors.bg, fontSize: 11, opacity: 0.75 },
-  resumeAction: { color: Colors.bg, fontSize: 12, fontWeight: '600', flexShrink: 0 },
+  resumeStep: { color: Colors.bg, fontSize: Typography.size.xs, opacity: 0.75 },
+  resumeAction: {
+    color: Colors.bg,
+    fontSize: Typography.size.xs,
+    fontWeight: '600',
+    flexShrink: 0,
+  },
   captureButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -710,7 +715,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   captureText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
     letterSpacing: 1,
@@ -727,7 +732,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   wantTitle: {
-    fontSize: 12, // xs: セクション見出し
+    fontSize: Typography.size.xs, // セクション見出し
     color: Colors.goldDim,
     letterSpacing: 2,
   },
@@ -758,7 +763,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
   },
   wantCardTitle: {
-    fontSize: 12, // xs: カードタイトル（コンパクト）
+    fontSize: Typography.size.xs, // カードタイトル（コンパクト）
     fontWeight: '400',
     color: Colors.paper,
     lineHeight: 16,
@@ -811,7 +816,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gold,
   },
   checkMark: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '700',
     color: Colors.bg,
     lineHeight: 16,
@@ -823,7 +828,7 @@ const styles = StyleSheet.create({
   },
   recipeTitle: {
     color: Colors.paper,
-    fontSize: 15, // base: カードタイトル
+    fontSize: Typography.size.base, // カードタイトル
     fontWeight: '500',
   },
   cardUser: {
@@ -833,12 +838,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   userName: {
-    fontSize: 13, // sm: ユーザー名
+    fontSize: Typography.size.sm, // ユーザー名
     color: Colors.paperDim,
     fontWeight: '400',
   },
   memo: {
-    fontSize: 13, // sm: メモ
+    fontSize: Typography.size.sm, // メモ
     color: Colors.goldDim,
     fontStyle: 'italic',
     marginTop: 2,
@@ -858,7 +863,7 @@ const styles = StyleSheet.create({
   },
   selectCount: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.paper,
   },
@@ -870,7 +875,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   selectAllText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -906,7 +911,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   actionBtnText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.bg,
   },

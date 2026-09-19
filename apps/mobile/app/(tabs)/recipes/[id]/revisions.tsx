@@ -7,7 +7,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../../../../src/constants/theme';
+import { Colors, Typography } from '../../../../src/constants/theme';
 import { t } from '../../../../src/i18n';
 import { getRecipeDetail, getRecipeRevisions } from '../../../../src/services/recipe.service';
 import type { RecipeRevisionSummary } from '../../../../src/services/types';
@@ -142,13 +142,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   backText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.goldDim,
   },
   headerTitle: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 0.3,
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   mutedText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   revisionBadgeText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '600',
     color: Colors.gold,
     letterSpacing: 0.5,
@@ -207,13 +207,13 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   currentBadgeText: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     fontWeight: '600',
     color: Colors.bg,
   },
   revisionDate: {
     marginLeft: 'auto',
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -223,18 +223,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   revisionMetaItem: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
   },
   revisionBody: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paper,
     lineHeight: 20,
   },
   revisionNote: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.goldDim,
     lineHeight: 20,

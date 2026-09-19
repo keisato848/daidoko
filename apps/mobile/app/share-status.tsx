@@ -13,7 +13,7 @@ import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { HeaderBackButton } from '../src/components/HeaderBackButton';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { dialog } from '../src/services/dialog.service';
 import { refreshKnownSyncGroups } from '../src/services/entity-groups.service';
@@ -268,17 +268,17 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 36 },
   list: { padding: 16, paddingBottom: 32, gap: 10 },
   sectionLabel: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '600',
     color: Colors.goldDim,
     marginTop: 14,
     letterSpacing: 1,
   },
-  scopeNote: { fontSize: 12, color: Colors.paperDim, lineHeight: 18 },
-  currentMark: { fontSize: 11, fontWeight: '400', color: Colors.goldDim },
+  scopeNote: { fontSize: Typography.size.xs, color: Colors.paperDim, lineHeight: 18 },
+  currentMark: { fontSize: Typography.size.xs, fontWeight: '400', color: Colors.goldDim },
   // 否定側の明示（G5）。地の文よりわずかに立てる — 隆の「見えていないことを確認したい」への回答
-  notVisibleNote: { fontSize: 12, color: Colors.paperDim, fontStyle: 'italic' },
-  emptyBody: { fontSize: 13, color: Colors.muted, paddingVertical: 6 },
+  notVisibleNote: { fontSize: Typography.size.xs, color: Colors.paperDim, fontStyle: 'italic' },
+  emptyBody: { fontSize: Typography.size.sm, color: Colors.muted, paddingVertical: 6 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   cardBody: { flex: 1, gap: 4 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: Colors.paper },
-  cardMeta: { fontSize: 12, color: Colors.paperDim },
+  cardTitle: { fontSize: Typography.size.base, fontWeight: '600', color: Colors.paper },
+  cardMeta: { fontSize: Typography.size.xs, color: Colors.paperDim },
   iconBtn: { padding: 6 },
 });

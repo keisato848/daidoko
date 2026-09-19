@@ -24,7 +24,7 @@ import { Avatar } from '../src/components/Avatar';
 import { BottomSheet } from '../src/components/BottomSheet';
 import { KeyboardAwareScroll } from '../src/components/KeyboardAwareScroll';
 import { Toast } from '../src/components/Toast';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { dialog } from '../src/services/dialog.service';
 import {
@@ -1090,12 +1090,12 @@ const styles = StyleSheet.create({
   },
   groupInfo: { flex: 1, gap: 2 },
   groupName: {
-    fontSize: 17,
+    fontSize: Typography.size.md,
     fontWeight: '500',
     color: Colors.paper,
   },
   groupMeta: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -1108,7 +1108,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '500',
     color: Colors.goldDim,
     letterSpacing: 1,
@@ -1122,7 +1122,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgInput,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paper,
   },
@@ -1154,17 +1154,17 @@ const styles = StyleSheet.create({
   },
   memberInfo: { flex: 1, gap: 1 },
   memberName: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paper,
   },
   memberYou: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.muted,
   },
   memberRole: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -1221,7 +1221,7 @@ const styles = StyleSheet.create({
     color: Colors.gold,
   },
   syncInfo: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     lineHeight: 20,
     color: Colors.paperDim,
     marginBottom: 10,
@@ -1232,12 +1232,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   syncInviteLabel: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     marginBottom: 6,
   },
   syncExpiry: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     marginTop: 6,
     marginBottom: 4,
@@ -1251,11 +1251,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  deviceName: { color: Colors.paper, fontSize: 13, flex: 1 },
-  deviceMeta: { color: Colors.muted, fontSize: 11 },
-  deviceEvict: { color: '#FF6B6B', fontSize: 12 },
+  deviceName: { color: Colors.paper, fontSize: Typography.size.sm, flex: 1 },
+  deviceMeta: { color: Colors.muted, fontSize: Typography.size.xs },
+  deviceEvict: { color: '#FF6B6B', fontSize: Typography.size.xs },
   syncOwnerBadge: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.goldDim,
     marginTop: 8,
   },
@@ -1280,7 +1280,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   leaveButtonText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '600',
     color: '#FF6B6B',
   },
@@ -1297,18 +1297,28 @@ const styles = StyleSheet.create({
   },
   groupCheck: { width: 20, alignItems: 'center' },
   groupRowBody: { flex: 1, gap: 2 },
-  groupRowName: { fontSize: 15, fontWeight: '500', color: Colors.paper },
-  groupRowMeta: { fontSize: 12, color: Colors.paperDim, lineHeight: 17 },
-  groupInviteLink: { fontSize: 13, fontWeight: '500', color: Colors.gold, padding: 4 },
+  groupRowName: { fontSize: Typography.size.base, fontWeight: '500', color: Colors.paper },
+  groupRowMeta: { fontSize: Typography.size.xs, color: Colors.paperDim, lineHeight: 17 },
+  groupInviteLink: {
+    fontSize: Typography.size.sm,
+    fontWeight: '500',
+    color: Colors.gold,
+    padding: 4,
+  },
   // 作成導線はテキストリンク 1 本（G8: グループは少数で足りる前提 — ボタンで誘導しない）
   groupCreateLink: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: Colors.goldDim,
     paddingVertical: 10,
   },
-  sheetNote: { fontSize: 13, lineHeight: 19, color: Colors.paperDim, marginBottom: 12 },
+  sheetNote: {
+    fontSize: Typography.size.sm,
+    lineHeight: 19,
+    color: Colors.paperDim,
+    marginBottom: 12,
+  },
   sheetScopeLabel: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     marginTop: 14,
     marginBottom: 6,

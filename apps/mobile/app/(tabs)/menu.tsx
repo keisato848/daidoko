@@ -28,7 +28,7 @@ import { MenuSlotPickSheet, type SlotPickCandidate } from '../../src/components/
 import { MenuWeekRow } from '../../src/components/MenuWeekRow';
 import { ShoppingPickSheet } from '../../src/components/ShoppingPickSheet';
 import { Toast } from '../../src/components/Toast';
-import { Colors } from '../../src/constants/theme';
+import { Colors, Typography } from '../../src/constants/theme';
 import { MENU_AI_ENABLED } from '../../src/config';
 import { t, tCount } from '../../src/i18n';
 import { getMenuTasteMemo } from '../../src/services/app-meta.service';
@@ -730,18 +730,23 @@ const styles = StyleSheet.create({
   // （ステータスバー分の余白。この画面だけ抜けていてタイトルと時計が重なっていた）
   content: { paddingHorizontal: 16, paddingTop: 58, paddingBottom: 48 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  title: { fontSize: 17, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
+  title: {
+    fontSize: Typography.size.md,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 0.5,
+  },
   headerSpacer: { flex: 1 },
   gearButton: { padding: 4 },
-  autoNote: { fontSize: 12, color: Colors.muted, marginBottom: 16 },
+  autoNote: { fontSize: Typography.size.xs, color: Colors.muted, marginBottom: 16 },
   // 朝/昼のときだけ出す控えめな表記（§10.13。夕は無印）
-  mealTimeNote: { fontSize: 13, color: Colors.goldDim, marginBottom: 8 },
+  mealTimeNote: { fontSize: Typography.size.sm, color: Colors.goldDim, marginBottom: 8 },
   mealTimeChipInner: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   // 他の時間帯にプランがあることを示す控えめなドット
   mealTimeDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.gold },
-  sectionLabel: { fontSize: 13, color: Colors.muted, marginBottom: 8 },
+  sectionLabel: { fontSize: Typography.size.sm, color: Colors.muted, marginBottom: 8 },
   /** 週の進み具合（PR-3）。数字だけの控えめな 1 行 */
-  weekProgress: { fontSize: 13, color: Colors.goldDim, marginBottom: 8 },
+  weekProgress: { fontSize: Typography.size.sm, color: Colors.goldDim, marginBottom: 8 },
   dayRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   dayChip: {
     paddingVertical: 8,
@@ -763,7 +768,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginBottom: 16,
   },
-  primaryText: { fontSize: 15, color: Colors.bg, fontWeight: '600' },
+  primaryText: { fontSize: Typography.size.base, color: Colors.bg, fontWeight: '600' },
   disabled: { opacity: 0.5 },
   arrangedBadge: {
     borderWidth: 1,
@@ -772,7 +777,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 8,
   },
-  arrangedBadgeText: { fontSize: 11, color: Colors.gold },
+  arrangedBadgeText: { fontSize: Typography.size.xs, color: Colors.gold },
   aiSection: { marginBottom: 16, gap: 6 },
   aiButton: {
     flexDirection: 'row',
@@ -785,7 +790,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   aiButtonText: { fontSize: 14, color: Colors.gold, fontWeight: '600' },
-  aiLimitNote: { fontSize: 12, color: Colors.muted, textAlign: 'center' },
+  aiLimitNote: { fontSize: Typography.size.xs, color: Colors.muted, textAlign: 'center' },
   staleBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -834,8 +839,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   bulkButtonText: { fontSize: 14, color: Colors.bg, fontWeight: '600' },
-  bulkErrorText: { fontSize: 13, color: Colors.muted, marginTop: 6 },
+  bulkErrorText: { fontSize: Typography.size.sm, color: Colors.muted, marginTop: 6 },
   empty: { alignItems: 'center', paddingVertical: 32, gap: 8 },
-  emptyTitle: { fontSize: 15, color: Colors.paper },
+  emptyTitle: { fontSize: Typography.size.base, color: Colors.paper },
   emptyBody: { fontSize: 14, color: Colors.muted, textAlign: 'center', lineHeight: 22 },
 });

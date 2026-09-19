@@ -8,7 +8,7 @@
 import { Image, Pressable, StyleSheet, Text } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 
 interface CoverImagePreviewSheetProps {
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   notice: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.paperDim,
     marginBottom: 16,
     textAlign: 'center',
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  primaryText: { fontSize: 15, fontWeight: '600', color: Colors.bg },
+  primaryText: { fontSize: Typography.size.base, fontWeight: '600', color: Colors.bg },
   secondaryButton: {
     borderWidth: 1,
     borderColor: Colors.border,
@@ -96,8 +96,12 @@ const styles = StyleSheet.create({
   },
   secondaryText: { fontSize: 14, color: Colors.paper },
   plainButton: { paddingVertical: 10, alignItems: 'center' },
-  plainText: { fontSize: 13, color: Colors.paperDim },
+  plainText: { fontSize: Typography.size.sm, color: Colors.paperDim },
   reportButton: { paddingVertical: 8, alignItems: 'center' },
-  reportText: { fontSize: 12, color: Colors.muted, textDecorationLine: 'underline' },
+  reportText: {
+    fontSize: Typography.size.xs,
+    color: Colors.muted,
+    textDecorationLine: 'underline',
+  },
   disabled: { opacity: 0.5 },
 });

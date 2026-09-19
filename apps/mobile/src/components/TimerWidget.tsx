@@ -8,7 +8,7 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { useTimerStore } from '../stores/timer.store';
 import { t } from '../i18n';
 
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   time: {
-    fontSize: 36, // timer: タイマー数値
+    fontSize: Typography.size.timer, // タイマー数値
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
     color: Colors.gold,
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     borderColor: '#3D8A5A',
   },
   mainButtonText: {
-    fontSize: 15, // base: タイマーCTAボタン
+    fontSize: Typography.size.base, // タイマーCTAボタン
     fontWeight: '600',
     color: Colors.bg,
   },
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   resetButtonText: {
-    fontSize: 15, // base: リセットボタン
+    fontSize: Typography.size.base, // リセットボタン
     fontWeight: '400',
     color: Colors.paperDim,
   },

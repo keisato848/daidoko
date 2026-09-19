@@ -17,7 +17,7 @@ import { ChefHat } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Colors, TAB_BAR_CONTENT_HEIGHT } from '../constants/theme';
+import { Colors, TAB_BAR_CONTENT_HEIGHT, Typography } from '../constants/theme';
 import { t } from '../i18n';
 import { useCookingSessionStore } from '../stores/cooking-session.store';
 import { pathHasAnySegment } from '../utils/routeMatch';
@@ -100,17 +100,17 @@ const styles = StyleSheet.create({
   textBlock: { flex: 1 },
   title: {
     color: Colors.bg,
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '700',
   },
   step: {
     color: Colors.bg,
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     opacity: 0.75,
   },
   action: {
     color: Colors.bg,
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '600',
     flexShrink: 0,
   },

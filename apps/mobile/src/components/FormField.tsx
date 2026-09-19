@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text, TextInput, type TextInputProps, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 
 interface FormFieldProps extends TextInputProps {
   label: string;
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 13, // sm: フォームラベル
+    fontSize: Typography.size.sm, // フォームラベル
     fontWeight: '500',
     color: Colors.paperDim,
     marginBottom: 6,
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    fontSize: 15, // base: 入力テキスト
+    fontSize: Typography.size.base, // 入力テキスト
     fontWeight: '400',
     color: Colors.paper,
   },
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     borderColor: '#FF6B6B',
   },
   error: {
-    fontSize: 12, // xs: エラーメッセージ
+    fontSize: Typography.size.xs, // エラーメッセージ
     fontWeight: '400',
     color: '#FF6B6B',
     marginTop: 4,

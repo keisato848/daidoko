@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 
 import { EULA_URL, PRIVACY_POLICY_URL } from '../../../src/constants/legal';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { t, tCount } from '../../../src/i18n';
 import { getAdRewardProvider, isAdRewardAvailable } from '../../../src/services/ad-reward.service';
 import type { PreparedRewardedAd } from '../../../src/services/ad-reward.types';
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   },
   benefitText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     lineHeight: 22,
   },
@@ -379,12 +379,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   priceValue: {
-    fontSize: 24,
+    fontSize: Typography.size.xl,
     fontWeight: '700',
     color: Colors.gold,
   },
   priceUnit: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.paperDim,
   },
   subscribeButton: {
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.55 },
   orText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     textAlign: 'center',
   },
@@ -421,18 +421,18 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   adButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.gold,
   },
   tokenHint: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     textAlign: 'center',
     lineHeight: 16,
   },
   tokenBalance: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '600',
     color: Colors.gold,
     textAlign: 'center',
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   terms: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     textAlign: 'center',
     lineHeight: 17,
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   legalLink: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     color: Colors.gold,
     textDecorationLine: 'underline',
     // 小さい文字なので、指で押せる高さを確保する

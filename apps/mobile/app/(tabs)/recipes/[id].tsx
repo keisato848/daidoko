@@ -38,7 +38,7 @@ import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
 import { TagChip } from '../../../src/components/TagChip';
 import { Toast } from '../../../src/components/Toast';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { t, tCount } from '../../../src/i18n';
 import { canSkipSelection, type ShoppingPlanRow } from '../../../src/utils/shoppingPlan';
@@ -903,7 +903,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.gold,
   },
-  heroAiBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.gold, letterSpacing: 0.5 },
+  heroAiBadgeText: {
+    fontSize: Typography.size.xs,
+    fontWeight: '700',
+    color: Colors.gold,
+    letterSpacing: 0.5,
+  },
   // ヘッダーのボタンは表紙写真の上に重なる。**写真が明るいと見えなくなる**ため
   // （実機で、明るいガレットの写真でメニュー ⋮ が事実上不可視になった）、
   // 半透明の暗い下地を敷く。編集・お店の味に近づける・版履歴はメニューの中にしか
@@ -930,7 +935,7 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   backText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     // 下地を敷いたので、写真の明るさに関係なく読める色にする
     color: Colors.paper,
@@ -968,7 +973,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   menuItemText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paper,
   },
@@ -983,7 +988,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   title: {
-    fontSize: 20,
+    fontSize: Typography.size.lg,
     fontWeight: '500',
     color: Colors.paper,
     marginBottom: 6,
@@ -1000,11 +1005,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     maxWidth: '100%',
   },
-  shareBadgeText: { fontSize: 11, color: Colors.paperDim },
-  aiDetailNote: { fontSize: 11, color: Colors.muted, marginBottom: 6 },
+  shareBadgeText: { fontSize: Typography.size.xs, color: Colors.paperDim },
+  aiDetailNote: { fontSize: Typography.size.xs, color: Colors.muted, marginBottom: 6 },
   // 表紙の一行より強く見せる（材料と分量の安全に関わる）。警告色は使わない — ブランド外
   aiRecipeNote: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     lineHeight: 17,
     color: Colors.paper,
     marginBottom: 8,
@@ -1022,12 +1027,12 @@ const styles = StyleSheet.create({
   },
   placeText: {
     color: Colors.goldDim,
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     flexShrink: 1,
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
   metaText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -1035,7 +1040,7 @@ const styles = StyleSheet.create({
   tabBar: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Colors.border },
   tabItem: { flex: 1, alignItems: 'center', paddingVertical: 10 },
   tabText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.muted,
   },
@@ -1050,7 +1055,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   groupLabel: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '500',
     color: Colors.goldDim,
     marginTop: 12,
@@ -1073,14 +1078,14 @@ const styles = StyleSheet.create({
   ingredientName: {
     flex: 1,
     flexShrink: 1,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paper,
   },
   ingredientAmount: {
     flexShrink: 0,
     textAlign: 'right',
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.goldDim,
   },
@@ -1110,13 +1115,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepNumberText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '500',
     color: Colors.gold,
   },
   stepContent: { flex: 1 },
   stepBody: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paper,
     lineHeight: 24,
@@ -1140,19 +1145,19 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   timerText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.gold,
   },
   memoContainer: { alignItems: 'center', paddingVertical: 40, gap: 10 },
   memoPlaceholder: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paperDim,
   },
   memoList: { gap: 14 },
   memoBody: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paper,
     lineHeight: 24,
@@ -1166,12 +1171,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   memoDate: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.paperDim,
   },
   historyHint: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.muted,
     textAlign: 'center',
@@ -1193,12 +1198,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logUserName: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '500',
     color: Colors.paper,
   },
   logDate: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -1206,7 +1211,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   logMemo: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.goldDim,
     fontStyle: 'italic',

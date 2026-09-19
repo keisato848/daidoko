@@ -17,7 +17,7 @@ import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { GroupPicker } from '../src/components/GroupPicker';
 import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { Loading } from '../src/components/Loading';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { readableErrorMessage } from '../src/services/ai-error';
 import { recognizeTextOnDevice, isClientOcrAvailable } from '../src/services/client-ocr.provider';
@@ -405,9 +405,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 8,
   },
-  storeText: { fontSize: 12, color: Colors.muted, flexShrink: 1 },
+  storeText: { fontSize: Typography.size.xs, color: Colors.muted, flexShrink: 1 },
   checkOffNote: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.goldDim,
     paddingHorizontal: 20,
     paddingBottom: 8,
@@ -422,7 +422,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
+  headerTitle: {
+    fontSize: Typography.size.base,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 0.5,
+  },
   headerSpacer: { width: 20 },
   selectArea: {
     flex: 1,
@@ -435,7 +440,7 @@ const styles = StyleSheet.create({
   cloudNote: {
     color: Colors.muted,
     textAlign: 'center',
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     lineHeight: 18,
     opacity: 0.8,
     marginTop: 4,
@@ -457,7 +462,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
   },
-  bigButtonText: { color: Colors.bg, fontSize: 15, fontWeight: '600' },
+  bigButtonText: { color: Colors.bg, fontSize: Typography.size.base, fontWeight: '600' },
   bigButtonOutline: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -469,10 +474,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
   },
-  bigButtonOutlineText: { color: Colors.gold, fontSize: 15, fontWeight: '600' },
+  bigButtonOutlineText: { color: Colors.gold, fontSize: Typography.size.base, fontWeight: '600' },
   reviewHint: {
     color: Colors.muted,
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     paddingHorizontal: 20,
     paddingVertical: 12,
     lineHeight: 19,
@@ -498,7 +503,7 @@ const styles = StyleSheet.create({
   checkboxOn: { backgroundColor: Colors.gold, borderColor: Colors.gold },
   nameInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     paddingVertical: 6,
     paddingHorizontal: 8,
@@ -510,7 +515,7 @@ const styles = StyleSheet.create({
   nameInputOff: { color: '#9A8A6C', backgroundColor: 'transparent' },
   qtyInput: {
     width: 52,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     paddingVertical: 6,
     paddingHorizontal: 6,
@@ -520,7 +525,7 @@ const styles = StyleSheet.create({
   },
   unitInput: {
     width: 56,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     paddingVertical: 6,
     paddingHorizontal: 6,
@@ -547,5 +552,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButtonDisabled: { opacity: 0.45 },
-  addButtonText: { color: Colors.bg, fontSize: 15, fontWeight: '600' },
+  addButtonText: { color: Colors.bg, fontSize: Typography.size.base, fontWeight: '600' },
 });

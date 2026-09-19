@@ -9,7 +9,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 
 import { KeyboardAvoider } from '../../../../src/components/KeyboardAvoider';
 import { Toast } from '../../../../src/components/Toast';
-import { Colors } from '../../../../src/constants/theme';
+import { Colors, Typography } from '../../../../src/constants/theme';
 import { t, tCount } from '../../../../src/i18n';
 import { readableErrorMessage } from '../../../../src/services/ai-error';
 import { createCookingLog } from '../../../../src/services/cooking-log.service';
@@ -276,13 +276,13 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: Typography.size.md,
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 0.5,
   },
   skipText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.muted,
   },
@@ -301,12 +301,12 @@ const styles = StyleSheet.create({
     fontSize: 48,
   },
   completionText: {
-    fontSize: 20,
+    fontSize: Typography.size.lg,
     fontWeight: '500',
     color: Colors.paper,
   },
   completionSub: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -319,14 +319,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '500',
     color: Colors.goldDim,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
   ratingHint: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     color: Colors.paper,
   },
   photoHint: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.muted,
     textAlign: 'right',
@@ -396,14 +396,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paper,
     minHeight: 100,
     lineHeight: 22,
   },
   charCount: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.muted,
     textAlign: 'right',
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   saveButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
     letterSpacing: 1,

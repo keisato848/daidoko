@@ -3,7 +3,7 @@
  */
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 
 interface IngredientRowProps {
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   groupInput: {
-    fontSize: 12, // xs: グループラベル入力
+    fontSize: Typography.size.xs, // グループラベル入力
     fontWeight: '400',
     color: Colors.goldDim,
     backgroundColor: Colors.bgInput,
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    fontSize: 15, // base: 材料名・分量
+    fontSize: Typography.size.base, // 材料名・分量
     fontWeight: '400',
     color: Colors.paper,
   },
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   },
   removeText: {
     color: '#FF6B6B',
-    fontSize: 17, // md: 削除ボタン
+    fontSize: Typography.size.md, // 削除ボタン
     fontWeight: '400',
   },
 });

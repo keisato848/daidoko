@@ -11,7 +11,7 @@ import { ChevronRight, FileText, Link2, Users } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 
 interface ShareSheetProps {
@@ -118,8 +118,8 @@ const styles = StyleSheet.create({
   rowSecondary: { borderBottomWidth: 0 },
   rowDisabled: { opacity: 0.7 },
   rowBody: { flex: 1, gap: 3 },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: Colors.paper },
+  rowTitle: { fontSize: Typography.size.base, fontWeight: '600', color: Colors.paper },
   rowTitleSecondary: { fontSize: 14, color: Colors.paper },
-  rowNote: { fontSize: 12, color: Colors.paperDim, lineHeight: 17 },
+  rowNote: { fontSize: Typography.size.xs, color: Colors.paperDim, lineHeight: 17 },
   textDisabled: { color: Colors.muted },
 });

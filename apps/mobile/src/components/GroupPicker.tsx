@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { KeyboardAvoider } from './KeyboardAvoider';
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 
 export interface GroupPickerProps {
@@ -112,7 +112,12 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 8,
   },
-  title: { fontSize: 15, fontWeight: '600', color: Colors.paper, marginBottom: 4 },
+  title: {
+    fontSize: Typography.size.base,
+    fontWeight: '600',
+    color: Colors.paper,
+    marginBottom: 4,
+  },
   row: {
     paddingVertical: 11,
     paddingHorizontal: 12,
@@ -142,7 +147,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gold,
   },
   createButtonDisabled: { opacity: 0.4 },
-  createButtonText: { fontSize: 13, fontWeight: '600', color: Colors.bg },
+  createButtonText: { fontSize: Typography.size.sm, fontWeight: '600', color: Colors.bg },
   close: { alignItems: 'center', paddingVertical: 10, marginTop: 2 },
-  closeText: { fontSize: 13, color: Colors.muted },
+  closeText: { fontSize: Typography.size.sm, color: Colors.muted },
 });

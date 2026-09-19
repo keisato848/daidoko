@@ -10,7 +10,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { KeyboardAwareScroll } from '../src/components/KeyboardAwareScroll';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t } from '../src/i18n';
 import { dialog } from '../src/services/dialog.service';
 import { lookupJan, rememberJan } from '../src/services/jan.service';
@@ -157,9 +157,14 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     gap: 16,
   },
-  message: { color: Colors.paper, fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  message: {
+    color: Colors.paper,
+    fontSize: Typography.size.base,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
   namingTitle: { color: Colors.paper, fontSize: 18, fontWeight: '600' },
-  code: { color: Colors.muted, fontSize: 13 },
+  code: { color: Colors.muted, fontSize: Typography.size.sm },
   input: {
     width: '100%',
     borderWidth: 1,
@@ -168,7 +173,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
     paddingHorizontal: 12,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
   },
   button: {
@@ -178,7 +183,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   buttonDisabled: { opacity: 0.45 },
-  buttonText: { color: Colors.bg, fontSize: 15, fontWeight: '600' },
+  buttonText: { color: Colors.bg, fontSize: Typography.size.base, fontWeight: '600' },
   link: { color: Colors.muted, fontSize: 14 },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   closeButton: { position: 'absolute', top: 54, left: 20 },

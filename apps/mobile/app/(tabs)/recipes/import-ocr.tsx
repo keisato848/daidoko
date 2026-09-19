@@ -37,7 +37,7 @@ import {
 import { RecipeForm } from '../../../src/components/RecipeForm';
 import { SourceBanner } from '../../../src/components/SourceBanner';
 import { Toast } from '../../../src/components/Toast';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { t, tCount } from '../../../src/i18n';
 import { ensureInferenceCredit } from '../../../src/services/inference-gate.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../src/services/expo-photo-capture.adapter';
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 0.5,
@@ -350,20 +350,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    fontSize: 17,
+    fontSize: Typography.size.md,
     fontWeight: '500',
     color: Colors.paper,
     textAlign: 'center',
   },
   description: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
     textAlign: 'center',
     lineHeight: 22,
   },
   hintText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     textAlign: 'center',
     lineHeight: 18,
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pageIndexText: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     fontWeight: '600',
     color: Colors.paper,
   },
@@ -432,12 +432,12 @@ const styles = StyleSheet.create({
     borderStyle: 'solid',
   },
   addTileText: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     color: Colors.goldDim,
     textAlign: 'center',
   },
   errorText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: '#F2A07B',
     textAlign: 'center',
     lineHeight: 20,
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   processingText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: Colors.paperDim,
   },
   actionGrid: {
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   primaryButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
   },
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
   },
   secondaryButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.gold,
   },
@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   disclosureText: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     textAlign: 'center',
     lineHeight: 17,
@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   manualButtonText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: Colors.goldDim,
   },
 });

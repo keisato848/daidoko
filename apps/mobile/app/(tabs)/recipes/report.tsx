@@ -12,7 +12,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FormField } from '../../../src/components/FormField';
 import { KeyboardAwareScroll } from '../../../src/components/KeyboardAwareScroll';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
 import { dialog } from '../../../src/services/dialog.service';
 import { reportContent, type ReportCategory } from '../../../src/services/report.service';
@@ -119,11 +119,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
+  headerTitle: {
+    fontSize: Typography.size.base,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 0.5,
+  },
   headerSpacer: { width: 20 },
   body: { paddingHorizontal: 24, paddingVertical: 28, gap: 14 },
-  lead: { fontSize: 13, color: Colors.paperDim, lineHeight: 20 },
-  label: { fontSize: 13, fontWeight: '500', color: Colors.paperDim, marginTop: 4 },
+  lead: { fontSize: Typography.size.sm, color: Colors.paperDim, lineHeight: 20 },
+  label: { fontSize: Typography.size.sm, fontWeight: '500', color: Colors.paperDim, marginTop: 4 },
   categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   categoryChip: {
     paddingHorizontal: 12,
@@ -134,7 +139,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgInput,
   },
   categoryChipActive: { borderColor: Colors.gold, backgroundColor: '#241A0D' },
-  categoryText: { fontSize: 13, color: Colors.paperDim },
+  categoryText: { fontSize: Typography.size.sm, color: Colors.paperDim },
   categoryTextActive: { color: Colors.gold, fontWeight: '600' },
   multilineInput: { minHeight: 90, textAlignVertical: 'top' },
   submitButton: {
@@ -144,6 +149,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  submitText: { fontSize: 15, fontWeight: '600', color: Colors.bg },
+  submitText: { fontSize: Typography.size.base, fontWeight: '600', color: Colors.bg },
   disabled: { opacity: 0.55 },
 });

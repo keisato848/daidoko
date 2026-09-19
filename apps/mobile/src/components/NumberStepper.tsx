@@ -3,7 +3,7 @@
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { formatValueWithUnit } from '../i18n/format';
 
 interface NumberStepperProps {
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 13, // sm: ステッパーラベル
+    fontSize: Typography.size.sm, // ステッパーラベル
     fontWeight: '500',
     color: Colors.paperDim,
     marginBottom: 6,
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   buttonText: {
-    fontSize: 20, // lg: ＋/－ボタン文字
+    fontSize: Typography.size.lg, // ＋/－ボタン文字
     fontWeight: '400',
     color: Colors.gold,
   },
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     color: Colors.muted,
   },
   value: {
-    fontSize: 17, // md: 現在値
+    fontSize: Typography.size.md, // 現在値
     fontWeight: '400',
     color: Colors.paper,
     minWidth: 60,

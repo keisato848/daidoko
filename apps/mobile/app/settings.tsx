@@ -12,7 +12,7 @@ import { Avatar } from '../src/components/Avatar';
 import { CoachMarkOverlay } from '../src/components/CoachMarkOverlay';
 import { HeaderBackButton } from '../src/components/HeaderBackButton';
 import { HelpButton } from '../src/components/HelpButton';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { useCoachMarks } from '../src/hooks/useCoachMarks';
 import { resetCoachMarks } from '../src/services/coach-marks.service';
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   headerTitle: {
-    fontSize: 20, // lg: 画面タイトル
+    fontSize: Typography.size.lg, // 画面タイトル
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 1,
@@ -501,12 +501,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   userName: {
-    fontSize: 17, // md: ユーザー名
+    fontSize: Typography.size.md, // ユーザー名
     fontWeight: '500',
     color: Colors.paper,
   },
   familyName: {
-    fontSize: 13, // sm: 家族名
+    fontSize: Typography.size.sm, // 家族名
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   sectionTitle: {
-    fontSize: 12, // xs: セクションヘッダー（大文字化で強調）
+    fontSize: Typography.size.xs, // セクションヘッダー（大文字化で強調）
     fontWeight: '500',
     color: Colors.goldDim,
     letterSpacing: 2,
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   settingLabel: {
-    fontSize: 15, // base: 設定項目ラベル
+    fontSize: Typography.size.base, // 設定項目ラベル
     fontWeight: '400',
     color: Colors.paper,
   },
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
     color: Colors.paperDim,
   },
   settingSubtitle: {
-    fontSize: 13, // sm: 設定項目の補足
+    fontSize: Typography.size.sm, // 設定項目の補足
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -559,7 +559,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.goldDim,
     color: Colors.goldDim,
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     fontWeight: '500',
   },
 });

@@ -11,7 +11,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Loading } from '../src/components/Loading';
 import { Toast } from '../src/components/Toast';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { readableErrorMessage } from '../src/services/ai-error';
 import { ensureInferenceCredit } from '../src/services/inference-gate.service';
@@ -233,7 +233,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
+  headerTitle: {
+    fontSize: Typography.size.base,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 0.5,
+  },
   headerSpacer: { width: 20 },
   selectArea: {
     flex: 1,
@@ -260,7 +265,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
   },
-  bigButtonText: { color: Colors.bg, fontSize: 15, fontWeight: '600' },
+  bigButtonText: { color: Colors.bg, fontSize: Typography.size.base, fontWeight: '600' },
   bigButtonOutline: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -272,18 +277,18 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
   },
-  bigButtonOutlineText: { color: Colors.gold, fontSize: 15, fontWeight: '600' },
-  quota: { color: Colors.muted, fontSize: 12, marginTop: 4 },
+  bigButtonOutlineText: { color: Colors.gold, fontSize: Typography.size.base, fontWeight: '600' },
+  quota: { color: Colors.muted, fontSize: Typography.size.xs, marginTop: 4 },
   // 開示は読めて初めて開示になる。import-photo の disclosureText と同じ色・大きさ
   disclosureText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.paperDim,
     textAlign: 'center',
     lineHeight: 17,
   },
   reviewHint: {
     color: Colors.muted,
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     paddingHorizontal: 20,
     paddingVertical: 12,
     lineHeight: 19,
@@ -307,8 +312,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxOn: { backgroundColor: Colors.gold, borderColor: Colors.gold },
-  itemName: { flex: 1, fontSize: 15, color: Colors.paper },
-  itemQty: { fontSize: 13, color: Colors.paperDim },
+  itemName: { flex: 1, fontSize: Typography.size.base, color: Colors.paper },
+  itemQty: { fontSize: Typography.size.sm, color: Colors.paperDim },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -328,5 +333,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   applyDisabled: { opacity: 0.45 },
-  applyText: { color: Colors.bg, fontSize: 15, fontWeight: '600' },
+  applyText: { color: Colors.bg, fontSize: Typography.size.base, fontWeight: '600' },
 });

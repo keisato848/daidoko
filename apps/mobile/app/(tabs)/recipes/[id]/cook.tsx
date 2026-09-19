@@ -21,7 +21,7 @@ import {
 import { NumberStepper } from '../../../../src/components/NumberStepper';
 import { PhotoPickerField } from '../../../../src/components/PhotoPickerField';
 import { TimerWidget } from '../../../../src/components/TimerWidget';
-import { Colors } from '../../../../src/constants/theme';
+import { Colors, Typography } from '../../../../src/constants/theme';
 import { t, tCount } from '../../../../src/i18n';
 import { useKeepAwake } from '../../../../src/hooks/useKeepAwake';
 import { dialog } from '../../../../src/services/dialog.service';
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bg,
   },
   loadingText: {
-    fontSize: 15, // base
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paperDim,
     textAlign: 'center',
@@ -422,14 +422,14 @@ const styles = StyleSheet.create({
     // 名前だけを縮ませる。ステップ数は縮ませない（#222）
     flex: 1,
     textAlign: 'center',
-    fontSize: 15, // base: レシピ名（コンパクト表示）
+    fontSize: Typography.size.base, // レシピ名（コンパクト表示）
     fontWeight: '500',
     color: Colors.paperDim,
     letterSpacing: 0.5,
   },
   headerStep: {
     flexShrink: 0,
-    fontSize: 13, // sm: ステップカウンター
+    fontSize: Typography.size.sm, // ステップカウンター
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   timerChipText: {
-    fontSize: 13, // sm: タイマーチップ
+    fontSize: Typography.size.sm, // タイマーチップ
     fontWeight: '500',
     color: Colors.gold,
     fontVariant: ['tabular-nums'],
@@ -478,12 +478,12 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   stepNumberText: {
-    fontSize: 20, // lg: ステップ番号
+    fontSize: Typography.size.lg, // ステップ番号
     fontWeight: '500',
     color: Colors.gold,
   },
   stepBody: {
-    fontSize: 20, // lg: 手順テキスト（料理中は大きく読みやすく）
+    fontSize: Typography.size.lg, // 手順テキスト（料理中は大きく読みやすく）
     fontWeight: '400',
     color: Colors.paper,
     textAlign: 'center',
@@ -514,15 +514,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timerIcon: {
-    fontSize: 17, // md
+    fontSize: Typography.size.md,
   },
   timerButtonText: {
     color: Colors.gold,
-    fontSize: 17, // md: タイマーボタン
+    fontSize: Typography.size.md, // タイマーボタン
     fontWeight: '500',
   },
   tapHint: {
-    fontSize: 12, // xs: ヒントテキスト
+    fontSize: Typography.size.xs, // ヒントテキスト
     fontWeight: '400',
     // muted だと背景と同化して気づかれない（ペルソナレビュー 1.12.2 #5 —
     // 老眼では「見過ごし確実」）。ここに気づけないと材料を見る手段が無い
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   navPrevText: {
-    fontSize: 15, // base: ナビゲーションボタン
+    fontSize: Typography.size.base, // ナビゲーションボタン
     fontWeight: '400',
     color: Colors.goldDim,
   },
@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   navNextText: {
-    fontSize: 15, // base
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
   },
@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   navFinishText: {
-    fontSize: 15, // base
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: '#7FFFAA',
   },
@@ -607,7 +607,7 @@ const styles = StyleSheet.create({
   },
   // 詳細画面の aiRecipeNote と同じ見せ方（#266）
   aiNote: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     lineHeight: 17,
     color: Colors.paper,
     marginBottom: 10,
@@ -618,7 +618,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(201,161,106,0.07)',
   },
   overlayTitle: {
-    fontSize: 13, // sm: オーバーレイタイトル
+    fontSize: Typography.size.sm, // オーバーレイタイトル
     fontWeight: '500',
     color: Colors.goldDim,
     letterSpacing: 1,
@@ -644,14 +644,14 @@ const styles = StyleSheet.create({
   overlayIngName: {
     flex: 1,
     flexShrink: 1,
-    fontSize: 15, // base: 材料名（オーバーレイ）
+    fontSize: Typography.size.base, // 材料名（オーバーレイ）
     fontWeight: '400',
     color: Colors.paper,
   },
   overlayIngAmount: {
     flexShrink: 0,
     textAlign: 'right',
-    fontSize: 15, // base: 分量（オーバーレイ）
+    fontSize: Typography.size.base, // 分量（オーバーレイ）
     fontWeight: '400',
     color: Colors.goldDim,
   },

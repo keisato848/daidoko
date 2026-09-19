@@ -17,7 +17,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { PressableScale } from '../../src/components/PressableScale';
-import { Colors } from '../../src/constants/theme';
+import { Colors, Typography } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 
@@ -235,13 +235,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   heading: {
-    fontSize: 20, // lg: 画面タイトル
+    fontSize: Typography.size.lg, // 画面タイトル
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 1,
   },
   subheading: {
-    fontSize: 13, // sm: 補足テキスト
+    fontSize: Typography.size.sm, // 補足テキスト
     fontWeight: '400',
     color: Colors.paperDim,
     marginBottom: 32,
@@ -258,13 +258,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   groupLabel: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '600',
     color: Colors.gold,
     letterSpacing: 0.5,
   },
   groupNote: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
   },
   methodCard: {
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   methodLabel: {
-    fontSize: 15, // base: 選択肢ラベル
+    fontSize: Typography.size.base, // 選択肢ラベル
     fontWeight: '500',
     color: Colors.paper,
     marginBottom: 2,
@@ -303,12 +303,12 @@ const styles = StyleSheet.create({
     color: Colors.muted,
   },
   methodDescription: {
-    fontSize: 13, // sm: 補足説明
+    fontSize: Typography.size.sm, // 補足説明
     fontWeight: '400',
     color: Colors.paperDim,
   },
   comingSoon: {
-    fontSize: 11, // xxs: 今後追加予定ラベル
+    fontSize: Typography.size.xs, // 今後追加予定ラベル
     color: Colors.goldDim,
     fontStyle: 'italic',
     marginTop: 4,

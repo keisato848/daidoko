@@ -14,7 +14,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from
 import { HeaderBackButton } from '../src/components/HeaderBackButton';
 import { KeyboardAvoider } from '../src/components/KeyboardAvoider';
 import { NumberStepper } from '../src/components/NumberStepper';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t } from '../src/i18n';
 import {
   getMenuAutoDays,
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   },
   slotName: { fontSize: 16, color: Colors.paper },
   slotActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  slotAutoFillLabel: { fontSize: 13, color: Colors.paperDim },
+  slotAutoFillLabel: { fontSize: Typography.size.sm, color: Colors.paperDim },
   slotRemove: { fontSize: 14, color: Colors.gold },
   header: {
     flexDirection: 'row',
@@ -409,11 +409,11 @@ const styles = StyleSheet.create({
   },
   childRow: { borderBottomWidth: 0 },
   rowText: { flex: 1, gap: 4 },
-  rowLabel: { fontSize: 15, color: Colors.paper },
-  rowSubtitle: { fontSize: 13, color: Colors.paperDim, lineHeight: 19 },
+  rowLabel: { fontSize: Typography.size.base, color: Colors.paper },
+  rowSubtitle: { fontSize: Typography.size.sm, color: Colors.paperDim, lineHeight: 19 },
   section: { paddingTop: 4, gap: 8 },
   sectionDisabled: { opacity: 0.5 },
-  chipLabel: { fontSize: 13, color: Colors.muted, marginBottom: 4 },
+  chipLabel: { fontSize: Typography.size.sm, color: Colors.muted, marginBottom: 4 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingVertical: 8,
@@ -449,5 +449,5 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     marginTop: 4,
   },
-  clearButtonText: { fontSize: 13, fontWeight: '600', color: '#FF6B6B' },
+  clearButtonText: { fontSize: Typography.size.sm, fontWeight: '600', color: '#FF6B6B' },
 });

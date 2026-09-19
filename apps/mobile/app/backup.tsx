@@ -17,7 +17,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 
 import { HeaderBackButton } from '../src/components/HeaderBackButton';
 import { Toast } from '../src/components/Toast';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { readableErrorMessage } from '../src/services/ai-error';
 import { formatDateTime } from '../src/i18n/format';
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '500',
     color: Colors.goldDim,
     letterSpacing: 1,
@@ -465,12 +465,12 @@ const styles = StyleSheet.create({
     color: Colors.paper,
   },
   summaryMeta: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
   },
   summaryNote: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.muted,
     lineHeight: 17,
@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primaryButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
   },
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   secondaryButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.gold,
   },
@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '500',
     color: Colors.goldDim,
     letterSpacing: 1.5,
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
     color: Colors.paper,
   },
   backupMeta: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.paperDim,
   },

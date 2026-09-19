@@ -33,7 +33,7 @@ import { MAX_CONSULT_IMAGES_PER_MESSAGE } from '../../../src/services/recipe-con
 import { GroupMultiChips } from '../../../src/components/GroupMultiChips';
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
 import { RecipeForm } from '../../../src/components/RecipeForm';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { t, tCount } from '../../../src/i18n';
 import {
   getInStockNormalizedNames,
@@ -596,12 +596,12 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerButton: { padding: 4 },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
+  headerTitle: { fontSize: Typography.size.md, fontWeight: '600', color: Colors.paper },
   thread: { padding: 16, gap: 12, paddingBottom: 24 },
   intro: { marginBottom: 4, alignItems: 'center' },
   assistantRow: { flexDirection: 'row', alignItems: 'flex-end', maxWidth: '88%' },
   introHeading: {
-    fontSize: 20,
+    fontSize: Typography.size.lg,
     fontWeight: '700',
     color: Colors.paper,
     marginBottom: 6,
@@ -611,8 +611,8 @@ const styles = StyleSheet.create({
   bubble: { maxWidth: '88%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
   bubbleAssistant: { alignSelf: 'flex-start', backgroundColor: Colors.bgInput, flexShrink: 1 },
   bubbleUser: { alignSelf: 'flex-end', backgroundColor: Colors.gold },
-  bubbleText: { fontSize: 15, lineHeight: 22, color: Colors.paper },
-  bubbleTextUser: { fontSize: 15, lineHeight: 22, color: Colors.bg },
+  bubbleText: { fontSize: Typography.size.base, lineHeight: 22, color: Colors.paper },
+  bubbleTextUser: { fontSize: Typography.size.base, lineHeight: 22, color: Colors.bg },
   thinking: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   thinkingText: { fontSize: 14, color: Colors.paperDim },
   error: { fontSize: 14, color: Colors.goldDim, textAlign: 'center', marginTop: 4 },
@@ -624,8 +624,8 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 4,
   },
-  draftLabel: { fontSize: 12, color: Colors.gold, letterSpacing: 0.5 },
-  draftTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
+  draftLabel: { fontSize: Typography.size.xs, color: Colors.gold, letterSpacing: 0.5 },
+  draftTitle: { fontSize: Typography.size.md, fontWeight: '600', color: Colors.paper },
   // 14px 以上・区切りは空白付き中点。13px の薄色はペルソナ検証（のりこ・老眼）で読めなかった
   draftMeta: { fontSize: 14, lineHeight: 20, color: Colors.paperDim },
   draftChange: { fontSize: 14, lineHeight: 20, color: Colors.paper },
@@ -639,19 +639,19 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: Colors.bgInput,
   },
-  actionHeard: { fontSize: 13, color: Colors.paperDim },
+  actionHeard: { fontSize: Typography.size.sm, color: Colors.paperDim },
   actionTitle: { fontSize: 16, fontWeight: '600', color: Colors.paper, marginVertical: 4 },
-  actionPrefix: { fontSize: 13, color: Colors.muted, marginBottom: 8 },
+  actionPrefix: { fontSize: Typography.size.sm, color: Colors.muted, marginBottom: 8 },
   actionButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
   actionButtonCancel: { paddingVertical: 8, paddingHorizontal: 12 },
-  actionButtonTextCancel: { fontSize: 15, color: Colors.muted },
+  actionButtonTextCancel: { fontSize: Typography.size.base, color: Colors.muted },
   actionButtonConfirm: {
     paddingVertical: 8,
     paddingHorizontal: 16,
     backgroundColor: Colors.gold,
     borderRadius: 8,
   },
-  actionButtonTextConfirm: { fontSize: 15, fontWeight: '600', color: Colors.bg },
+  actionButtonTextConfirm: { fontSize: Typography.size.base, fontWeight: '600', color: Colors.bg },
   candidateCard: {
     marginTop: 8,
     borderWidth: 1,
@@ -660,11 +660,11 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 4,
   },
-  candidateTitle: { fontSize: 17, fontWeight: '600', color: Colors.paper },
+  candidateTitle: { fontSize: Typography.size.md, fontWeight: '600', color: Colors.paper },
   candidateDesc: { fontSize: 14, lineHeight: 20, color: Colors.paperDim },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   candidateCountSelector: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  candidateCountLabel: { fontSize: 12, color: Colors.muted, marginRight: 4 },
+  candidateCountLabel: { fontSize: Typography.size.xs, color: Colors.muted, marginRight: 4 },
   candidateCountButton: {
     width: 24,
     height: 24,
@@ -675,11 +675,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   candidateCountButtonActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
-  candidateCountButtonText: { fontSize: 12, color: Colors.paperDim },
+  candidateCountButtonText: { fontSize: Typography.size.xs, color: Colors.paperDim },
   candidateCountButtonTextActive: { color: Colors.bg, fontWeight: '600' },
-  disclaimer: { fontSize: 12, lineHeight: 18, color: Colors.muted, marginTop: 8 },
+  disclaimer: { fontSize: Typography.size.xs, lineHeight: 18, color: Colors.muted, marginTop: 8 },
   reportLink: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     textDecorationLine: 'underline',
     marginTop: 6,
@@ -694,8 +694,8 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
   },
   pantryLabels: { flex: 1, paddingRight: 12 },
-  pantryLabel: { fontSize: 15, color: Colors.paper },
-  pantrySubtitle: { fontSize: 12, color: Colors.muted, marginTop: 2 },
+  pantryLabel: { fontSize: Typography.size.base, color: Colors.paper },
+  pantrySubtitle: { fontSize: Typography.size.xs, color: Colors.muted, marginTop: 2 },
   // 添えた写真は composer のすぐ上に置く。**送る前に見えている**ことが要る
   pendingRow: {
     flexDirection: 'row',
@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
   },
   // 開示は読めて初めて開示になる。import-photo の disclosureText と同じ色・大きさ
   disclosureText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     lineHeight: 17,
     color: Colors.paperDim,
     paddingHorizontal: 16,
@@ -769,7 +769,7 @@ const styles = StyleSheet.create({
     color: Colors.paper,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: Typography.size.base,
   },
   sendButton: {
     width: 44,

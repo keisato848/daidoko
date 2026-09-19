@@ -3,7 +3,7 @@
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 
 interface EmptyStateProps {
   icon?: string;
@@ -41,14 +41,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    fontSize: 17, // md: 空状態タイトル
+    fontSize: Typography.size.md, // 空状態タイトル
     fontWeight: '500',
     color: Colors.paper,
     marginBottom: 8,
     textAlign: 'center',
   },
   message: {
-    fontSize: 13, // sm: 空状態メッセージ
+    fontSize: Typography.size.sm, // 空状態メッセージ
     fontWeight: '400',
     color: Colors.paperDim,
     textAlign: 'center',
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gold,
   },
   buttonText: {
-    fontSize: 15, // base: アクションボタン
+    fontSize: Typography.size.base, // アクションボタン
     fontWeight: '600',
     color: Colors.bg,
   },

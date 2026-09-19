@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 
 interface TagChipProps {
   label: string;
@@ -24,7 +24,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
   },
   text: {
-    fontSize: 12, // xs: タグチップ（詳細画面の表示用）
+    fontSize: Typography.size.xs, // タグチップ（詳細画面の表示用）
     fontWeight: '400',
     color: Colors.goldDim,
     letterSpacing: 0.5,

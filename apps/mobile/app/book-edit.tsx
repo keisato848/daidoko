@@ -15,7 +15,7 @@ import { HeaderBackButton } from '../src/components/HeaderBackButton';
 import { BottomSheet } from '../src/components/BottomSheet';
 import { KeyboardAwareScroll } from '../src/components/KeyboardAwareScroll';
 import { Toast } from '../src/components/Toast';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t } from '../src/i18n';
 import { dialog } from '../src/services/dialog.service';
 import {
@@ -358,7 +358,12 @@ const styles = StyleSheet.create({
   },
   headerSpacer: { width: 36 },
   body: { padding: 16, paddingBottom: 48 },
-  label: { fontSize: 13, fontWeight: '600', color: Colors.paperDim, marginBottom: 8 },
+  label: {
+    fontSize: Typography.size.sm,
+    fontWeight: '600',
+    color: Colors.paperDim,
+    marginBottom: 8,
+  },
   sectionGap: { marginTop: 24 },
   input: {
     backgroundColor: Colors.bgCard,
@@ -366,7 +371,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: 8,
     color: Colors.paper,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 16,
@@ -378,7 +383,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4 },
-  addBtnText: { fontSize: 13, fontWeight: '600', color: Colors.gold },
+  addBtnText: { fontSize: Typography.size.sm, fontWeight: '600', color: Colors.gold },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -389,8 +394,8 @@ const styles = StyleSheet.create({
   },
   itemTitle: { flex: 1, fontSize: 14, color: Colors.paper },
   itemExcluded: { color: Colors.muted },
-  excludedTag: { fontSize: 11, color: Colors.muted },
-  emptyItems: { fontSize: 13, color: Colors.muted, paddingVertical: 12 },
+  excludedTag: { fontSize: Typography.size.xs, color: Colors.muted },
+  emptyItems: { fontSize: Typography.size.sm, color: Colors.muted, paddingVertical: 12 },
   optionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   optionLabel: { fontSize: 14, color: Colors.paper },
   checkbox: {
@@ -413,7 +418,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   expiryChipOn: { backgroundColor: Colors.gold, borderColor: Colors.gold },
-  expiryChipText: { fontSize: 13, color: Colors.paperDim },
+  expiryChipText: { fontSize: Typography.size.sm, color: Colors.paperDim },
   expiryChipTextOn: { color: Colors.bg, fontWeight: '600' },
   shareBtn: {
     backgroundColor: Colors.gold,
@@ -421,9 +426,14 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: 'center',
   },
-  shareBtnText: { fontSize: 15, fontWeight: '600', color: Colors.bg },
+  shareBtnText: { fontSize: Typography.size.base, fontWeight: '600', color: Colors.bg },
   btnDisabled: { opacity: 0.5 },
-  sharedNote: { fontSize: 12, color: Colors.paperDim, marginTop: 12, lineHeight: 18 },
+  sharedNote: {
+    fontSize: Typography.size.xs,
+    color: Colors.paperDim,
+    marginTop: 12,
+    lineHeight: 18,
+  },
   stopBtn: { alignItems: 'center', paddingVertical: 14, marginTop: 8 },
   stopBtnText: { fontSize: 14, color: '#E08A7A', fontWeight: '600' },
   pickerList: { maxHeight: 420 },

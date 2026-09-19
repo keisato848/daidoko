@@ -11,7 +11,7 @@ import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-nat
 
 import { InfoTooltip } from '../src/components/InfoTooltip';
 import { KeyboardAwareScroll } from '../src/components/KeyboardAwareScroll';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t } from '../src/i18n';
 import { dialog } from '../src/services/dialog.service';
 import {
@@ -171,7 +171,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
+  headerTitle: {
+    fontSize: Typography.size.base,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 0.5,
+  },
   headerSpacer: { width: 20 },
   body: { paddingHorizontal: 24, paddingVertical: 28, gap: 14 },
   iconWrap: {
@@ -187,8 +192,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   lead: { fontSize: 14, color: Colors.paper, lineHeight: 22 },
-  note: { fontSize: 12, color: Colors.paperDim, lineHeight: 18 },
-  statusOn: { fontSize: 13, color: Colors.gold, fontWeight: '600' },
+  note: { fontSize: Typography.size.xs, color: Colors.paperDim, lineHeight: 18 },
+  statusOn: { fontSize: Typography.size.sm, color: Colors.gold, fontWeight: '600' },
   input: {
     borderWidth: 1,
     borderColor: Colors.border,
@@ -196,7 +201,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
     paddingHorizontal: 12,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     marginTop: 4,
   },
@@ -207,10 +212,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  saveText: { fontSize: 15, fontWeight: '600', color: Colors.bg },
+  saveText: { fontSize: Typography.size.base, fontWeight: '600', color: Colors.bg },
   disabled: { opacity: 0.55 },
   clearButton: { paddingVertical: 10, alignItems: 'center' },
-  clearText: { fontSize: 13, color: '#F2A07B' },
-  link: { fontSize: 13, color: Colors.gold, textDecorationLine: 'underline', marginTop: 8 },
+  clearText: { fontSize: Typography.size.sm, color: '#F2A07B' },
+  link: {
+    fontSize: Typography.size.sm,
+    color: Colors.gold,
+    textDecorationLine: 'underline',
+    marginTop: 8,
+  },
   detailsSection: { marginTop: 10 },
 });

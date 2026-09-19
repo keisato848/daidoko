@@ -12,7 +12,7 @@ import { FlatList, Pressable, Share, StyleSheet, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { HeaderBackButton } from '../src/components/HeaderBackButton';
-import { Colors } from '../src/constants/theme';
+import { Colors, Typography } from '../src/constants/theme';
 import { t, tCount } from '../src/i18n';
 import { dialog } from '../src/services/dialog.service';
 import {
@@ -183,7 +183,12 @@ const styles = StyleSheet.create({
   list: { padding: 16, gap: 10 },
   empty: { alignItems: 'center', gap: 10, paddingTop: 80, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 16, fontWeight: '600', color: Colors.paper },
-  emptyBody: { fontSize: 13, color: Colors.paperDim, textAlign: 'center', lineHeight: 20 },
+  emptyBody: {
+    fontSize: Typography.size.sm,
+    color: Colors.paperDim,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -195,7 +200,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   cardBody: { flex: 1, gap: 4 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: Colors.paper },
-  cardMeta: { fontSize: 12, color: Colors.paperDim },
+  cardTitle: { fontSize: Typography.size.base, fontWeight: '600', color: Colors.paper },
+  cardMeta: { fontSize: Typography.size.xs, color: Colors.paperDim },
   iconBtn: { padding: 6 },
 });

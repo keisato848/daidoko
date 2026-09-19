@@ -6,7 +6,7 @@
  */
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 
 export interface GroupMultiChipsProps {
   /** 選べるグループ名（未設定は含めない — こちらで足す） */
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.gold,
   },
   chipText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     maxWidth: 140,
   },

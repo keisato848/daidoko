@@ -8,7 +8,7 @@ import { Info } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 
 interface InfoTooltipProps {
@@ -50,12 +50,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    fontSize: 13, // sm
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
   },
   detail: {
-    fontSize: 12, // xs
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.muted,
     lineHeight: 18,

@@ -26,7 +26,7 @@ import { EmptyState } from '../../../src/components/EmptyState';
 import { Loading } from '../../../src/components/Loading';
 import { PressableScale } from '../../../src/components/PressableScale';
 import { Stars } from '../../../src/components/Stars';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { useCoachMarks } from '../../../src/hooks/useCoachMarks';
 import { useSyncRefresh } from '../../../src/hooks/useSyncRefresh';
 import { t, tCount } from '../../../src/i18n';
@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
   },
   sortButtonText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.gold,
   },
@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   sortOptionText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     color: Colors.paper,
-    fontSize: 15, // base: 検索入力テキスト
+    fontSize: Typography.size.base, // 検索入力テキスト
     fontWeight: '400',
     padding: 0,
   },
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
   bookShelf: { borderBottomWidth: 1, borderBottomColor: Colors.border },
   bookShelfContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 8, alignItems: 'center' },
   bookShelfLabelWrap: { flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 2 },
-  bookShelfLabel: { color: Colors.goldDim, fontSize: 11, letterSpacing: 1 },
+  bookShelfLabel: { color: Colors.goldDim, fontSize: Typography.size.xs, letterSpacing: 1 },
   bookChip: {
     borderWidth: 1,
     borderColor: Colors.border,
@@ -772,8 +772,8 @@ const styles = StyleSheet.create({
     maxWidth: 160,
     backgroundColor: Colors.bgCard,
   },
-  bookChipTitle: { color: Colors.paper, fontSize: 13 },
-  bookChipMeta: { color: Colors.muted, fontSize: 10, marginTop: 1 },
+  bookChipTitle: { color: Colors.paper, fontSize: Typography.size.sm },
+  bookChipMeta: { color: Colors.muted, fontSize: Typography.size.xs, marginTop: 1 },
   bookChipNew: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -782,7 +782,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.goldDim,
     backgroundColor: 'transparent',
   },
-  bookChipNewText: { color: Colors.gold, fontSize: 12 },
+  bookChipNewText: { color: Colors.gold, fontSize: Typography.size.xs },
   filterContent: {
     gap: 6,
     paddingHorizontal: 16,
@@ -802,7 +802,7 @@ const styles = StyleSheet.create({
   },
   filterChipActive: { backgroundColor: Colors.gold, borderColor: Colors.gold },
   filterChipText: {
-    fontSize: 13, // sm: フィルタータグ
+    fontSize: Typography.size.sm, // フィルタータグ
     lineHeight: 18,
     fontWeight: '400',
     color: Colors.paperDim,
@@ -811,7 +811,7 @@ const styles = StyleSheet.create({
   filterChipTextActive: { color: Colors.bg, fontWeight: '500' },
   searchHint: { paddingHorizontal: 16, paddingTop: 6 },
   searchHintText: {
-    fontSize: 13, // sm: 検索ヒント
+    fontSize: Typography.size.sm, // 検索ヒント
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -852,16 +852,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.gold,
   },
-  aiBadgeText: { fontSize: 9, fontWeight: '700', color: Colors.gold, letterSpacing: 0.5 },
+  aiBadgeText: {
+    fontSize: Typography.size.wordmark,
+    fontWeight: '700',
+    color: Colors.gold,
+    letterSpacing: 0.5,
+  },
   cardBody: { padding: 10 },
   cardTitle: {
-    fontSize: 15, // base: レシピカードタイトル
+    fontSize: Typography.size.base, // レシピカードタイトル
     fontWeight: '500',
     color: Colors.paper,
     marginBottom: 4,
   },
   cardTime: {
-    fontSize: 12, // xs: 調理時間メタ情報
+    fontSize: Typography.size.xs, // 調理時間メタ情報
     fontWeight: '400',
     color: Colors.paperDim,
     marginTop: 4,
@@ -874,7 +879,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   ingredientBadgeText: {
-    fontSize: 12, // xs: 食材ヒットバッジ
+    fontSize: Typography.size.xs, // 食材ヒットバッジ
     fontWeight: '400',
     color: Colors.goldDim,
     lineHeight: 16,
@@ -895,7 +900,7 @@ const styles = StyleSheet.create({
   },
   selectCount: {
     flex: 1,
-    fontSize: 15, // base
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.paper,
   },
@@ -907,7 +912,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   selectAllText: {
-    fontSize: 13, // sm
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -933,7 +938,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gold,
   },
   checkMark: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '700',
     color: Colors.bg,
     lineHeight: 16,
@@ -969,7 +974,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.gold,
   },
   bookSheetNote: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     color: Colors.muted,
     marginBottom: 12,
   },
@@ -980,12 +985,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     marginBottom: 12,
   },
   bookSheetAttest: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.muted,
     lineHeight: 18,
     marginBottom: 16,
@@ -998,7 +1003,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   bookPublishBtnText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
   },
@@ -1011,7 +1016,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   bookCreateOnlyBtnText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.paper,
   },
@@ -1021,7 +1026,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   actionBtnText: {
-    fontSize: 15, // base
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.bg,
   },

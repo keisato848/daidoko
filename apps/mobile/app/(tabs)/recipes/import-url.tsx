@@ -11,7 +11,7 @@ import { RecipeForm } from '../../../src/components/RecipeForm';
 import { SourceBanner } from '../../../src/components/SourceBanner';
 import { Toast } from '../../../src/components/Toast';
 import { KeyboardAvoider } from '../../../src/components/KeyboardAvoider';
-import { Colors } from '../../../src/constants/theme';
+import { Colors, Typography } from '../../../src/constants/theme';
 import { t } from '../../../src/i18n';
 import { type RecipeDraft, runImportAgent } from '../../../src/agents/import.agent';
 import { createRecipe } from '../../../src/services/recipe.service';
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 0.5,
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   inputLabel: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paperDim,
     lineHeight: 20,
@@ -218,18 +218,18 @@ const styles = StyleSheet.create({
   },
   urlInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.paper,
     padding: 0,
   },
   errorText: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: '#FF6B6B',
   },
   supportedNote: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.muted,
     lineHeight: 18,
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   loadingText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   fetchButtonText: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '600',
     color: Colors.bg,
     letterSpacing: 1,

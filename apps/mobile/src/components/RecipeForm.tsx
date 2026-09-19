@@ -362,13 +362,13 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   headerTitle: {
-    fontSize: 15, // base: フォームタイトル
+    fontSize: Typography.size.base, // フォームタイトル
     fontWeight: '500',
     color: Colors.paper,
     letterSpacing: 0.5,
   },
   cancelText: {
-    fontSize: 15, // base: キャンセルリンク
+    fontSize: Typography.size.base, // キャンセルリンク
     fontWeight: '400',
     color: Colors.goldDim,
   },
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgInput,
   },
   saveButtonText: {
-    fontSize: 13, // sm: 保存ボタン（小さめ）
+    fontSize: Typography.size.sm, // 保存ボタン（小さめ）
     fontWeight: '600',
     color: Colors.bg,
   },
@@ -403,14 +403,14 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   sectionTitle: {
-    fontSize: 13, // sm: セクションタイトル
+    fontSize: Typography.size.sm, // セクションタイトル
     fontWeight: '500',
     color: Colors.gold,
     letterSpacing: 1,
     marginBottom: 12,
   },
   sectionError: {
-    fontSize: 12, // xs: バリデーションエラー
+    fontSize: Typography.size.xs, // バリデーションエラー
     fontWeight: '400',
     color: '#FF6B6B',
     marginBottom: 8,
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   addRowButtonText: {
-    fontSize: 13, // sm: 追加ボタンテキスト
+    fontSize: Typography.size.sm, // 追加ボタンテキスト
     fontWeight: '400',
     color: Colors.goldDim,
   },

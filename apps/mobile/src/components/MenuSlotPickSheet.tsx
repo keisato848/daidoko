@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput } from 'react-native';
 
 import { BottomSheet } from './BottomSheet';
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 import { recipeMatchesQuery } from '../utils/recipeSearch';
 
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     backgroundColor: Colors.bgInput,
     marginBottom: 8,
@@ -122,5 +122,5 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 16, color: Colors.paper },
   empty: { fontSize: 14, color: Colors.muted, paddingVertical: 20, textAlign: 'center' },
   clear: { paddingVertical: 14, alignItems: 'center' },
-  clearText: { fontSize: 15, color: Colors.danger },
+  clearText: { fontSize: Typography.size.base, color: Colors.danger },
 });

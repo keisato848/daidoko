@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 
 interface TagSelectorProps {
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 13, // sm: タグラベル
+    fontSize: Typography.size.sm, // タグラベル
     fontWeight: '500',
     color: Colors.paperDim,
     marginBottom: 8,
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.gold,
   },
   chipText: {
-    fontSize: 13, // sm: タグチップテキスト
+    fontSize: Typography.size.sm, // タグチップテキスト
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    fontSize: 15, // base: 新規タグ入力
+    fontSize: Typography.size.base, // 新規タグ入力
     fontWeight: '400',
     color: Colors.paper,
   },
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   addButtonText: {
-    fontSize: 13, // sm: 追加ボタン
+    fontSize: Typography.size.sm, // 追加ボタン
     fontWeight: '500',
     color: Colors.gold,
   },

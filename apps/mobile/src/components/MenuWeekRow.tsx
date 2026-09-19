@@ -8,7 +8,7 @@
 import { RefreshCw } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 import { weekdayLabels } from '../utils/calendar';
 import { MAIN_SLOT_ID } from '../utils/menuPlanStorage';
@@ -128,8 +128,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
   spacer: { flex: 1 },
   swapRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  swapText: { fontSize: 13, color: Colors.gold },
-  date: { fontSize: 13, color: Colors.goldDim },
+  swapText: { fontSize: Typography.size.sm, color: Colors.gold },
+  date: { fontSize: Typography.size.sm, color: Colors.goldDim },
   dateToday: { color: Colors.gold },
   todayChip: {
     paddingHorizontal: 6,
@@ -137,5 +137,5 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: Colors.gold,
   },
-  todayChipText: { fontSize: 11, color: Colors.bg },
+  todayChipText: { fontSize: Typography.size.xs, color: Colors.bg },
 });

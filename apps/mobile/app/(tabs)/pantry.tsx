@@ -28,7 +28,7 @@ import { GroupPicker } from '../../src/components/GroupPicker';
 import { CoachMarkOverlay } from '../../src/components/CoachMarkOverlay';
 import { HelpButton } from '../../src/components/HelpButton';
 import { KeyboardAvoider } from '../../src/components/KeyboardAvoider';
-import { Colors } from '../../src/constants/theme';
+import { Colors, Typography } from '../../src/constants/theme';
 import { t } from '../../src/i18n';
 import { useCoachMarks } from '../../src/hooks/useCoachMarks';
 import { checkAndNotifyLowStock } from '../../src/services/low-stock.service';
@@ -524,10 +524,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
+  headerTitle: {
+    fontSize: Typography.size.base,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 0.5,
+  },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   headerScan: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  headerScanText: { fontSize: 13, color: Colors.gold },
+  headerScanText: { fontSize: Typography.size.sm, color: Colors.gold },
   addRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -543,7 +548,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
   },
   qtyInput: {
@@ -554,7 +559,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
     paddingHorizontal: 8,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     textAlign: 'center',
   },
@@ -566,7 +571,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#130E08',
     paddingHorizontal: 8,
     paddingVertical: 10,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     color: Colors.paper,
     textAlign: 'center',
   },
@@ -607,10 +612,10 @@ const styles = StyleSheet.create({
   },
   rowText: { flex: 1, gap: 2 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  itemName: { fontSize: 15, color: Colors.paper },
-  lowBadge: { fontSize: 11, color: '#C97A4A' },
-  groupBadge: { fontSize: 11, color: Colors.goldDim, maxWidth: 120 },
-  expiryBadge: { fontSize: 11, color: Colors.muted },
+  itemName: { fontSize: Typography.size.base, color: Colors.paper },
+  lowBadge: { fontSize: Typography.size.xs, color: '#C97A4A' },
+  groupBadge: { fontSize: Typography.size.xs, color: Colors.goldDim, maxWidth: 120 },
+  expiryBadge: { fontSize: Typography.size.xs, color: Colors.muted },
   addGroupRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -618,7 +623,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 10,
   },
-  addGroupText: { fontSize: 12, color: Colors.muted, flexShrink: 1 },
+  addGroupText: { fontSize: Typography.size.xs, color: Colors.muted, flexShrink: 1 },
   detailEditor: { gap: 8, paddingBottom: 12, paddingLeft: 4 },
   detailLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   groupButton: {
@@ -629,7 +634,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     maxWidth: 180,
   },
-  groupButtonText: { fontSize: 13, color: Colors.paper },
+  groupButtonText: { fontSize: Typography.size.sm, color: Colors.paper },
   expiryInput: {
     width: 120,
     borderWidth: 1,
@@ -642,8 +647,8 @@ const styles = StyleSheet.create({
     color: Colors.paper,
     textAlign: 'center',
   },
-  expiryError: { fontSize: 11, color: '#C97A4A', paddingLeft: 2 },
-  thresholdBadge: { fontSize: 11, color: Colors.goldDim },
+  expiryError: { fontSize: Typography.size.xs, color: '#C97A4A', paddingLeft: 2 },
+  thresholdBadge: { fontSize: Typography.size.xs, color: Colors.goldDim },
   thresholdEditor: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -651,7 +656,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingLeft: 4,
   },
-  thresholdLabel: { flex: 1, fontSize: 12, color: Colors.muted },
+  thresholdLabel: { flex: 1, fontSize: Typography.size.xs, color: Colors.muted },
   thresholdInput: {
     width: 64,
     borderWidth: 1,
@@ -670,7 +675,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: Colors.gold,
   },
-  thresholdSaveText: { fontSize: 13, color: Colors.bg, fontWeight: '600' },
+  thresholdSaveText: { fontSize: Typography.size.sm, color: Colors.bg, fontWeight: '600' },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   qtyText: { fontSize: 14, color: Colors.paperDim, minWidth: 48, textAlign: 'center' },
 });

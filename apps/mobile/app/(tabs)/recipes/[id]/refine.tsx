@@ -14,7 +14,7 @@ import { Loading } from '../../../../src/components/Loading';
 import { t } from '../../../../src/i18n';
 import { readableErrorMessage } from '../../../../src/services/ai-error';
 import { Toast } from '../../../../src/components/Toast';
-import { Colors } from '../../../../src/constants/theme';
+import { Colors, Typography } from '../../../../src/constants/theme';
 import { getLogsForRecipe } from '../../../../src/services/cooking-log.service';
 import { dialog } from '../../../../src/services/dialog.service';
 import { expoImagePickerPhotoCaptureAdapter } from '../../../../src/services/expo-photo-capture.adapter';
@@ -449,13 +449,13 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   backButton: { flexDirection: 'row', alignItems: 'center', width: 72 },
-  backText: { fontSize: 13, fontWeight: '400', color: Colors.goldDim },
+  backText: { fontSize: Typography.size.sm, fontWeight: '400', color: Colors.goldDim },
   headerTitle: { fontSize: 16, fontWeight: '500', color: Colors.paper, letterSpacing: 0.5 },
   headerSpacer: { width: 72 },
   // フッターに開示の 2 行が乗ったぶん、隠れないよう余白を足してある
   scrollContent: { paddingBottom: 170 },
   recipeTitle: {
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paperDim,
     paddingHorizontal: 24,
@@ -470,13 +470,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '500',
     color: Colors.goldDim,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  sectionHint: { fontSize: 12, fontWeight: '400', color: Colors.muted, lineHeight: 18 },
+  sectionHint: {
+    fontSize: Typography.size.xs,
+    fontWeight: '400',
+    color: Colors.muted,
+    lineHeight: 18,
+  },
   feedbackInput: {
     backgroundColor: Colors.bgInput,
     borderWidth: 1,
@@ -484,13 +489,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: Typography.size.base,
     fontWeight: '400',
     color: Colors.paper,
     minHeight: 110,
     lineHeight: 22,
   },
-  charCount: { fontSize: 12, fontWeight: '400', color: Colors.muted, textAlign: 'right' },
+  charCount: {
+    fontSize: Typography.size.xs,
+    fontWeight: '400',
+    color: Colors.muted,
+    textAlign: 'right',
+  },
   photoActions: { flexDirection: 'row', gap: 10 },
   photoAddButton: {
     flex: 1,
@@ -541,8 +551,8 @@ const styles = StyleSheet.create({
   targetThumb: { width: 52, height: 52, borderRadius: 6 },
   targetTextWrap: { flex: 1, gap: 4 },
   targetLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  targetLabel: { fontSize: 13, fontWeight: '500', color: Colors.paper },
-  targetHint: { fontSize: 12, fontWeight: '400', color: Colors.muted },
+  targetLabel: { fontSize: Typography.size.sm, fontWeight: '500', color: Colors.paper },
+  targetHint: { fontSize: Typography.size.xs, fontWeight: '400', color: Colors.muted },
   summaryCard: {
     marginHorizontal: 24,
     marginTop: 18,
@@ -553,11 +563,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     gap: 6,
   },
-  summaryLabel: { fontSize: 12, fontWeight: '500', color: Colors.goldDim, letterSpacing: 1 },
+  summaryLabel: {
+    fontSize: Typography.size.xs,
+    fontWeight: '500',
+    color: Colors.goldDim,
+    letterSpacing: 1,
+  },
   summaryText: { fontSize: 14, fontWeight: '400', color: Colors.paper, lineHeight: 21 },
   diffSection: { paddingHorizontal: 24, paddingTop: 20, gap: 10 },
   diffSectionTitle: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '500',
     color: Colors.goldDim,
     letterSpacing: 1,
@@ -574,7 +589,7 @@ const styles = StyleSheet.create({
   diffLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   diffLabel: { fontSize: 14, fontWeight: '500', color: Colors.paper, flex: 1 },
   diffBadge: {
-    fontSize: 11,
+    fontSize: Typography.size.xs,
     fontWeight: '500',
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -586,7 +601,7 @@ const styles = StyleSheet.create({
   badge_removed: { color: Colors.bg, backgroundColor: '#C97F7F' },
   badge_unchanged: { color: Colors.muted, backgroundColor: Colors.border },
   diffBefore: {
-    fontSize: 13,
+    fontSize: Typography.size.sm,
     fontWeight: '400',
     color: Colors.muted,
     textDecorationLine: 'line-through',
@@ -594,7 +609,7 @@ const styles = StyleSheet.create({
   },
   diffAfter: { fontSize: 14, fontWeight: '400', color: Colors.paper, lineHeight: 21 },
   diffHint: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     fontWeight: '400',
     color: Colors.muted,
     paddingHorizontal: 24,
@@ -610,7 +625,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.goldDim,
     backgroundColor: Colors.bgCard,
   },
-  cautionText: { fontSize: 12, fontWeight: '400', color: Colors.paperDim, lineHeight: 19 },
+  cautionText: {
+    fontSize: Typography.size.xs,
+    fontWeight: '400',
+    color: Colors.paperDim,
+    lineHeight: 19,
+  },
   noticeCard: {
     marginHorizontal: 24,
     marginTop: 18,
@@ -620,7 +640,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     backgroundColor: Colors.bgCard,
   },
-  noticeText: { fontSize: 13, fontWeight: '400', color: Colors.paperDim, lineHeight: 20 },
+  noticeText: {
+    fontSize: Typography.size.sm,
+    fontWeight: '400',
+    color: Colors.paperDim,
+    lineHeight: 20,
+  },
   errorCard: {
     marginHorizontal: 24,
     marginTop: 18,
@@ -630,7 +655,12 @@ const styles = StyleSheet.create({
     borderColor: '#C97F7F',
     backgroundColor: Colors.bgCard,
   },
-  errorCardText: { fontSize: 13, fontWeight: '400', color: Colors.paper, lineHeight: 20 },
+  errorCardText: {
+    fontSize: Typography.size.sm,
+    fontWeight: '400',
+    color: Colors.paper,
+    lineHeight: 20,
+  },
   errorText: {
     fontSize: 14,
     fontWeight: '400',
@@ -652,7 +682,7 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: 'row', gap: 10 },
   // import-photo の disclosureText と同じ色・大きさ（muted は背景と同化して読めない）
   disclosureText: {
-    fontSize: 12,
+    fontSize: Typography.size.xs,
     color: Colors.paperDim,
     textAlign: 'center',
     lineHeight: 17,
@@ -666,7 +696,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryButtonDisabled: { opacity: 0.5 },
-  primaryButtonText: { fontSize: 15, fontWeight: '600', color: Colors.bg, letterSpacing: 1 },
+  primaryButtonText: {
+    fontSize: Typography.size.base,
+    fontWeight: '600',
+    color: Colors.bg,
+    letterSpacing: 1,
+  },
   secondaryButton: {
     flex: 1,
     borderWidth: 1,
@@ -676,5 +711,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.bgCard,
   },
-  secondaryButtonText: { fontSize: 15, fontWeight: '500', color: Colors.paper, letterSpacing: 1 },
+  secondaryButtonText: {
+    fontSize: Typography.size.base,
+    fontWeight: '500',
+    color: Colors.paper,
+    letterSpacing: 1,
+  },
 });

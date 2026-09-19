@@ -9,7 +9,7 @@
  */
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { t } from '../i18n';
 import { decodeReason } from '../utils/menuPlan';
 import type { WeekSlotCell } from '../utils/menuWeek';
@@ -126,15 +126,15 @@ export function MenuSlotLine({
 const styles = StyleSheet.create({
   line: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   // 枠名は幅を固定して料理名の頭を縦に揃える（視線が縦に流れる）
-  slotLabel: { width: 48, fontSize: 12, color: Colors.muted },
+  slotLabel: { width: 48, fontSize: Typography.size.xs, color: Colors.muted },
   body: { flex: 1 },
   title: { fontSize: 16, color: Colors.paper },
   titleDone: { color: Colors.paperDim },
   empty: { color: Colors.muted, fontSize: 14 },
-  meta: { fontSize: 12, color: Colors.muted, marginTop: 2 },
-  reason: { fontSize: 12, color: Colors.goldDim, marginTop: 2 },
+  meta: { fontSize: Typography.size.xs, color: Colors.muted, marginTop: 2 },
+  reason: { fontSize: Typography.size.xs, color: Colors.goldDim, marginTop: 2 },
   // 「予定」「済み」。13px は受入基準の下限（副菜の本文と同じ大きさ）
-  state: { fontSize: 13, color: Colors.muted },
+  state: { fontSize: Typography.size.sm, color: Colors.muted },
   stateDone: { color: Colors.gold },
-  edit: { fontSize: 13, color: Colors.gold },
+  edit: { fontSize: Typography.size.sm, color: Colors.gold },
 });

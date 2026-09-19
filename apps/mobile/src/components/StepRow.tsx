@@ -4,7 +4,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { Colors } from '../constants/theme';
+import { Colors, Typography } from '../constants/theme';
 import { extractPrimaryStepTimer, formatStepTimerLabel } from '../utils/stepTimer';
 import { PhotoPickerField } from './PhotoPickerField';
 import { t } from '../i18n';
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepNumberText: {
-    fontSize: 13, // sm: ステップ番号
+    fontSize: Typography.size.sm, // ステップ番号
     fontWeight: '500',
     color: Colors.gold,
   },
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   },
   removeText: {
     color: '#FF6B6B',
-    fontSize: 17, // md: 削除ボタン
+    fontSize: Typography.size.md, // 削除ボタン
     fontWeight: '400',
   },
   bodyInput: {
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 15, // base: 手順テキスト入力
+    fontSize: Typography.size.base, // 手順テキスト入力
     fontWeight: '400',
     color: Colors.paper,
     minHeight: 64,
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   timerLabel: {
-    fontSize: 13, // sm: タイマーラベル
+    fontSize: Typography.size.sm, // タイマーラベル
     fontWeight: '400',
     color: Colors.goldDim,
   },
@@ -176,14 +176,14 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    fontSize: 15, // base: タイマー入力値
+    fontSize: Typography.size.base, // タイマー入力値
     fontWeight: '400',
     color: Colors.paper,
     width: 54,
     textAlign: 'center',
   },
   timerSuffix: {
-    fontSize: 13, // sm: 単位ラベル
+    fontSize: Typography.size.sm, // 単位ラベル
     fontWeight: '400',
     color: Colors.paperDim,
   },
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1108',
   },
   suggestChipText: {
-    fontSize: 12, // xs: 提案チップ
+    fontSize: Typography.size.xs, // 提案チップ
     fontWeight: '500',
     color: Colors.gold,
   },
