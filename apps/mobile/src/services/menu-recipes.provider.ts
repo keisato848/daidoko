@@ -33,6 +33,7 @@ import {
 import { getInstallationId } from './app-meta.service';
 import { getUserApiKey } from './byok.service';
 import { resolveQuotaSource } from './usage.service';
+import type { MenuBulkJobPart, MenuJobFetchResult } from '../utils/menuBulkJob';
 
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 // n 品まとめて書かせるぶん出力が長い（サーバー側 Gemini タイムアウト 60s より長く待つ）
@@ -447,4 +448,165 @@ export async function generateMenuRecipes(args: MenuRecipesArgs): Promise<MenuRe
   };
   const userKey = await getUserApiKey();
   return userKey ? generateViaByok(bounded, userKey) : generateViaServer(bounded);
+}
+
+// ─── 非同期ジョブ（R34・`docs/買い物リスト・在庫設計.md` §10.12.3）──────────────
+// 受理されたら画面を塞がない。結果は通知タップ／献立画面のフォーカス／アプリ復帰から取りに行く。
+// 判断（どの part を頼むか・返事をどう扱うか）は `utils/menuBulkJob.ts` の純関数側。
+
+/** ジョブの投入・取得は短く待つ（生成そのものは待たない） */
+const JOB_TIMEOUT_MS = 15_000;
+
+/** 主菜以外を頼むときの追加項目（サーバー `menuRecipesRequestSchema` と同じ名前） */
+export interface MenuJobRequest extends MenuRecipesArgs {
+  slotKind?: string;
+  mainTitles?: string[];
+}
+
+export type SubmitMenuJobResult =
+  | { kind: 'accepted'; jobId: string }
+  /**
+   * サーバーがジョブ経路を持っていない（未デプロイの 404/405）か、その環境では使えない
+   * （`AI_API_UNAVAILABLE`）。**呼び出し側は従来の同期経路へ倒す** —
+   * 新経路はサーバー未デプロイでも落ちない形にする
+   */
+  | { kind: 'unsupported' };
+
+async function jobHeaders(): Promise<Record<string, string>> {
+  const [deviceId, quotaSource] = await Promise.all([getInstallationId(), resolveQuotaSource()]);
+  return {
+    'Content-Type': 'application/json',
+    'x-device-id': deviceId,
+    ...(quotaSource ? { 'x-quota-source': quotaSource } : {}),
+  };
+}
+
+async function jobFetch(path: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), JOB_TIMEOUT_MS);
+  try {
+    return await fetch(`${API_V1}/infer/menu-recipes/jobs${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 投入。枠切れ・上限は `MenuRecipesError`（同期経路と同じ文言）。通信不能も同じ */
+export async function submitMenuRecipesJob(
+  parts: readonly MenuBulkJobPart<MenuJobRequest>[],
+  expoPushToken: string | null,
+): Promise<SubmitMenuJobResult> {
+  let res: Response;
+  try {
+    res = await jobFetch('', {
+      method: 'POST',
+      headers: await jobHeaders(),
+      body: JSON.stringify({
+        parts: parts.map(({ key, request }) => ({
+          key,
+          request: {
+            days: request.days,
+            existingTitles: request.existingTitles.slice(0, MAX_MENU_RECIPES_TITLES),
+            pantry: request.pantry.slice(0, MAX_MENU_RECIPES_PANTRY),
+            ...(request.preferences?.trim()
+              ? { preferences: request.preferences.trim().slice(0, MAX_MENU_RECIPES_PREFERENCES) }
+              : {}),
+            ...(request.mealTime ? { mealTime: request.mealTime } : {}),
+            ...(request.slotKind ? { slotKind: request.slotKind } : {}),
+            ...(request.mainTitles?.length ? { mainTitles: request.mainTitles } : {}),
+            unitSystem: requestUnitSystem(),
+          },
+        })),
+        ...(expoPushToken ? { expoPushToken } : {}),
+        locale: requestLocale(),
+      }),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new MenuRecipesError(t('ai.error.timeout'), true);
+    }
+    throw new MenuRecipesError(t('error.offline'), true);
+  }
+  if (res.status === 404 || res.status === 405) return { kind: 'unsupported' };
+  if (!res.ok) {
+    const info = serverErrorFor(res.status);
+    throw new MenuRecipesError(info.message, info.retryable);
+  }
+  const body = (await res.json().catch(() => null)) as {
+    ok?: boolean;
+    data?: { jobId?: string };
+    error?: { code?: string; retryable?: boolean };
+  } | null;
+  if (body?.ok && typeof body.data?.jobId === 'string') {
+    return { kind: 'accepted', jobId: body.data.jobId };
+  }
+  const code = body?.error?.code;
+  if (code === 'AI_API_UNAVAILABLE') return { kind: 'unsupported' };
+  const quota =
+    code === 'AI_QUOTA_EXCEEDED' || code === 'RATE_LIMITED' || code === 'FREE_QUOTA_EXCEEDED';
+  throw new MenuRecipesError(
+    quota ? t('error.quotaExceeded') : t('menu.bulk.failed'),
+    body?.error?.retryable ?? true,
+  );
+}
+
+/**
+ * 状態と結果。**投げない** — 通信できなければ `unreachable`（控えを消さず、次の機会にもう一度聞く）。
+ * 下書きの中身の検証（半端な下書き・手持ちと同名を捨てる）は呼び出し側が
+ * `validateMenuRecipeDrafts` を**受け取った時点の手持ち**で通す — 結果は何時間も後に届きうる
+ */
+export async function fetchMenuRecipesJob(jobId: string): Promise<MenuJobFetchResult<unknown>> {
+  try {
+    const res = await jobFetch(`/${encodeURIComponent(jobId)}`, {
+      method: 'GET',
+      headers: await jobHeaders(),
+    });
+    if (res.status === 404) return { kind: 'gone' };
+    if (!res.ok) return { kind: 'unreachable' };
+    const body = (await res.json()) as {
+      data?: {
+        status?: string;
+        parts?: { key?: unknown; ok?: unknown; recipes?: unknown }[];
+        error?: { retryable?: boolean };
+      };
+    };
+    const data = body.data;
+    if (data?.status === 'failed') {
+      return { kind: 'failed', retryable: data.error?.retryable !== false };
+    }
+    if (data?.status !== 'done') return { kind: 'pending' };
+    type DonePart = Extract<MenuJobFetchResult<unknown>, { kind: 'done' }>['parts'][number];
+    const parts: DonePart[] = [];
+    for (const p of data.parts ?? []) {
+      if (typeof p.key !== 'string') continue;
+      parts.push(
+        p.ok === true && Array.isArray(p.recipes)
+          ? { key: p.key, ok: true, recipes: p.recipes as unknown[] }
+          : { key: p.key, ok: false },
+      );
+    }
+    return { kind: 'done', parts };
+  } catch {
+    return { kind: 'unreachable' };
+  }
+}
+
+/** 受け取り済みを返す（サーバーの行を消す）。失敗しても何もしない — 24 時間で自然に消える */
+export async function ackMenuRecipesJob(jobId: string): Promise<void> {
+  try {
+    await jobFetch(`/${encodeURIComponent(jobId)}`, {
+      method: 'DELETE',
+      headers: await jobHeaders(),
+    });
+  } catch {
+    // 期限で消える。利用者には関係ない
+  }
+}
+
+/** いまの設定で、サーバー経由（＝非同期にできる）か。自前キー（BYOK）はサーバーを通らない */
+export async function usesManagedMenuRecipes(): Promise<boolean> {
+  return !(await getUserApiKey());
 }

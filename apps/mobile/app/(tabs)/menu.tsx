@@ -19,7 +19,7 @@ import {
   Undo2,
   Wand2,
 } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { MenuRecipeProposalSheet } from '../../src/components/MenuRecipeProposalSheet';
@@ -34,11 +34,19 @@ import { t, tCount } from '../../src/i18n';
 import { getMenuTasteMemo } from '../../src/services/app-meta.service';
 import { arrangeMenu, MenuArrangeError } from '../../src/services/menu-arrange.provider';
 import {
+  checkPendingMenuBulkJob,
+  discardMenuBulkResult,
+  submitMenuBulkJob,
+  type MenuBulkCheck,
+} from '../../src/services/menu-bulk-job.service';
+import {
   generateMenuRecipes,
   MenuRecipesError,
+  usesManagedMenuRecipes,
   type MenuRecipeDraft,
 } from '../../src/services/menu-recipes.provider';
 import {
+  addMenuPlanSlotEntries,
   addMenuShoppingRows,
   applyMenuArrangement,
   buildMenuArrangeContext,
@@ -59,6 +67,13 @@ import {
 import { createRecipe } from '../../src/services/recipe.service';
 import { ensureInferenceCredit } from '../../src/services/inference-gate.service';
 import { FREE_MONTHLY_LIMIT, recordCloudInference } from '../../src/services/usage.service';
+import {
+  assignGeneratedToSlots,
+  bulkJobParts,
+  emptySlotCountsByKind,
+  type PendingMenuBulkJob,
+} from '../../src/utils/menuBulkJob';
+import { SLOT_KINDS, type SlotKind } from '../../src/utils/menuSlots';
 import { buildWeekRows, weekProgress, type WeekSlotSetting } from '../../src/utils/menuWeek';
 import type { ShoppingPlanRow } from '../../src/utils/shoppingPlan';
 import { formatSnapshotTime } from '../../src/utils/widgetSnapshot';
@@ -70,6 +85,15 @@ const DAY_OPTIONS = [2, 3, 5, 7] as const;
  * 時間帯チップの文言（設計 §10.13）。`t()` はキーをリテラル型で受けるため、
  * 実行時に決まる時間帯はこの対応表で引く。
  */
+/** 枠の種類の文言（S21 と同じ対応表）。「副菜は作れませんでした」の 1 行に使う */
+const SLOT_KIND_LABEL_KEY = {
+  main: 'menu.slotKind.main',
+  side: 'menu.slotKind.side',
+  soup: 'menu.slotKind.soup',
+  salad: 'menu.slotKind.salad',
+  dessert: 'menu.slotKind.dessert',
+} as const satisfies Record<SlotKind, string>;
+
 const MEAL_TIME_LABEL_KEY = {
   breakfast: 'menu.mealTime.breakfast',
   lunch: 'menu.mealTime.lunch',
@@ -119,6 +143,15 @@ export default function MenuScreen() {
   const [bulkError, setBulkError] = useState<string | null>(null);
   /** 提案レビューシート（M3-1）。null = 閉じている */
   const [proposals, setProposals] = useState<MenuRecipeDraft[] | null>(null);
+  /**
+   * 提案がどの枠の種類（main / side / soup …）のものか（PR-5b）。シートは 1 本のリストで見せるので、
+   * 確定時に「主菜は空き日へ・副菜以降は空いている枠へ」を振り分けるために持つ
+   */
+  const proposalKinds = useRef(new Map<MenuRecipeDraft, string>());
+  /** 投入済みの非同期ジョブ（R34）。あれば「生成中」の 1 行を出し、ボタンを止める。画面は塞がない */
+  const [pendingJob, setPendingJob] = useState<PendingMenuBulkJob | null>(null);
+  /** 一部の種類だけ作れなかったときの 1 行（「副菜は作れませんでした」） */
+  const [bulkNote, setBulkNote] = useState<string | null>(null);
   /** #214 の選択シート（M3-5）。null = 閉じている */
   const [pickRows, setPickRows] = useState<ShoppingPlanRow[] | null>(null);
   const [pickRecipeIds, setPickRecipeIds] = useState<Record<string, string>>({});
@@ -179,11 +212,83 @@ export default function MenuScreen() {
     }
   }, [load]);
 
+  /** 提案シートを開く。種類ごとの下書きを 1 本に並べ、どれがどの種類かを覚えておく */
+  const openProposals = useCallback(
+    (parts: readonly { key: string; drafts: MenuRecipeDraft[] }[]) => {
+      proposalKinds.current = new Map(
+        parts.flatMap((p) => p.drafts.map((d) => [d, p.key] as const)),
+      );
+      setProposals(parts.flatMap((p) => p.drafts));
+    },
+    [],
+  );
+
+  /**
+   * 非同期ジョブの返事を画面へ映す（R34）。入口は 3 つ（通知タップ＝この画面のフォーカス・
+   * フォーカス中の定期確認・アプリ復帰）で、どれも同じ `checkPendingMenuBulkJob` に合流する
+   */
+  const applyBulkCheck = useCallback(
+    (check: MenuBulkCheck) => {
+      switch (check.state) {
+        case 'none':
+          setPendingJob(null);
+          return;
+        case 'pending':
+          setPendingJob(check.job);
+          return;
+        case 'failed':
+          setPendingJob(null);
+          setBulkError(t('menu.bulk.jobFailed'));
+          return;
+        case 'expired':
+          setPendingJob(null);
+          setBulkError(t('menu.bulk.jobExpired'));
+          return;
+        case 'ready': {
+          setPendingJob(null);
+          setBulkError(null);
+          // 頼んだ時間帯の献立へ入れる（待っている間にチップを切り替えていても）
+          setMealTime(check.result.mealTime);
+          const failed = SLOT_KINDS.filter((k: SlotKind) =>
+            check.result.failedKinds.includes(k),
+          ).map((k) => t(SLOT_KIND_LABEL_KEY[k]));
+          setBulkNote(
+            failed.length > 0
+              ? t('menu.bulk.partFailed', { kinds: failed.join(t('common.listSeparator')) })
+              : null,
+          );
+          openProposals(check.result.parts);
+        }
+      }
+    },
+    [openProposals],
+  );
+
+  const checkBulkJob = useCallback(async () => {
+    const context = await buildMenuBulkContext().catch(() => null);
+    applyBulkCheck(await checkPendingMenuBulkJob(context?.existingTitles ?? []));
+  }, [applyBulkCheck]);
+
+  const focused = useRef(false);
   useFocusEffect(
     useCallback(() => {
+      focused.current = true;
       void load();
-    }, [load]),
+      void checkBulkJob().catch(() => undefined);
+      return () => {
+        focused.current = false;
+      };
+    }, [load, checkBulkJob]),
   );
+
+  // 生成中だけ、**この画面を見ている間に限って** 5 秒おきに聞く（通知が来ない環境でも結果が出る）
+  useEffect(() => {
+    if (!pendingJob) return undefined;
+    const timer = setInterval(() => {
+      if (focused.current) void checkBulkJob().catch(() => undefined);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [pendingJob, checkBulkJob]);
 
   const build = useCallback(async () => {
     setBusy(true);
@@ -306,9 +411,18 @@ export default function MenuScreen() {
     const requested = view?.plan.requestedDays;
     const missingDays =
       view && typeof requested === 'number' ? Math.max(0, requested - view.days.length) : 0;
-    if (missingDays <= 0 || bulkRunning) return;
+    // 副菜以降の空き（PR-5b）。数えるのは要求日数ぶん — 主菜がこれから入る日の枠も一緒に頼む
+    const totalDays = view ? Math.max(view.days.length, requested ?? 0) : 0;
+    const emptyCounts = emptySlotCountsByKind({
+      totalDays,
+      slotDefs: slotSettings,
+      existingSlots: view?.plan.slots ?? [],
+    });
+    const emptySlots = Object.values(emptyCounts).reduce((sum, n) => sum + n, 0);
+    if ((missingDays <= 0 && emptySlots <= 0) || bulkRunning || pendingJob) return;
 
     setBulkError(null);
+    setBulkNote(null);
     const gate = await ensureInferenceCredit();
     if (gate === 'paywall') {
       router.push('/recipes/paywall');
@@ -320,25 +434,45 @@ export default function MenuScreen() {
     try {
       const [context, memo] = await Promise.all([buildMenuBulkContext(), getMenuTasteMemo()]);
       if (!context) throw new MenuRecipesError(t('menu.bulk.failed'), true);
-      const drafts = await generateMenuRecipes({
-        days: missingDays,
+      const baseRequest = {
         existingTitles: context.existingTitles,
         pantry: context.pantryNames,
         ...(memo ? { preferences: memo } : {}),
         // 時間帯をプロンプトの出し分けに渡す（§10.13）。夕は省略 = サーバー既定
         // （旧クライアントと同じリクエスト形のまま）
         ...(mealTime !== 'dinner' ? { mealTime } : {}),
-      });
+      };
+
+      // サーバー経由なら非同期ジョブ（R34）。受理されたら**待たない** — 画面を塞がず、
+      // 結果は通知・フォーカス・復帰から取りに行く。自前キー（BYOK）はサーバーを通らないので従来どおり
+      if (await usesManagedMenuRecipes()) {
+        const parts = bulkJobParts({
+          shortfallDays: missingDays,
+          emptyCountsByKind: emptyCounts,
+          slotDefs: slotSettings,
+          baseRequest,
+          mainTitles: (view?.days ?? []).map((d) => d.title),
+        });
+        const submitted = await submitMenuBulkJob(parts, mealTime);
+        if (submitted.outcome === 'queued') {
+          setPendingJob(submitted.job);
+          return;
+        }
+        // サーバーがジョブ経路を持っていない（未デプロイ）。従来の同期経路へ倒す
+      }
+
+      if (missingDays <= 0) throw new MenuRecipesError(t('menu.bulk.failed'), true);
+      const drafts = await generateMenuRecipes({ ...baseRequest, days: missingDays });
       if (drafts.length === 0) throw new MenuRecipesError(t('menu.bulk.emptyResult'), true);
       // 成功時だけ枠を消費。一括で 1 回分（M3-3）。BYOK・プレミアムは内部で no-op
       void recordCloudInference().catch(() => undefined);
-      setProposals(drafts); // 提案レビューへ（M3-1・自動確定にしない）
+      openProposals([{ key: 'main', drafts }]); // 提案レビューへ（M3-1・自動確定にしない）
     } catch (err) {
       setBulkError(err instanceof MenuRecipesError ? err.message : t('menu.bulk.failed'));
     } finally {
       setBulkRunning(false);
     }
-  }, [view, bulkRunning, mealTime, router]);
+  }, [view, bulkRunning, pendingJob, mealTime, router, slotSettings, openProposals]);
 
   // M3-1 の確定: 採用分だけを aiGenerated=true で保存（M3-2・#266 の印を流用）→
   // 献立の空き日に組み込み → #214 の選択シートへ接続（M3-5・自動では入れない）
@@ -348,6 +482,7 @@ export default function MenuScreen() {
       setBulkSaving(true);
       try {
         const additions: { recipeId: string; title: string }[] = [];
+        const createdByKind: Record<string, { recipeId: string; title: string }[]> = {};
         for (const draft of selected) {
           const recipeId = await createRecipe({
             title: draft.title,
@@ -362,12 +497,27 @@ export default function MenuScreen() {
             tags: draft.tags ?? [],
             aiGenerated: true,
           });
-          additions.push({ recipeId, title: draft.title });
+          // 主菜は空き日へ、副菜以降は空いている枠へ（PR-5b）
+          const kind = proposalKinds.current.get(draft) ?? 'main';
+          if (kind === 'main') additions.push({ recipeId, title: draft.title });
+          else (createdByKind[kind] ??= []).push({ recipeId, title: draft.title });
         }
         setProposals(null);
-        const next = await fillMenuPlanShortfall(additions, mealTime);
+        void discardMenuBulkResult().catch(() => undefined);
+        let next = additions.length > 0 ? await fillMenuPlanShortfall(additions, mealTime) : null;
+        // 主菜を入れた**後の**献立に対して枠を決める（新しく入った日の枠も対象になる）
+        const current = next ?? (await getMenuPlan(mealTime));
+        if (current && Object.keys(createdByKind).length > 0) {
+          const rows = assignGeneratedToSlots({
+            totalDays: current.days.length,
+            slotDefs: slotSettings,
+            existingSlots: current.plan.slots ?? [],
+            createdByKind,
+          });
+          next = (await addMenuPlanSlotEntries(mealTime, rows)) ?? next;
+        }
         if (next) setView(next);
-        setToastMessage(tCount('menu.bulk.done', additions.length));
+        setToastMessage(tCount('menu.bulk.done', selected.length));
         setToastVisible(true);
         // 買い物リストへは確認ステップ経由（M3-5）。シートが開けば toast はその背後に出る
         await openShoppingPick().catch(() => undefined);
@@ -377,7 +527,7 @@ export default function MenuScreen() {
         setBulkSaving(false);
       }
     },
-    [mealTime, openShoppingPick],
+    [mealTime, openShoppingPick, slotSettings],
   );
 
   if (!loaded) {
@@ -430,9 +580,9 @@ export default function MenuScreen() {
       <View style={styles.shortfallBanner}>
         <Text style={styles.shortfallText}>{tCount('menu.shortfall.banner', shortfall)}</Text>
         <Pressable
-          style={[styles.bulkButton, (bulkRunning || busy) && styles.disabled]}
+          style={[styles.bulkButton, (bulkRunning || busy || pendingJob) && styles.disabled]}
           onPress={() => void runBulkGenerate()}
-          disabled={bulkRunning || busy}
+          disabled={bulkRunning || busy || pendingJob !== null}
           accessibilityRole="button"
         >
           {bulkRunning ? (
@@ -461,6 +611,60 @@ export default function MenuScreen() {
         </Pressable>
       </View>
     ) : null;
+
+  // 主菜は足りていて、副菜以降の枠だけ空いているとき（PR-5b）。不足バナーが出ないので入口を別に出す
+  const emptySlotTotal = hasPlan
+    ? Object.values(
+        emptySlotCountsByKind({
+          totalDays: view.days.length,
+          slotDefs: slotSettings,
+          existingSlots: view.plan.slots ?? [],
+        }),
+      ).reduce((sum, n) => sum + n, 0)
+    : 0;
+
+  /**
+   * 一括生成の状態（R34）。**画面は塞がない** — 生成中は 1 行出すだけで、ほかの操作は全部できる。
+   * 通知を頼めなかったとき（許可なし）は文言を変える（「戻ってきて確認してください」）
+   */
+  const bulkStatus = (
+    <>
+      {pendingJob ? (
+        <View style={styles.pendingBar}>
+          <ActivityIndicator size="small" color={Colors.gold} />
+          <Text style={styles.pendingText}>
+            {t(pendingJob.hasPushToken ? 'menu.bulk.queued' : 'menu.bulk.queuedNoPush')}
+          </Text>
+        </View>
+      ) : null}
+      {bulkNote ? <Text style={styles.bulkErrorText}>{bulkNote}</Text> : null}
+      {shortfall === 0 && emptySlotTotal > 0 && !pendingJob ? (
+        <View style={styles.aiSection}>
+          <Pressable
+            style={[styles.aiButton, (bulkRunning || busy) && styles.disabled]}
+            onPress={() => void runBulkGenerate()}
+            disabled={bulkRunning || busy}
+            accessibilityRole="button"
+          >
+            {bulkRunning ? (
+              <ActivityIndicator size="small" color={Colors.gold} />
+            ) : (
+              <Wand2 size={16} color={Colors.gold} />
+            )}
+            <Text style={styles.aiButtonText}>
+              {bulkRunning
+                ? t('menu.bulk.generating')
+                : tCount('menu.bulk.fillSlots', emptySlotTotal)}
+            </Text>
+          </Pressable>
+          <Text style={styles.aiLimitNote}>
+            {tCount('menu.shortfall.limitNote', FREE_MONTHLY_LIMIT)}
+          </Text>
+          {bulkError ? <Text style={styles.bulkErrorText}>{bulkError}</Text> : null}
+        </View>
+      ) : null}
+    </>
+  );
 
   return (
     <View style={styles.screen}>
@@ -647,6 +851,7 @@ export default function MenuScreen() {
               />
             ))}
 
+            {bulkStatus}
             {shortfallBanner}
 
             {/* M3-5: #214 の選択シートへ（在庫突合・自動では入れない）。以前は /shopping へ
@@ -667,6 +872,7 @@ export default function MenuScreen() {
             <Text style={styles.emptyBody}>
               {shortfall > 0 ? t('menu.emptyDays.noRecipesBulk') : t('menu.emptyDays.noRecipes')}
             </Text>
+            {bulkStatus}
             {shortfallBanner}
             {/* 1 品ずつ相談する道も残す（M3 は提案であって唯一の入口ではない） */}
             <Pressable
@@ -700,7 +906,11 @@ export default function MenuScreen() {
         visible={proposals !== null}
         drafts={proposals ?? []}
         busy={bulkSaving}
-        onCancel={() => setProposals(null)}
+        onCancel={() => {
+          setProposals(null);
+          // 閉じた = 見送り。持っていた結果を捨てる（次に開いたときまた出ないように）
+          void discardMenuBulkResult().catch(() => undefined);
+        }}
         onConfirm={(selected) => void confirmProposals(selected)}
       />
 
@@ -835,6 +1045,19 @@ const styles = StyleSheet.create({
   },
   bulkButtonText: { fontSize: 14, color: Colors.bg, fontWeight: '600' },
   bulkErrorText: { fontSize: 13, color: Colors.muted, marginTop: 6 },
+  // 生成中の 1 行（R34）。staleBar と同じ控えめな線。塞がない・押せない
+  pendingBar: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  pendingText: { flex: 1, fontSize: 14, color: Colors.paperDim, lineHeight: 20 },
   empty: { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyTitle: { fontSize: 15, color: Colors.paper },
   emptyBody: { fontSize: 14, color: Colors.muted, textAlign: 'center', lineHeight: 22 },

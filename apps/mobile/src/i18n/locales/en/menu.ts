@@ -60,8 +60,19 @@ const menu = {
     failed: "We couldn't create the recipes. Your meal plan is unchanged.",
     emptyResult: "We couldn't use the AI suggestions. Your meal plan is unchanged.",
     saveFailed: "We couldn't save the recipes. Please try again.",
+    queued:
+      "We're working on your recipes and will notify you when they're ready. You can close the app.",
+    queuedNoPush:
+      "We're working on your recipes. Notifications are off, so check back here in a little while.",
+    jobFailed: "We couldn't create the recipes. Your meal plan is unchanged. Please try again.",
+    jobExpired: 'The results have expired. Please try again.',
+    partFailed: "We couldn't create: {{kinds}}.",
+    fillSlots: {
+      one: 'Fill the {{count}} empty slot with AI',
+      other: 'Fill the {{count}} empty slots with AI',
+    },
     sheetTitle: 'AI recipe suggestions',
-    sheetBody: 'Pick the ones you want. Saved recipes fill the empty days of your plan.',
+    sheetBody: 'Pick the ones you want. Saved recipes fill the empty days and slots of your plan.',
     ingredientCount: {
       one: '{{count}} ingredient',
       other: '{{count}} ingredients',

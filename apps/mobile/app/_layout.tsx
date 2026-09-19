@@ -21,6 +21,7 @@ import {
   addAllLowStockToShoppingList,
   checkAndNotifyLowStock,
 } from '../src/services/low-stock.service';
+import { checkPendingMenuBulkJob } from '../src/services/menu-bulk-job.service';
 import { runDailyMenuMaintenance } from '../src/services/menu-plan.service';
 import {
   addCookingResumeTapListener,
@@ -154,6 +155,8 @@ export default function RootLayout() {
         maybeShowAppOpenAdOnForeground(pathnameRef.current).catch(() => undefined);
         void runSync();
         runDailyMenuMaintenance().catch(() => undefined);
+        // 一括生成の結果（R34）。献立画面を開かなくても受け取って、サーバーの保持を短くする
+        checkPendingMenuBulkJob().catch(() => undefined);
       }
     });
     return () => sub.remove();
