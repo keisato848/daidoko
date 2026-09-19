@@ -36,7 +36,18 @@ const SNAPSHOT_FILE = 'snapshot.json';
 const IOS_APP_GROUP = 'group.com.daidoko.app';
 const IOS_SNAPSHOT_KEY = 'widget_snapshot';
 /** `ShoppingWidget.swift` の `StaticConfiguration(kind:)` と揃える */
-const IOS_WIDGET_KIND = 'ShoppingWidget';
+/**
+ * iOS のウィジェット種別。**スナップショット 1 本を複数のウィジェットが読む**ので、
+ * 書いたあとは種別を指定せず**全部に再読み込みを促す**（`reloadWidgets()` に
+ * 何も渡さないと `WidgetCenter.reloadAllTimelines()` になる）。
+ *
+ * **かつては `'ShoppingWidget'` を指定していた。** 献立ウィジェット（`'MenuWidget'`・
+ * W2-iOS）を足した時点でこれは不具合になる — 買い物リストだけが即時更新され、
+ * 献立はタイムラインの 30 分間隔まで古い姿のままになる。**エラーも警告も出ない**ので
+ * 気づきにくい。ウィジェットを足したときに種別の列挙を増やし忘れる事故を避けるため、
+ * 種別で絞らない形にした（`docs/ウィジェット設計.md` §11-1）。
+ */
+const IOS_WIDGET_KINDS_ALL = undefined;
 
 /**
  * 連打で書き潰さないためのデバウンス。買い物リストのチェックは連続で起きる
@@ -113,7 +124,8 @@ async function write(snapshot: WidgetSnapshot): Promise<void> {
  *
  * **`documentDirectory` は拡張から読めない** — ウィジェットは別プロセス・別サンドボックスで
  * 動くので、共有できるのは App Group だけ。Android と同じ JSON 文字列を 1 本置き、
- * Swift 側（`targets/shopping-widget/ShoppingWidget.swift`）が
+ * Swift 側（`targets/shopping-widget/` の `ShoppingWidget.swift` と `MenuWidget.swift`。
+ * 同じ JSON を 2 つのウィジェットが別々に読む）が
  * `UserDefaults(suiteName:)` で読む。
  *
  * 書いたあと `reloadWidgets()` を呼ばないと、WidgetKit のタイムライン（30 分間隔）まで
@@ -134,7 +146,7 @@ async function pushToIosWidget(snapshot: WidgetSnapshot): Promise<void> {
       await import('../../modules/daidoko-widget-storage');
     const written = setWidgetSnapshot(IOS_SNAPSHOT_KEY, JSON.stringify(snapshot), IOS_APP_GROUP);
     // 書けていないのに再読み込みを促しても、古い姿を出し直すだけ
-    if (written) reloadWidgets(IOS_WIDGET_KIND);
+    if (written) reloadWidgets(IOS_WIDGET_KINDS_ALL);
   } catch {
     // モジュール未リンクでも本体機能は継続させる（警告はモジュール側が出す）
   }

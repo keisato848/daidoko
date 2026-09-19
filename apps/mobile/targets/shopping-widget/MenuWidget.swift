@@ -9,8 +9,8 @@
 //  表示規約は Android 版（src/widgets/MenuWidget.tsx / menuWidgetContent.ts）と同じ:
 //    小 = 今日の一品 ＋ 副菜 2 件
 //    中 = 今日の一品 ＋ 副菜 4 件（**iOS は横長なので 2 列に割る**・§8-5）
-//    大 = 週間一覧（7 日）
-//    特大 = 週間一覧 ＋ 各日の副菜（**iPad 専用** — iPhone に systemExtraLarge は無い）
+//    大 = 週間一覧（7 日）＋ 各日の副菜
+//    特大 = 大と同じ（**iPad 専用**。だいどこは iPhone 専用なので実際には出ない・§11-2）
 //    どれも「HH:mm 時点」を必ず出す（古い表示だと利用者に分かるように）
 //    文言は snapshot.locale で ja/en を描き分ける（ウィジェットはアプリの i18n を読めない）
 //
@@ -33,7 +33,7 @@ private let supportedSnapshotVersion = 1
 /// 1 日に出す主菜以外の枠の上限。JS 側 `WIDGET_MENU_SIDES_MAX` と揃える。
 private let menuSidesMax = 4
 
-/// 週の各日の副菜（特大でのみ描く）。`WidgetMenuWeekDay['sides']` に対応。
+/// 週の各日の副菜（週間一覧で描く）。`WidgetMenuWeekDay['sides']` に対応。
 private struct WeekDaySide: Decodable {
   let label: String
   let title: String
@@ -155,7 +155,7 @@ private struct MenuWeekRow: Identifiable {
   let isDone: Bool
   let isUndecided: Bool
   let uri: String
-  /// 「汁物 味噌汁・副菜 冷奴」のように連結済み。特大以外は nil
+  /// 「汁物 味噌汁・副菜 冷奴」のように連結済み。週間一覧以外・副菜が無い日は nil
   let sidesText: String?
 }
 
@@ -215,9 +215,16 @@ private func isWeekFamily(_ family: WidgetFamily) -> Bool {
   return family == .systemLarge
 }
 
-private func isXLargeFamily(_ family: WidgetFamily) -> Bool {
+/// 週間一覧の各行に副菜まで出すか。
+///
+/// **Android は「特大」だけで出すが、iOS は `systemLarge` でも出す。**
+/// `.systemExtraLarge` は iPad 専用で、**だいどこは iPhone 専用で出荷している**ため
+/// （`app.json` の `ios.supportsTablet: false` / `TARGETED_DEVICE_FAMILY = 1`）、
+/// 特大に寄せると**どの端末でも副菜が見えない死んだ枝**になる。
+/// iPhone の最大サイズに出すことで初めて利用者の目に入る（設計 §11-2・利用者判断 2026-09-19）。
+private func showsWeekSides(_ family: WidgetFamily) -> Bool {
   if #available(iOS 15.0, *), family == .systemExtraLarge { return true }
-  return false
+  return family == .systemLarge
 }
 
 /// スナップショットから表示内容を組む。**Android の `buildMenuWidgetContent` と同じ判断**。
@@ -269,11 +276,11 @@ private func buildMenuContent(
 
   if week {
     let days = snapshot.menu.week ?? []
-    let xlarge = isXLargeFamily(family)
+    let withSides = showsWeekSides(family)
     let rows: [MenuWeekRow] = days.map { day in
       let undecided = day.title == nil
       var sidesText: String? = nil
-      if xlarge, let sides = day.sides, !sides.isEmpty {
+      if withSides, let sides = day.sides, !sides.isEmpty {
         sidesText = sides.map { "\($0.label) \($0.title)" }.joined(separator: "・")
       }
       return MenuWeekRow(
