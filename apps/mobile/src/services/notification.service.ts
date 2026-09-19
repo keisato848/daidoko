@@ -11,6 +11,7 @@ import { Platform } from 'react-native';
 
 import { isNativePlatform } from '../db/client';
 import { t } from '../i18n';
+import { withTimeout } from '../utils/withTimeout';
 
 const TIMER_CHANNEL_ID = 'timer';
 const LOW_STOCK_CHANNEL_ID = 'low-stock';
@@ -331,6 +332,20 @@ export async function getExpoPushToken(): Promise<string | null> {
   if (!isNativePlatform) return null;
   if (!(await ensureNotificationPermission())) return null;
   return readExpoPushToken();
+}
+
+/**
+ * 許可を求めたうえでトークンを取る。ただし**トークンの取得は `ms` で打ち切る**（R34）。
+ *
+ * 許可ダイアログは待つ（利用者が考える時間）。打ち切るのはその後の取得だけ —
+ * FCM が応答しない端末では `getExpoPushTokenAsync` が返ってこないことがあり、待つと
+ * 「通知を頼んでから投入する」処理が投入まで辿り着かない（2026-09-19 エミュレータで検出）。
+ * 通知は「あれば嬉しい」側。取れなければ null で先へ進み、画面は「戻ってきて確認」を出す。
+ */
+export async function getExpoPushTokenWithin(ms: number): Promise<string | null> {
+  if (!isNativePlatform) return null;
+  if (!(await ensureNotificationPermission().catch(() => false))) return null;
+  return withTimeout(readExpoPushToken(), ms, null);
 }
 
 /**

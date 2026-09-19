@@ -18,7 +18,7 @@ import {
   type MenuJobRequest,
   type MenuRecipeDraft,
 } from './menu-recipes.provider';
-import { ensureMenuChannel, getExpoPushToken } from './notification.service';
+import { ensureMenuChannel, getExpoPushTokenWithin } from './notification.service';
 import { recordCloudInference } from './usage.service';
 import {
   decideJobTransition,
@@ -29,6 +29,9 @@ import {
   type PendingMenuBulkResult,
 } from '../utils/menuBulkJob';
 import type { MenuMealTime } from '../utils/menuPlanStorage';
+
+/** push トークンの取得を待つ上限。通知は「あれば嬉しい」側なので短く切る */
+const PUSH_TOKEN_TIMEOUT_MS = 4000;
 
 const PENDING_KEY = 'menu_bulk_job';
 const RESULT_KEY = 'menu_bulk_result';
@@ -60,7 +63,10 @@ export async function submitMenuBulkJob(
   mealTime: MenuMealTime,
 ): Promise<SubmitMenuBulkResult> {
   await ensureMenuChannel();
-  const token = await getExpoPushToken().catch(() => null);
+  // **トークンの取得で投入を止めない。** FCM が応答しない端末では取得が返ってこない
+  // （2026-09-19 エミュレータで検出 — ボタンのスピナーが回り続け、サーバーに何も届かなかった）。
+  // 許可ダイアログは待つが、その後の取得は数秒で打ち切り、トークン無しで投入する
+  const token = await getExpoPushTokenWithin(PUSH_TOKEN_TIMEOUT_MS).catch(() => null);
   const submitted = await submitMenuRecipesJob(parts, token);
   if (submitted.kind === 'unsupported') return { outcome: 'unsupported' };
   const job: PendingMenuBulkJob = {
