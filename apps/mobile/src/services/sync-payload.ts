@@ -316,6 +316,8 @@ export interface MenuPlanSyncPayload {
     requestedDays: number | null;
     aiNote: string | null;
     autoAddedItemIds: string | null;
+    /** 最終更新（v21）。古い端末は送らないので省略可。LWW は `menuPlanEffectiveUpdatedAt` で比べる */
+    updatedAt?: string | null;
   };
   slots: {
     day: number;
@@ -579,6 +581,7 @@ const menuPlanPayloadSchema = z.object({
     requestedDays: nullableNumber,
     aiNote: nullableText,
     autoAddedItemIds: nullableText,
+    updatedAt: nullableText.optional(),
   }),
   slots: z.array(
     z.object({
@@ -687,6 +690,20 @@ export function serializeSyncPayload(payload: SyncPayload): string {
  * 「別の端末が同じ時刻に書いた」＝どちらでもよい場合。決定的に倒す方を選ぶ）。
  * 壊れた時刻はローカルを守る側に倒す（サーバー側 `lwwIncomingWins` と同じ構え）。
  */
+/**
+ * 献立の LWW に使う時刻。`updatedAt` が無ければ `generatedAt` へ倒す（v20 以前の行・古い相手）。
+ *
+ * **`generatedAt` だけで比べてはいけない。** それは「いつ組んだか」で、枠に料理を入れても
+ * 動かない。鍵にしていたため、最初の同期のあと**献立の編集が一度も届かなかった**
+ * （サーバーは同時刻を「既存の勝ち」と扱い payload を更新しない — 2 台の実機検証で発覚・2026-09-19）。
+ */
+export function menuPlanEffectiveUpdatedAt(plan: {
+  updatedAt?: string | null;
+  generatedAt: string;
+}): string {
+  return plan.updatedAt != null && plan.updatedAt !== '' ? plan.updatedAt : plan.generatedAt;
+}
+
 export function incomingChangeWins(
   incomingUpdatedAt: string,
   localUpdatedAt: string | null,

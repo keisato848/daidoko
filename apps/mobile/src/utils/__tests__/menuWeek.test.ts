@@ -153,6 +153,20 @@ describe('buildWeekRows', () => {
     expect(row.slots[1]?.label).toBe('soup');
   });
 
+  it('定義に無い枠は、料理が入っていない日には出さない（空行を全日に並べない）', () => {
+    const rows = build([slot(1, 'main'), slot(1, 'soup', { title: 'みそ汁' }), slot(2, 'main')], {
+      settings: [],
+    });
+    expect(rows[0]?.slots.map((s) => s.slotId)).toEqual(['main', 'soup']);
+    // 2 日目は soup の行が無い（設定から消えた枠の空行が並ぶのを防ぐ）
+    expect(rows[1]?.slots.map((s) => s.slotId)).toEqual(['main']);
+  });
+
+  it('定義にある枠は空でも全日に出す（入れる先として要る）', () => {
+    const rows = build([slot(1, 'main'), slot(2, 'main')]);
+    expect(rows[1]?.slots.map((s) => s.slotId)).toEqual(['main', 'side']);
+  });
+
   it('定義に無い枠が未完了なら、その日は済みにならない', () => {
     const row = firstRow(
       build([slot(1, 'main', { doneAt: '2026-09-18T10:00:00.000Z' }), slot(1, 'soup')], {

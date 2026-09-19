@@ -49,6 +49,7 @@ import {
   SYNC_ENTITY_STORE_GROUP_ALIAS,
   SYNC_PAYLOAD_SCHEMA_VERSION,
   incomingChangeWins,
+  menuPlanEffectiveUpdatedAt,
   normalizeCookingLogKind,
   serializeSyncPayload,
   type RowSyncPayload,
@@ -331,6 +332,7 @@ async function buildMenuPlanChange(id: string, deletedAt: string): Promise<Outgo
         requestedDays: row.requestedDays,
         aiNote: row.aiNote,
         autoAddedItemIds: row.autoAddedItemIds,
+        updatedAt: row.updatedAt,
       },
       slots: slots.map((s) => ({
         day: s.day,
@@ -341,7 +343,9 @@ async function buildMenuPlanChange(id: string, deletedAt: string): Promise<Outgo
         doneAt: s.doneAt,
       })),
     }),
-    clientUpdatedAt: row.generatedAt,
+    // **LWW の鍵は updatedAt。** generatedAt を送っていたため、枠の編集がサーバーで
+    // 「同時刻＝既存の勝ち」と扱われ、最初の同期のあと一度も家族へ届かなかった
+    clientUpdatedAt: menuPlanEffectiveUpdatedAt(row),
     deleted: false,
   };
 }
@@ -820,12 +824,18 @@ async function applyMenuPlan(payload: RowSyncPayload): Promise<ApplyOutcome> {
   const plan = payload.plan;
 
   const localRows = await db
-    .select({ id: schema.menuPlans.id, generatedAt: schema.menuPlans.generatedAt })
+    .select({
+      id: schema.menuPlans.id,
+      generatedAt: schema.menuPlans.generatedAt,
+      updatedAt: schema.menuPlans.updatedAt,
+    })
     .from(schema.menuPlans)
     .where(eq(schema.menuPlans.mealTime, plan.mealTime))
     .limit(1);
   const local = localRows[0];
-  if (local && !incomingChangeWins(plan.generatedAt, local.generatedAt)) return 'skipped';
+  // generatedAt ではなく updatedAt で比べる（無ければ generatedAt へ倒す）。理由は builder 側と同じ
+  const incomingAt = menuPlanEffectiveUpdatedAt(plan);
+  if (local && !incomingChangeWins(incomingAt, menuPlanEffectiveUpdatedAt(local))) return 'skipped';
 
   await db.transaction(async (tx) => {
     if (local) {
@@ -839,6 +849,7 @@ async function applyMenuPlan(payload: RowSyncPayload): Promise<ApplyOutcome> {
           requestedDays: plan.requestedDays,
           aiNote: plan.aiNote,
           autoAddedItemIds: plan.autoAddedItemIds,
+          updatedAt: incomingAt,
         })
         .where(eq(schema.menuPlans.id, local.id));
     } else {
@@ -852,6 +863,7 @@ async function applyMenuPlan(payload: RowSyncPayload): Promise<ApplyOutcome> {
         requestedDays: plan.requestedDays,
         aiNote: plan.aiNote,
         autoAddedItemIds: plan.autoAddedItemIds,
+        updatedAt: incomingAt,
       });
     }
 
@@ -1061,13 +1073,16 @@ export async function applyRowTombstone(
       return 'applied';
     case SYNC_ENTITY_MENU_PLAN: {
       const rows = await db
-        .select({ generatedAt: schema.menuPlans.generatedAt })
+        .select({
+          generatedAt: schema.menuPlans.generatedAt,
+          updatedAt: schema.menuPlans.updatedAt,
+        })
         .from(schema.menuPlans)
         .where(eq(schema.menuPlans.id, entityId))
         .limit(1);
       const local = rows[0];
       if (!local) return 'skipped';
-      if (!incomingChangeWins(clientUpdatedAt, local.generatedAt)) return 'skipped';
+      if (!incomingChangeWins(clientUpdatedAt, menuPlanEffectiveUpdatedAt(local))) return 'skipped';
       await db.transaction(async (tx) => {
         // slots → days → plan の順（`PRAGMA foreign_keys = ON` で CASCADE は無い）。
         // **days を消し忘れると削除がまるごと落ちて、同期が毎回同じ行で詰まる**

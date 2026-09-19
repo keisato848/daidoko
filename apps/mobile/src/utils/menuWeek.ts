@@ -107,12 +107,14 @@ export function dateKeyForDay(anchorDate: string | null, day: number): string | 
 function withUnknownSlots(
   defs: readonly WeekSlotSetting[],
   rows: readonly WeekSlotRow[],
-): WeekSlotSetting[] {
+): { defs: WeekSlotSetting[]; unknownIds: ReadonlySet<string> } {
   const known = new Set(defs.map((d) => d.slotId));
+  const unknownIds = new Set<string>();
   const extra: WeekSlotSetting[] = [];
   for (const row of rows) {
     if (known.has(row.slotId)) continue;
     known.add(row.slotId);
+    unknownIds.add(row.slotId);
     extra.push({
       slotId: row.slotId,
       slotKind: 'side',
@@ -120,7 +122,7 @@ function withUnknownSlots(
       position: Number.MAX_SAFE_INTEGER,
     });
   }
-  return [...defs, ...extra];
+  return { defs: [...defs, ...extra], unknownIds };
 }
 
 /** 週ビューに出す日数の上限。7 日を超える献立も、今週ぶんだけ出す */
@@ -142,7 +144,10 @@ export function buildWeekRows(args: {
   /** 枠が未設定のときに使う既定枠の文言（`t('menu.slot.main')`） */
   defaultSlotLabel: string;
 }): WeekDayRow[] {
-  const slotDefs = withUnknownSlots(orderedSlots(args.settings, args.defaultSlotLabel), args.slots);
+  const { defs: slotDefs, unknownIds } = withUnknownSlots(
+    orderedSlots(args.settings, args.defaultSlotLabel),
+    args.slots,
+  );
   const todayKey = menuDateKey(args.today);
 
   const byDay = new Map<number, Map<string, WeekSlotRow>>();
@@ -166,8 +171,12 @@ export function buildWeekRows(args: {
         day,
         dateKey,
         isToday: dateKey !== null && dateKey === todayKey,
-        slots: slotDefs.map((def) => {
+        slots: slotDefs.flatMap((def) => {
           const row = forDay?.get(def.slotId);
+          // **定義に無い枠は、料理が入っている日にだけ出す。** 定義が無い＝設定から
+          // 消された枠なので、空の行を全日に並べても入れる先が無く、雑音にしかならない
+          // （消した副菜の空行が 7 日ぶん並ぶ）。入っている料理は消さずに出し続ける
+          if (row === undefined && unknownIds.has(def.slotId)) return [];
           return {
             slotId: def.slotId,
             slotKind: def.slotKind,

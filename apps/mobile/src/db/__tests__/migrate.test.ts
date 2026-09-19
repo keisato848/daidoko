@@ -71,6 +71,22 @@ describe('database migrations', () => {
     expect(backfill).toMatch(/WHERE \(place_name IS NULL OR TRIM\(place_name\) = ''\)/);
   });
 
+  it('v21: menu_plans.updated_at を足し、既存行は generated_at で埋める（LWW の鍵）', () => {
+    const statements: string[] = [];
+    runMigrations({ execSync: (sql: string) => void statements.push(sql) });
+    expect(
+      statements.some((s) => s.includes('ALTER TABLE menu_plans ADD COLUMN updated_at TEXT')),
+    ).toBe(true);
+    // 読みは generated_at へ倒すので無くても壊れないが、行を自己記述にするために埋める
+    expect(
+      statements.some((s) =>
+        /UPDATE menu_plans\s+SET updated_at = generated_at\s+WHERE updated_at IS NULL/.test(s),
+      ),
+    ).toBe(true);
+    const createSql = statements[0] ?? '';
+    expect(createSql).toMatch(/CREATE TABLE IF NOT EXISTS menu_plans \([^;]*updated_at TEXT/s);
+  });
+
   it('v19: 献立のテーブル（menu_plans / menu_plan_days）を作る', () => {
     const statements: string[] = [];
 

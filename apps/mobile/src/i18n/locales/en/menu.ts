@@ -90,7 +90,23 @@ const menu = {
     dateLabel: '{{weekday}} {{month}}/{{day}}',
     today: 'Today',
     slotEmpty: 'Not decided yet',
+    statePlanned: 'Planned',
+    stateDone: 'Cooked',
     progress: 'Cooked {{done}} of {{total}} days',
+  },
+  slotPick: {
+    title: 'Put in {{slot}}',
+    searchPlaceholder: 'Search recipes',
+    noMatch: 'Nothing found',
+    change: 'Change',
+    clear: 'Clear this slot',
+  },
+  slotKind: {
+    main: 'Main',
+    side: 'Side',
+    soup: 'Soup',
+    salad: 'Salad',
+    dessert: 'Dessert',
   },
   reason: {
     expiry: '{{name}} is expiring soon',
@@ -154,6 +170,12 @@ const menu = {
     tasteSubtitle:
       'Used when AI creates recipes in one go (e.g. "no seafood", "mild spice only"). Stored only on this device — never shared with your family.',
     tastePlaceholder: 'e.g. No raw fish. Our staples are onions and carrots',
+    slotsLabel: 'Menu slots',
+    slotsSubtitle:
+      'Decide how many dishes make up a day. There is always a main. Removing a slot does not remove the dish in it.',
+    slotsMealTimeLabel: 'Which meal',
+    slotAdd: 'Add {{kind}}',
+    slotRemove: 'Remove',
     clearAction: 'Clear meal plan',
     clearConfirmTitle: 'Clear this meal plan?',
     clearConfirmBody: "Your pantry and shopping list won't change. This can't be undone.",

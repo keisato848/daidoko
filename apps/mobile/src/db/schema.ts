@@ -636,6 +636,13 @@ export const menuPlans = sqliteTable('menu_plans', {
   aiNote: text('ai_note'),
   /** 直近の自動追加バッチの `shopping_items.id` の JSON 配列文字列（§10.11.2）。null = 無し */
   autoAddedItemIds: text('auto_added_item_ids'),
+  /**
+   * 最終更新（v21）。**同期の勝敗（LWW）はこの列で決まる。**
+   * `generated_at` は「いつ組んだか」で、枠に料理を入れても動かない。それを LWW の鍵にしていた
+   * ため、最初の同期のあとは**献立の編集が一度も家族へ届かなかった**（2 台の実機検証で発覚・
+   * 2026-09-19）。null = v20 以前の行（読みは `generated_at` へ倒す・`menuPlanEffectiveUpdatedAt`）
+   */
+  updatedAt: text('updated_at'),
 });
 
 /**

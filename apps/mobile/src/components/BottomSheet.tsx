@@ -3,6 +3,7 @@
  */
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { KeyboardAvoider } from './KeyboardAvoider';
 import { Colors } from '../constants/theme';
 
 interface BottomSheetProps {
@@ -15,13 +16,18 @@ interface BottomSheetProps {
 export function BottomSheet({ visible, onClose, title, children }: BottomSheetProps) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.handle} />
-          {title && <Text style={styles.title}>{title}</Text>}
-          {children}
+      {/* Modal の中身は画面本体とは別ツリーなので、ここにも要る（GroupPicker と同じ形）。
+        **包むのは全画面の backdrop 側**。中の sheet を包むと `flex: 1` が効いて
+        中身が潰れ、一覧が出なくなる（PR-4 の実機確認で踏んだ） */}
+      <KeyboardAvoider>
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.handle} />
+            {title && <Text style={styles.title}>{title}</Text>}
+            {children}
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoider>
     </Modal>
   );
 }

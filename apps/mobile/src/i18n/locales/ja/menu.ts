@@ -132,7 +132,26 @@ const menu = {
     today: '今日',
     /** その枠をまだ決めていない */
     slotEmpty: 'まだ決めていません',
+    /** **記号でなく文字**（受付票 C）。✓ だけでは何の印か伝わらない */
+    statePlanned: '予定',
+    stateDone: '済み',
     progress: '{{done}}/{{total}}日 作りました',
+  },
+  /** 枠に入れる料理を選ぶシート（PR-4）。AI は呼ばない・蔵書庫から選ぶだけ */
+  slotPick: {
+    title: '{{slot}}に入れる',
+    searchPlaceholder: 'レシピを探す',
+    noMatch: '見つかりませんでした',
+    change: '変える',
+    clear: 'この枠を空にする',
+  },
+  /** 枠の種類（S21 で足す・週ビューの既定の文言もここから引く） */
+  slotKind: {
+    main: '主菜',
+    side: '副菜',
+    soup: '汁物',
+    salad: 'サラダ',
+    dessert: 'デザート',
   },
   /**
    * 理由の一言。AI を使わず採点の決め手から機械的に作る（§10.3）。
@@ -226,6 +245,13 @@ const menu = {
     tasteSubtitle:
       'AIでレシピをまとめて作るときに考慮します（例:「義母は洋食を食べない」「辛いものは控えめに」）。この端末にだけ保存され、家族には共有されません。',
     tastePlaceholder: '例: 義母は洋食を食べない。定番野菜は玉ねぎ・にんじん',
+    /** 枠の構成（PR-4・§10.14）。時間帯ごとに持つ */
+    slotsLabel: '献立の枠',
+    slotsSubtitle:
+      '1 日に何品を組むかを決めます。主菜は必ずあります。枠を消しても、その枠に入っている料理は消えません。',
+    slotsMealTimeLabel: 'どの時間帯の枠か',
+    slotAdd: '{{kind}}を足す',
+    slotRemove: '消す',
     /** 破壊的操作。押すと確認ダイアログを挟む（dialog.confirm）。在庫・買い物リストは変わらない */
     clearAction: '献立を消す',
     clearConfirmTitle: '献立を消しますか？',
