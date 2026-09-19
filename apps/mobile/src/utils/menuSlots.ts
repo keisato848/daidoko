@@ -59,6 +59,7 @@ export function addSlot(
     slotKind: kind,
     label,
     position: 0,
+    autoFill: true,
   };
   const ordered = [...slots].sort((a, b) => a.position - b.position);
   return renumberSlots(kind === REQUIRED_SLOT_KIND ? [next, ...ordered] : [...ordered, next]);
@@ -114,4 +115,23 @@ export function normalizeSlots(
  */
 export function canRemoveSlot(slotId: string): boolean {
   return slotId !== MAIN_SLOT_ID;
+}
+
+/**
+ * 「自動で埋める」を切り替える（PR-5a）。**主菜は常に自動**（渡されても無視する）—
+ * 主菜を手入力専用にすると「組む」が何も組まなくなり、献立の入口そのものが死ぬ。
+ */
+export function setSlotAutoFill(
+  slots: readonly WeekSlotSetting[],
+  slotId: string,
+  autoFill: boolean,
+): WeekSlotSetting[] {
+  return slots.map((s) =>
+    s.slotId === slotId && s.slotId !== MAIN_SLOT_ID ? { ...s, autoFill } : s,
+  );
+}
+
+/** 自動で埋めてよい枠か。省略（v20 の行）は true */
+export function isAutoFillSlot(slot: Pick<WeekSlotSetting, 'autoFill'>): boolean {
+  return slot.autoFill !== false;
 }

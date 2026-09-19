@@ -313,6 +313,27 @@ export function upsertSlotEntry(
   return [...without, next];
 }
 
+/**
+ * 手で入れた枠か（PR-5a）。**`reason === ''` かつ主菜以外**。
+ * 自動で入れた行は `coverage:` / `expiry:` / `ai-new:` 等の理由を持ち、手入力（`upsertSlotEntry`）
+ * だけが空文字を持つ — 既にある印を区別に使う。主菜は `days` が正なのでここでは扱わない
+ */
+export function isManualSlotEntry(row: Pick<MenuPlanSlotRow, 'slotId' | 'reason'>): boolean {
+  return row.slotId !== MAIN_SLOT_ID && row.reason === '';
+}
+
+/**
+ * 「組む」「作り直す」で**手入力の枠を引き継ぐ**（PR-5a・§10.15）。
+ *
+ * 新しいプランを組むと `slots` は空から始まり、手で入れた副菜が黙って消えていた。
+ * 手入力＝利用者の意思、自動＝こちらの提案、の非対称なので確認ダイアログは挟まず、
+ * 手入力だけを残して自動の行は作り直す。`doneAt` は引き継いだ行のものを保つ。
+ * 要求日数より後ろの日の手入力も**消さない**（週ビューは行のある日を出すので見える。消すのは利用者）
+ */
+export function carryManualSlotEntries(prev: readonly MenuPlanSlotRow[]): MenuPlanSlotRow[] {
+  return prev.filter(isManualSlotEntry);
+}
+
 /** 1 枠を空にする（料理を外す）。その日の他の枠は触らない */
 export function removeSlotEntry(
   slots: readonly MenuPlanSlotRow[],

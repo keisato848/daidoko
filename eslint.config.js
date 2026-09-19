@@ -97,6 +97,8 @@ module.exports = [
       'apps/mobile/src/utils/stepTimer.ts',
       // 献立の「取り分け」判定語彙（「大さじ」「少々」）。レシピ本文と照合する語であって画面の文言ではない
       'apps/mobile/src/utils/menuPlan.ts',
+      // 枠の種類（副菜・汁物）の分類語彙（「味噌汁」「おひたし」）。レシピの題名・タグと照合する語であって画面の文言ではない
+      'apps/mobile/src/utils/menuSlotKind.ts',
       'apps/mobile/src/utils/itemMatch.ts',
       'apps/mobile/src/utils/itemName.ts',
       'apps/mobile/src/utils/kana.ts',

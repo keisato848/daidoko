@@ -5,6 +5,8 @@ import {
   normalizeSlots,
   removeSlot,
   renumberSlots,
+  isAutoFillSlot,
+  setSlotAutoFill,
 } from '../menuSlots';
 import type { WeekSlotSetting } from '../menuWeek';
 
@@ -103,5 +105,29 @@ describe('normalizeSlots', () => {
 
   it('既に正しい並びは変わらない', () => {
     expect(normalizeSlots([MAIN, SIDE], 'MAIN')).toEqual([MAIN, SIDE]);
+  });
+});
+
+describe('autoFill（PR-5a）— 手入力専用の枠', () => {
+  it('足した枠は autoFill:true で始まる', () => {
+    const next = addSlot([MAIN], 'side', 'SIDE');
+    expect(next.find((s) => s.slotId === 'side')?.autoFill).toBe(true);
+  });
+
+  it('setSlotAutoFill で切り替わる', () => {
+    const slots = addSlot([MAIN], 'side', 'SIDE');
+    const off = setSlotAutoFill(slots, 'side', false);
+    expect(off.find((s) => s.slotId === 'side')?.autoFill).toBe(false);
+    expect(off.filter((s) => s.slotId === 'side').map(isAutoFillSlot)).toEqual([false]);
+  });
+
+  it('**主菜は手入力専用にできない**（「組む」が何も組まなくなる）', () => {
+    const next = setSlotAutoFill([MAIN, SIDE], 'main', false);
+    expect(next.filter((s) => s.slotId === 'main').map(isAutoFillSlot)).toEqual([true]);
+  });
+
+  it('省略（v20 の行）は自動扱い', () => {
+    expect(isAutoFillSlot({})).toBe(true);
+    expect(isAutoFillSlot({ autoFill: undefined })).toBe(true);
   });
 });
