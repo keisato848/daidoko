@@ -234,7 +234,9 @@ async function writeStoredMenuPlan(plan: StoredMenuPlan): Promise<void> {
   // つまり献立を 2 回いじると、家族には削除が届きうる
   const planId = ids[0] ?? generateId();
   const { row, days, slots } = storedMenuPlanToRows(plan, planId);
-  await db.insert(schema.menuPlans).values(row);
+  // **`updated_at` は書くたびに今の時刻。** 同期の LWW の鍵（v21）。`generated_at` は
+  // 「いつ組んだか」で編集では動かないので、それを鍵にすると枠の編集が家族へ届かない
+  await db.insert(schema.menuPlans).values({ ...row, updatedAt: new Date().toISOString() });
   if (days.length > 0) {
     await db.insert(schema.menuPlanDays).values(days.map((d) => ({ ...d, planId: row.id })));
   }

@@ -29,6 +29,7 @@ import {
   syncCursorStorageKey,
   type RecipeBookSyncPayload,
   type RecipeSyncPayload,
+  menuPlanEffectiveUpdatedAt,
 } from '../sync-payload';
 
 function recipePayload(overrides: Partial<RecipeSyncPayload> = {}): RecipeSyncPayload {
@@ -482,6 +483,43 @@ describe('sync-payload — 献立・枠・調理記録（PR-2）', () => {
     expect(hasNaturalKey('menu_plan')).toBe(true);
     expect(hasNaturalKey('menu_slot')).toBe(false);
     expect(hasNaturalKey('cooking_log')).toBe(false);
+  });
+
+  // 2 台の実機検証で発覚（2026-09-19）: LWW の鍵を generatedAt にしていたため、枠に料理を
+  // 入れても時刻が動かず、サーバーが「同時刻＝既存の勝ち」として payload を更新しなかった
+  describe('menuPlanEffectiveUpdatedAt — LWW の鍵は updatedAt（無ければ generatedAt）', () => {
+    it('updatedAt があればそれを使う', () => {
+      expect(
+        menuPlanEffectiveUpdatedAt({
+          generatedAt: '2026-09-18T14:52:08.656Z',
+          updatedAt: '2026-09-19T01:07:00.000Z',
+        }),
+      ).toBe('2026-09-19T01:07:00.000Z');
+    });
+
+    it.each([undefined, null, ''])(
+      'updatedAt が %p なら generatedAt へ倒す（v20 以前・古い相手）',
+      (v) => {
+        expect(
+          menuPlanEffectiveUpdatedAt({ generatedAt: '2026-09-18T14:52:08.656Z', updatedAt: v }),
+        ).toBe('2026-09-18T14:52:08.656Z');
+      },
+    );
+
+    it('updatedAt 付きの menu_plan が往復する', () => {
+      const plan = menuPlanPayload();
+      const withUpdated = {
+        ...plan,
+        plan: { ...plan.plan, updatedAt: '2026-09-19T01:07:00.000Z' },
+      };
+      expect(parseSyncPayload('menu_plan', serializeSyncPayload(withUpdated))).toEqual(withUpdated);
+    });
+
+    it('updatedAt を持たない古い payload もそのまま読める（前方互換）', () => {
+      const plan = menuPlanPayload();
+      expect('updatedAt' in plan.plan).toBe(false);
+      expect(parseSyncPayload('menu_plan', serializeSyncPayload(plan))).toEqual(plan);
+    });
   });
 });
 

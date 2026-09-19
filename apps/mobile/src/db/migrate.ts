@@ -36,7 +36,9 @@ type DB = ExpoSQLiteDatabase<typeof schema>;
 //      docs/買い物リスト・在庫設計.md §10.6。旧 app_meta 'menu_plan' JSON は
 //      menu-plan.service.ts が読み側でレイジーに取り込む）
 // v20: 献立の枠（スロット）対応 menu_slot_settings / menu_plan_slots を追加。menu_plan_days は互換のため残し、レイジー移行する
-export const CURRENT_SCHEMA_VERSION = 20;
+// v21: menu_plans.updated_at — 同期の LWW 用。generated_at を鍵にしていたため、枠の編集が
+//      最初の同期のあと一度も家族へ届かなかった（2 台検証で発覚）。既存行は generated_at で埋める
+export const CURRENT_SCHEMA_VERSION = 21;
 
 const DEFAULT_USER_ID = 'user-kei';
 const DEFAULT_FAMILY_ID = 'family-001';
@@ -405,7 +407,8 @@ const CREATE_TABLES_SQL = `
     anchor_date TEXT,
     requested_days INTEGER,
     ai_note TEXT,
-    auto_added_item_ids TEXT
+    auto_added_item_ids TEXT,
+    updated_at TEXT
   );
 
   -- recipe_id is a weak reference (no REFERENCES on purpose): deleting a recipe must
@@ -468,6 +471,8 @@ export const ADD_COLUMN_MIGRATIONS: { table: string; columnDdl: string }[] = [
   // NOT NULL にすると、その列を持たない古いバックアップの復元が丸ごと失敗する
   // （`replaceDatabase` が明示的に NULL を渡すため DEFAULT が効かない）
   { table: 'shopping_items', columnDdl: 'updated_at TEXT' },
+  // v21: 献立の LWW 用。generated_at は「いつ組んだか」で編集では動かない
+  { table: 'menu_plans', columnDdl: 'updated_at TEXT' },
   { table: 'shopping_items', columnDdl: 'shared INTEGER' },
   { table: 'pantry_items', columnDdl: 'shared INTEGER' },
   // v16: 数量のベースライン（S2-B・設計 §5-3）。NULL = 未移行（quantity が権威）
@@ -573,6 +578,25 @@ function backfillShoppingUpdatedAt(expoDb: { execSync: (sql: string) => void }):
   }
 }
 
+/**
+ * v21: 献立の `updated_at` を埋める。
+ *
+ * 同期の勝敗（LWW）はこの列で決まるので、列を足しただけだと既存の行が全部 null になり、
+ * 「ローカルに時刻が無い＝受信が常に勝つ」形になる（v15 の shopping_items と同じ罠）。
+ * 一番近い時刻＝組んだ時刻で埋める。**冪等**（null の行だけ触る）。
+ */
+function backfillMenuPlanUpdatedAt(expoDb: { execSync: (sql: string) => void }): void {
+  try {
+    expoDb.execSync(`
+      UPDATE menu_plans
+      SET updated_at = generated_at
+      WHERE updated_at IS NULL
+    `);
+  } catch {
+    // 列がまだ無い等（新規インストール直後）。次回の起動で埋まる
+  }
+}
+
 /** Run migrations (create tables + additive column changes) */
 export function runMigrations(expoDb: { execSync: (sql: string) => void }): MigrationResult {
   expoDb.execSync(CREATE_TABLES_SQL);
@@ -585,6 +609,7 @@ export function runMigrations(expoDb: { execSync: (sql: string) => void }): Migr
   }
   backfillRecipePlaceName(expoDb);
   backfillShoppingUpdatedAt(expoDb);
+  backfillMenuPlanUpdatedAt(expoDb);
   backfillRecipeAiGenerated(expoDb);
   expoDb.execSync(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION}`);
   return { schemaVersion: CURRENT_SCHEMA_VERSION };
