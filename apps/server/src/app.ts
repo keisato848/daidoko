@@ -12,6 +12,7 @@ import { logger } from 'hono/logger';
 import gardenRouter from './routes/garden.js';
 import importRouter from './routes/import.js';
 import inferRouter from './routes/infer.js';
+import menuJobsRouter from './routes/menu-jobs.js';
 import { invitePageRouter } from './routes/invite.js';
 import reportRouter from './routes/report.js';
 import resolveRouter from './routes/resolve.js';
@@ -39,6 +40,9 @@ app.get('/health', (c) => c.json({ status: 'ok', ts: new Date().toISOString() })
 
 app.route('/api/v1/import', importRouter);
 app.route('/api/v1/infer', inferRouter);
+// 一括生成の非同期ジョブ（R34）。**inferRouter より具体的なパスなので後ろに置いても当たる**が、
+// 読む人が迷わないよう直後に並べる
+app.route('/api/v1/infer/menu-recipes/jobs', menuJobsRouter);
 app.route('/api/v1/resolve', resolveRouter);
 // さいえん手帳（家庭菜園アプリ）の相乗りルート。プロンプトはレシピ系と独立
 app.route('/api/v1/garden', gardenRouter);

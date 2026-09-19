@@ -47,6 +47,9 @@ export const menuRecipeDraftSchema = z.object({
 /** 献立の時間帯（v19・買い物リスト・在庫設計 §10.13）。省略 = 夕（旧クライアント互換）。 */
 export const menuRecipesMealTimeSchema = z.enum(['breakfast', 'lunch', 'dinner']);
 
+/** 枠の種類（R34・省略 = main）。副菜や汁物をプロンプトで出し分ける。 */
+export const menuSlotKindSchema = z.enum(['main', 'side', 'soup', 'salad', 'dessert']);
+
 /** リクエスト本体。locale は AI の**出力言語**（他 infer ルートと同じ意味）。 */
 export const menuRecipesRequestSchema = z.object({
   /** 不足日数 = 生成する品数（1〜7） */
@@ -67,6 +70,11 @@ export const menuRecipesRequestSchema = z.object({
   locale: z.enum(['ja', 'en']).optional(),
   /** 単位系（分量を書かせる推論なので consult と同様に受ける） */
   unitSystem: z.enum(['metric', 'imperial']).optional(),
+
+  /** 枠の種類（省略時は主菜） */
+  slotKind: menuSlotKindSchema.optional(),
+  /** 合わせる主菜のタイトル（slotKind が main 以外のときに文脈へ入れる・最大 7） */
+  mainTitles: z.array(z.string().max(100)).max(7).optional(),
 });
 
 /** レスポンスの data 部（AgentResult の中身）。 */
@@ -74,8 +82,63 @@ export const menuRecipesResponseSchema = z.object({
   recipes: z.array(menuRecipeDraftSchema).min(1).max(MAX_MENU_RECIPES_DAYS),
 });
 
+export const menuJobRequestSchema = z.object({
+  parts: z
+    .array(
+      z.object({
+        key: z.string().max(16),
+        request: menuRecipesRequestSchema,
+      }),
+    )
+    .min(1)
+    .max(4),
+  expoPushToken: z.string().optional(),
+  locale: z.enum(['ja', 'en']).optional(),
+});
+
+export const menuJobResponseSchema = z.object({
+  ok: z.boolean(),
+  data: z
+    .object({
+      jobId: z.string(),
+      status: z.enum(['queued', 'running', 'done', 'failed']),
+      createdAt: z.string().optional(),
+      finishedAt: z.string().optional(),
+      parts: z
+        .array(
+          z.union([
+            z.object({
+              key: z.string(),
+              ok: z.literal(true),
+              recipes: z.array(menuRecipeDraftSchema),
+            }),
+            z.object({
+              key: z.string(),
+              ok: z.literal(false),
+              error: z.object({
+                code: z.string(),
+                message: z.string(),
+                retryable: z.boolean().optional(),
+              }),
+            }),
+          ]),
+        )
+        .optional(),
+      error: z
+        .object({ code: z.string(), message: z.string(), retryable: z.boolean().optional() })
+        .optional(),
+    })
+    .optional(),
+  error: z
+    .object({ code: z.string(), message: z.string(), retryable: z.boolean().optional() })
+    .optional(),
+});
+
 export type MenuRecipesMealTime = z.infer<typeof menuRecipesMealTimeSchema>;
+export type MenuSlotKind = z.infer<typeof menuSlotKindSchema>;
 export type MenuRecipeIngredient = z.infer<typeof menuRecipeIngredientSchema>;
 export type MenuRecipeDraft = z.infer<typeof menuRecipeDraftSchema>;
 export type MenuRecipesRequest = z.infer<typeof menuRecipesRequestSchema>;
 export type MenuRecipesResponse = z.infer<typeof menuRecipesResponseSchema>;
+export type MenuJobRequest = z.infer<typeof menuJobRequestSchema>;
+export type MenuJobResponse = z.infer<typeof menuJobResponseSchema>;
