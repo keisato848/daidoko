@@ -30,6 +30,11 @@ export interface WeekSlotSetting {
   slotKind: string;
   label: string;
   position: number;
+  /**
+   * 自動で埋めるか（PR-5a）。**false = 手入力専用**（M1「組む」と日次ローリングが飛ばす。M3 は枠を見ない）。
+   * 省略は true（v20 の行・既定枠）。列は PR-1 からあったが読む側が無かった
+   */
+  autoFill?: boolean;
 }
 
 /**

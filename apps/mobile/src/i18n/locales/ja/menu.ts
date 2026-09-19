@@ -252,6 +252,10 @@ const menu = {
     slotsMealTimeLabel: 'どの時間帯の枠か',
     slotAdd: '{{kind}}を足す',
     slotRemove: '消す',
+    /** 枠ごとの「自動で埋める」（PR-5a・§10.15）。主菜には出さない */
+    slotAutoFill: '自動で埋める',
+    slotAutoFillNote:
+      '「組む」のとき、蔵書庫から種類の合う料理（題名やタグで判断）を入れます。合うものが無い枠は空のまま。手で入れた料理は組み直しても残ります。オフにすると、その枠は手で入れる専用になります。',
     /** 破壊的操作。押すと確認ダイアログを挟む（dialog.confirm）。在庫・買い物リストは変わらない */
     clearAction: '献立を消す',
     clearConfirmTitle: '献立を消しますか？',

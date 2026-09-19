@@ -37,6 +37,8 @@ import {
   buildClaims,
   buildMenu,
   encodeReason,
+  fillSlotsFromLibrary,
+  mainCandidatePool,
   menuDateKey,
   mergeMenuIngredients,
   mergeMissingIngredients,
@@ -50,6 +52,7 @@ import {
 } from '../utils/menuPlan';
 import {
   applyDaysToSlots,
+  carryManualSlotEntries,
   MAIN_SLOT_ID,
   menuPlanRowToStored,
   parseLegacyMenuPlanJson,
@@ -82,9 +85,21 @@ export interface MenuDayView extends StoredMenuDay {
   cookTimeMin: number | null;
 }
 
+/** 枠の行に足りない表示情報。`hydrate` がプラン中の**全レシピ**（副菜以降も）について計算する */
+export interface MenuRecipeMeta {
+  /** レシピが削除・アーカイブされた */
+  missing: boolean;
+  cookTimeMin: number | null;
+}
+
 export interface MenuPlanView {
   plan: StoredMenuPlan;
   days: MenuDayView[];
+  /**
+   * レシピ ID → 表示に足りない情報（PR-5a）。`days` は主菜しか持たないので、
+   * 副菜以降の「無くなった」「◯分」はここから引く。手入力（`recipeId` が蔵書庫に無い）も missing
+   */
+  recipeMeta: ReadonlyMap<string, MenuRecipeMeta>;
   /** 在庫 ID → それを使う日。順序は付けない（§10.2） */
   claims: Record<string, number[]>;
   /** 保存時から在庫が変わった。勝手に組み直さず「作り直す」を出すだけ */
@@ -175,6 +190,19 @@ async function loadMenuRecipes(): Promise<MenuRecipe[]> {
     if (!lastCookedByRecipe.has(recipeId)) lastCookedByRecipe.set(recipeId, cookedAt);
   }
 
+  // タグ名。枠の種類（副菜・汁物）の分類に使う（PR-5a・`utils/menuSlotKind.ts`）。
+  // レシピに種別の列は無いので、利用者が付けたタグが唯一の明示の手がかり
+  const tagRows = await db
+    .select({ recipeId: schema.recipeTags.recipeId, name: schema.tags.name })
+    .from(schema.recipeTags)
+    .innerJoin(schema.tags, eq(schema.tags.id, schema.recipeTags.tagId));
+  const tagsByRecipe = new Map<string, string[]>();
+  for (const row of tagRows) {
+    const list = tagsByRecipe.get(row.recipeId) ?? [];
+    list.push(row.name);
+    tagsByRecipe.set(row.recipeId, list);
+  }
+
   return recipes.map((recipe) => ({
     id: recipe.id,
     title: recipe.title,
@@ -182,6 +210,7 @@ async function loadMenuRecipes(): Promise<MenuRecipe[]> {
     pinnedAt: recipe.pinnedAt,
     lastCookedAt: lastCookedByRecipe.get(recipe.id) ?? null,
     ingredients: recipe.currentRevId ? (ingredientsByRev.get(recipe.currentRevId) ?? []) : [],
+    tags: tagsByRecipe.get(recipe.id) ?? [],
   }));
 }
 
@@ -405,15 +434,35 @@ export async function generateMenuPlan(
   if (!isNativePlatform) return null;
   await ensureLegacyMenuPlanMigrated();
   const { getAliasMap } = await import('./name-alias.service');
-  const [recipes, pantry, aliases, autoOn] = await Promise.all([
+  const [recipes, pantry, aliases, autoOn, previous, slotDefs] = await Promise.all([
     loadMenuRecipes(),
     loadPantry(),
     getAliasMap(),
     isMenuAutoEnabled(),
+    readStoredMenuPlanRows(mealTime),
+    getMenuSlotSettings(mealTime),
   ]);
 
   const today = new Date();
-  const built = buildMenu(recipes, pantry.items, days, today, aliases);
+  // 主菜以外の枠（PR-5a・§10.16）: 手入力は引き継ぎ、自動の枠は組み直す。判断は純関数側
+  // （`carryManualSlotEntries` / `mainCandidatePool` / `fillSlotsFromLibrary`）。ここは繋ぐだけ
+  const carried = carryManualSlotEntries(previous?.slots ?? []);
+  const mainPool = mainCandidatePool({
+    recipes,
+    slotDefs,
+    excludeIds: carried.map((s) => s.recipeId),
+    days,
+  });
+  const built = buildMenu(mainPool, pantry.items, days, today, aliases);
+  const filled = fillSlotsFromLibrary({
+    days: built.days,
+    slotDefs,
+    existingSlots: carried,
+    recipes,
+    pantry: pantry.items,
+    today,
+    aliases,
+  });
   const plan: StoredMenuPlan = {
     version: 1,
     mealTime,
@@ -425,6 +474,7 @@ export async function generateMenuPlan(
     requestedDays: days,
     ...(autoOn && mealTime === 'dinner' ? { anchorDate: menuDateKey(today) } : {}),
     days: toStoredDays(built.days),
+    slots: [...carried, ...filled],
   };
   await writeStoredMenuPlan(plan);
   refreshWidgetSnapshot();
@@ -475,6 +525,7 @@ export async function getMenuSlotSettings(
       slotKind: schema.menuSlotSettings.slotKind,
       label: schema.menuSlotSettings.label,
       position: schema.menuSlotSettings.position,
+      autoFill: schema.menuSlotSettings.autoFill,
     })
     .from(schema.menuSlotSettings)
     .where(eq(schema.menuSlotSettings.mealTime, mealTime));
@@ -527,11 +578,17 @@ export async function saveMenuSlotSettings(
           slotKind: slot.slotKind,
           label: slot.label,
           position: slot.position,
-          autoFill: true,
+          autoFill: slot.autoFill !== false,
         })
         .onConflictDoUpdate({
           target: [schema.menuSlotSettings.mealTime, schema.menuSlotSettings.slotId],
-          set: { slotKind: slot.slotKind, label: slot.label, position: slot.position },
+          // `autoFill` も更新する。PR-4 では set に無く、一度作った枠の切り替えが保存されなかった
+          set: {
+            slotKind: slot.slotKind,
+            label: slot.label,
+            position: slot.position,
+            autoFill: slot.autoFill !== false,
+          },
         });
     }
   });
@@ -708,12 +765,20 @@ function hydrate(
   }));
   // 作り終わった日は引き当てから外す（残すと二重に数える）
   const active = plan.days.filter((d) => d.doneAt === null);
+  // **枠を `days` に合わせ直してから返す。** 差し替えや「作りました」は `days` だけを
+  // 書き換えて渡してくるので、読んだままの `slots` を返すと**画面に前の料理名が残る**
+  // （保存先は `writeStoredMenuPlan` が同じ `applyDaysToSlots` で揃えている）
+  const slots = applyDaysToSlots(plan.days, plan.slots ?? []);
+  const recipeMeta = new Map<string, MenuRecipeMeta>();
+  for (const s of slots) {
+    if (recipeMeta.has(s.recipeId)) continue;
+    const r = byId.get(s.recipeId);
+    recipeMeta.set(s.recipeId, { missing: !r, cookTimeMin: r?.cookTimeMin ?? null });
+  }
   return {
-    // **枠を `days` に合わせ直してから返す。** 差し替えや「作りました」は `days` だけを
-    // 書き換えて渡してくるので、読んだままの `slots` を返すと**画面に前の料理名が残る**
-    // （保存先は `writeStoredMenuPlan` が同じ `applyDaysToSlots` で揃えている）
-    plan: { ...plan, slots: applyDaysToSlots(plan.days, plan.slots ?? []) },
+    plan: { ...plan, slots },
     days,
+    recipeMeta,
     claims: buildClaims(active, recipes, pantry.items, aliases),
     stale: plan.pantrySignature !== pantry.signature,
   };
@@ -858,6 +923,9 @@ export async function applyMenuArrangement(
     generatedAt: new Date().toISOString(),
     source: 'ai',
     days: nextDays,
+    // 副菜以降は日番号のまま引き継ぐ（PR-5a）。落とすと S21 の「手で入れた料理は残ります」が嘘になる。
+    // 主菜の行は保存時に `applyDaysToSlots` が `nextDays` から作り直す
+    ...(current.plan.slots ? { slots: current.plan.slots } : {}),
     pantrySignature: current.plan.pantrySignature,
     // anchorDate は引き継ぐ（自動モードの並びが AI で差し替わっても、ローリング対象で
     // あることまでは変えない）。autoAddedItemIds は引き継がない — 直前の自動追加バッチが
@@ -1124,12 +1192,13 @@ export async function runDailyMenuMaintenance(): Promise<void> {
 
   const today = new Date();
   const { getAliasMap } = await import('./name-alias.service');
-  const [stored, recipes, pantry, aliases, days] = await Promise.all([
+  const [stored, recipes, pantry, aliases, days, slotDefs] = await Promise.all([
     readStoredMenuPlan(),
     loadMenuRecipes(),
     loadPantry(),
     getAliasMap(),
     getMenuAutoDays(),
+    getMenuSlotSettings('dinner'),
   ]);
 
   let plan: StoredMenuPlan;
@@ -1168,12 +1237,26 @@ export async function runDailyMenuMaintenance(): Promise<void> {
       days, // 現在の日数設定。ここを渡さないと設定変更が初回生成後は一切効かない（修正済み）
     );
     if (rolled) {
+      // 主菜以外の枠も同じだけ詰める。詰めないと副菜が別の日の主菜と並ぶ（v20）
+      const rolledSlots = rollMenuPlanSlots(stored.slots ?? [], rolled.droppedDays);
+      // **新しく入った日だけ**副菜以降を蔵書庫から埋める（PR-5a）。生き残った日の空き枠は
+      // 触らない — 利用者が「外した」枠が翌朝黙って戻る（§10.11.1）。`days` は全日を渡す
+      // （重複除外と在庫の計算用）
+      const filled = fillSlotsFromLibrary({
+        days: rolled.days,
+        onlyDays: rolled.addedDays.map((d) => d.day),
+        slotDefs,
+        existingSlots: rolledSlots,
+        recipes,
+        pantry: pantry.items,
+        today,
+        aliases,
+      });
       plan = {
         ...stored,
         anchorDate: rolled.anchorDate,
         days: rolled.days,
-        // 主菜以外の枠も同じだけ詰める。詰めないと副菜が別の日の主菜と並ぶ（v20）
-        ...(stored.slots ? { slots: rollMenuPlanSlots(stored.slots, rolled.droppedDays) } : {}),
+        slots: [...rolledSlots, ...filled],
         generatedAt: today.toISOString(),
         pantrySignature: pantry.signature,
         // ローリング後の要求日数は現在の設定値（targetDays と同じ根拠）

@@ -89,6 +89,7 @@ const emptyPlanView = (requestedDays: number): MenuPlanView =>
     },
     days: [],
     stale: false,
+    recipeMeta: new Map(),
   }) as unknown as MenuPlanView;
 
 describe('S20 献立 — レシピ 0 件からの一括生成（§10.12.2）', () => {
@@ -155,6 +156,7 @@ describe('S20 献立 — レシピ 0 件からの一括生成（§10.12.2）', (
       },
       days: [],
       stale: false,
+      recipeMeta: new Map(),
     } as unknown as MenuPlanView);
 
     render(<MenuScreen />);
@@ -216,6 +218,11 @@ describe('S20 献立 — 週ビュー（PR-3）', () => {
         },
       ],
       stale: false,
+      // PR-5a: 枠の「◯分」「無くなった」は days ではなく recipeMeta から引く（副菜以降も同じ経路）
+      recipeMeta: new Map([
+        ['r1', { missing: false, cookTimeMin: 30 }],
+        ['r2', { missing: false, cookTimeMin: null }],
+      ]),
     }) as unknown as MenuPlanView;
 
   beforeEach(() => {

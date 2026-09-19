@@ -21,6 +21,8 @@ import {
   type MenuPlanDayRow,
   type MenuPlanSlotRow,
   type StoredMenuPlan,
+  carryManualSlotEntries,
+  isManualSlotEntry,
 } from '../menuPlanStorage';
 
 const basePlanJson = {
@@ -415,5 +417,59 @@ describe('menuPlanRowToStored / storedMenuPlanToRows — 枠つきの往復（v2
         doneAt: null,
       },
     ]);
+  });
+});
+
+describe('carryManualSlotEntries — 「組む」で手入力の枠を引き継ぐ（PR-5a）', () => {
+  const manualSide: MenuPlanSlotRow = {
+    day: 1,
+    slotId: 'side',
+    recipeId: 'r9',
+    title: 'おひたし',
+    reason: '',
+    doneAt: '2026-09-18T10:00:00.000Z',
+  };
+  const autoSoup: MenuPlanSlotRow = {
+    day: 1,
+    slotId: 'soup',
+    recipeId: 'r5',
+    title: '豚汁',
+    reason: 'coverage:2',
+    doneAt: null,
+  };
+  const aiSide: MenuPlanSlotRow = {
+    day: 2,
+    slotId: 'side',
+    recipeId: 'r7',
+    title: 'AI の副菜',
+    reason: 'ai-new:',
+    doneAt: null,
+  };
+  const manualMain: MenuPlanSlotRow = {
+    day: 1,
+    slotId: 'main',
+    recipeId: 'r1',
+    title: '肉じゃが',
+    reason: '',
+    doneAt: null,
+  };
+
+  it('reason が空の非主菜だけが手入力', () => {
+    expect(isManualSlotEntry(manualSide)).toBe(true);
+    expect(isManualSlotEntry(autoSoup)).toBe(false);
+    expect(isManualSlotEntry(aiSide)).toBe(false);
+    // 主菜は days が正なので、reason が空でも対象外
+    expect(isManualSlotEntry(manualMain)).toBe(false);
+  });
+
+  it('手入力の行だけ残し、doneAt はそのまま持ち越す', () => {
+    expect(carryManualSlotEntries([manualSide, autoSoup, aiSide, manualMain])).toEqual([
+      manualSide,
+    ]);
+  });
+
+  it('要求日数より後ろの日の手入力も消さない（消すのは利用者）', () => {
+    const far: MenuPlanSlotRow = { ...manualSide, day: 6 };
+    expect(carryManualSlotEntries([far])).toEqual([far]);
   });
 });

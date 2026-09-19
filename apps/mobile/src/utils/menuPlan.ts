@@ -11,6 +11,8 @@
  * ここは端末内で完結する（推論ゼロ・サーバー変更ゼロ）。AI は M2 の
  * 「並べ替え」1 操作だけで、失敗しても本関数の並びがそのまま生きる（§10.5）。
  */
+import { classifySlotKind } from './menuSlotKind';
+import type { MenuPlanSlotRow } from './menuPlanStorage';
 import { itemNamesMatch } from './itemMatch';
 import { normalizeItemName } from './itemName';
 
@@ -25,6 +27,11 @@ export interface MenuRecipe {
   lastCookedAt: string | null;
   /** 材料。名前と分量の自由文だけ持つ（数量は解釈しない） */
   ingredients: readonly { name: string; amount: string | null }[];
+  /**
+   * タグ名（PR-5a）。枠の種類の分類（`classifySlotKind`）にだけ使う。
+   * 省略可 — 従来の呼び出し元・テストを変えないため。無ければ題名だけで分類する
+   */
+  tags?: readonly string[];
 }
 
 /** 在庫の 1 行（突合と期限に要る分だけ） */
@@ -311,6 +318,148 @@ export function buildMenu(
   }
 
   return { days: out, claims: buildClaims(out, pool, pantry, aliases) };
+}
+
+/** 枠埋めの対象になる枠の定義（`WeekSlotSetting` の必要な部分だけ） */
+export interface SlotFillTarget {
+  slotId: string;
+  slotKind: string;
+  autoFill?: boolean;
+}
+
+/** 枠埋めに渡す 1 日ぶんの主菜。`usesPantryItemIds` は組んだ直後だけ持てる（保存形には無い） */
+export interface SlotFillDay {
+  day: number;
+  recipeId: string;
+  usesPantryItemIds?: readonly string[];
+}
+
+/**
+ * 主菜以外の枠を蔵書庫から埋める（PR-5a・M1 の枠対応）。**`buildMenu` は触らない** —
+ * 主菜の並び・差し替え・ローリングの経路を無傷にするため、主菜が決まった後に
+ * **空いている非主菜枠だけ**をこの関数で埋める。
+ *
+ * 規則:
+ * - 対象は `autoFill !== false` の非主菜枠。手入力専用（false）は飛ばす
+ * - 既に料理が入っている (day, slotId) は触らない（手入力・引き継ぎを上書きしない）
+ * - 候補は `classifySlotKind(title, tags)` がその枠の種類に当たるレシピだけ。
+ *   **当たるものが無ければ空のまま**（偽の副菜を置くより「まだ決めていません」）
+ * - 同じレシピは 1 プランに 1 回（主菜・既存の枠・いま置いた分をすべて除外）
+ * - 在庫は主菜が取った分を「取られている」側から始める（主菜と副菜で同じ在庫を奪い合わない）
+ * - 採点は主菜と同じ `scoreRecipe`（在庫の一致・期限・ピン留め）
+ *
+ * 返すのは**新しく置いた行だけ**。呼び出し側が既存の枠と合わせて保存する。
+ */
+export function fillSlotsFromLibrary(args: {
+  days: readonly SlotFillDay[];
+  slotDefs: readonly SlotFillTarget[];
+  existingSlots: readonly MenuPlanSlotRow[];
+  recipes: readonly MenuRecipe[];
+  pantry: readonly MenuPantryItem[];
+  today: Date;
+  aliases?: Record<string, string>;
+  /**
+   * 埋める対象の日番号。省略 = `days` の全部。**ローリングは新しく入った日だけを渡す** —
+   * 生き残った日の空き枠まで埋めると、利用者が「外した」枠が翌朝黙って戻る
+   * （§10.11.1「生き残った日の中身は変えない」）。`days` 自体は全日を渡す（重複除外と在庫の計算用）
+   */
+  onlyDays?: readonly number[];
+}): MenuPlanSlotRow[] {
+  const aliases = args.aliases ?? {};
+  const targets = args.slotDefs.filter(
+    (d) => d.slotId !== 'main' && d.slotKind !== 'main' && d.autoFill !== false,
+  );
+  if (targets.length === 0) return [];
+
+  // 種類ごとの候補プール。分類は 1 レシピ 1 回だけ
+  const poolByKind = new Map<string, MenuRecipe[]>();
+  for (const r of args.recipes) {
+    if (r.ingredients.length === 0) continue;
+    const kind = classifySlotKind(r.title, r.tags ?? []);
+    if (kind === null) continue;
+    const list = poolByKind.get(kind) ?? [];
+    list.push(r);
+    poolByKind.set(kind, list);
+  }
+  if (poolByKind.size === 0) return [];
+
+  const used = new Set<string>([
+    ...args.days.map((d) => d.recipeId),
+    ...args.existingSlots.map((s) => s.recipeId),
+  ]);
+  // 主菜が取った在庫。組んだ直後は `usesPantryItemIds` を持つが、保存形（ローリングで
+  // 生き残った日）は持たないので、その日は `buildClaims` で引き直す（`rollMenuPlan` の
+  // `survivorClaims` と同じ手）。引き直さないと副菜が主菜と同じ在庫で高得点になる
+  const claimed = new Set<string>();
+  for (const d of args.days) (d.usesPantryItemIds ?? []).forEach((id) => claimed.add(id));
+  const unclaimedDays = args.days.filter((d) => d.usesPantryItemIds === undefined);
+  if (unclaimedDays.length > 0) {
+    Object.keys(buildClaims(unclaimedDays, args.recipes, args.pantry, aliases)).forEach((id) =>
+      claimed.add(id),
+    );
+  }
+  const filled = new Set(args.existingSlots.map((s) => `${s.day}:${s.slotId}`));
+  const onlyDays = args.onlyDays ? new Set(args.onlyDays) : null;
+
+  const out: MenuPlanSlotRow[] = [];
+  const days = [...args.days].sort((a, b) => a.day - b.day);
+  for (const day of days) {
+    if (onlyDays && !onlyDays.has(day.day)) continue;
+    for (const target of targets) {
+      const key = `${day.day}:${target.slotId}`;
+      if (filled.has(key)) continue;
+      const pool = poolByKind.get(target.slotKind);
+      if (!pool || pool.length === 0) continue;
+      const available = args.pantry.filter((p) => !claimed.has(p.id));
+      const best = pickBestRecipe(pool, used, available, aliases, args.today);
+      if (!best) continue; // その種類の候補を使い切った。埋めない
+      used.add(best.recipe.id);
+      filled.add(key); // 同じ slotId が定義に 2 回あっても (day, slotId) を 2 行出さない（PK で落ちる）
+      best.usesPantryItemIds.forEach((id) => claimed.add(id));
+      out.push({
+        day: day.day,
+        slotId: target.slotId,
+        recipeId: best.recipe.id,
+        title: best.recipe.title,
+        reason: encodeReason(best.topReason, reasonSubjectFor(best, args.pantry, args.today)),
+        doneAt: null,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * 主菜の候補プール（PR-5a）。`buildMenu` に渡す前に 2 種類を外す:
+ *
+ * 1. **引き継ぐ手入力の枠に入っているレシピ**（`excludeIds`）。外さないと、副菜に手で入れた
+ *    冷奴が別の日の主菜にも選ばれる（「同じレシピは 1 プラン 1 回」が fill の内側でしか守られない）
+ * 2. **自動で埋める枠の種類に当たるレシピ**。外さないと、在庫が揃った味噌汁が主菜に選ばれ、
+ *    汁物枠は候補切れで空になる — 汁物枠を足した人ほど「主菜＝味噌汁・汁物＝空」を見る
+ *
+ * 2 は**日数に足りなくなるなら諦める**（蔵書が少ない人の主菜を削ってまで副菜を守らない）。
+ * 1 は常に外す（足りなければ不足バナーが出る。重複よりまし）。
+ */
+export function mainCandidatePool(args: {
+  recipes: readonly MenuRecipe[];
+  slotDefs: readonly SlotFillTarget[];
+  excludeIds: readonly string[];
+  days: number;
+}): MenuRecipe[] {
+  const exclude = new Set(args.excludeIds);
+  const base = args.recipes.filter((r) => !exclude.has(r.id));
+  const kinds = new Set(
+    args.slotDefs
+      .filter((d) => d.slotId !== 'main' && d.slotKind !== 'main' && d.autoFill !== false)
+      .map((d) => d.slotKind),
+  );
+  if (kinds.size === 0) return base;
+  const mainsOnly = base.filter((r) => {
+    const kind = classifySlotKind(r.title, r.tags ?? []);
+    return kind === null || !kinds.has(kind);
+  });
+  const usable = mainsOnly.filter((r) => r.ingredients.length > 0).length;
+  return usable >= args.days ? mainsOnly : base;
 }
 
 /**
